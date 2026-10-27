@@ -4758,6 +4758,59 @@
 
     </div>
 
+    <!-- TARJETA INFORMATIVA DE TIEMPOS Y CAPACIDAD LABORAL (MOD) -->
+    <div id="vc-tarjeta-tiempos" class="hidden mt-5 bg-gradient-to-br from-amber-50/90 via-orange-50/40 to-white border border-amber-200 rounded-2xl p-4 shadow-sm">
+      <div class="flex items-center justify-between pb-3 mb-3 border-b border-amber-200/70 flex-wrap gap-2">
+        <div class="flex items-center gap-2">
+          <span class="text-base">⏱️</span>
+          <h4 class="text-xs font-black text-amber-950 uppercase tracking-wider">Consolidado de Tiempos y Capacidad de Mano de Obra (MOD)</h4>
+          <span class="text-[10px] bg-amber-200/80 text-amber-900 font-bold px-2 py-0.5 rounded-full">Reporte del Período</span>
+        </div>
+        <div class="text-[11px] font-mono text-gray-600 flex items-center gap-3">
+          <span>Jornada base: <strong class="text-gray-800" id="vc-card-jornada-base">42 horas semanales en 6 días (7.0 horas por día)</strong></span>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <!-- Minutos de Trabajo -->
+        <div class="bg-white/80 border border-amber-200/70 rounded-xl p-3 shadow-2xs">
+          <span class="block text-[10px] font-bold uppercase tracking-wider text-amber-700 mb-1">Minutos de Operación</span>
+          <div id="vc-card-minutos-totales" class="text-lg font-black text-amber-950 font-mono">0 minutos</div>
+          <div class="text-[10px] text-gray-500 mt-1 flex flex-col gap-0.5" id="vc-card-minutos-desglose">
+            <span>🍳 0 minutos en preparación previa</span>
+            <span>📦 0 minutos en ensamble y despacho</span>
+          </div>
+        </div>
+
+        <!-- Horas de Trabajo -->
+        <div class="bg-white/80 border border-amber-200/70 rounded-xl p-3 shadow-2xs">
+          <span class="block text-[10px] font-bold uppercase tracking-wider text-amber-700 mb-1">Horas de Trabajo</span>
+          <div id="vc-card-horas-totales" class="text-lg font-black text-amber-900 font-mono">0 horas</div>
+          <div class="text-[10px] text-gray-500 mt-1" id="vc-card-horas-desglose">
+            Equivalente al total de minutos laborados
+          </div>
+        </div>
+
+        <!-- Días Laborales -->
+        <div class="bg-white/80 border border-amber-200/70 rounded-xl p-3 shadow-2xs">
+          <span class="block text-[10px] font-bold uppercase tracking-wider text-amber-700 mb-1">Días Laborales</span>
+          <div id="vc-card-dias-totales" class="text-lg font-black text-orange-950 font-mono">0 días laborales</div>
+          <div class="text-[10px] text-gray-500 mt-1" id="vc-card-dias-desglose">
+            Calculado a razón de turno diario
+          </div>
+        </div>
+
+        <!-- Semanas de Trabajo y Costo -->
+        <div class="bg-white/80 border border-amber-200/70 rounded-xl p-3 shadow-2xs">
+          <span class="block text-[10px] font-bold uppercase tracking-wider text-amber-700 mb-1">Semanas de Trabajo</span>
+          <div id="vc-card-semanas-totales" class="text-lg font-black text-indigo-950 font-mono">0 semanas de trabajo</div>
+          <div class="text-[10px] text-amber-900 font-semibold mt-1 font-mono" id="vc-card-costo-mod">
+            Costo MOD: $0
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div>
 
 
@@ -19586,6 +19639,31 @@ function toggleTiemposVC() { toggleDesgloseVC(); }
 let horasSemanaModVC = 42.0;
 let diasSemanaModVC = 6.0;
 
+function irAPantallaReparacion(numeroDoc, productoId, fecha) {
+  const desdeInp = document.getElementById('vc-desde');
+  const hastaInp = document.getElementById('vc-hasta');
+  const fIni = fecha || (desdeInp ? desdeInp.value : '');
+  const fFin = fecha || (hastaInp ? hastaInp.value : '');
+
+  const rIni = document.getElementById('reparador-fecha-ini');
+  const rFin = document.getElementById('reparador-fecha-fin');
+  if (rIni && fIni) rIni.value = fIni;
+  if (rFin && fFin) rFin.value = fFin;
+
+  mostrarTab('ensambles_historicos');
+
+  setTimeout(() => {
+    if (typeof repararCostosPreview === 'function') {
+      repararCostosPreview();
+    }
+    const sec = document.getElementById('ensambles-reparador');
+    if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 300);
+
+  const numLimpio = numeroDoc ? '#' + numeroDoc.replace(/^[^-]+-/, '') : 'producto';
+  toast(`Navegando a la pantalla de reparación para ${numLimpio}...`, true);
+}
+
 function getHorasPorDiaMOD() {
   const hSem = Math.max(1, parseFloat(horasSemanaModVC) || 42.0);
   const dSem = Math.max(1, parseFloat(diasSemanaModVC) || 6.0);
@@ -19922,7 +20000,15 @@ function renderTablaVC() {
           <div class="flex items-center gap-1.5 flex-wrap">
             <span class="vc-arrow text-gray-400 mr-1 text-[10px]">▶</span>
             <span>${r.nombre_producto}</span>
-            ${r.tiene_desfase ? `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-100 text-amber-800 border border-amber-300" title="Costo POS: ${fmtMon(r.total_costo_insumos)} vs Kardex Real: ${fmtMon(r.total_costo_kardex)} | Diferencia: ${r.desfase_kardex > 0 ? '+' : ''}${fmtMon(r.desfase_kardex)}">⚠️ Desfase Kardex ${r.desfase_kardex > 0 ? '+' : ''}${fmtMon(r.desfase_kardex)}</span>` : ''}
+            ${r.tiene_desfase ? `
+              <button type="button"
+                      onclick="event.stopPropagation(); irAPantallaReparacion('', ${r.producto_id}, '')"
+                      class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 shadow-2xs cursor-pointer transition"
+                      title="Costo POS: ${fmtMon(r.total_costo_insumos)} vs Kardex Real: ${fmtMon(r.total_costo_kardex)} | Diferencia: ${r.desfase_kardex > 0 ? '+' : ''}${fmtMon(r.desfase_kardex)}. Clic para ir a reparar en Ensambles Históricos">
+                <span>⚠️ Desfase Kardex ${r.desfase_kardex > 0 ? '+' : ''}${fmtMon(r.desfase_kardex)}</span>
+                <span class="text-[9px] text-amber-950 font-sans font-bold underline">Reparar ↗</span>
+              </button>
+            ` : ''}
             ${r.tiene_costo_cero ? `<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300" title="Este producto tiene costo $0 en este período">🔴 Costo $0</span>` : ''}
             ${r.tiene_margen_negativo ? `<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300" title="Margen negativo: Se vendió por debajo de su costo">📉 Margen Negativo</span>` : ''}
           </div>
@@ -19975,8 +20061,71 @@ function renderTablaVC() {
   const totalHorasEns = totalMinEns / 60.0;
   const totalHorasGlobal = totalMinGlobal / 60.0;
 
+  const hSem = Math.max(1, parseFloat(horasSemanaModVC) || 42.0);
+  const dSem = Math.max(1, parseFloat(diasSemanaModVC) || 6.0);
   const hDia = getHorasPorDiaMOD();
   const totalDiasTrabajo = hDia > 0 ? (totalHorasGlobal / hDia) : 0;
+  const totalSemanasTrabajo = hSem > 0 ? (totalHorasGlobal / hSem) : 0;
+
+  // Actualizar tarjeta informativa inferior con palabras completas
+  const cardTiempos = document.getElementById('vc-tarjeta-tiempos');
+  if (cardTiempos) {
+    if (datosVC.length > 0) {
+      cardTiempos.classList.remove('hidden');
+
+      const elJornada = document.getElementById('vc-card-jornada-base');
+      if (elJornada) {
+        elJornada.textContent = `${fmt(hSem)} horas semanales en ${fmt(dSem)} días (${fmt(hDia)} horas por día)`;
+      }
+
+      const elMinTot = document.getElementById('vc-card-minutos-totales');
+      if (elMinTot) {
+        elMinTot.textContent = `${fmt(totalMinGlobal)} ${totalMinGlobal === 1 ? 'minuto' : 'minutos'}`;
+      }
+
+      const elMinDes = document.getElementById('vc-card-minutos-desglose');
+      if (elMinDes) {
+        elMinDes.innerHTML = `
+          <span>🍳 <strong>${fmt(totalMinPrep)}</strong> ${totalMinPrep === 1 ? 'minuto' : 'minutos'} en preparación previa</span>
+          <span>📦 <strong>${fmt(totalMinEns)}</strong> ${totalMinEns === 1 ? 'minuto' : 'minutos'} en ensamble y despacho</span>
+        `;
+      }
+
+      const elHorasTot = document.getElementById('vc-card-horas-totales');
+      if (elHorasTot) {
+        elHorasTot.textContent = `${fmt(totalHorasGlobal)} ${totalHorasGlobal === 1 ? 'hora' : 'horas'}`;
+      }
+
+      const elHorasDes = document.getElementById('vc-card-horas-desglose');
+      if (elHorasDes) {
+        elHorasDes.innerHTML = `
+          <span>🍳 ${fmt(totalHorasPrep)} horas de preparación &nbsp;|&nbsp; 📦 ${fmt(totalHorasEns)} horas de ensamble</span>
+        `;
+      }
+
+      const elDiasTot = document.getElementById('vc-card-dias-totales');
+      if (elDiasTot) {
+        elDiasTot.textContent = `${fmt(totalDiasTrabajo)} ${totalDiasTrabajo === 1 ? 'día laboral' : 'días laborales'}`;
+      }
+
+      const elDiasDes = document.getElementById('vc-card-dias-desglose');
+      if (elDiasDes) {
+        elDiasDes.textContent = `A razón de ${fmt(hDia)} horas por turno de trabajo diario`;
+      }
+
+      const elSemTot = document.getElementById('vc-card-semanas-totales');
+      if (elSemTot) {
+        elSemTot.textContent = `${fmt(totalSemanasTrabajo)} ${totalSemanasTrabajo === 1 ? 'semana laboral' : 'semanas laborales'}`;
+      }
+
+      const elCostoMod = document.getElementById('vc-card-costo-mod');
+      if (elCostoMod) {
+        elCostoMod.textContent = `Costo MOD Total: ${fmtMon(totalMod)} (${fmtMon(costoHoraModVC)} por hora)`;
+      }
+    } else {
+      cardTiempos.classList.add('hidden');
+    }
+  }
 
   const margenTotalGeneral = totalVentas - totalCostos;
   const pctMargenGeneral = totalVentas > 0 ? (margenTotalGeneral / totalVentas * 100.0) : 0.0;
@@ -20007,18 +20156,9 @@ function renderTablaVC() {
       <!-- Desglose unitario footer -->
       <td class="vc-col-desglose ${desgHiddenCls} px-2 py-2.5 text-right num font-mono font-extrabold text-slate-700 bg-slate-100/80 whitespace-nowrap">${fmtMon(promInsumosPonderado)}</td>
       <td class="vc-col-desglose ${desgHiddenCls} px-2 py-2.5 text-right num font-mono font-extrabold text-amber-900 bg-amber-100/60 whitespace-nowrap">${fmtMon(promModPonderado)}</td>
-      <td class="vc-col-desglose ${desgHiddenCls} px-1.5 py-1 text-center font-mono whitespace-nowrap bg-amber-50/70 border-x border-amber-200" title="Tiempos totales acumulados en el período (minutos unitarios × cantidad vendida)">
-        <div class="flex flex-col items-center justify-center text-[10px] leading-tight">
-          <div class="text-amber-900 font-bold" title="Tiempo total preparación: ${fmt(totalMinPrep)} minutos (${fmt(totalHorasPrep)} horas)">
-            🍳 ${fmt(totalMinPrep)}m <span class="text-[9px] font-semibold text-amber-700">(${fmt(totalHorasPrep)}h)</span>
-          </div>
-          <div class="text-amber-900 font-bold mt-0.5" title="Tiempo total ensamble: ${fmt(totalMinEns)} minutos (${fmt(totalHorasEns)} horas)">
-            📦 ${fmt(totalMinEns)}m <span class="text-[9px] font-semibold text-amber-700">(${fmt(totalHorasEns)}h)</span>
-          </div>
-          <div class="mt-1 pt-0.5 border-t border-amber-300 font-extrabold text-amber-950 text-[10px]" title="Mano de obra total acumulada: ${fmt(totalMinGlobal)} minutos (${fmt(totalHorasGlobal)} horas) = ~${fmt(totalDiasTrabajo)} jornadas de ${fmt(hDia)}h">
-            ⏱️ ${fmt(totalHorasGlobal)}h <span class="text-[9px] font-bold text-amber-800">(~${fmt(totalDiasTrabajo)} d)</span>
-          </div>
-        </div>
+      <td class="vc-col-desglose ${desgHiddenCls} px-1.5 py-2 text-center font-mono whitespace-nowrap bg-amber-50/70 border-x border-amber-200" title="Mano de obra total acumulada: ${fmt(totalHorasGlobal)} horas (~${fmt(totalDiasTrabajo)} días laborales / ~${fmt(totalSemanasTrabajo)} semanas). Ver detalle en la tarjeta informativa de abajo">
+        <div class="text-xs font-black text-amber-950">⏱️ ${fmt(totalHorasGlobal)}h</div>
+        <div class="text-[9px] text-amber-700 font-semibold">(Ver tarjeta ↓)</div>
       </td>
 
       <!-- Costo Unitario y Margen Unitario footer -->
@@ -20030,9 +20170,9 @@ function renderTablaVC() {
 
       <!-- Desglose total footer -->
       <td class="vc-col-desglose ${desgHiddenCls} px-2 py-2.5 text-right num font-mono font-extrabold text-slate-700 bg-slate-100/80 whitespace-nowrap">${fmtMon(totalInsumos)}</td>
-      <td class="vc-col-desglose ${desgHiddenCls} px-2 py-1.5 text-right num font-mono font-extrabold text-amber-900 bg-amber-100/60 whitespace-nowrap" title="Costo MOD Total: ${fmtMon(totalMod)} (${fmt(totalHorasGlobal)} horas estimadas = ~${fmt(totalDiasTrabajo)} días a ${fmt(hDia)}h/día)">
-        <div>${fmtMon(totalMod)}</div>
-        <div class="text-[9px] font-semibold text-amber-700">(${fmt(totalHorasGlobal)}h ~ ${fmt(totalDiasTrabajo)} d)</div>
+      <td class="vc-col-desglose ${desgHiddenCls} px-2 py-2 text-right num font-mono font-extrabold text-amber-900 bg-amber-100/60 whitespace-nowrap" title="Costo MOD Total: ${fmtMon(totalMod)}">
+        <div class="text-xs font-extrabold text-amber-900">${fmtMon(totalMod)}</div>
+        <div class="text-[9px] font-semibold text-amber-700">(${fmt(totalHorasGlobal)}h MOD)</div>
       </td>
 
       <td class="px-2 py-2.5 text-right num font-mono font-extrabold text-rose-800 whitespace-nowrap">${fmtMon(totalCostos)}</td>
@@ -20092,9 +20232,13 @@ async function toggleDetalleVC(tr, productoId) {
               <span class="text-[11px] font-normal text-slate-500">(${docs.length} movimientos)</span>
             </span>
             ${hayDesfaseTotal ? `
-              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-amber-100 text-amber-800 border border-amber-300">
-                ⚠️ Desfase Total Kardex: ${totalDesfase > 0 ? '+' : ''}${fmtMon(totalDesfase)}
-              </span>
+              <button type="button"
+                      onclick="irAPantallaReparacion('', ${productoId}, '${desde}')"
+                      class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-[10px] font-bold font-mono bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 shadow-2xs cursor-pointer transition group"
+                      title="Ir a Ensambles Históricos para auditar y reparar las diferencias de este producto">
+                <span>⚠️ Desfase Total Kardex: ${totalDesfase > 0 ? '+' : ''}${fmtMon(totalDesfase)}</span>
+                <span class="bg-amber-300 group-hover:bg-amber-400 text-amber-950 px-1.5 py-0.5 rounded text-[9px] font-sans font-bold">Ir a Reparar ↗</span>
+              </button>
             ` : `
               <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200">
                 ✓ Sincronizado con Kardex
@@ -20150,9 +20294,16 @@ async function toggleDetalleVC(tr, productoId) {
         </td>
         <td class="px-2 py-1 text-center whitespace-nowrap">
           ${tieneDesfase ? `
-            <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold font-mono bg-amber-100 text-amber-800 border border-amber-300" title="El POS grabó ${fmtMon(posVal)} pero los insumos descargados en Kardex sumaron ${fmtMon(kardexVal)}">
-              ⚠️ Desfasado
-            </span>
+            <button type="button"
+                    onclick="event.stopPropagation(); irAPantallaReparacion('${doc.numero_documento}', ${productoId}, '${doc.fecha}')"
+                    class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 shadow-2xs hover:shadow transition-all cursor-pointer group"
+                    title="El POS grabó ${fmtMon(posVal)} pero los insumos descargados en Kardex sumaron ${fmtMon(kardexVal)}. Clic para ir a reparar en Ensambles Históricos">
+              <span>⚠️ Desfasado</span>
+              <span class="text-[9px] bg-amber-300 group-hover:bg-amber-400 text-amber-950 px-1 py-0.2 rounded font-sans font-bold flex items-center gap-0.5">
+                <span>Reparar</span>
+                <span>↗</span>
+              </span>
+            </button>
           ` : `
             <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200">
               ✓ Ok

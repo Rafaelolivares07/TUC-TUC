@@ -869,17 +869,33 @@ def compartir_cancion_generar():
             tercero_id = nuevo['id']
             conn.commit()
 
-        # Validar claves foráneas antes del insert para evitar aborto de transacción
-        creado_por = session.get('usuario_id')
-        if creado_por:
+        # Obtener o asegurar el tercero_id del emisor (tu usuario tercero)
+        creado_por = session.get('chat_tercero_id') or session.get('tercero_id')
+        if not creado_por and session.get('usuario_id'):
             try:
-                creado_por_int = int(creado_por)
-                val = conn.execute("SELECT id FROM terceros WHERE id = %s", (creado_por_int,)).fetchone()
-                creado_por = creado_por_int if val else None
+                uid = int(session.get('usuario_id'))
+                if conn.execute("SELECT 1 FROM terceros WHERE id = %s", (uid,)).fetchone():
+                    creado_por = uid
             except (ValueError, TypeError):
-                creado_por = None
-        else:
-            creado_por = None
+                pass
+
+        if not creado_por and session.get('nombre'):
+            nom_emisor = session.get('nombre').strip()
+            r_emisor = conn.execute(
+                "SELECT id FROM terceros WHERE LOWER(TRIM(nombre)) = LOWER(TRIM(%s)) LIMIT 1",
+                (nom_emisor,)
+            ).fetchone()
+            if r_emisor:
+                creado_por = r_emisor['id']
+            else:
+                rol_emisor = (session.get('rol') or 'admin').lower()
+                r_nuevo = conn.execute(
+                    "INSERT INTO terceros (nombre, tipo_tercero) VALUES (%s, %s) RETURNING id",
+                    (nom_emisor, rol_emisor)
+                ).fetchone()
+                conn.commit()
+                creado_por = r_nuevo['id']
+            session['chat_tercero_id'] = creado_por
 
         if tercero_id:
             try:

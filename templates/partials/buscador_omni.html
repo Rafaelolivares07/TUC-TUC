@@ -1,28 +1,28 @@
 {# templates/partials/buscador_omni.html #}
 {# Buscador Corporativo Global (Omnibox / Spotlight) para TUC TUC V2 #}
 
-<div id="omni-search-wrapper" class="relative w-full max-w-md sm:max-w-lg select-none">
-  <!-- Barra de entrada corporativa -->
-  <div class="relative flex items-center bg-gray-50/80 hover:bg-white focus-within:bg-white border border-gray-200 focus-within:border-indigo-500 rounded-2xl px-3 py-2 transition-all duration-150 shadow-xs focus-within:shadow-md focus-within:ring-2 focus-within:ring-indigo-100">
-    <div class="text-gray-400 flex items-center justify-center shrink-0 me-2.5">
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<div id="omni-search-wrapper" class="omni-search-container relative flex-1 w-full max-w-xl mx-2 sm:mx-4 select-none">
+  <!-- Barra de entrada corporativa unificada (Clase única) -->
+  <div class="relative flex items-center h-10 sm:h-11 w-full bg-slate-100/90 hover:bg-slate-200/60 focus-within:bg-white focus-within:ring-2 focus-within:ring-indigo-500/20 rounded-xl px-3 sm:px-4 transition-all duration-150 shadow-2xs">
+    <div class="text-slate-400 flex items-center justify-center shrink-0 me-2.5">
+      <svg class="w-4 h-4 sm:w-5 sm:h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M21 21l-4.35-4.35m1.85-5.15a7 7 0 11-14 0 7 7 0 0114 0z"/>
       </svg>
     </div>
     
     <input type="text" id="omni-input" 
-           placeholder="Buscar pantallas, pestañas o ayuda..." 
+           placeholder="Buscar pantallas, pestañas o manuales de ayuda..." 
            autocomplete="off" spellcheck="false"
-           class="w-full bg-transparent text-xs sm:text-sm font-medium text-gray-800 placeholder-gray-400 outline-none">
+           class="w-full h-full bg-transparent border-0 outline-none text-sm sm:text-base font-medium text-slate-800 placeholder-slate-400 p-0 m-0">
            
     <!-- Atajo de teclado sutil -->
-    <div id="omni-shortcut-badge" class="hidden sm:flex items-center gap-1 shrink-0 px-2 py-0.5 rounded-lg border border-gray-200 bg-white text-[10px] font-mono font-bold text-gray-400 shadow-2xs">
+    <div id="omni-shortcut-badge" class="hidden sm:flex items-center gap-1 shrink-0 px-2 py-0.5 rounded-md border border-slate-200/80 bg-white/90 text-[11px] font-mono font-bold text-slate-400 shadow-2xs">
       <span>Ctrl</span><span>K</span>
     </div>
     
     <!-- Spinner de carga -->
     <div id="omni-loading" class="hidden shrink-0 ms-2 text-indigo-500 animate-spin">
-      <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none">
+      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none">
         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
       </svg>
@@ -68,11 +68,12 @@
     if (urlParams.get('negocio_id')) return urlParams.get('negocio_id');
     const pathParts = window.location.pathname.split('/');
     for (let i = 0; i < pathParts.length; i++) {
-      if ((pathParts[i] === 'contabilidad' || pathParts[i] === 'inventario') && pathParts[i + 1]) {
+      if ((pathParts[i] === 'contabilidad' || pathParts[i] === 'inventario' || pathParts[i] === 'mantenimiento') && pathParts[i + 1]) {
         const parsed = parseInt(pathParts[i + 1]);
         if (!isNaN(parsed)) return parsed;
       }
     }
+    if (typeof NEGOCIO_ID !== 'undefined' && NEGOCIO_ID) return NEGOCIO_ID;
     return '';
   }
 
@@ -233,7 +234,7 @@
           <div class="py-8 text-center text-gray-400">
             <span class="text-2xl block mb-1">🔍</span>
             <p class="text-xs font-bold text-gray-600">No encontramos resultados para "${q}"</p>
-            <p class="text-[11px] text-gray-400 mt-0.5">Prueba con palabras como "puc", "gasto", "kardex", "receta" o "iva".</p>
+            <p class="text-[11px] text-gray-400 mt-0.5">Prueba con palabras como "puc", "gasto", "kardex", "receta", "auditor" o "iva".</p>
           </div>
         `;
         return;
@@ -297,7 +298,7 @@
       }
 
       resultsBody.innerHTML = html;
-      resaltarElemento(0); // Preseleccionar el primer resultado
+      resaltarElemento(0);
     } catch(err) {
       loading.classList.add('hidden');
       resultsBody.innerHTML = `<div class="p-4 text-center text-red-500 text-xs">Error de conexión con el buscador</div>`;
@@ -314,9 +315,11 @@
     try {
       const targetUrlObj = new URL(url, window.location.origin);
       const targetTab = targetUrlObj.searchParams.get('tab');
+      const targetTool = targetUrlObj.searchParams.get('tool');
       
       const esContabilidad = window.location.pathname.includes('/contabilidad');
       const esInventario = window.location.pathname.includes('/inventario');
+      const esMantenimiento = window.location.pathname.includes('/mantenimiento');
       
       if (targetTab) {
         if (esContabilidad && targetUrlObj.pathname.includes('/contabilidad') && typeof cambiarTab === 'function') {
@@ -329,6 +332,12 @@
           history.pushState(null, '', window.location.pathname + '?tab=' + targetTab);
           return;
         }
+      }
+      
+      if (targetTool && esMantenimiento && typeof abrirHerramienta === 'function') {
+        abrirHerramienta(targetTool);
+        history.pushState(null, '', window.location.pathname + '?tool=' + targetTool);
+        return;
       }
     } catch(err) {}
 
@@ -358,7 +367,7 @@
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
       ejecutarBusqueda(input.value);
-    }, 280); // Debounce de 280ms
+    }, 280);
   });
 
   input.addEventListener('keydown', (e) => {

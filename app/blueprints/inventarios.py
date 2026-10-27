@@ -12439,7 +12439,7 @@ def api_reporte_ventas_costos_detalle(negocio_id):
     conn = get_db_connection()
     try:
         cond_cu = ""
-        params_det = [negocio_id, producto_id, desde, hasta]
+        params_det = [producto_id, negocio_id, desde, hasta]
         if centro_utilidad_id:
             try:
                 c_id = int(centro_utilidad_id)
@@ -12450,32 +12450,50 @@ def api_reporte_ventas_costos_detalle(negocio_id):
                 pass
 
         rows = conn.execute(f"""
+            WITH items_agrupados AS (
+                SELECT 
+                    pi.pedido_id,
+                    pi.producto_id,
+                    SUM(pi.cantidad) AS cantidad,
+                    SUM(pi.cantidad * pi.precio_unitario) AS total_venta,
+                    SUM(pi.cantidad * pi.costo_unitario) AS total_costo,
+                    CASE 
+                        WHEN SUM(pi.cantidad) > 0 THEN SUM(pi.cantidad * pi.precio_unitario) / SUM(pi.cantidad) 
+                        ELSE 0 
+                    END AS precio_unitario,
+                    CASE 
+                        WHEN SUM(pi.cantidad) > 0 THEN SUM(pi.cantidad * pi.costo_unitario) / SUM(pi.cantidad) 
+                        ELSE 0 
+                    END AS costo_unitario
+                FROM pedido_items pi
+                WHERE pi.producto_id = %s
+                GROUP BY pi.pedido_id, pi.producto_id
+            )
             SELECT 
                 ped.id AS pedido_id,
                 COALESCE(ped.fecha, ped.created_at::date) AS fecha,
                 ped.numero_documento,
                 ped.nombre_cliente,
                 ped.estado,
-                pi.cantidad,
-                pi.precio_unitario,
-                pi.costo_unitario,
-                (pi.cantidad * pi.precio_unitario) AS total_venta,
-                (pi.cantidad * pi.costo_unitario) AS total_costo,
+                ia.cantidad,
+                ia.precio_unitario,
+                ia.costo_unitario,
+                ia.total_venta,
+                ia.total_costo,
                 COALESCE(kardex.costo_kardex, 0) AS total_costo_kardex,
-                (COALESCE(kardex.costo_kardex, 0) - (pi.cantidad * pi.costo_unitario)) AS desfase_kardex,
+                (COALESCE(kardex.costo_kardex, 0) - ia.total_costo) AS desfase_kardex,
                 ped.metodo_pago
-            FROM pedido_items pi
-            JOIN pedidos ped ON ped.id = pi.pedido_id
+            FROM items_agrupados ia
+            JOIN pedidos ped ON ped.id = ia.pedido_id
             LEFT JOIN LATERAL (
                 SELECT SUM(mi.valor_total) AS costo_kardex
                 FROM movimientos_inventario mi
                 WHERE mi.negocio_id = ped.negocio_id
                   AND (mi.referencia_id = ped.id OR mi.numero_documento = ped.numero_documento)
                   AND mi.tipo = 'salida'
-                  AND COALESCE(mi.producto_padre_id, mi.producto_id) = pi.producto_id
+                  AND COALESCE(mi.producto_padre_id, mi.producto_id) = ia.producto_id
             ) kardex ON true
             WHERE ped.negocio_id = %s
-              AND pi.producto_id = %s
               AND (ped.estado IS NULL OR ped.estado = '' OR ped.estado NOT IN ('anulado', 'premontado'))
               AND ped.numero_documento IS NOT NULL AND ped.numero_documento != ''
               AND COALESCE(ped.fecha, ped.created_at::date) >= %s::date

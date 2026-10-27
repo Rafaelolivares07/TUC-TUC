@@ -18194,6 +18194,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const qDesde = initUrlParams.get('fecha_desde');
     const qHasta = initUrlParams.get('fecha_hasta');
     const qAutoPreview = initUrlParams.get('auto_preview');
+    const qFocusProd = initUrlParams.get('focus_prod');
+    const qFocusDoc = initUrlParams.get('focus_doc');
+
     if (qDesde) {
       const rIni = document.getElementById('reparador-fecha-ini');
       const eIni = document.getElementById('ensambles-fecha-ini');
@@ -18206,11 +18209,47 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (rFin) rFin.value = qHasta;
       if (eFin) eFin.value = qHasta;
     }
+
+    if (qFocusProd) {
+      window._openRepairAccordions = window._openRepairAccordions || new Set();
+      window._openRepairAccordions.add(`prod-acc-${qFocusProd}`);
+      if (qFocusDoc) {
+        window._openRepairAccordions.add(`doc-acc-${qFocusProd}-${qFocusDoc}`);
+        // Limpieza de prefijo por si vino como FV-165 o #165
+        const docNumClean = qFocusDoc.replace(/^[#A-Za-z_-]+/, '');
+        if (docNumClean && docNumClean !== qFocusDoc) {
+          window._openRepairAccordions.add(`doc-acc-${qFocusProd}-${docNumClean}`);
+        }
+      }
+    }
+
     if (qAutoPreview === '1' && typeof repararCostosPreview === 'function') {
-      setTimeout(() => {
-        repararCostosPreview();
-        const sec = document.getElementById('ensambles-reparador');
-        if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setTimeout(async () => {
+        await repararCostosPreview();
+        setTimeout(() => {
+          let targetEl = null;
+          if (qFocusProd && qFocusDoc) {
+            targetEl = document.getElementById(`card-doc-${qFocusProd}-${qFocusDoc}`);
+            if (!targetEl) {
+              const docNumClean = qFocusDoc.replace(/^[#A-Za-z_-]+/, '');
+              targetEl = document.getElementById(`card-doc-${qFocusProd}-${docNumClean}`) ||
+                         document.querySelector(`[id*="card-doc-${qFocusProd}-"][id*="${docNumClean}"]`);
+            }
+          }
+          if (!targetEl && qFocusProd) {
+            targetEl = document.getElementById(`prod-acc-${qFocusProd}`) || document.getElementById(`arrow-prod-acc-${qFocusProd}`)?.closest('button');
+          }
+          if (!targetEl) {
+            targetEl = document.getElementById('ensambles-reparador');
+          }
+          if (targetEl) {
+            targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            targetEl.classList.add('ring-4', 'ring-amber-500', 'shadow-2xl');
+            setTimeout(() => {
+              targetEl.classList.remove('ring-4', 'ring-amber-500', 'shadow-2xl');
+            }, 4000);
+          }
+        }, 400);
       }, 500);
     }
   }
@@ -19701,23 +19740,20 @@ function irAPantallaReparacion(numeroDoc, productoId, fecha) {
   const fIni = fecha || (desdeInp ? desdeInp.value : '');
   const fFin = fecha || (hastaInp ? hastaInp.value : '');
 
-  const rIni = document.getElementById('reparador-fecha-ini');
-  const rFin = document.getElementById('reparador-fecha-fin');
-  if (rIni && fIni) rIni.value = fIni;
-  if (rFin && fFin) rFin.value = fFin;
+  const cleanDoc = numeroDoc ? String(numeroDoc).trim() : '';
+  let url = `/admin/inventario/${NEGOCIO_ID}/ensambles_historicos?fecha_desde=${encodeURIComponent(fIni)}&fecha_hasta=${encodeURIComponent(fFin)}&auto_preview=1`;
+  if (productoId) {
+    url += `&focus_prod=${encodeURIComponent(productoId)}`;
+  }
+  if (cleanDoc) {
+    url += `&focus_doc=${encodeURIComponent(cleanDoc)}`;
+  }
 
-  mostrarTab('ensambles_historicos');
+  // Abrir en nueva pestaña para no reemplazar la pestaña actual de Ventas/Costos
+  window.open(url, '_blank');
 
-  setTimeout(() => {
-    if (typeof repararCostosPreview === 'function') {
-      repararCostosPreview();
-    }
-    const sec = document.getElementById('ensambles-reparador');
-    if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, 300);
-
-  const numLimpio = numeroDoc ? '#' + numeroDoc.replace(/^[^-]+-/, '') : 'producto';
-  toast(`Navegando a la pantalla de reparación para ${numLimpio}...`, true);
+  const numLimpio = cleanDoc ? '#' + cleanDoc.replace(/^[^-]+-/, '') : 'producto';
+  toast(`Abriendo auditoría en nueva pestaña para ${numLimpio}...`, true);
 }
 
 function getHorasPorDiaMOD() {
@@ -21422,7 +21458,7 @@ async function cargarReporteEnsambles() {
             }
 
             const docBorderClass = (tieneDifContabDoc || tieneDifPiDoc) ? 'border-amber-400 bg-amber-50/40 shadow-xs' : 'border-gray-200 bg-white shadow-xs';
-            html += `<div class="border ${docBorderClass} rounded-xl overflow-hidden mt-2">`;
+            html += `<div id="card-doc-${prod.producto_padre_id}-${ff.documento_numero}" class="border ${docBorderClass} rounded-xl overflow-hidden mt-2 transition-all duration-500">`;
             html += `<button type="button" onclick="toggleRepairLevel('${docAccId}')" class="w-full flex items-center justify-between px-3.5 py-2.5 bg-gray-50 hover:bg-gray-100 text-left transition-colors flex-wrap gap-2 cursor-pointer">`;
             html += `<div class="flex items-center gap-2 flex-wrap">`;
             html += `<svg class="w-3.5 h-3.5 text-gray-500 transition-transform repair-arrow" id="arrow-${docAccId}" ${docArrowStyle} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>`;

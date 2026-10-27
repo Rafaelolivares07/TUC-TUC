@@ -1651,12 +1651,13 @@ input:checked + .slider:before {
 </div>
 
 <!-- Modal Compartir Canción por WhatsApp -->
-<div id="modal-compartir-cancion" style="display:none; position:fixed; inset:0; z-index:260; background:rgba(0,0,0,.78); backdrop-filter:blur(6px); align-items:flex-end; justify-content:center;" onclick="if(event.target===this)cerrarModalCompartir()">
-  <div style="width:100%; max-width:440px; background:var(--surface); border:1px solid rgba(0,212,255,0.22); border-radius:24px 24px 0 0; padding:22px 20px 32px; animation:fadeUp .25s ease; box-shadow:0 -12px 40px rgba(0,0,0,.75);">
-    <div style="width:42px; height:4px; background:var(--muted2); border-radius:2px; margin:0 auto 16px;"></div>
+<div id="modal-compartir-cancion" style="display:none; position:fixed; inset:0; z-index:260; background:rgba(0,0,0,.82); backdrop-filter:blur(6px); align-items:flex-end; justify-content:center;" onclick="if(event.target===this)cerrarModalCompartir()">
+  <div style="width:100%; max-width:440px; background:var(--surface); border:1px solid rgba(0,212,255,0.25); border-radius:24px 24px 0 0; padding:20px 18px 28px; animation:fadeUp .25s ease; box-shadow:0 -12px 40px rgba(0,0,0,.85); max-height:92vh; overflow-y:auto;">
+    <div style="width:42px; height:4px; background:var(--muted2); border-radius:2px; margin:0 auto 14px;"></div>
 
-    <div style="display:flex; align-items:center; gap:12px; margin-bottom:14px;">
-      <div style="width:42px; height:42px; border-radius:12px; background:rgba(37,211,102,0.15); border:1px solid rgba(37,211,102,0.4); display:flex; align-items:center; justify-content:center; color:#25d366; font-size:22px; flex-shrink:0;">
+    <!-- Título y canción -->
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
+      <div style="width:40px; height:40px; border-radius:12px; background:rgba(37,211,102,0.15); border:1px solid rgba(37,211,102,0.4); display:flex; align-items:center; justify-content:center; color:#25d366; font-size:22px; flex-shrink:0;">
         📲
       </div>
       <div style="flex:1; min-width:0;">
@@ -1665,31 +1666,47 @@ input:checked + .slider:before {
       </div>
     </div>
 
-    <!-- Botón Contact Picker (si el dispositivo móvil lo soporta) -->
-    <button type="button" id="btn-modal-seleccionar-contacto" onclick="seleccionarContactoModal()" style="display:none; width:100%; padding:11px 12px; border-radius:12px; background:rgba(0,212,255,0.10); border:1px solid rgba(0,212,255,0.35); color:var(--ac1); font-family:'Space Grotesk',sans-serif; font-weight:800; font-size:13px; cursor:pointer; align-items:center; justify-content:center; gap:8px; margin-bottom:12px;">
-      <svg style="width:16px; height:16px; fill:currentColor;" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
-      Seleccionar de la libreta de contactos
-    </button>
-
-    <div style="position:relative; margin-bottom:12px;">
-      <label style="display:block; font-size:11px; font-weight:700; color:var(--muted); margin-bottom:5px; text-transform:uppercase; letter-spacing:0.5px;">Para quién es (opcional para grupos)</label>
-      <input type="text" id="modal-compartir-input-nombre" oninput="buscarContactosTerceros(this.value)" placeholder="Escribe el nombre o busca un contacto..." style="width:100%; padding:12px 14px; border-radius:10px; border:1px solid rgba(0,212,255,0.2); background:rgba(0,0,0,0.35); color:#fff; font-family:inherit; font-size:14px; outline:none;" autocomplete="off">
-      
-      <!-- Lista flotante de contactos encontrados en la BD -->
-      <div id="modal-compartir-autocomplete" style="display:none; position:absolute; left:0; right:0; top:100%; z-index:350; background:#0c182c; border:1px solid var(--ac1); border-radius:10px; max-height:190px; overflow-y:auto; box-shadow:0 8px 24px rgba(0,0,0,0.85); margin-top:4px;"></div>
+    <!-- Buscador en tiempo real de contactos de Terceros -->
+    <div style="margin-bottom:8px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+        <span style="font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px;">Elegir contacto de la Rockola</span>
+        <span id="btn-modal-seleccionar-contacto" onclick="seleccionarContactoModal()" style="display:none; font-size:11px; font-weight:800; color:var(--ac1); cursor:pointer;">📖 Libreta del cel</span>
+      </div>
+      <input type="text" id="modal-compartir-buscador" oninput="filtrarContactosModal(this.value)" placeholder="🔍 Buscar por nombre o celular..." style="width:100%; padding:11px 13px; border-radius:10px; border:1px solid rgba(0,212,255,0.25); background:rgba(0,0,0,0.35); color:#fff; font-family:inherit; font-size:13.5px; outline:none;" autocomplete="off">
     </div>
 
-    <div style="margin-bottom:16px;">
-      <label style="display:block; font-size:11px; font-weight:700; color:var(--muted); margin-bottom:5px; text-transform:uppercase; letter-spacing:0.5px;">Teléfono o WhatsApp (opcional)</label>
-      <input type="tel" id="modal-compartir-input-tel" oninput="buscarContactosTerceros(this.value)" placeholder="Ej: 3101234567" style="width:100%; padding:12px 14px; border-radius:10px; border:1px solid rgba(0,212,255,0.2); background:rgba(0,0,0,0.35); color:#fff; font-family:inherit; font-size:14px; outline:none;">
-      <div style="font-size:11px; color:var(--muted); margin-top:4px;">Escribe el nombre o teléfono para buscar entre tus contactos registrados de Tuc Tuc.</div>
+    <!-- Lista de contactos scrolleable y siempre visible -->
+    <div id="modal-compartir-lista-contactos" style="max-height:140px; overflow-y:auto; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.08); border-radius:10px; margin-bottom:12px; padding:2px;">
+      <div style="padding:16px; text-align:center; color:var(--muted); font-size:12px;">Cargando contactos...</div>
     </div>
 
-    <button type="button" id="btn-modal-ejecutar-compartir" onclick="ejecutarCompartirWhatsApp()" style="width:100%; padding:14px; border-radius:12px; border:none; background:#25d366; color:#05140b; font-family:'Space Grotesk',sans-serif; font-weight:900; font-size:15px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; box-shadow:0 4px 16px rgba(37,211,102,0.35);">
-      <svg style="width:20px; height:20px; fill:currentColor;" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
-      Abrir WhatsApp
+    <!-- Campos de confirmación (Nombre y Teléfono seleccionados o manuales) -->
+    <div style="background:rgba(0,212,255,0.05); border:1px solid rgba(0,212,255,0.18); border-radius:12px; padding:10px 12px; margin-bottom:14px;">
+      <div style="font-size:10.5px; font-weight:800; color:var(--ac1); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">Destinatario seleccionado:</div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+        <div>
+          <label style="display:block; font-size:10px; color:var(--muted); margin-bottom:3px;">Nombre</label>
+          <input type="text" id="modal-compartir-input-nombre" oninput="alCambiarDatosManuales()" placeholder="Ej: Carlos" style="width:100%; padding:8px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.15); background:rgba(0,0,0,0.4); color:#fff; font-size:13px; outline:none;">
+        </div>
+        <div>
+          <label style="display:block; font-size:10px; color:var(--muted); margin-bottom:3px;">Celular / WhatsApp</label>
+          <input type="tel" id="modal-compartir-input-tel" oninput="alCambiarDatosManuales()" placeholder="Ej: 3101234567" style="width:100%; padding:8px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.15); background:rgba(0,0,0,0.4); color:#fff; font-size:13px; outline:none;">
+        </div>
+      </div>
+    </div>
+
+    <!-- Botón 1: Enviar al contacto seleccionado -->
+    <button type="button" id="btn-modal-ejecutar-compartir" onclick="ejecutarCompartirWhatsApp()" style="width:100%; padding:13px; border-radius:12px; border:none; background:#25d366; color:#05140b; font-family:'Space Grotesk',sans-serif; font-weight:900; font-size:14.5px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; box-shadow:0 4px 16px rgba(37,211,102,0.35); margin-bottom:8px;">
+      <svg style="width:18px; height:18px; fill:currentColor;" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+      <span id="btn-modal-ejecutar-txt">Enviar por WhatsApp</span>
     </button>
-    <button type="button" onclick="cerrarModalCompartir()" style="width:100%; padding:10px; margin-top:8px; border:none; background:transparent; color:var(--muted); font-size:13px; font-weight:700; cursor:pointer;">Cancelar</button>
+
+    <!-- Botón 2: Compartir a grupo sin contacto específico -->
+    <button type="button" onclick="compartirParaGrupoWhatsApp()" style="width:100%; padding:11px; border-radius:12px; border:1px solid rgba(0,212,255,0.3); background:rgba(0,212,255,0.08); color:var(--ac1); font-family:'Space Grotesk',sans-serif; font-weight:800; font-size:13px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px;">
+      <span>👥</span> Compartir a un Grupo (enlace para todos)
+    </button>
+
+    <button type="button" onclick="cerrarModalCompartir()" style="width:100%; padding:9px; margin-top:6px; border:none; background:transparent; color:var(--muted); font-size:12.5px; font-weight:700; cursor:pointer;">Cancelar</button>
   </div>
 </div>
 
@@ -4916,81 +4933,130 @@ function abrirModalCompartirLocalItem(id, nombre) {
   abrirModalCompartirUI(nombre);
 }
 
-function abrirModalCompartirUI(nombreCancion) {
+let listaContactosCache = [];
+let idContactoSeleccionado = null;
+
+async function abrirModalCompartirUI(nombreCancion) {
   const modal = document.getElementById('modal-compartir-cancion');
   if (!modal) return;
   document.getElementById('modal-compartir-titulo-cancion').textContent = limpiarNombre(nombreCancion || 'Canción');
   document.getElementById('modal-compartir-input-nombre').value = '';
   document.getElementById('modal-compartir-input-tel').value = '';
-  const box = document.getElementById('modal-compartir-autocomplete');
-  if (box) { box.style.display = 'none'; box.innerHTML = ''; }
+  document.getElementById('modal-compartir-buscador').value = '';
+  idContactoSeleccionado = null;
+  actualizarTextoBotonCompartir();
 
   const btnContacts = document.getElementById('btn-modal-seleccionar-contacto');
   if (btnContacts) {
-    if ('contacts' in navigator && 'ContactsManager' in window) {
+    if ('contacts' in navigator && navigator.contacts && navigator.contacts.select) {
       btnContacts.style.display = 'inline-flex';
     } else {
       btnContacts.style.display = 'none';
     }
   }
 
-  const btn = document.getElementById('btn-modal-ejecutar-compartir');
-  if (btn) {
-    btn.disabled = false;
-    btn.innerHTML = `<svg style="width:20px; height:20px; fill:currentColor;" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg> Abrir WhatsApp`;
-  }
-
   modal.style.display = 'flex';
+  cargarContactosParaCompartir('');
+}
+
+async function cargarContactosParaCompartir(filtro) {
+  const contenedor = document.getElementById('modal-compartir-lista-contactos');
+  if (!contenedor) return;
+
+  try {
+    const q = (filtro || '').trim();
+    const res = await fetch('/rockola/buscar-terceros' + (q ? '?q=' + encodeURIComponent(q) : ''));
+    const data = await res.json();
+    listaContactosCache = data.contactos || [];
+
+    if (!listaContactosCache.length) {
+      contenedor.innerHTML = `<div style="padding:14px; text-align:center; color:var(--muted); font-size:12px;">No se encontraron contactos${q ? ' con "' + q + '"' : ''}. Puedes escribirlo abajo.</div>`;
+      return;
+    }
+
+    renderizarListaContactosModal(listaContactosCache);
+  } catch (err) {
+    console.error('Error al cargar contactos:', err);
+    contenedor.innerHTML = `<div style="padding:12px; text-align:center; color:#ff4d6d; font-size:11.5px;">Error cargando contactos de la base de datos</div>`;
+  }
+}
+
+function renderizarListaContactosModal(contactos) {
+  const contenedor = document.getElementById('modal-compartir-lista-contactos');
+  if (!contenedor) return;
+
+  contenedor.innerHTML = contactos.map(c => {
+    const esSeleccionado = idContactoSeleccionado === c.id;
+    const nombreLimpio = limpiarNombre(c.nombre || '');
+    const telLimpio = c.telefono || 'Sin celular';
+    return `
+      <div onclick="seleccionarContactoDirecto(${c.id}, '${escapeJs(c.nombre)}', '${escapeJs(c.telefono)}')" style="display:flex; align-items:center; justify-content:space-between; padding:8px 10px; border-radius:8px; margin-bottom:3px; cursor:pointer; background:${esSeleccionado ? 'rgba(37,211,102,0.18)' : 'rgba(255,255,255,0.03)'}; border:1px solid ${esSeleccionado ? '#25d366' : 'transparent'}; transition:all 0.15s;">
+        <div style="display:flex; align-items:center; gap:8px; min-width:0;">
+          <span style="font-size:14px;">${esSeleccionado ? '✓' : '👤'}</span>
+          <div style="min-width:0;">
+            <div style="font-size:12.5px; font-weight:700; color:${esSeleccionado ? '#25d366' : '#fff'}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${nombreLimpio}</div>
+            <div style="font-size:10.5px; color:var(--muted);">${telLimpio}</div>
+          </div>
+        </div>
+        <button type="button" style="padding:4px 9px; border-radius:6px; border:1px solid ${esSeleccionado ? '#25d366' : 'rgba(0,212,255,0.3)'}; background:${esSeleccionado ? '#25d366' : 'transparent'}; color:${esSeleccionado ? '#05140b' : 'var(--ac1)'}; font-size:11px; font-weight:800; cursor:pointer;">
+          ${esSeleccionado ? 'Elegido' : 'Elegir'}
+        </button>
+      </div>
+    `;
+  }).join('');
+}
+
+function filtrarContactosModal(val) {
+  clearTimeout(_timerBuscarContactos);
+  _timerBuscarContactos = setTimeout(() => {
+    cargarContactosParaCompartir(val);
+  }, 200);
+}
+
+function seleccionarContactoDirecto(id, nombre, telefono) {
+  idContactoSeleccionado = id;
+  document.getElementById('modal-compartir-input-nombre').value = nombre;
+  document.getElementById('modal-compartir-input-tel').value = telefono;
+  renderizarListaContactosModal(listaContactosCache);
+  actualizarTextoBotonCompartir();
+}
+
+function alCambiarDatosManuales() {
+  idContactoSeleccionado = null;
+  renderizarListaContactosModal(listaContactosCache);
+  actualizarTextoBotonCompartir();
+}
+
+function actualizarTextoBotonCompartir() {
+  const nom = (document.getElementById('modal-compartir-input-nombre').value || '').trim();
+  const txtEl = document.getElementById('btn-modal-ejecutar-txt');
+  if (txtEl) {
+    if (nom) {
+      const primerNombre = nom.split(' ')[0];
+      txtEl.textContent = `Enviar a ${primerNombre} por WhatsApp`;
+    } else {
+      txtEl.textContent = 'Enviar por WhatsApp';
+    }
+  }
+}
+
+function compartirParaGrupoWhatsApp() {
+  document.getElementById('modal-compartir-input-nombre').value = '';
+  document.getElementById('modal-compartir-input-tel').value = '';
+  idContactoSeleccionado = null;
+  ejecutarCompartirWhatsApp();
 }
 
 function cerrarModalCompartir() {
   const modal = document.getElementById('modal-compartir-cancion');
   if (modal) modal.style.display = 'none';
-  const box = document.getElementById('modal-compartir-autocomplete');
-  if (box) box.style.display = 'none';
   cancionACompartir = null;
-}
-
-function buscarContactosTerceros(val) {
-  clearTimeout(_timerBuscarContactos);
-  const box = document.getElementById('modal-compartir-autocomplete');
-  const q = (val || '').trim();
-  if (q.length < 2) {
-    if (box) box.style.display = 'none';
-    return;
-  }
-  _timerBuscarContactos = setTimeout(async () => {
-    try {
-      const res = await fetch('/rockola/buscar-terceros?q=' + encodeURIComponent(q));
-      const data = await res.json();
-      const list = data.contactos || [];
-      if (!list.length) {
-        if (box) box.style.display = 'none';
-        return;
-      }
-      box.innerHTML = list.map(c => `
-        <div onclick="seleccionarTerceroCompartir('${escapeJs(c.nombre)}', '${escapeJs(c.telefono)}')" style="padding:10px 14px; border-bottom:1px solid rgba(255,255,255,0.08); cursor:pointer; display:flex; justify-content:space-between; align-items:center;">
-          <span style="font-weight:700; color:#fff; font-size:13px;">${limpiarNombre(c.nombre)}</span>
-          <span style="font-size:11px; color:var(--ac1);">${c.telefono || 'Sin tel'}</span>
-        </div>
-      `).join('');
-      box.style.display = 'block';
-    } catch (e) {
-      if (box) box.style.display = 'none';
-    }
-  }, 250);
-}
-
-function seleccionarTerceroCompartir(nombre, telefono) {
-  document.getElementById('modal-compartir-input-nombre').value = nombre;
-  document.getElementById('modal-compartir-input-tel').value = telefono;
-  const box = document.getElementById('modal-compartir-autocomplete');
-  if (box) box.style.display = 'none';
+  idContactoSeleccionado = null;
 }
 
 async function seleccionarContactoModal() {
   if (!('contacts' in navigator) || !navigator.contacts || !navigator.contacts.select) {
-    alert('Tu navegador no permite acceso directo a la libreta local. Puedes escribir o buscar el contacto directamente en el campo de texto.');
+    alert('Tu navegador no permite acceso directo a la libreta local. Puedes escribir o buscar el contacto directamente en el buscador.');
     return;
   }
   try {
@@ -5005,6 +5071,7 @@ async function seleccionarContactoModal() {
         if (tel.startsWith('57') && tel.length > 10) tel = tel.substring(2);
         document.getElementById('modal-compartir-input-tel').value = tel;
       }
+      actualizarTextoBotonCompartir();
     }
   } catch (err) {
     console.log('Contacto no seleccionado:', err);

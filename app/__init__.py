@@ -138,8 +138,21 @@ def create_app():
 
             RUTAS_FIJAS_ROCKOLA = {
                 'verificar-telefono', 'identificar', 'actualizar-perfil', 'salas',
-                'pwa', 'compartir', 'catalogo', 'admin', 'chat', 'chat2'
+                'pwa', 'compartir', 'catalogo', 'admin', 'chat', 'chat2',
+                'buscar-terceros', 'registro-rapido', 'c'
             }
+
+            if partes[0] == 'c' and len(partes) >= 2:
+                from .blueprints.rockola import escuchar_cancion_compartida, audio_cancion_compartida
+                if len(partes) >= 3 and partes[2] == 'audio':
+                    return audio_cancion_compartida(partes[1])
+                return escuchar_cancion_compartida(partes[1])
+            if partes[0] == 'buscar-terceros':
+                from .blueprints.rockola import buscar_terceros_rockola
+                return buscar_terceros_rockola()
+            if partes[0] == 'registro-rapido':
+                from .blueprints.rockola import registro_rapido_rockola
+                return registro_rapido_rockola()
 
             if partes[0] == 'rockola':
                 if len(partes) == 1:

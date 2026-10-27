@@ -418,7 +418,7 @@
     </div>
 
     <!-- Escenario de Vinilo Interactivo -->
-    <div class="vinyl-stage" onclick="togglePlayPause(event)" title="Toca para reproducir o pausar">
+    <div class="vinyl-stage" id="vinyl-stage" title="Toca para reproducir o pausar">
       <div class="play-overlay-btn" id="play-overlay">
         <svg viewBox="0 0 24 24" fill="currentColor">
           <path d="M8 5v14l11-7z"/>
@@ -690,11 +690,18 @@
       }
     }
 
-    // Control Play / Pause inmediato (1 solo toque)
+    // Control Play / Pause limpio con protección anti-rebote (un solo toque exacto)
+    let _ultimoToggleTime = 0;
     function togglePlayPause(e) {
       if (e) {
         if (typeof e.stopPropagation === 'function') e.stopPropagation();
       }
+
+      const ahora = Date.now();
+      if (ahora - _ultimoToggleTime < 350) {
+        return; // Evita rebote o doble disparo (pointerdown + click)
+      }
+      _ultimoToggleTime = ahora;
 
       if (CANCION.origen === 'youtube' && ytPlayer && ytReady) {
         if (isPlaying) {
@@ -717,17 +724,11 @@
       }
     }
 
-    // Registrar listeners táctiles directos para evitar doble toque en móviles
+    // Un único listener en el contenedor del vinilo (cubre botón central y vinilo)
     window.addEventListener('DOMContentLoaded', () => {
-      const playBtn = document.getElementById('play-overlay');
-      if (playBtn) {
-        ['pointerdown', 'touchend', 'click'].forEach(evtName => {
-          playBtn.addEventListener(evtName, (ev) => {
-            ev.preventDefault();
-            ev.stopPropagation();
-            togglePlayPause(ev);
-          }, { passive: false });
-        });
+      const stageEl = document.getElementById('vinyl-stage');
+      if (stageEl) {
+        stageEl.addEventListener('click', togglePlayPause);
       }
     });
 

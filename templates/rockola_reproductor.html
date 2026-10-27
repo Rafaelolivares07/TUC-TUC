@@ -4668,28 +4668,85 @@ async function cargarPeticionesRemotas() {
   }
 }
 
+function obtenerCancionActualSonando() {
+  let track = cancionActualObjeto;
+  if (!track && typeof currentCola !== 'undefined' && currentCola && currentCola.length > 0) {
+    track = currentCola[0];
+  }
+  if (!track && typeof cancionActual !== 'undefined' && cancionActual) {
+    track = (typeof currentCola !== 'undefined' && currentCola ? currentCola.find(x => x.id === cancionActual) : null)
+      || (typeof cancionesLocales !== 'undefined' && cancionesLocales ? cancionesLocales.find(x => x.id === cancionActual) : null);
+  }
+  if (!track) {
+    const el = document.getElementById('nombre-actual');
+    const txt = el ? el.textContent.trim() : '';
+    if (txt && !txt.toLowerCase().includes('esperando') && !txt.toLowerCase().includes('saltando') && !txt.toLowerCase().includes('cola vacía')) {
+      track = {
+        id: (typeof cancionActual !== 'undefined' && cancionActual) ? cancionActual : 'actual',
+        nombre: txt
+      };
+    }
+  }
+  return track;
+}
+
 async function despacharConActual(peticionId, cancionSolicitada) {
-  if (!cancionActual || !cancionActual.nombre) {
+  const track = obtenerCancionActualSonando();
+  if (!track || !track.nombre) {
     alert('No hay ninguna canción sonando actualmente en el reproductor para despachar.');
     return;
   }
 
-  if (!confirm(`¿Despachar "${cancionActual.nombre}" para la petición "${cancionSolicitada}"?`)) return;
+  const trackNombre = track.nombre;
+  if (!confirm(`¿Despachar "${trackNombre}" para la petición "${cancionSolicitada}"?`)) return;
+
+  mostrarMensaje(`Preparando "${trackNombre}" para el oyente...`);
 
   try {
+    const esYt = !!(track.youtube_url || (track.origen === 'youtube') || (track.id && String(track.id).includes('youtube')));
+    let archivoId = track.archivo_id || (window._archivosSubidosServidor ? window._archivosSubidosServidor[trackNombre] : '') || '';
+
+    // Si es archivo local y aún no está verificado en el servidor, extraer y subir
+    if (!esYt && !archivoId) {
+      const blob = await obtenerBlobAudioParaCompartir(track);
+      if (blob) {
+        mostrarMensaje('Subiendo audio al servidor para el oyente...');
+        const fd = new FormData();
+        const ext = blob.type && blob.type.includes('ogg') ? '.ogg' : '.mp3';
+        fd.append('archivo', blob, trackNombre + ext);
+        fd.append('nombre', trackNombre);
+
+        const upData = await subirArchivoAudioConProgreso(
+          `/rockola/${SALA}/compartir-local`,
+          fd,
+          (pct) => {
+            mostrarMensaje(`Subiendo audio: ${pct}%...`);
+          }
+        );
+
+        if (upData && upData.ok && upData.archivo_id) {
+          archivoId = upData.archivo_id;
+          window._archivosSubidosServidor = window._archivosSubidosServidor || {};
+          window._archivosSubidosServidor[trackNombre] = archivoId;
+        }
+      }
+    }
+
+    const payload = {
+      nombre: trackNombre,
+      origen: esYt ? 'youtube' : 'archivo',
+      youtube_url: track.youtube_url || '',
+      archivo_id: archivoId
+    };
+
     const res = await fetch(`/rockola/api/peticiones/${peticionId}/despachar`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        nombre: cancionActual.nombre,
-        origen: cancionActual.origen || 'archivo',
-        youtube_url: cancionActual.youtube_url || '',
-        archivo_id: cancionActual.archivo_id || cancionActual.id || ''
-      })
+      body: JSON.stringify(payload)
     });
     const data = await res.json();
     if (data.ok) {
-      mostrarMensaje(`¡Canción "${cancionActual.nombre}" despachada al oyente! 🚀`);
+      mostrarMensaje(`¡Canción "${trackNombre}" despachada al oyente! 🚀`);
       cargarPeticionesRemotas();
     } else {
       alert(data.error || 'No se pudo despachar');
@@ -5376,7 +5433,8 @@ function subirArchivoAudioConProgreso(url, formData, onProgress) {
   });
 }
 
-const _archivosSubidosServidor = {};
+window._archivosSubidosServidor = window._archivosSubidosServidor || {};
+const _archivosSubidosServidor = window._archivosSubidosServidor;
 
 async function ejecutarCompartirWhatsApp() {
   if (!cancionACompartir) return;
@@ -5455,12 +5513,34 @@ async function ejecutarCompartirWhatsApp() {
     }
 
     if (data.ok) {
-      btn.innerHTML = '<span>✓ ¡Listo! Abriendo WhatsApp...</span>';
-      cerrarModalCompartir();
       mostrarMensaje('✓ Enlace creado y verificado. Abriendo WhatsApp...', 'ok');
-      // En móviles, window.open() es bloqueado como ventana emergente tras operaciones asíncronas.
-      // Redirigir directamente a la URL de WhatsApp abre la app nativa sin bloqueo alguno.
-      window.location.href = data.wa_url;
+      
+      // 1. Intentar apertura inmediata vía link programático y redirección
+      try {
+        const a = document.createElement('a');
+        a.href = data.wa_url;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      } catch(e) {}
+
+      setTimeout(() => {
+        try { window.location.href = data.wa_url; } catch(e) {}
+      }, 250);
+
+      // 2. Si el navegador bloqueó la apertura automática, dejar botón listo para 1 toque
+      btn.disabled = false;
+      btn.innerHTML = '<span>📲 Toca aquí para abrir WhatsApp</span>';
+      btn.onclick = () => {
+        window.location.href = data.wa_url;
+      };
+
+      // Si después de 4 segundos ya se fue a WhatsApp, cerrar modal
+      setTimeout(() => {
+        cerrarModalCompartir();
+      }, 5000);
     } else {
       alert(data.error || 'No se pudo generar el enlace');
       btn.disabled = false;

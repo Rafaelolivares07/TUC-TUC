@@ -942,6 +942,14 @@ def compartir_cancion_generar():
             except (ValueError, TypeError):
                 tercero_id = None
 
+        if creado_por:
+            try:
+                cp_int = int(creado_por)
+                val_cp = conn.execute("SELECT id FROM terceros WHERE id = %s", (cp_int,)).fetchone()
+                creado_por = cp_int if val_cp else None
+            except (ValueError, TypeError):
+                creado_por = None
+
         token = uuid.uuid4().hex[:10]
         conn.execute("""
             INSERT INTO rockola_compartidos (token, sala_id, nombre, origen, youtube_url, archivo_id, tercero_id, creado_por)
@@ -1238,6 +1246,26 @@ def despachar_peticion_dj(peticion_id):
 
     conn = _connect()
     try:
+        # Si no se pasó archivo_id para una canción local, verificar si ya existe en el servidor
+        if origen == 'archivo' and not archivo_id:
+            row_prev = conn.execute("""
+                SELECT archivo_id FROM rockola_compartidos 
+                WHERE sala_id = (SELECT sala_id FROM rockola_peticiones WHERE id = %s)
+                  AND LOWER(TRIM(nombre)) = LOWER(TRIM(%s)) 
+                  AND archivo_id IS NOT NULL AND archivo_id != ''
+                ORDER BY creado_en DESC LIMIT 1
+            """, (peticion_id, nombre)).fetchone()
+            if not row_prev:
+                row_prev = conn.execute("""
+                    SELECT archivo_id FROM rockola_biblioteca 
+                    WHERE sala_id = (SELECT sala_id FROM rockola_peticiones WHERE id = %s)
+                      AND LOWER(TRIM(nombre)) = LOWER(TRIM(%s)) 
+                      AND archivo_id IS NOT NULL AND archivo_id != ''
+                    ORDER BY creado_en DESC LIMIT 1
+                """, (peticion_id, nombre)).fetchone()
+            if row_prev and row_prev['archivo_id']:
+                archivo_id = row_prev['archivo_id']
+
         row = conn.execute("SELECT * FROM rockola_peticiones WHERE id = %s", (peticion_id,)).fetchone()
         if not row:
             return jsonify(ok=False, error='Petición no encontrada'), 404

@@ -5113,11 +5113,17 @@ async function ejecutarCompartirWhatsApp() {
           method: 'POST',
           body: fd
         });
-        const upData = await upRes.json();
-        if (upData.ok) {
+        const upText = await upRes.text();
+        let upData;
+        try {
+          upData = JSON.parse(upText);
+        } catch (e) {
+          throw new Error('El servidor no pudo procesar el archivo local');
+        }
+        if (upData && upData.ok) {
           archivoId = upData.archivo_id;
         } else {
-          throw new Error(upData.error || 'No se pudo subir el archivo local');
+          throw new Error((upData && upData.error) || 'No se pudo subir el archivo local');
         }
       }
     }
@@ -5138,7 +5144,13 @@ async function ejecutarCompartirWhatsApp() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    const data = await res.json();
+    const resText = await res.text();
+    let data;
+    try {
+      data = JSON.parse(resText);
+    } catch (e) {
+      throw new Error('El servidor devolvió un error inesperado al generar el enlace');
+    }
 
     if (data.ok) {
       cerrarModalCompartir();
@@ -5862,11 +5874,23 @@ async function togglePlayPause() {
         setVinylSpinning(false);
         actualizarPlayPauseBtn(false);
       } else {
-        activo.playVideo();
-        reproduciendo = true;
-        setVinylSpinning(true);
-        iniciarVisualizerCompacto();
-        actualizarPlayPauseBtn(true);
+        if (state === YT.PlayerState.CUED || state === -1) {
+          const c = cancionActualObjeto || (currentCola && currentCola[0]);
+          const vidId = c ? extractYouTubeId(c.youtube_url) : null;
+          if (vidId && typeof activo.loadVideoById === 'function') {
+            activo.loadVideoById(vidId);
+          } else {
+            activo.playVideo();
+          }
+        } else {
+          activo.playVideo();
+        }
+        estadoEl.textContent = 'Iniciando YouTube...';
+      }
+    } else {
+      const c = cancionActualObjeto || (currentCola && currentCola[0]);
+      if (c) {
+        intentarReproducir(c);
       }
     }
     return;

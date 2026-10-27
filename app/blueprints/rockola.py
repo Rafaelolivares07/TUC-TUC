@@ -813,15 +813,18 @@ def compartir_biblioteca_archivo(share_id, archivo_id):
 @bp.route('/<sala_id>/compartir-local', methods=['POST'])
 def compartir_local(sala_id):
     """Guarda un archivo de audio local del reproductor en el servidor para poder compartirlo."""
-    file = request.files.get('archivo')
-    nombre = (request.form.get('nombre') or (file.filename if file else '')).strip()
-    if not file or not nombre:
-        return jsonify(ok=False, error='Archivo o nombre faltante'), 400
-    upload_dir = _upload_dir(sala_id)
-    ext = os.path.splitext(file.filename or 'audio.mp3')[1].lower() or '.mp3'
-    archivo_id = uuid.uuid4().hex + ext
-    file.save(os.path.join(upload_dir, archivo_id))
-    return jsonify(ok=True, archivo_id=archivo_id, nombre=nombre)
+    try:
+        file = request.files.get('archivo')
+        nombre = (request.form.get('nombre') or (file.filename if file else '')).strip()
+        if not file or not nombre:
+            return jsonify(ok=False, error='Archivo o nombre faltante'), 400
+        upload_dir = _upload_dir(sala_id)
+        ext = os.path.splitext(file.filename or 'audio.mp3')[1].lower() or '.mp3'
+        archivo_id = uuid.uuid4().hex + ext
+        file.save(os.path.join(upload_dir, archivo_id))
+        return jsonify(ok=True, archivo_id=archivo_id, nombre=nombre)
+    except Exception as e:
+        return jsonify(ok=False, error=f"Error guardando audio local: {str(e)}"), 500
 
 
 @bp.route('/compartir/generar', methods=['POST'])
@@ -866,8 +869,27 @@ def compartir_cancion_generar():
             tercero_id = nuevo['id']
             conn.commit()
 
-        token = uuid.uuid4().hex[:10]
+        # Validar claves foráneas antes del insert para evitar aborto de transacción
         creado_por = session.get('usuario_id')
+        if creado_por:
+            try:
+                creado_por_int = int(creado_por)
+                val = conn.execute("SELECT id FROM terceros WHERE id = %s", (creado_por_int,)).fetchone()
+                creado_por = creado_por_int if val else None
+            except (ValueError, TypeError):
+                creado_por = None
+        else:
+            creado_por = None
+
+        if tercero_id:
+            try:
+                tercero_id_int = int(tercero_id)
+                val = conn.execute("SELECT id FROM terceros WHERE id = %s", (tercero_id_int,)).fetchone()
+                tercero_id = tercero_id_int if val else None
+            except (ValueError, TypeError):
+                tercero_id = None
+
+        token = uuid.uuid4().hex[:10]
         conn.execute("""
             INSERT INTO rockola_compartidos (token, sala_id, nombre, origen, youtube_url, archivo_id, tercero_id, creado_por)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
@@ -898,6 +920,10 @@ def compartir_cancion_generar():
             tercero_id=tercero_id,
             amigo_nombre=amigo_nombre
         )
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify(ok=False, error=f"Error generando enlace: {str(e)}"), 500
     finally:
         conn.close()
 

@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#060c18">
+
+  {% if no_encontrada %}
+  <title>Canción no encontrada · Mi Rockola</title>
+  {% else %}
+  <title>🎵 {{ cancion.nombre }} · Mi Rockola</title>
+  <meta name="description" content="{{ saludo }} Toca para escuchar en Mi Rockola.">
+
+  <!-- Open Graph / WhatsApp Cards -->
+  <meta property="og:site_name" content="Mi Rockola · TUC TUC">
+  <meta property="og:type" content="music.song">
+  <meta property="og:url" content="{{ base_url }}/rockola/c/{{ token }}">
+  <meta property="og:title" content="🎵 {{ cancion.nombre }} · Mi Rockola">
+  <meta property="og:description" content="{{ saludo }} Toca para escuchar en Mi Rockola y pedir la tuya.">
+  <meta property="og:image" content="{{ base_url }}/static/splash_tuctuc.png">
+  <meta property="og:image:secure_url" content="{{ base_url }}/static/splash_tuctuc.png">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="600">
+  <meta property="og:image:height" content="600">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="🎵 {{ cancion.nombre }} · Mi Rockola">
+  <meta name="twitter:description" content="{{ saludo }} Toca para escuchar en Mi Rockola.">
+  <meta name="twitter:image" content="{{ base_url }}/static/splash_tuctuc.png">
+  {% endif %}
+
+  <link rel="icon" type="image/png" href="/static/rockola-icon-192.png">
+  <link rel="apple-touch-icon" href="/static/rockola-apple-touch-180.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700;800;900&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    :root {
+      --bg: #060c18;
+      --surface: #0c1626;
+      --surface-border: rgba(0, 212, 255, 0.18);
+      --ac1: #00d4ff;
+      --ac2: #0066ff;
+      --text: #f0f6fc;
+      --muted: #8b9bb4;
+      --green: #25d366;
+    }
+
+    body {
+      background: radial-gradient(circle at 50% 20%, #0d1e38 0%, var(--bg) 70%);
+      color: var(--text);
+      font-family: 'Inter', system-ui, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      padding: 24px 18px;
+      overflow-x: hidden;
+    }
+
+    .wrap {
+      width: 100%;
+      max-width: 440px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+
+    /* Header */
+    .brand-header {
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .brand-title {
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 900;
+      font-size: 20px;
+      letter-spacing: 2px;
+      color: #fff;
+      text-transform: uppercase;
+    }
+    .brand-title span { color: var(--ac1); }
+    .brand-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--ac1);
+      box-shadow: 0 0 10px var(--ac1);
+      animation: pulseDot 2s infinite ease-in-out;
+    }
+    @keyframes pulseDot {
+      0%, 100% { transform: scale(1); opacity: 0.8; }
+      50% { transform: scale(1.4); opacity: 1; }
+    }
+
+    /* Saludo Dedicado */
+    .saludo-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(0, 212, 255, 0.10);
+      border: 1px solid rgba(0, 212, 255, 0.35);
+      border-radius: 20px;
+      padding: 6px 16px;
+      color: var(--ac1);
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 14px;
+      font-weight: 800;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 16px rgba(0, 212, 255, 0.15);
+      animation: fadeInDown 0.6s ease;
+    }
+    @keyframes fadeInDown {
+      from { opacity: 0; transform: translateY(-12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Vinilo 3D Giratorio */
+    .vinyl-stage {
+      position: relative;
+      width: min(290px, 78vw);
+      height: min(290px, 78vw);
+      margin: 8px auto 22px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      filter: drop-shadow(0 14px 35px rgba(0, 0, 0, 0.75));
+    }
+    .vinyl-disc {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      animation: rotateVinyl 4s linear infinite;
+      animation-play-state: paused;
+      transition: transform 0.3s cubic-bezier(0.2, 0, 0, 1);
+    }
+    .vinyl-disc.spinning {
+      animation-play-state: running;
+    }
+    .vinyl-stage:active .vinyl-disc {
+      transform: scale(0.97);
+    }
+    @keyframes rotateVinyl {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    /* Botón flotante central de Play si está pausado */
+    .play-overlay-btn {
+      position: absolute;
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: rgba(0, 212, 255, 0.90);
+      color: #040810;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 25px rgba(0, 212, 255, 0.6);
+      transition: all 0.25s ease;
+      cursor: pointer;
+      z-index: 10;
+    }
+    .play-overlay-btn.hidden {
+      opacity: 0;
+      pointer-events: none;
+      transform: scale(0.6);
+    }
+    .play-overlay-btn svg {
+      width: 30px;
+      height: 30px;
+      margin-left: 3px;
+    }
+
+    /* Canción Info */
+    .song-card {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: 20px;
+      padding: 18px 20px;
+      margin-bottom: 22px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+    }
+    .song-title {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 18px;
+      font-weight: 800;
+      color: #ffffff;
+      line-height: 1.35;
+      margin-bottom: 6px;
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+    .song-title:hover {
+      color: var(--ac1);
+    }
+    .song-hint {
+      font-size: 11px;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      margin-bottom: 14px;
+    }
+    .song-hint span { color: var(--ac1); }
+
+    /* Barra de Progreso */
+    .progress-box {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+    }
+    .time-txt {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+      min-width: 32px;
+    }
+    .progress-track {
+      flex: 1;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.12);
+      border-radius: 6px;
+      overflow: hidden;
+      cursor: pointer;
+      position: relative;
+    }
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--ac1), #00e5ff);
+      border-radius: 6px;
+      transition: width 0.15s linear;
+    }
+
+    /* Botón Pedir Más Canciones (CTA) */
+    .btn-cta {
+      width: 100%;
+      padding: 16px 22px;
+      border-radius: 16px;
+      border: none;
+      background: linear-gradient(135deg, #00d4ff, #0066ff);
+      color: #030814;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 16px;
+      font-weight: 900;
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      cursor: pointer;
+      box-shadow: 0 8px 24px rgba(0, 102, 255, 0.45);
+      transition: all 0.25s ease;
+      text-decoration: none;
+    }
+    .btn-cta:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 30px rgba(0, 212, 255, 0.6);
+    }
+    .btn-cta:active {
+      transform: translateY(0);
+    }
+
+    .footer-note {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 18px;
+    }
+
+    /* Modal Registro / Identificación */
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(8px);
+      z-index: 1000;
+      align-items: flex-end;
+      justify-content: center;
+      animation: fadeIn 0.25s ease;
+    }
+    .modal-backdrop.visible {
+      display: flex;
+    }
+    .modal-sheet {
+      width: 100%;
+      max-width: 440px;
+      background: #0f1c30;
+      border: 1px solid var(--surface-border);
+      border-radius: 24px 24px 0 0;
+      padding: 24px 20px 32px;
+      box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.8);
+      animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes slideUp {
+      from { transform: translateY(100%); }
+      to { transform: translateY(0); }
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    .modal-handle {
+      width: 42px;
+      height: 5px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 4px;
+      margin: 0 auto 18px;
+    }
+    .modal-title {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 19px;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 6px;
+    }
+    .modal-sub {
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 20px;
+      line-height: 1.45;
+    }
+    .input-grp {
+      margin-bottom: 14px;
+      text-align: left;
+    }
+    .input-label {
+      display: block;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .input-field {
+      width: 100%;
+      padding: 13px 14px;
+      border-radius: 12px;
+      border: 1px solid rgba(0, 212, 255, 0.25);
+      background: rgba(4, 9, 18, 0.7);
+      color: #fff;
+      font-family: inherit;
+      font-size: 15px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .input-field:focus {
+      border-color: var(--ac1);
+      box-shadow: 0 0 10px rgba(0, 212, 255, 0.25);
+    }
+    .btn-submit-modal {
+      width: 100%;
+      padding: 14px;
+      margin-top: 10px;
+      border-radius: 12px;
+      border: none;
+      background: var(--ac1);
+      color: #030814;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 15px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-submit-modal:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .btn-cancel-modal {
+      width: 100%;
+      padding: 10px;
+      margin-top: 8px;
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    /* Contenedor IFrame de YouTube Oculto para audio */
+    #yt-hidden-wrap {
+      position: absolute;
+      top: -9999px;
+      left: -9999px;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="wrap">
+    <!-- Header de Marca -->
+    <div class="brand-header">
+      <div class="brand-dot"></div>
+      <div class="brand-title">MI <span>ROCKOLA</span></div>
+    </div>
+
+    <!-- Saludo Personalizado / Neutral -->
+    <div class="saludo-tag" id="saludo-badge">
+      <span>✨</span> <span id="saludo-texto">{{ saludo }}</span>
+    </div>
+
+    <!-- Escenario de Vinilo Interactivo -->
+    <div class="vinyl-stage" onclick="togglePlayPause(event)" title="Toca para reproducir o pausar">
+      <div class="play-overlay-btn" id="play-overlay">
+        <svg viewBox="0 0 24 24" fill="currentColor">
+          <path d="M8 5v14l11-7z"/>
+        </svg>
+      </div>
+
+      <div class="vinyl-disc" id="vinyl-disc">
+        <!-- SVG Vinilo de Alta Definición Tuc Tuc -->
+        <svg viewBox="0 0 300 300" width="100%" height="100%">
+          <defs>
+            <radialGradient id="v-body" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#070b12" />
+              <stop offset="35%" stop-color="#141c2a" />
+              <stop offset="39%" stop-color="#0a0f17" />
+              <stop offset="65%" stop-color="#172233" />
+              <stop offset="69%" stop-color="#090e16" />
+              <stop offset="95%" stop-color="#192436" />
+              <stop offset="100%" stop-color="#04060a" />
+            </radialGradient>
+            <linearGradient id="v-sheen" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="rgba(0,212,255,0.28)" />
+              <stop offset="30%" stop-color="rgba(255,255,255,0.03)" />
+              <stop offset="50%" stop-color="rgba(0,212,255,0.32)" />
+              <stop offset="70%" stop-color="rgba(255,255,255,0.03)" />
+              <stop offset="100%" stop-color="rgba(0,212,255,0.28)" />
+            </linearGradient>
+            <linearGradient id="v-label" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#00d4ff" />
+              <stop offset="60%" stop-color="#0055dd" />
+              <stop offset="100%" stop-color="#001844" />
+            </linearGradient>
+          </defs>
+
+          <!-- Cuerpo del vinilo y reflejo -->
+          <circle cx="150" cy="150" r="146" fill="url(#v-body)" stroke="rgba(0,212,255,0.45)" stroke-width="1.8" />
+          <circle cx="150" cy="150" r="146" fill="url(#v-sheen)" />
+
+          <!-- Pistas y micro-surcos -->
+          <circle cx="150" cy="150" r="140" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="0.6" />
+          <circle cx="150" cy="150" r="134" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="0.5" />
+          <circle cx="150" cy="150" r="128" fill="none" stroke="rgba(255,255,255,0.14)" stroke-width="0.6" />
+          <circle cx="150" cy="150" r="121" fill="none" stroke="rgba(0,212,255,0.55)" stroke-width="1.6" stroke-dasharray="7 3" />
+          
+          <circle cx="150" cy="150" r="114" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="0.5" />
+          <circle cx="150" cy="150" r="108" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="0.6" />
+          <circle cx="150" cy="150" r="94" fill="none" stroke="rgba(0,212,255,0.55)" stroke-width="1.6" stroke-dasharray="9 4" />
+
+          <!-- Galleta central -->
+          <circle cx="150" cy="150" r="58" fill="url(#v-label)" stroke="#00d4ff" stroke-width="2" />
+          <circle cx="150" cy="150" r="52" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="0.8" />
+          <text x="150" y="155" font-family="'Space Grotesk', sans-serif" font-weight="900" font-size="13" text-anchor="middle" fill="#ffffff" letter-spacing="0.5">MI ROCKOLA</text>
+          <circle cx="150" cy="150" r="6" fill="#04060a" stroke="#00d4ff" stroke-width="1.3" />
+        </svg>
+      </div>
+    </div>
+
+    <!-- Tarjeta de Canción -->
+    <div class="song-card">
+      <div class="song-title" id="song-title" onclick="reiniciarCancion()" title="Toca para repetir la canción desde el inicio">
+        {{ cancion.nombre }}
+      </div>
+      <div class="song-hint">
+        <span>↺</span> Toca el título para repetirla
+      </div>
+
+      <!-- Barra de progreso -->
+      <div class="progress-box">
+        <span class="time-txt" id="curr-time">0:00</span>
+        <div class="progress-track" id="progress-track" onclick="seekTrack(event)">
+          <div class="progress-fill" id="progress-fill"></div>
+        </div>
+        <span class="time-txt" id="dur-time">0:00</span>
+      </div>
+    </div>
+
+    <!-- Botón Principal: Pedir Más Canciones -->
+    <button class="btn-cta" onclick="handlePedirMasCanciones()">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
+      </svg>
+      Pedir más canciones
+    </button>
+
+    <div class="footer-note">
+      Mi Rockola · Tu música favorita en vivo
+    </div>
+  </div>
+
+  <!-- Audio Player si es archivo -->
+  {% if cancion.origen == 'archivo' and cancion.archivo_id %}
+  <audio id="audio-player" src="/rockola/c/{{ token }}/audio" playsinline preload="auto"></audio>
+  {% endif %}
+
+  <!-- Contenedor YouTube Iframe -->
+  <div id="yt-hidden-wrap">
+    <div id="yt-player-target"></div>
+  </div>
+
+  <!-- Modal Captura de Nombre / Registro Rápido -->
+  <div class="modal-backdrop" id="modal-registro">
+    <div class="modal-sheet">
+      <div class="modal-handle"></div>
+      <div class="modal-title">¿Cómo te llamas? 🎵</div>
+      <div class="modal-sub">
+        Ingresa tus datos una sola vez para que la rockola muestre tus canciones a tu nombre.
+      </div>
+
+      <div class="input-grp">
+        <label class="input-label" for="input-reg-nombre">Tu Nombre</label>
+        <input type="text" id="input-reg-nombre" class="input-field" placeholder="Ej: Carlos" autocomplete="name" autofocus>
+      </div>
+
+      <div class="input-grp">
+        <label class="input-label" for="input-reg-tel">Tu WhatsApp / Celular</label>
+        <input type="tel" id="input-reg-tel" class="input-field" placeholder="Ej: 3101234567" autocomplete="tel">
+      </div>
+
+      <button class="btn-submit-modal" id="btn-submit-reg" onclick="guardarYContinuar()">
+        Continuar a la Rockola
+      </button>
+      <button class="btn-cancel-modal" onclick="cerrarModalRegistro()">
+        Solo quiero escuchar
+      </button>
+    </div>
+  </div>
+
+  <script>
+    const SALA_ID = {{ sala_id | tojson }};
+    const TOKEN = {{ token | tojson }};
+    const CANCION = {{ cancion | tojson }};
+    const DESTINATARIO_ID = {{ destinatario_id | tojson }};
+    const DESTINATARIO_NOMBRE = {{ destinatario_nombre | tojson }};
+    const DESTINATARIO_TELEFONO = {{ destinatario_telefono | tojson }};
+
+    let isPlaying = false;
+    let ytPlayer = null;
+    let ytReady = false;
+    let progressTimer = null;
+
+    // Si ya viene identificado desde la BD, guardarlo en localStorage de inmediato
+    if (DESTINATARIO_NOMBRE) {
+      localStorage.setItem('rockola_nombre', DESTINATARIO_NOMBRE);
+      if (DESTINATARIO_TELEFONO) {
+        localStorage.setItem('rockola_telefono', DESTINATARIO_TELEFONO);
+      }
+    }
+
+    const vinylDisc = document.getElementById('vinyl-disc');
+    const playOverlay = document.getElementById('play-overlay');
+    const progressFill = document.getElementById('progress-fill');
+    const currTimeLabel = document.getElementById('curr-time');
+    const durTimeLabel = document.getElementById('dur-time');
+    const audioEl = document.getElementById('audio-player');
+
+    // Inicialización del reproductor
+    window.addEventListener('DOMContentLoaded', () => {
+      if (CANCION.origen === 'youtube' && CANCION.youtube_id) {
+        cargarYouTubeAPI();
+      } else if (audioEl) {
+        configurarAudioLocal();
+      }
+    });
+
+    // Configuración para archivos locales
+    function configurarAudioLocal() {
+      if (!audioEl) return;
+
+      audioEl.addEventListener('play', () => {
+        isPlaying = true;
+        vinylDisc.classList.add('spinning');
+        playOverlay.classList.add('hidden');
+        iniciarTimerProgreso();
+      });
+
+      audioEl.addEventListener('pause', () => {
+        isPlaying = false;
+        vinylDisc.classList.remove('spinning');
+        playOverlay.classList.remove('hidden');
+        detenerTimerProgreso();
+      });
+
+      audioEl.addEventListener('ended', () => {
+        isPlaying = false;
+        vinylDisc.classList.remove('spinning');
+        playOverlay.classList.remove('hidden');
+        detenerTimerProgreso();
+      });
+
+      audioEl.addEventListener('loadedmetadata', () => {
+        durTimeLabel.textContent = formatTime(audioEl.duration);
+      });
+
+      // Intento de auto-play suave
+      const p = audioEl.play();
+      if (p !== undefined) {
+        p.catch(() => {
+          // Bloqueado por el navegador: se muestra el botón de play
+          playOverlay.classList.remove('hidden');
+        });
+      }
+    }
+
+    // Configuración YouTube API
+    function cargarYouTubeAPI() {
+      const tag = document.createElement('script');
+      tag.src = "https://www.youtube.com/iframe_api";
+      const firstScriptTag = document.getElementsByTagName('script')[0];
+      firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+    }
+
+    window.onYouTubeIframeAPIReady = function() {
+      ytPlayer = new YT.Player('yt-player-target', {
+        height: '200',
+        width: '200',
+        videoId: CANCION.youtube_id,
+        playerVars: {
+          autoplay: 1,
+          playsinline: 1,
+          controls: 0,
+          disablekb: 1,
+          fs: 0,
+          rel: 0,
+          origin: window.location.origin
+        },
+        events: {
+          'onReady': onPlayerReady,
+          'onStateChange': onPlayerStateChange
+        }
+      });
+    };
+
+    function onPlayerReady(event) {
+      ytReady = true;
+      try {
+        event.target.playVideo();
+      } catch (e) {}
+    }
+
+    function onPlayerStateChange(event) {
+      if (event.data === YT.PlayerState.PLAYING) {
+        isPlaying = true;
+        vinylDisc.classList.add('spinning');
+        playOverlay.classList.add('hidden');
+        iniciarTimerProgreso();
+      } else if (event.data === YT.PlayerState.PAUSED) {
+        isPlaying = false;
+        vinylDisc.classList.remove('spinning');
+        playOverlay.classList.remove('hidden');
+        detenerTimerProgreso();
+      } else if (event.data === YT.PlayerState.ENDED) {
+        isPlaying = false;
+        vinylDisc.classList.remove('spinning');
+        playOverlay.classList.remove('hidden');
+        detenerTimerProgreso();
+      }
+    }
+
+    // Control Play / Pause
+    function togglePlayPause(e) {
+      if (e) e.stopPropagation();
+
+      if (CANCION.origen === 'youtube' && ytPlayer && ytReady) {
+        if (isPlaying) {
+          ytPlayer.pauseVideo();
+        } else {
+          ytPlayer.playVideo();
+        }
+      } else if (audioEl) {
+        if (audioEl.paused) {
+          audioEl.play().catch(() => {});
+        } else {
+          audioEl.pause();
+        }
+      }
+    }
+
+    // Repetir canción al tocar el título
+    function reiniciarCancion() {
+      if (CANCION.origen === 'youtube' && ytPlayer && ytReady) {
+        ytPlayer.seekTo(0, true);
+        ytPlayer.playVideo();
+      } else if (audioEl) {
+        audioEl.currentTime = 0;
+        audioEl.play().catch(() => {});
+      }
+    }
+
+    // Barra de Progreso
+    function iniciarTimerProgreso() {
+      detenerTimerProgreso();
+      progressTimer = setInterval(actualizarProgreso, 300);
+    }
+
+    function detenerTimerProgreso() {
+      if (progressTimer) clearInterval(progressTimer);
+    }
+
+    function actualizarProgreso() {
+      let cur = 0, dur = 0;
+      if (CANCION.origen === 'youtube' && ytPlayer && ytReady) {
+        try {
+          cur = ytPlayer.getCurrentTime() || 0;
+          dur = ytPlayer.getDuration() || 0;
+        } catch (e) {}
+      } else if (audioEl) {
+        cur = audioEl.currentTime || 0;
+        dur = audioEl.duration || 0;
+      }
+
+      if (dur > 0) {
+        const pct = Math.min(100, (cur / dur) * 100);
+        progressFill.style.width = pct + '%';
+        currTimeLabel.textContent = formatTime(cur);
+        durTimeLabel.textContent = formatTime(dur);
+      }
+    }
+
+    function seekTrack(event) {
+      const rect = event.currentTarget.getBoundingClientRect();
+      const clickX = event.clientX - rect.left;
+      const pct = Math.max(0, Math.min(1, clickX / rect.width));
+
+      if (CANCION.origen === 'youtube' && ytPlayer && ytReady) {
+        const dur = ytPlayer.getDuration() || 0;
+        ytPlayer.seekTo(dur * pct, true);
+      } else if (audioEl && audioEl.duration) {
+        audioEl.currentTime = audioEl.duration * pct;
+      }
+    }
+
+    function formatTime(sec) {
+      if (!sec || isNaN(sec)) return '0:00';
+      const m = Math.floor(sec / 60);
+      const s = Math.floor(sec % 60);
+      return `${m}:${s < 10 ? '0' : ''}${s}`;
+    }
+
+    // Botón: Pedir Más Canciones
+    function handlePedirMasCanciones() {
+      // 1. ¿Ya tiene nombre en la base de datos o en localStorage?
+      const localNombre = localStorage.getItem('rockola_nombre');
+      const localTel = localStorage.getItem('rockola_telefono');
+
+      if (DESTINATARIO_ID || (localNombre && localNombre !== 'Anónimo' && localNombre.trim().length > 0)) {
+        // Redirigir de una a la sala de cliente
+        window.location.href = `/rockola/${SALA_ID}/cliente`;
+        return;
+      }
+
+      // 2. Si vino de un grupo sin nombre: abrir modal para capturar
+      document.getElementById('modal-registro').classList.add('visible');
+      setTimeout(() => {
+        document.getElementById('input-reg-nombre').focus();
+      }, 150);
+    }
+
+    function cerrarModalRegistro() {
+      document.getElementById('modal-registro').classList.remove('visible');
+    }
+
+    async function guardarYContinuar() {
+      const inputNom = document.getElementById('input-reg-nombre');
+      const inputTel = document.getElementById('input-reg-tel');
+      const nombre = inputNom.value.trim();
+      const telefono = inputTel.value.trim();
+      const btn = document.getElementById('btn-submit-reg');
+
+      if (!nombre) {
+        alert('Por favor escribe tu nombre');
+        inputNom.focus();
+        return;
+      }
+
+      const telLimpio = telefono.replace(/\D/g, '');
+      if (telLimpio.length < 7) {
+        alert('Por favor escribe un número de teléfono o WhatsApp válido');
+        inputTel.focus();
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Guardando...';
+
+      try {
+        const res = await fetch('/rockola/registro-rapido', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nombre, telefono: telLimpio })
+        });
+        const data = await res.json();
+
+        if (data.ok) {
+          localStorage.setItem('rockola_nombre', data.nombre);
+          localStorage.setItem('rockola_telefono', data.telefono);
+          window.location.href = `/rockola/${SALA_ID}/cliente`;
+        } else {
+          alert(data.error || 'No se pudo guardar');
+          btn.disabled = false;
+          btn.textContent = 'Continuar a la Rockola';
+        }
+      } catch (e) {
+        console.error(e);
+        // Fallback local
+        localStorage.setItem('rockola_nombre', nombre);
+        localStorage.setItem('rockola_telefono', telLimpio);
+        window.location.href = `/rockola/${SALA_ID}/cliente`;
+      }
+    }
+  </script>
+</body>
+</html>

@@ -10,6 +10,7 @@ import json
 import os
 import re
 import threading
+import urllib.parse
 import uuid
 
 from flask import Blueprint, Response, jsonify, make_response, render_template, request, send_from_directory, session
@@ -128,6 +129,21 @@ def _ensure_db():
             conn.execute("ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS fundido_cruzado BOOLEAN DEFAULT TRUE;")
             conn.execute("ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS fundido_segundos INTEGER DEFAULT 12;")
             conn.execute("ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS fundido_duracion INTEGER DEFAULT 5;")
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS rockola_compartidos (
+                    token         TEXT PRIMARY KEY,
+                    sala_id       TEXT NOT NULL,
+                    nombre        TEXT NOT NULL,
+                    origen        TEXT NOT NULL DEFAULT 'youtube',
+                    youtube_url   TEXT,
+                    archivo_id    TEXT,
+                    tercero_id    INTEGER REFERENCES terceros(id) ON DELETE SET NULL,
+                    creado_por    INTEGER REFERENCES terceros(id) ON DELETE SET NULL,
+                    visitas       INTEGER NOT NULL DEFAULT 0,
+                    creado_en     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE INDEX IF NOT EXISTS idx_rockola_compartidos_token ON rockola_compartidos(token);
+            """)
             try:
                 conn.execute("ALTER TABLE rockola_cola DROP COLUMN IF EXISTS owner;")
             except Exception:
@@ -790,6 +806,208 @@ def compartir_biblioteca_manifest(share_id):
 @bp.route('/compartir/<share_id>/archivo/<archivo_id>')
 def compartir_biblioteca_archivo(share_id, archivo_id):
     return send_from_directory(_share_dir(share_id), archivo_id)
+
+
+# Compartir canciones individuales (WhatsApp, enlaces publicos y captacion de terceros)
+
+@bp.route('/<sala_id>/compartir-local', methods=['POST'])
+def compartir_local(sala_id):
+    """Guarda un archivo de audio local del reproductor en el servidor para poder compartirlo."""
+    file = request.files.get('archivo')
+    nombre = (request.form.get('nombre') or (file.filename if file else '')).strip()
+    if not file or not nombre:
+        return jsonify(ok=False, error='Archivo o nombre faltante'), 400
+    upload_dir = _upload_dir(sala_id)
+    ext = os.path.splitext(file.filename or 'audio.mp3')[1].lower() or '.mp3'
+    archivo_id = uuid.uuid4().hex + ext
+    file.save(os.path.join(upload_dir, archivo_id))
+    return jsonify(ok=True, archivo_id=archivo_id, nombre=nombre)
+
+
+@bp.route('/compartir/generar', methods=['POST'])
+def compartir_cancion_generar():
+    """Genera token de cancion compartida, registra/vincula a terceros en BD y entrega link con WhatsApp."""
+    data = request.get_json(silent=True) or {}
+    sala_id = (data.get('sala_id') or 'default').strip()
+    nombre = (data.get('nombre') or 'Canción').strip()
+    origen = (data.get('origen') or 'youtube').strip()
+    youtube_url = (data.get('youtube_url') or '').strip()
+    archivo_id = (data.get('archivo_id') or '').strip()
+    amigo_nombre = (data.get('amigo_nombre') or '').strip()
+    amigo_telefono = (data.get('amigo_telefono') or '').strip()
+
+    conn = _connect()
+    try:
+        tercero_id = None
+        tel_limpio = ''.join(c for c in amigo_telefono if c.isdigit())
+        if tel_limpio:
+            row = conn.execute(
+                "SELECT id, nombre FROM terceros WHERE REGEXP_REPLACE(COALESCE(telefono, ''), '[^0-9]', '', 'g') = %s LIMIT 1",
+                (tel_limpio,)
+            ).fetchone()
+            if row:
+                tercero_id = row['id']
+                if amigo_nombre and (not row['nombre'] or row['nombre'].lower() in ('invitado', 'cliente', 'amigo')):
+                    conn.execute("UPDATE terceros SET nombre = %s WHERE id = %s", (amigo_nombre, tercero_id))
+                    conn.commit()
+            else:
+                nom = amigo_nombre or 'Amigo'
+                nuevo = conn.execute(
+                    "INSERT INTO terceros (nombre, telefono, tipo_tercero) VALUES (%s, %s, 'invitado') RETURNING id",
+                    (nom, tel_limpio)
+                ).fetchone()
+                tercero_id = nuevo['id']
+                conn.commit()
+        elif amigo_nombre:
+            nuevo = conn.execute(
+                "INSERT INTO terceros (nombre, tipo_tercero) VALUES (%s, 'invitado') RETURNING id",
+                (amigo_nombre,)
+            ).fetchone()
+            tercero_id = nuevo['id']
+            conn.commit()
+
+        token = uuid.uuid4().hex[:10]
+        creado_por = session.get('usuario_id')
+        conn.execute("""
+            INSERT INTO rockola_compartidos (token, sala_id, nombre, origen, youtube_url, archivo_id, tercero_id, creado_por)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """, (token, sala_id, nombre, origen, youtube_url, archivo_id, tercero_id, creado_por))
+        conn.commit()
+
+        base_url = request.host_url.rstrip('/')
+        url_compartir = f"{base_url}/rockola/c/{token}"
+
+        if amigo_nombre:
+            primer_nombre = amigo_nombre.strip().split(' ')[0]
+            mensaje_wa = f"🎵 *{nombre}*\n\n¡Hola {primer_nombre}! ¡escúchala aquí en Mi Rockola! 👇\n{url_compartir}"
+        else:
+            mensaje_wa = f"🎵 *{nombre}*\n\n¡Escúchala aquí en Mi Rockola y pide la tuya! 👇\n{url_compartir}"
+
+        wa_text_quoted = urllib.parse.quote(mensaje_wa)
+        wa_url = f"https://api.whatsapp.com/send?text={wa_text_quoted}"
+        if tel_limpio:
+            tel_wa = tel_limpio if tel_limpio.startswith('57') else ('57' + tel_limpio if len(tel_limpio) == 10 else tel_limpio)
+            wa_url = f"https://api.whatsapp.com/send?phone={tel_wa}&text={wa_text_quoted}"
+
+        return jsonify(
+            ok=True,
+            token=token,
+            url=url_compartir,
+            mensaje_wa=mensaje_wa,
+            wa_url=wa_url,
+            tercero_id=tercero_id,
+            amigo_nombre=amigo_nombre
+        )
+    finally:
+        conn.close()
+
+
+@bp.route('/c/<token>')
+def escuchar_cancion_compartida(token):
+    """Pagina de escucha publica ultraligera para WhatsApp y enlaces compartidos."""
+    conn = _connect()
+    try:
+        row = conn.execute("""
+            SELECT rc.*, t.nombre AS destinatario_nombre, t.telefono AS destinatario_telefono
+            FROM rockola_compartidos rc
+            LEFT JOIN terceros t ON t.id = rc.tercero_id
+            WHERE rc.token = %s
+        """, (token,)).fetchone()
+        if not row:
+            return render_template('rockola_escuchar.html', no_encontrada=True), 404
+
+        conn.execute("UPDATE rockola_compartidos SET visitas = visitas + 1 WHERE token = %s", (token,))
+        conn.commit()
+
+        destinatario = row['destinatario_nombre'] or ''
+        if destinatario:
+            primer_nombre = destinatario.strip().split(' ')[0]
+            saludo = f"¡Hola {primer_nombre}! ¡escúchala!"
+        else:
+            saludo = "¡Escúchala!"
+
+        base_url = request.host_url.rstrip('/')
+        yt_id = _extraer_youtube_id(row['youtube_url']) if row['youtube_url'] else ''
+
+        return render_template(
+            'rockola_escuchar.html',
+            token=token,
+            cancion={
+                'nombre': row['nombre'],
+                'origen': row['origen'],
+                'youtube_url': row['youtube_url'] or '',
+                'youtube_id': yt_id,
+                'archivo_id': row['archivo_id'] or '',
+            },
+            sala_id=row['sala_id'],
+            destinatario_id=row['tercero_id'] or '',
+            destinatario_nombre=row['destinatario_nombre'] or '',
+            destinatario_telefono=row['destinatario_telefono'] or '',
+            saludo=saludo,
+            base_url=base_url
+        )
+    finally:
+        conn.close()
+
+
+@bp.route('/c/<token>/audio')
+def audio_cancion_compartida(token):
+    """Streaming de audio para la cancion compartida si es archivo."""
+    conn = _connect()
+    try:
+        row = conn.execute("SELECT * FROM rockola_compartidos WHERE token = %s", (token,)).fetchone()
+        if not row:
+            return jsonify(ok=False, error='No encontrada'), 404
+        if row['origen'] == 'archivo' and row['archivo_id']:
+            upload_dir = _upload_dir(row['sala_id'])
+            return send_from_directory(upload_dir, row['archivo_id'])
+        return jsonify(ok=False, error='Audio no disponible'), 400
+    finally:
+        conn.close()
+
+
+@bp.route('/registro-rapido', methods=['POST'])
+def registro_rapido_rockola():
+    """Registro rapido de oyentes en tabla terceros al pedir canciones."""
+    data = request.get_json(silent=True) or {}
+    nombre = (data.get('nombre') or '').strip()
+    telefono = (data.get('telefono') or '').strip()
+    if not nombre or not telefono:
+        return jsonify(ok=False, error='Nombre y teléfono requeridos'), 400
+
+    tel_limpio = ''.join(c for c in telefono if c.isdigit())
+    if len(tel_limpio) < 7:
+        return jsonify(ok=False, error='Teléfono inválido (mínimo 7 dígitos)'), 400
+
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT id, nombre, pin_seguridad FROM terceros WHERE REGEXP_REPLACE(COALESCE(telefono, ''), '[^0-9]', '', 'g') = %s LIMIT 1",
+            (tel_limpio,)
+        ).fetchone()
+        if row:
+            tercero_id = row['id']
+            if nombre and (not row['nombre'] or row['nombre'].lower() in ('invitado', 'cliente', 'amigo')):
+                conn.execute("UPDATE terceros SET nombre = %s WHERE id = %s", (nombre, tercero_id))
+                conn.commit()
+            nombre_final = row['nombre'] or nombre
+        else:
+            cur = conn.execute(
+                "INSERT INTO terceros (nombre, telefono, tipo_tercero) VALUES (%s, %s, 'invitado') RETURNING id",
+                (nombre, tel_limpio)
+            )
+            tercero_id = cur.fetchone()['id']
+            conn.commit()
+            nombre_final = nombre
+
+        session['usuario_id'] = tercero_id
+        session['nombre'] = nombre_final
+        session['telefono'] = tel_limpio
+        session['rol'] = 'Cliente'
+
+        return jsonify(ok=True, tercero_id=tercero_id, nombre=nombre_final, telefono=tel_limpio)
+    finally:
+        conn.close()
 
 
 # Mensajeria musical: compartir cancion al chat

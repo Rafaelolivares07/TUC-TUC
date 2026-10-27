@@ -1266,6 +1266,9 @@ input:checked + .slider:before {
           <span id="badge-repetir-cancion" onclick="toggleModoRepetirCancionDirecto()" style="display:none; cursor:pointer; font-size:10px; font-weight:800; padding:2px 8px; border-radius:12px; background:rgba(0,212,255,0.18); border:1px solid var(--ac1); color:var(--ac1); box-shadow:0 0 10px rgba(0,212,255,0.4); transition:all 0.25s;" title="Canción programada para repetir 1 vez. Toca para desactivar">
             🔂 Repetir 1x
           </span>
+          <span id="btn-compartir-actual" onclick="abrirModalCompartirActual()" style="cursor:pointer; font-size:10px; font-weight:800; padding:2px 8px; border-radius:12px; background:rgba(37,211,102,0.14); border:1px solid rgba(37,211,102,0.4); color:#25d366; display:inline-flex; align-items:center; gap:3px;" title="Compartir esta canción por WhatsApp">
+            <span>📲</span> Compartir
+          </span>
         </div>
         <div class="np-nombre" id="nombre-actual" onclick="toggleModoRepetirCancionDirecto()" style="cursor:pointer;" title="Toca para programar repetir esta canción 1 vez">Esperando canciones...</div>
 
@@ -1644,6 +1647,46 @@ input:checked + .slider:before {
     </div>
 
     <button onclick="cerrarModalGuardarDescarga()" style="width:100%; padding:10px; border:none; border-radius:12px; background:transparent; color:var(--muted); font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:12px; cursor:pointer; margin-top:2px;">Cerrar</button>
+  </div>
+</div>
+
+<!-- Modal Compartir Canción por WhatsApp -->
+<div id="modal-compartir-cancion" style="display:none; position:fixed; inset:0; z-index:260; background:rgba(0,0,0,.78); backdrop-filter:blur(6px); align-items:flex-end; justify-content:center;" onclick="if(event.target===this)cerrarModalCompartir()">
+  <div style="width:100%; max-width:440px; background:var(--surface); border:1px solid rgba(0,212,255,0.22); border-radius:24px 24px 0 0; padding:22px 20px 32px; animation:fadeUp .25s ease; box-shadow:0 -12px 40px rgba(0,0,0,.75);">
+    <div style="width:42px; height:4px; background:var(--muted2); border-radius:2px; margin:0 auto 16px;"></div>
+
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:14px;">
+      <div style="width:42px; height:42px; border-radius:12px; background:rgba(37,211,102,0.15); border:1px solid rgba(37,211,102,0.4); display:flex; align-items:center; justify-content:center; color:#25d366; font-size:22px; flex-shrink:0;">
+        📲
+      </div>
+      <div style="flex:1; min-width:0;">
+        <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.8px; color:#25d366; font-weight:800;">Compartir por WhatsApp</div>
+        <div id="modal-compartir-titulo-cancion" style="font-size:14px; font-weight:800; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"></div>
+      </div>
+    </div>
+
+    <!-- Botón Contact Picker (si el navegador lo soporta) -->
+    <button type="button" id="btn-modal-seleccionar-contacto" onclick="seleccionarContactoModal()" style="display:none; width:100%; padding:11px 12px; border-radius:12px; background:rgba(0,212,255,0.10); border:1px solid rgba(0,212,255,0.35); color:var(--ac1); font-family:'Space Grotesk',sans-serif; font-weight:800; font-size:13px; cursor:pointer; align-items:center; justify-content:center; gap:8px; margin-bottom:12px;">
+      <svg style="width:16px; height:16px; fill:currentColor;" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+      Seleccionar de mis contactos
+    </button>
+
+    <div style="margin-bottom:12px;">
+      <label style="display:block; font-size:11px; font-weight:700; color:var(--muted); margin-bottom:5px; text-transform:uppercase; letter-spacing:0.5px;">Para quién es (opcional para grupos)</label>
+      <input type="text" id="modal-compartir-input-nombre" placeholder="Ej: Carlos" style="width:100%; padding:12px 14px; border-radius:10px; border:1px solid rgba(0,212,255,0.2); background:rgba(0,0,0,0.35); color:#fff; font-family:inherit; font-size:14px; outline:none;">
+    </div>
+
+    <div style="margin-bottom:16px;">
+      <label style="display:block; font-size:11px; font-weight:700; color:var(--muted); margin-bottom:5px; text-transform:uppercase; letter-spacing:0.5px;">Teléfono o WhatsApp (opcional)</label>
+      <input type="tel" id="modal-compartir-input-tel" placeholder="Ej: 3101234567" style="width:100%; padding:12px 14px; border-radius:10px; border:1px solid rgba(0,212,255,0.2); background:rgba(0,0,0,0.35); color:#fff; font-family:inherit; font-size:14px; outline:none;">
+      <div style="font-size:11px; color:var(--muted); margin-top:4px;">Si lo dejas en blanco, generará un enlace general listo para compartir a cualquier grupo o chat.</div>
+    </div>
+
+    <button type="button" id="btn-modal-ejecutar-compartir" onclick="ejecutarCompartirWhatsApp()" style="width:100%; padding:14px; border-radius:12px; border:none; background:#25d366; color:#05140b; font-family:'Space Grotesk',sans-serif; font-weight:900; font-size:15px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; box-shadow:0 4px 16px rgba(37,211,102,0.35);">
+      <svg style="width:20px; height:20px; fill:currentColor;" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+      Abrir WhatsApp
+    </button>
+    <button type="button" onclick="cerrarModalCompartir()" style="width:100%; padding:10px; margin-top:8px; border:none; background:transparent; color:var(--muted); font-size:13px; font-weight:700; cursor:pointer;">Cancelar</button>
   </div>
 </div>
 
@@ -3913,6 +3956,7 @@ function renderBibliotecaLocal() {
       </div>
       <button class="playlist-mini" onclick="agregarCancionALista('${c.id}')">Lista</button>
       <button class="library-btn" onclick="abrirModalPoner('${c.id}', '${escapeJs(limpiarNombre(c.nombre))}')">Poner</button>
+      <button class="library-del-btn" onclick="abrirModalCompartirLocalItem('${c.id}', '${escapeJs(limpiarNombre(c.nombre))}')" title="Compartir canción por WhatsApp" style="color:#25d366;">📲</button>
       <button class="library-del-btn" onclick="eliminarCancionLocal('${c.id}', '${escapeJs(limpiarNombre(c.nombre))}')" title="Eliminar solo esta copia">🗑️</button>
     </li>
   `;
@@ -4620,6 +4664,7 @@ function renderCola(cola) {
           `<span class="q-saved-badge" title="Canción guardada en la biblioteca de este dispositivo"><svg style="width:11px; height:11px; fill:none; stroke:currentColor; stroke-width:2.5; stroke-linecap:round; stroke-linejoin:round;" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg> Guardada</span>` : 
           `<button class="q-download-btn" onclick="bajarCancionServidor('${c.id}', '${escapeJs(c.nombre)}', this)" title="Descargar y guardar en tu celular / PC"><svg style="width:15px; height:15px; display:block; fill:none; stroke:currentColor; stroke-width:2.4; stroke-linecap:round; stroke-linejoin:round;" viewBox="0 0 24 24"><path d="M12 3v13m0 0l-5-5m5 5l5-5M4 19h16"/></svg></button>`
       ) : '')}
+      <button class="q-download-btn" onclick="abrirModalCompartirItem('${c.id}', '${escapeJs(c.nombre)}', '${c.youtube_url || ''}')" title="Compartir canción por WhatsApp" style="color:#25d366; border-color:rgba(37,211,102,0.35);"><svg style="width:13px; height:13px; display:block; fill:currentColor;" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg></button>
       <button class="q-remove" onclick="quitar('${c.id}')">Quitar</button>
     </li>
   `;
@@ -4792,6 +4837,184 @@ function reintentarUltimaDescarga() {
     bajarLink(ultimaDescargaInfo.id);
   } else if (ultimaDescargaInfo.tipo === 'servidor') {
     bajarCancionServidor(ultimaDescargaInfo.id, ultimaDescargaInfo.nombre);
+  }
+}
+
+let cancionACompartir = null;
+
+function abrirModalCompartirActual() {
+  if (!currentTrack || (!currentTrack.id && !currentTrack.nombre)) {
+    mostrarMensaje('No hay ninguna canción sonando ahora mismo', 'err');
+    return;
+  }
+  const yt = (currentTrack.youtube_url || (currentTrack.id && currentTrack.id.includes('youtube') ? currentTrack.id : '')).trim();
+  const esLocal = currentTrack.id && currentTrack.id.startsWith('local-');
+  const archivoId = (!yt && !esLocal) ? currentTrack.id : '';
+
+  cancionACompartir = {
+    id: currentTrack.id,
+    nombre: currentTrack.nombre || 'Canción',
+    origen: yt ? 'youtube' : 'archivo',
+    youtube_url: yt,
+    archivo_id: archivoId,
+    es_local: esLocal
+  };
+  abrirModalCompartirUI(cancionACompartir.nombre);
+}
+
+function abrirModalCompartirItem(id, nombre, youtube_url) {
+  const yt = (youtube_url || '').trim();
+  const esLocal = id && id.startsWith('local-');
+  const archivoId = (!yt && !esLocal) ? id : '';
+
+  cancionACompartir = {
+    id: id,
+    nombre: nombre || 'Canción',
+    origen: yt ? 'youtube' : 'archivo',
+    youtube_url: yt,
+    archivo_id: archivoId,
+    es_local: esLocal
+  };
+  abrirModalCompartirUI(nombre);
+}
+
+function abrirModalCompartirLocalItem(id, nombre) {
+  cancionACompartir = {
+    id: id,
+    nombre: nombre || 'Canción',
+    origen: 'archivo',
+    youtube_url: '',
+    archivo_id: '',
+    es_local: true
+  };
+  abrirModalCompartirUI(nombre);
+}
+
+function abrirModalCompartirUI(nombreCancion) {
+  const modal = document.getElementById('modal-compartir-cancion');
+  if (!modal) return;
+  document.getElementById('modal-compartir-titulo-cancion').textContent = limpiarNombre(nombreCancion || 'Canción');
+  document.getElementById('modal-compartir-input-nombre').value = '';
+  document.getElementById('modal-compartir-input-tel').value = '';
+
+  const btnContacts = document.getElementById('btn-modal-seleccionar-contacto');
+  if (btnContacts) {
+    if ('contacts' in navigator && 'ContactsManager' in window) {
+      btnContacts.style.display = 'inline-flex';
+    } else {
+      btnContacts.style.display = 'none';
+    }
+  }
+
+  const btn = document.getElementById('btn-modal-ejecutar-compartir');
+  if (btn) {
+    btn.disabled = false;
+    btn.innerHTML = `<svg style="width:20px; height:20px; fill:currentColor;" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg> Abrir WhatsApp`;
+  }
+
+  modal.style.display = 'flex';
+}
+
+function cerrarModalCompartir() {
+  const modal = document.getElementById('modal-compartir-cancion');
+  if (modal) modal.style.display = 'none';
+  cancionACompartir = null;
+}
+
+async function seleccionarContactoModal() {
+  try {
+    const contactos = await navigator.contacts.select(['name', 'tel'], { multiple: false });
+    if (contactos && contactos.length > 0) {
+      const c = contactos[0];
+      if (c.name && c.name.length > 0) {
+        document.getElementById('modal-compartir-input-nombre').value = c.name[0];
+      }
+      if (c.tel && c.tel.length > 0) {
+        let tel = c.tel[0].replace(/\D/g, '');
+        if (tel.startsWith('57') && tel.length > 10) tel = tel.substring(2);
+        document.getElementById('modal-compartir-input-tel').value = tel;
+      }
+    }
+  } catch (err) {
+    console.log('Contacto no seleccionado:', err);
+  }
+}
+
+async function ejecutarCompartirWhatsApp() {
+  if (!cancionACompartir) return;
+
+  const btn = document.getElementById('btn-modal-ejecutar-compartir');
+  const inputNom = document.getElementById('modal-compartir-input-nombre');
+  const inputTel = document.getElementById('modal-compartir-input-tel');
+  const amigoNombre = inputNom.value.trim();
+  const amigoTelefono = inputTel.value.trim();
+
+  btn.disabled = true;
+  btn.innerHTML = '<span>⏳ Generando enlace...</span>';
+
+  try {
+    let archivoId = cancionACompartir.archivo_id || '';
+
+    if (cancionACompartir.es_local && !archivoId && !cancionACompartir.youtube_url) {
+      btn.innerHTML = '<span>☁️ Subiendo al servidor...</span>';
+      const db = await abrirDbLocal();
+      const songData = await new Promise((res, rej) => {
+        const tx = db.transaction('songs', 'readonly');
+        const req = tx.objectStore('songs').get(cancionACompartir.id);
+        req.onsuccess = () => res(req.result);
+        req.onerror = () => rej(req.error);
+      });
+      db.close();
+
+      if (songData && songData.blob) {
+        const fd = new FormData();
+        fd.append('archivo', songData.blob, cancionACompartir.nombre + '.mp3');
+        fd.append('nombre', cancionACompartir.nombre);
+        const upRes = await fetch(`/rockola/${SALA_ID}/compartir-local`, {
+          method: 'POST',
+          body: fd
+        });
+        const upData = await upRes.json();
+        if (upData.ok) {
+          archivoId = upData.archivo_id;
+        } else {
+          throw new Error(upData.error || 'No se pudo subir el archivo local');
+        }
+      }
+    }
+
+    btn.innerHTML = '<span>🚀 Preparando WhatsApp...</span>';
+    const payload = {
+      sala_id: SALA_ID,
+      nombre: cancionACompartir.nombre,
+      origen: cancionACompartir.youtube_url ? 'youtube' : 'archivo',
+      youtube_url: cancionACompartir.youtube_url || '',
+      archivo_id: archivoId,
+      amigo_nombre: amigoNombre,
+      amigo_telefono: amigoTelefono
+    };
+
+    const res = await fetch('/rockola/compartir/generar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+
+    if (data.ok) {
+      cerrarModalCompartir();
+      mostrarMensaje('✓ Enlace creado. Abriendo WhatsApp...', 'ok');
+      window.open(data.wa_url, '_blank');
+    } else {
+      alert(data.error || 'No se pudo generar el enlace');
+      btn.disabled = false;
+      btn.innerHTML = `<svg style="width:20px; height:20px; fill:currentColor;" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg> Abrir WhatsApp`;
+    }
+  } catch (err) {
+    console.error('Error compartiendo:', err);
+    alert('Error al compartir: ' + (err.message || err));
+    btn.disabled = false;
+    btn.innerHTML = `<svg style="width:20px; height:20px; fill:currentColor;" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg> Abrir WhatsApp`;
   }
 }
 

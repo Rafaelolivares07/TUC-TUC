@@ -329,6 +329,7 @@ def _crear_tablas(conn):
         "ALTER TABLE config_negocio ADD COLUMN IF NOT EXISTS costo_hora_mod NUMERIC(12,2) DEFAULT 0",
         "ALTER TABLE config_negocio ADD COLUMN IF NOT EXISTS horas_semana_mod NUMERIC(5,2) DEFAULT 42.0",
         "ALTER TABLE config_negocio ADD COLUMN IF NOT EXISTS dias_semana_mod NUMERIC(4,2) DEFAULT 6.0",
+        "ALTER TABLE config_negocio ADD COLUMN IF NOT EXISTS personas_mod NUMERIC(4,1) DEFAULT 1.0",
     ]
     for sql in alters:
         try:
@@ -12187,33 +12188,41 @@ def api_configuracion_mod(negocio_id):
                 dias_semana = max(1.0, float(data.get('dias_semana_mod', 6.0)))
             except (ValueError, TypeError):
                 dias_semana = 6.0
+            try:
+                personas = max(1.0, float(data.get('personas_mod', 1.0)))
+            except (ValueError, TypeError):
+                personas = 1.0
 
             conn.execute("""
-                INSERT INTO config_negocio (tercero_id, costo_hora_mod, horas_semana_mod, dias_semana_mod, updated_at)
-                VALUES (%s, %s, %s, %s, NOW())
+                INSERT INTO config_negocio (tercero_id, costo_hora_mod, horas_semana_mod, dias_semana_mod, personas_mod, updated_at)
+                VALUES (%s, %s, %s, %s, %s, NOW())
                 ON CONFLICT (tercero_id) DO UPDATE
                 SET costo_hora_mod = EXCLUDED.costo_hora_mod,
                     horas_semana_mod = EXCLUDED.horas_semana_mod,
                     dias_semana_mod = EXCLUDED.dias_semana_mod,
+                    personas_mod = EXCLUDED.personas_mod,
                     updated_at = NOW()
-            """, (negocio_id, costo_hora, horas_semana, dias_semana))
+            """, (negocio_id, costo_hora, horas_semana, dias_semana, personas))
             conn.commit()
             return jsonify({
                 'ok': True,
                 'costo_hora_mod': costo_hora,
                 'horas_semana_mod': horas_semana,
-                'dias_semana_mod': dias_semana
+                'dias_semana_mod': dias_semana,
+                'personas_mod': personas
             })
         else:
-            row = conn.execute("SELECT costo_hora_mod, horas_semana_mod, dias_semana_mod FROM config_negocio WHERE tercero_id = %s", (negocio_id,)).fetchone()
+            row = conn.execute("SELECT costo_hora_mod, horas_semana_mod, dias_semana_mod, personas_mod FROM config_negocio WHERE tercero_id = %s", (negocio_id,)).fetchone()
             costo_hora = float(row['costo_hora_mod']) if row and row['costo_hora_mod'] is not None else 0.0
             horas_semana = float(row['horas_semana_mod']) if row and row.get('horas_semana_mod') is not None else 42.0
             dias_semana = float(row['dias_semana_mod']) if row and row.get('dias_semana_mod') is not None else 6.0
+            personas = float(row['personas_mod']) if row and row.get('personas_mod') is not None else 1.0
             return jsonify({
                 'ok': True,
                 'costo_hora_mod': costo_hora,
                 'horas_semana_mod': horas_semana,
-                'dias_semana_mod': dias_semana
+                'dias_semana_mod': dias_semana,
+                'personas_mod': personas
             })
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -12268,10 +12277,11 @@ def api_reporte_ventas_costos(negocio_id):
         
     conn = get_db_connection()
     try:
-        cfg_row = conn.execute("SELECT costo_hora_mod, horas_semana_mod, dias_semana_mod FROM config_negocio WHERE tercero_id = %s", (negocio_id,)).fetchone()
+        cfg_row = conn.execute("SELECT costo_hora_mod, horas_semana_mod, dias_semana_mod, personas_mod FROM config_negocio WHERE tercero_id = %s", (negocio_id,)).fetchone()
         costo_hora_mod = float(cfg_row['costo_hora_mod']) if cfg_row and cfg_row['costo_hora_mod'] is not None else 0.0
         horas_semana_mod = float(cfg_row['horas_semana_mod']) if cfg_row and cfg_row.get('horas_semana_mod') is not None else 42.0
         dias_semana_mod = float(cfg_row['dias_semana_mod']) if cfg_row and cfg_row.get('dias_semana_mod') is not None else 6.0
+        personas_mod = float(cfg_row['personas_mod']) if cfg_row and cfg_row.get('personas_mod') is not None else 1.0
 
         datos = _query_reporte_ventas_costos(conn, negocio_id, desde, hasta, centro_utilidad_id=centro_utilidad_id, costo_hora_mod=costo_hora_mod)
 
@@ -12290,6 +12300,7 @@ def api_reporte_ventas_costos(negocio_id):
             'costo_hora_mod': costo_hora_mod,
             'horas_semana_mod': horas_semana_mod,
             'dias_semana_mod': dias_semana_mod,
+            'personas_mod': personas_mod,
             'alertas': alertas
         })
     except Exception as e:

@@ -4635,6 +4635,17 @@
                  onchange="guardarParametrosMOD()">
         </div>
 
+        <div class="h-4 w-px bg-amber-300/70 hidden sm:block"></div>
+
+        <!-- Personas en Operación -->
+        <div class="flex items-center gap-1.5">
+          <label class="text-xs font-semibold text-gray-700" title="Número de operarios o cocineros en simultáneo (ej. 1, 2, 3...)">👥 Personas:</label>
+          <input type="number" id="vc-personas-mod" min="1" max="99" step="1" value="1" placeholder="1"
+                 class="w-12 text-center py-1 border border-gray-200 rounded-xl bg-white font-mono font-bold text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-2xs no-spinners"
+                 onfocus="this.select()"
+                 onchange="guardarParametrosMOD()">
+        </div>
+
         <!-- Badge Turno Diario Calculado -->
         <span id="vc-jornada-diaria-badge" class="text-xs text-amber-900 font-mono font-bold bg-amber-100/70 px-2.5 py-1 rounded-xl border border-amber-200 shadow-2xs" title="Horas laborales por día = Horas por semana / Días por semana">
           ⚡ Turno: <strong>7.0h</strong> / día
@@ -4767,7 +4778,7 @@
           <span class="text-[10px] bg-amber-200/80 text-amber-900 font-bold px-2 py-0.5 rounded-full">Reporte del Período</span>
         </div>
         <div class="text-[11px] font-mono text-gray-600 flex items-center gap-3">
-          <span>Jornada base: <strong class="text-gray-800" id="vc-card-jornada-base">42 horas semanales en 6 días (7.0 horas por día)</strong></span>
+          <span>Parámetros: <strong class="text-gray-800" id="vc-card-jornada-base">42 horas semanales en 6 días (7.0 horas por día) | Equipo: 1 persona</strong></span>
         </div>
       </div>
 
@@ -4784,7 +4795,7 @@
 
         <!-- Horas de Trabajo -->
         <div class="bg-white/80 border border-amber-200/70 rounded-xl p-3 shadow-2xs">
-          <span class="block text-[10px] font-bold uppercase tracking-wider text-amber-700 mb-1">Horas de Trabajo</span>
+          <span class="block text-[10px] font-bold uppercase tracking-wider text-amber-700 mb-1">Horas de Trabajo (Totales)</span>
           <div id="vc-card-horas-totales" class="text-lg font-black text-amber-900 font-mono">0 horas</div>
           <div class="text-[10px] text-gray-500 mt-1" id="vc-card-horas-desglose">
             Equivalente al total de minutos laborados
@@ -4793,19 +4804,63 @@
 
         <!-- Días Laborales -->
         <div class="bg-white/80 border border-amber-200/70 rounded-xl p-3 shadow-2xs">
-          <span class="block text-[10px] font-bold uppercase tracking-wider text-amber-700 mb-1">Días Laborales</span>
+          <span class="block text-[10px] font-bold uppercase tracking-wider text-amber-700 mb-1">Días Laborales (Equipo)</span>
           <div id="vc-card-dias-totales" class="text-lg font-black text-orange-950 font-mono">0 días laborales</div>
           <div class="text-[10px] text-gray-500 mt-1" id="vc-card-dias-desglose">
-            Calculado a razón de turno diario
+            Calculado para el equipo de trabajo
           </div>
         </div>
 
-        <!-- Semanas de Trabajo y Costo -->
+        <!-- Semanas de Trabajo y Nómina -->
         <div class="bg-white/80 border border-amber-200/70 rounded-xl p-3 shadow-2xs">
-          <span class="block text-[10px] font-bold uppercase tracking-wider text-amber-700 mb-1">Semanas de Trabajo</span>
+          <span class="block text-[10px] font-bold uppercase tracking-wider text-amber-700 mb-1">Semanas de Trabajo (Equipo)</span>
           <div id="vc-card-semanas-totales" class="text-lg font-black text-indigo-950 font-mono">0 semanas de trabajo</div>
           <div class="text-[10px] text-amber-900 font-semibold mt-1 font-mono" id="vc-card-costo-mod">
-            Costo MOD: $0
+            Calculado para el equipo de trabajo
+          </div>
+        </div>
+      </div>
+
+      <!-- GRAN EXPLICACIÓN GERENCIAL DE CAPACIDAD Y TIEMPOS -->
+      <div class="mt-4 p-4 bg-gradient-to-r from-amber-100/60 via-orange-100/30 to-amber-50/50 border border-amber-300 rounded-xl">
+        <div class="flex items-start gap-3">
+          <span class="text-xl">💡</span>
+          <div class="flex-1 text-xs text-amber-950 leading-relaxed">
+            <h5 class="text-xs font-black uppercase tracking-wider text-amber-950 mb-1.5 flex items-center gap-1.5">
+              <span>Análisis de Capacidad:</span>
+              <span class="text-amber-800 font-normal">¿Cuántas personas y cuántos días de trabajo demandó esta producción?</span>
+            </h5>
+            <p id="vc-card-explicacion-general" class="text-gray-700">
+              Cargando análisis de capacidad...
+            </p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2.5">
+              <div class="bg-white/90 p-3 rounded-lg border border-amber-200 shadow-2xs">
+                <span class="font-bold text-gray-800 text-[11px] flex items-center gap-1.5 mb-1">
+                  <span>👤</span>
+                  <span>Si trabajara 1 sola persona:</span>
+                </span>
+                <p id="vc-card-explicacion-unipersonal" class="text-[11px] text-gray-600">
+                  Le tomaría 0 días laborales (0 semanas).
+                </p>
+              </div>
+              <div class="bg-white/90 p-3 rounded-lg border border-amber-200 shadow-2xs">
+                <span class="font-bold text-amber-900 text-[11px] flex items-center gap-1.5 mb-1">
+                  <span>👥</span>
+                  <span id="vc-card-explicacion-equipo-titulo">Con tu equipo de 1 persona:</span>
+                </span>
+                <p id="vc-card-explicacion-equipo-body" class="text-[11px] text-gray-600">
+                  El trabajo se distribuye en 0 días laborales (0 semanas).
+                </p>
+              </div>
+            </div>
+            <div class="mt-2.5 pt-2 border-t border-amber-200 text-[11px] text-amber-900 font-medium flex items-center justify-between flex-wrap gap-2">
+              <span id="vc-card-explicacion-tarifa">
+                Tarifa horaria base: $0 por hora por operario.
+              </span>
+              <span id="vc-card-explicacion-costo" class="font-bold font-mono text-amber-950">
+                Inversión MOD total estimada: $0
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -19638,6 +19693,7 @@ function toggleTiemposVC() { toggleDesgloseVC(); }
 
 let horasSemanaModVC = 42.0;
 let diasSemanaModVC = 6.0;
+let personasModVC = 1.0;
 
 function irAPantallaReparacion(numeroDoc, productoId, fecha) {
   const desdeInp = document.getElementById('vc-desde');
@@ -19691,10 +19747,12 @@ async function guardarParametrosMOD() {
   const inpHora = document.getElementById('vc-costo-hora-mod');
   const inpHrsSem = document.getElementById('vc-horas-semana-mod');
   const inpDiasSem = document.getElementById('vc-dias-semana-mod');
+  const inpPersonas = document.getElementById('vc-personas-mod');
 
   if (inpHora) costoHoraModVC = Math.max(0, parseFloat(inpHora.value) || 0);
   if (inpHrsSem) horasSemanaModVC = Math.max(1, parseFloat(inpHrsSem.value) || 42.0);
   if (inpDiasSem) diasSemanaModVC = Math.max(1, parseFloat(inpDiasSem.value) || 6.0);
+  if (inpPersonas) personasModVC = Math.max(1, parseFloat(inpPersonas.value) || 1.0);
 
   actualizarBadgesMOD();
   datosVC.forEach(prod => recalcularFilaMOD(prod));
@@ -19707,7 +19765,8 @@ async function guardarParametrosMOD() {
       body: JSON.stringify({
         costo_hora_mod: costoHoraModVC,
         horas_semana_mod: horasSemanaModVC,
-        dias_semana_mod: diasSemanaModVC
+        dias_semana_mod: diasSemanaModVC,
+        personas_mod: personasModVC
       })
     });
     const d = await r.json();
@@ -19869,6 +19928,7 @@ async function consultarVentasCostos() {
       costoHoraModVC = d.costo_hora_mod || 0;
       horasSemanaModVC = d.horas_semana_mod || 42.0;
       diasSemanaModVC = d.dias_semana_mod || 6.0;
+      personasModVC = d.personas_mod || 1.0;
 
       const inpMod = document.getElementById('vc-costo-hora-mod');
       if (inpMod && document.activeElement !== inpMod) {
@@ -19881,6 +19941,10 @@ async function consultarVentasCostos() {
       const inpDiasSem = document.getElementById('vc-dias-semana-mod');
       if (inpDiasSem && document.activeElement !== inpDiasSem) {
         inpDiasSem.value = diasSemanaModVC;
+      }
+      const inpPersonas = document.getElementById('vc-personas-mod');
+      if (inpPersonas && document.activeElement !== inpPersonas) {
+        inpPersonas.value = personasModVC;
       }
       actualizarBadgesMOD();
 
@@ -20061,11 +20125,16 @@ function renderTablaVC() {
   const totalHorasEns = totalMinEns / 60.0;
   const totalHorasGlobal = totalMinGlobal / 60.0;
 
+  const numPersonas = Math.max(1, parseFloat(personasModVC) || 1.0);
   const hSem = Math.max(1, parseFloat(horasSemanaModVC) || 42.0);
   const dSem = Math.max(1, parseFloat(diasSemanaModVC) || 6.0);
   const hDia = getHorasPorDiaMOD();
-  const totalDiasTrabajo = hDia > 0 ? (totalHorasGlobal / hDia) : 0;
-  const totalSemanasTrabajo = hSem > 0 ? (totalHorasGlobal / hSem) : 0;
+
+  // Cálculos comparativos: 1 persona sola vs Equipo de N personas
+  const dias1Persona = hDia > 0 ? (totalHorasGlobal / hDia) : 0;
+  const semanas1Persona = hSem > 0 ? (totalHorasGlobal / hSem) : 0;
+  const diasEquipo = (numPersonas > 0 && hDia > 0) ? (totalHorasGlobal / (numPersonas * hDia)) : 0;
+  const semanasEquipo = (numPersonas > 0 && hSem > 0) ? (totalHorasGlobal / (numPersonas * hSem)) : 0;
 
   // Actualizar tarjeta informativa inferior con palabras completas
   const cardTiempos = document.getElementById('vc-tarjeta-tiempos');
@@ -20075,7 +20144,7 @@ function renderTablaVC() {
 
       const elJornada = document.getElementById('vc-card-jornada-base');
       if (elJornada) {
-        elJornada.textContent = `${fmt(hSem)} horas semanales en ${fmt(dSem)} días (${fmt(hDia)} horas por día)`;
+        elJornada.textContent = `${fmt(hSem)} horas semanales en ${fmt(dSem)} días (${fmt(hDia)} horas por día) | Equipo: ${fmt(numPersonas)} ${numPersonas === 1 ? 'persona' : 'personas'}`;
       }
 
       const elMinTot = document.getElementById('vc-card-minutos-totales');
@@ -20105,22 +20174,53 @@ function renderTablaVC() {
 
       const elDiasTot = document.getElementById('vc-card-dias-totales');
       if (elDiasTot) {
-        elDiasTot.textContent = `${fmt(totalDiasTrabajo)} ${totalDiasTrabajo === 1 ? 'día laboral' : 'días laborales'}`;
+        elDiasTot.textContent = `${fmt(diasEquipo)} ${diasEquipo === 1 ? 'día laboral' : 'días laborales'}`;
       }
 
       const elDiasDes = document.getElementById('vc-card-dias-desglose');
       if (elDiasDes) {
-        elDiasDes.textContent = `A razón de ${fmt(hDia)} horas por turno de trabajo diario`;
+        elDiasDes.textContent = `Con tu equipo de ${fmt(numPersonas)} ${numPersonas === 1 ? 'persona' : 'personas'} (~${fmt(dias1Persona)} días si fuera 1 persona sola)`;
       }
 
       const elSemTot = document.getElementById('vc-card-semanas-totales');
       if (elSemTot) {
-        elSemTot.textContent = `${fmt(totalSemanasTrabajo)} ${totalSemanasTrabajo === 1 ? 'semana laboral' : 'semanas laborales'}`;
+        elSemTot.textContent = `${fmt(semanasEquipo)} ${semanasEquipo === 1 ? 'semana laboral' : 'semanas laborales'}`;
       }
 
       const elCostoMod = document.getElementById('vc-card-costo-mod');
       if (elCostoMod) {
-        elCostoMod.textContent = `Costo MOD Total: ${fmtMon(totalMod)} (${fmtMon(costoHoraModVC)} por hora)`;
+        elCostoMod.textContent = `Con tu equipo de ${fmt(numPersonas)} ${numPersonas === 1 ? 'persona' : 'personas'} (~${fmt(semanas1Persona)} sem. para 1 persona)`;
+      }
+
+      // Gran Explicación Gerencial de Capacidad
+      const elExpGen = document.getElementById('vc-card-explicacion-general');
+      if (elExpGen) {
+        elExpGen.innerHTML = `El volumen total de productos vendidos en este período demandó una inversión de <strong>${fmt(totalHorasGlobal)} horas de mano de obra</strong> (equivalente a <strong>${fmt(totalMinGlobal)} minutos</strong>), combinando cocción previa y ensamble de comandas.`;
+      }
+
+      const elExpUni = document.getElementById('vc-card-explicacion-unipersonal');
+      if (elExpUni) {
+        elExpUni.innerHTML = `Requeriría <strong>${fmt(dias1Persona)} días de trabajo completo</strong> (o <strong>${fmt(semanas1Persona)} semanas laborales</strong>) a razón de ${fmt(hDia)} horas por turno diario para cubrir esta producción.`;
+      }
+
+      const elExpEqTit = document.getElementById('vc-card-explicacion-equipo-titulo');
+      if (elExpEqTit) {
+        elExpEqTit.textContent = `Con tu equipo configurado de ${fmt(numPersonas)} ${numPersonas === 1 ? 'persona' : 'personas'}:`;
+      }
+
+      const elExpEqBody = document.getElementById('vc-card-explicacion-equipo-body');
+      if (elExpEqBody) {
+        elExpEqBody.innerHTML = `Trabajando en simultáneo, el equipo cubre toda la producción en <strong>${fmt(diasEquipo)} días de trabajo</strong> (o <strong>${fmt(semanasEquipo)} semanas laborales</strong>) de jornada regular.`;
+      }
+
+      const elExpTarifa = document.getElementById('vc-card-explicacion-tarifa');
+      if (elExpTarifa) {
+        elExpTarifa.innerHTML = `Tarifa horaria base: <strong>${fmtMon(costoHoraModVC)}</strong> por hora por operario.`;
+      }
+
+      const elExpCosto = document.getElementById('vc-card-explicacion-costo');
+      if (elExpCosto) {
+        elExpCosto.textContent = `Inversión MOD Total: ${fmtMon(totalMod)}`;
       }
     } else {
       cardTiempos.classList.add('hidden');
@@ -20134,7 +20234,7 @@ function renderTablaVC() {
   document.getElementById('vc-kpi-costos').textContent = fmtMon(totalCostos);
   const subKpi = document.getElementById('vc-kpi-costos-sub');
   if (subKpi) {
-    subKpi.textContent = `Insumos: ${fmtMon(totalInsumos)} | MOD Est: ${fmtMon(totalMod)} (${fmt(totalHorasGlobal)}h ~ ${fmt(totalDiasTrabajo)} d)`;
+    subKpi.textContent = `Insumos: ${fmtMon(totalInsumos)} | MOD Est: ${fmtMon(totalMod)} (${fmt(totalHorasGlobal)}h ~ ${fmt(diasEquipo)} d equipo)`;
   }
   document.getElementById('vc-kpi-margen').textContent = fmtMon(margenTotalGeneral);
   document.getElementById('vc-kpi-pct').textContent = fmt(pctMargenGeneral) + '%';
@@ -20156,9 +20256,9 @@ function renderTablaVC() {
       <!-- Desglose unitario footer -->
       <td class="vc-col-desglose ${desgHiddenCls} px-2 py-2.5 text-right num font-mono font-extrabold text-slate-700 bg-slate-100/80 whitespace-nowrap">${fmtMon(promInsumosPonderado)}</td>
       <td class="vc-col-desglose ${desgHiddenCls} px-2 py-2.5 text-right num font-mono font-extrabold text-amber-900 bg-amber-100/60 whitespace-nowrap">${fmtMon(promModPonderado)}</td>
-      <td class="vc-col-desglose ${desgHiddenCls} px-1.5 py-2 text-center font-mono whitespace-nowrap bg-amber-50/70 border-x border-amber-200" title="Mano de obra total acumulada: ${fmt(totalHorasGlobal)} horas (~${fmt(totalDiasTrabajo)} días laborales / ~${fmt(totalSemanasTrabajo)} semanas). Ver detalle en la tarjeta informativa de abajo">
+      <td class="vc-col-desglose ${desgHiddenCls} px-1.5 py-2 text-center font-mono whitespace-nowrap bg-amber-50/70 border-x border-amber-200" title="Mano de obra total: ${fmt(totalHorasGlobal)} horas = ~${fmt(diasEquipo)} días con tu equipo de ${fmt(numPersonas)} personas (~${fmt(dias1Persona)} días si fuera 1 persona). Ver tarjeta explicativa abajo">
         <div class="text-xs font-black text-amber-950">⏱️ ${fmt(totalHorasGlobal)}h</div>
-        <div class="text-[9px] text-amber-700 font-semibold">(Ver tarjeta ↓)</div>
+        <div class="text-[9px] text-amber-700 font-semibold">(~${fmt(diasEquipo)} d equipo)</div>
       </td>
 
       <!-- Costo Unitario y Margen Unitario footer -->

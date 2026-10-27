@@ -108,6 +108,7 @@
     .toast-ok { background: #059669; }
 
     .toast-err { background: #dc2626; }
+    .toast-warn { background: #d97706; }
 
     .ac-list {
 
@@ -4894,17 +4895,22 @@ async function fetchDefaultPresentacion() {
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
 
-function toast(msg, ok = true) {
+function toast(msg, ok = true, duracion = 3200) {
 
   const el = document.getElementById('toast');
+  if (!el) return;
 
   el.textContent = msg;
 
-  el.className = `toast show ${ok ? 'toast-ok' : 'toast-err'}`;
+  let cls = 'toast-ok';
+  if (ok === false || ok === 'error') cls = 'toast-err';
+  else if (ok === 'warning' || ok === 'warn' || ok === 'info') cls = 'toast-warn';
+
+  el.className = `toast show ${cls}`;
 
   clearTimeout(el._t);
 
-  el._t = setTimeout(() => el.classList.remove('show'), 3000);
+  el._t = setTimeout(() => el.classList.remove('show'), duracion);
 
 }
 
@@ -10434,9 +10440,9 @@ async function escanearFacturaArchivo(archivo) {
       });
 
       calcularTotalesEntrada();
-      toast(`✅ ¡Factura escaneada! Se cargaron ${lineas.length} insumos de inventario.`);
+      toast(`✅ ¡Factura escaneada! Se cargaron ${lineas.length} insumos de inventario.`, true, 4500);
     } else {
-      toast('ℹ️ Factura leída. Revisa las líneas pendientes de clasificar.', false);
+      toast('ℹ️ Factura leída. Revisa las líneas o el banner de pendientes.', 'warn', 6000);
     }
 
     // Renderizar Gastos de la factura si hubo

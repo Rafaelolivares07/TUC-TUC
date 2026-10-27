@@ -352,6 +352,7 @@ def init_config_negocio(conn):
     conn.execute("ALTER TABLE config_negocio ADD COLUMN IF NOT EXISTS mostrar_productos_precio_cero BOOLEAN DEFAULT TRUE")
     conn.execute("ALTER TABLE config_negocio ADD COLUMN IF NOT EXISTS permitir_inventario_negativo BOOLEAN DEFAULT TRUE")
     conn.execute("ALTER TABLE config_negocio ADD COLUMN IF NOT EXISTS textos_entrega JSONB DEFAULT '{}'")
+    conn.execute("ALTER TABLE config_negocio ADD COLUMN IF NOT EXISTS costo_hora_mod NUMERIC(12,2) DEFAULT 0")
     conn.execute("ALTER TABLE centros_utilidad ADD COLUMN IF NOT EXISTS imprimir_tipo_entrega BOOLEAN DEFAULT TRUE")
 
     # Garantizar que el catálogo de métodos de pago esté completo en prod

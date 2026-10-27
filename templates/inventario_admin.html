@@ -4565,74 +4565,76 @@
 
 
 
+    <!-- BANNER PARÁMETROS MOD -->
+    <div class="bg-gradient-to-r from-amber-50/80 via-orange-50/50 to-amber-50/30 border border-amber-200/80 rounded-2xl p-3.5 mb-5 flex items-center justify-between flex-wrap gap-3">
+      <div class="flex items-center gap-3 flex-wrap">
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-500/15 text-amber-900 border border-amber-300 text-[11px] font-extrabold rounded-xl uppercase tracking-wider">
+          ⏱️ Mano de Obra Directa
+        </span>
+        <div class="flex items-center gap-2">
+          <label class="text-xs font-semibold text-gray-700">Base Hora Operativa:</label>
+          <div class="relative inline-flex items-center">
+            <span class="absolute left-2.5 text-xs font-bold text-gray-400">$</span>
+            <input type="number" id="vc-costo-hora-mod" min="0" step="500" placeholder="0"
+                   class="w-32 pl-6 pr-2.5 py-1.5 border border-gray-200 rounded-xl bg-white font-mono font-bold text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-2xs"
+                   onchange="guardarCostoHoraMOD(this.value)">
+          </div>
+          <span id="vc-costo-min-badge" class="text-xs text-gray-600 font-mono bg-white px-2.5 py-1 rounded-xl border border-gray-200 shadow-2xs">
+            Equivale a: <strong class="text-gray-800">$0</strong> / min
+          </span>
+        </div>
+      </div>
+      <div>
+        <button id="btn-toggle-tiempos" onclick="toggleTiemposVC()" type="button"
+                class="px-3.5 py-1.5 bg-white hover:bg-amber-100/60 text-gray-700 hover:text-amber-900 font-bold text-xs rounded-xl border border-gray-200 hover:border-amber-300 shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer">
+          <span>⏱️</span> <span id="btn-toggle-tiempos-txt">Ver / Ajustar Tiempos</span>
+        </button>
+      </div>
+    </div>
+
     <!-- KPI SUMMARY CARDS -->
-
     <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
-
       <div class="bg-emerald-50/50 border border-emerald-100 p-4 rounded-2xl">
-
         <span class="block text-emerald-600 font-bold uppercase tracking-wider text-[9px] mb-1">Ventas Totales</span>
-
         <span id="vc-kpi-ventas" class="text-xl font-black text-emerald-800 font-mono">$0</span>
-
       </div>
 
       <div class="bg-rose-50/50 border border-rose-100 p-4 rounded-2xl">
-
-        <span class="block text-rose-600 font-bold uppercase tracking-wider text-[9px] mb-1">Costo de Ventas</span>
-
+        <span class="block text-rose-600 font-bold uppercase tracking-wider text-[9px] mb-1">Costo Directo Total</span>
         <span id="vc-kpi-costos" class="text-xl font-black text-rose-800 font-mono">$0</span>
-
+        <span id="vc-kpi-costos-sub" class="block text-[10px] text-gray-500 font-medium mt-0.5 truncate">Insumos: $0 | MOD Est: $0</span>
       </div>
 
       <div class="bg-indigo-50/50 border border-indigo-100 p-4 rounded-2xl">
-
         <span class="block text-indigo-600 font-bold uppercase tracking-wider text-[9px] mb-1">Margen de Utilidad</span>
-
         <span id="vc-kpi-margen" class="text-xl font-black text-indigo-800 font-mono">$0</span>
-
       </div>
 
       <div class="bg-amber-50/50 border border-amber-100 p-4 rounded-2xl">
-
         <span class="block text-amber-600 font-bold uppercase tracking-wider text-[9px] mb-1">Margen Pct Promedio</span>
-
         <span id="vc-kpi-pct" class="text-xl font-black text-amber-800 font-mono">0%</span>
-
       </div>
-
     </div>
 
-
-
     <div class="overflow-x-auto">
-
       <table>
-
         <thead>
-
           <tr class="bg-gray-50 text-[10px] uppercase text-gray-500 border-b border-gray-150 select-none">
-
             <th onclick="ordenarVC('nombre_producto')" class="px-3 py-3 text-left cursor-pointer hover:bg-gray-100 transition-colors">Producto <span id="sort-vc-nombre" class="text-gray-400">↕</span></th>
-
             <th onclick="ordenarVC('cantidad')" class="px-3 py-3 text-right num cursor-pointer hover:bg-gray-100 transition-colors">Cant. Vendida <span id="sort-vc-cantidad" class="text-gray-400">↕</span></th>
-
             <th onclick="ordenarVC('precio_unitario')" class="px-3 py-3 text-right num cursor-pointer hover:bg-gray-100 transition-colors">Precio Prom. Venta <span id="sort-vc-precio" class="text-gray-400">↕</span></th>
-
-            <th onclick="ordenarVC('costo_unitario')" class="px-3 py-3 text-right num cursor-pointer hover:bg-gray-100 transition-colors">Costo Prom. Unitario <span id="sort-vc-costo" class="text-gray-400">↕</span></th>
-
+            <th onclick="ordenarVC('total_costo_insumos')" class="px-3 py-3 text-right num cursor-pointer hover:bg-gray-100 transition-colors">Costo Insumos <span id="sort-vc-cinsumos" class="text-gray-400">↕</span></th>
+            <th class="vc-col-tiempos hidden px-3 py-3 text-center transition-all bg-amber-50/60 text-amber-900 border-x border-amber-200">
+              <span title="Tiempos estimados: 🍳 Prep previa / 📦 Ensamble y despacho">⏱️ Tiempos (Prep / Ens)</span>
+            </th>
+            <th onclick="ordenarVC('total_mod')" class="px-3 py-3 text-right num cursor-pointer hover:bg-gray-100 transition-colors text-amber-900 bg-amber-50/30">
+              MOD (Estimada) <span id="sort-vc-mod" class="text-gray-400">↕</span>
+            </th>
+            <th onclick="ordenarVC('total_costo')" class="px-3 py-3 text-right num cursor-pointer hover:bg-gray-100 transition-colors font-bold text-gray-700">Costo Total <span id="sort-vc-tcosto" class="text-gray-400">↕</span></th>
             <th onclick="ordenarVC('total_venta')" class="px-3 py-3 text-right num cursor-pointer hover:bg-gray-100 transition-colors">Venta Total <span id="sort-vc-tventa" class="text-gray-400">↕</span></th>
-
-            <th onclick="ordenarVC('total_costo')" class="px-3 py-3 text-right num cursor-pointer hover:bg-gray-100 transition-colors">Costo Total <span id="sort-vc-tcosto" class="text-gray-400">↕</span></th>
-
-            <th onclick="ordenarVC('margen_unitario')" class="px-3 py-3 text-right num cursor-pointer hover:bg-gray-100 transition-colors">Margen Unit. <span id="sort-vc-munit" class="text-gray-400">↕</span></th>
-
             <th onclick="ordenarVC('margen_total')" class="px-3 py-3 text-right num cursor-pointer hover:bg-gray-100 transition-colors">Margen Total <span id="sort-vc-mtot" class="text-gray-400">↕</span></th>
-
             <th onclick="ordenarVC('margen_porcentual')" class="px-3 py-3 text-right num cursor-pointer hover:bg-gray-100 transition-colors">% Margen <span id="sort-vc-mpct" class="text-gray-400">↕</span></th>
-
           </tr>
-
         </thead>
 
         <tbody id="tabla-ventas-costos" class="divide-y divide-gray-100">
@@ -19419,10 +19421,115 @@ document.addEventListener('DOMContentLoaded', updateThemeButton);
 // ── Ventas y Costos ──
 
 let datosVC = [];
-
 let sortColVC = 'total_venta';
-
 let sortAscVC = false;
+let costoHoraModVC = 0;
+let tiemposVisiblesVC = false;
+
+function toggleTiemposVC() {
+  tiemposVisiblesVC = !tiemposVisiblesVC;
+  const thTiempos = document.querySelectorAll('.vc-col-tiempos');
+  thTiempos.forEach(el => {
+    if (tiemposVisiblesVC) el.classList.remove('hidden');
+    else el.classList.add('hidden');
+  });
+  const btnTxt = document.getElementById('btn-toggle-tiempos-txt');
+  if (btnTxt) {
+    btnTxt.textContent = tiemposVisiblesVC ? 'Ocultar Tiempos' : 'Ver / Ajustar Tiempos';
+  }
+}
+
+function actualizarBadgeMinutoVC(hora) {
+  const minBadge = document.getElementById('vc-costo-min-badge');
+  if (minBadge) {
+    const minVal = hora > 0 ? Math.round(hora / 60.0) : 0;
+    minBadge.innerHTML = `Equivale a: <strong class="text-gray-800">$${minVal.toLocaleString('es-CO')}</strong> / min`;
+  }
+}
+
+async function guardarCostoHoraMOD(val) {
+  const nuevoCosto = Math.max(0, parseFloat(val) || 0);
+  costoHoraModVC = nuevoCosto;
+  actualizarBadgeMinutoVC(costoHoraModVC);
+
+  datosVC.forEach(prod => recalcularFilaMOD(prod));
+  renderTablaVC();
+
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/configuracion-mod`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ costo_hora_mod: nuevoCosto })
+    });
+    const d = await r.json();
+    if (d.ok) toast('Base hora MOD guardada', true);
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+function recalcularFilaMOD(prod) {
+  const costoMinuto = costoHoraModVC > 0 ? (costoHoraModVC / 60.0) : 0;
+  const minutosTotales = (prod.tiempo_preparacion_min || 0) + (prod.tiempo_ensamble_min || 0);
+  prod.mod_unitario = minutosTotales * costoMinuto;
+  prod.total_mod = prod.mod_unitario * prod.cantidad;
+
+  const totalInsumos = prod.total_costo_insumos !== undefined ? prod.total_costo_insumos : (prod.costo_insumos_unitario * prod.cantidad || 0);
+  prod.total_costo = totalInsumos + prod.total_mod;
+  prod.costo_unitario = prod.cantidad > 0 ? (prod.total_costo / prod.cantidad) : 0;
+
+  prod.margen_unitario = prod.precio_unitario - prod.costo_unitario;
+  prod.margen_total = prod.total_venta - prod.total_costo;
+  prod.margen_porcentual = prod.total_venta > 0 ? (prod.margen_total / prod.total_venta * 100.0) : 0;
+}
+
+async function actualizarTiempoProdVC(productoId, prep, ens) {
+  const prod = datosVC.find(p => p.producto_id === productoId);
+  if (!prod) return;
+
+  const prepVal = prep !== null ? Math.max(0, parseFloat(prep) || 0) : prod.tiempo_preparacion_min;
+  const ensVal = ens !== null ? Math.max(0, parseFloat(ens) || 0) : prod.tiempo_ensamble_min;
+
+  prod.tiempo_preparacion_min = prepVal;
+  prod.tiempo_ensamble_min = ensVal;
+
+  recalcularFilaMOD(prod);
+
+  const ind = document.getElementById(`save-ind-${productoId}`);
+  if (ind) {
+    ind.textContent = '⏳';
+    ind.className = 'text-[11px] text-amber-500 opacity-100 transition-opacity font-bold';
+  }
+
+  try {
+    const res = await fetch(`/api/inventario/${NEGOCIO_ID}/producto/${productoId}/tiempos-mod`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tiempo_preparacion_min: prepVal, tiempo_ensamble_min: ensVal })
+    });
+    const d = await res.json();
+    if (d.ok) {
+      if (ind) {
+        ind.textContent = '✓';
+        ind.className = 'text-[11px] text-emerald-600 font-bold opacity-100 transition-opacity';
+        setTimeout(() => { if (ind) ind.classList.add('opacity-0'); }, 1500);
+      }
+      renderTablaVC();
+    } else {
+      if (ind) {
+        ind.textContent = '✗';
+        ind.className = 'text-[11px] text-rose-600 font-bold opacity-100 transition-opacity';
+      }
+      toast(d.error || 'Error al guardar tiempos', false);
+    }
+  } catch (e) {
+    console.error(e);
+    if (ind) {
+      ind.textContent = '✗';
+      ind.className = 'text-[11px] text-rose-600 font-bold opacity-100 transition-opacity';
+    }
+  }
+}
 
 
 
@@ -19506,11 +19613,15 @@ async function consultarVentasCostos() {
     const d = await r.json();
 
     if (d.ok) {
+      costoHoraModVC = d.costo_hora_mod || 0;
+      const inpMod = document.getElementById('vc-costo-hora-mod');
+      if (inpMod && document.activeElement !== inpMod) {
+        inpMod.value = costoHoraModVC > 0 ? costoHoraModVC : '';
+      }
+      actualizarBadgeMinutoVC(costoHoraModVC);
 
       datosVC = d.reporte || [];
-
       datosVC.sort((a, b) => b.total_venta - a.total_venta);
-
       renderTablaVC();
 
     } else {
@@ -19562,145 +19673,106 @@ function generarPdfVentasCostos() {
 
 
 function renderTablaVC() {
-
   const tbody = document.getElementById('tabla-ventas-costos');
-
   const tfoot = document.getElementById('tabla-ventas-costos-foot');
-
   if (!tbody) return;
 
-  
+  const colsSpan = tiemposVisiblesVC ? 10 : 9;
 
   if (!datosVC.length) {
-
-    tbody.innerHTML = `<tr><td colspan="9" class="text-center text-gray-400 py-8">No se encontraron ventas en este rango de fechas.</td></tr>`;
-
+    tbody.innerHTML = `<tr><td colspan="${colsSpan}" class="text-center text-gray-400 py-8">No se encontraron ventas en este rango de fechas.</td></tr>`;
     tfoot.innerHTML = '';
 
-    
-
     document.getElementById('vc-kpi-ventas').textContent = '$0';
-
     document.getElementById('vc-kpi-costos').textContent = '$0';
-
+    const subKpi = document.getElementById('vc-kpi-costos-sub');
+    if (subKpi) subKpi.textContent = 'Insumos: $0 | MOD Est: $0';
     document.getElementById('vc-kpi-margen').textContent = '$0';
-
     document.getElementById('vc-kpi-pct').textContent = '0%';
-
     return;
-
   }
 
-  
-
   let totalCant = 0;
-
   let totalVentas = 0;
-
   let totalCostos = 0;
-
-  
+  let totalInsumos = 0;
+  let totalMod = 0;
 
   tbody.innerHTML = datosVC.map(r => {
-
     totalCant += r.cantidad;
-
     totalVentas += r.total_venta;
-
     totalCostos += r.total_costo;
-
-    
+    totalInsumos += (r.total_costo_insumos || 0);
+    totalMod += (r.total_mod || 0);
 
     const pctCls = r.margen_porcentual >= 30 ? 'text-emerald-600' : (r.margen_porcentual >= 15 ? 'text-amber-600' : 'text-rose-600');
-
-    
+    const tiemposHiddenCls = tiemposVisiblesVC ? '' : 'hidden';
 
     return `
-
-      <tr class="hover:bg-gray-50 border-b border-gray-100 text-xs cursor-pointer" onclick="toggleDetalleVC(this, ${r.producto_id})" data-producto="${r.producto_id}">
-
-        <td class="px-3 py-2.5 font-semibold text-gray-800"><span class="vc-arrow text-gray-400 mr-1 text-[10px]">▶</span> ${r.nombre_producto}</td>
-
+      <tr class="hover:bg-gray-50 border-b border-gray-100 text-xs cursor-pointer transition-colors" onclick="toggleDetalleVC(this, ${r.producto_id})" data-producto="${r.producto_id}">
+        <td class="px-3 py-2.5 font-semibold text-gray-800">
+          <span class="vc-arrow text-gray-400 mr-1 text-[10px]">▶</span> ${r.nombre_producto}
+        </td>
         <td class="px-3 py-2.5 text-right num text-gray-600">${fmt(r.cantidad)}</td>
-
         <td class="px-3 py-2.5 text-right num font-mono text-gray-500">${fmtMon(r.precio_unitario)}</td>
+        <td class="px-3 py-2.5 text-right num font-mono text-gray-600">${fmtMon(r.total_costo_insumos || 0)}</td>
+        
+        <td class="vc-col-tiempos ${tiemposHiddenCls} px-2 py-2 text-center whitespace-nowrap bg-amber-50/40 border-x border-amber-200" onclick="event.stopPropagation()">
+          <div class="inline-flex items-center gap-1">
+            <span class="text-[10px] text-gray-400 font-bold" title="Minutos Preparación Previa">🍳</span>
+            <input type="number" min="0" max="999" step="0.5" value="${r.tiempo_preparacion_min || 0}"
+                   title="Preparación / Cocción previa (minutos)"
+                   onchange="actualizarTiempoProdVC(${r.producto_id}, this.value, null)"
+                   class="w-11 text-center font-mono text-[11px] font-bold border border-gray-300 rounded-lg py-0.5 px-1 bg-white focus:outline-none focus:ring-1 focus:ring-amber-500 shadow-2xs">
+            <span class="text-[10px] text-gray-400 font-bold" title="Minutos Ensamble y Entrega">📦</span>
+            <input type="number" min="0" max="999" step="0.5" value="${r.tiempo_ensamble_min || 0}"
+                   title="Ensamble y entrega al despachar (minutos)"
+                   onchange="actualizarTiempoProdVC(${r.producto_id}, null, this.value)"
+                   class="w-11 text-center font-mono text-[11px] font-bold border border-gray-300 rounded-lg py-0.5 px-1 bg-white focus:outline-none focus:ring-1 focus:ring-amber-500 shadow-2xs">
+            <span id="save-ind-${r.producto_id}" class="text-[11px] opacity-0 transition-opacity w-3 inline-block">✓</span>
+          </div>
+        </td>
 
-        <td class="px-3 py-2.5 text-right num font-mono text-gray-500">${fmtMon(r.costo_unitario)}</td>
-
-        <td class="px-3 py-2.5 text-right num font-mono font-semibold text-emerald-700">${fmtMon(r.total_venta)}</td>
-
-        <td class="px-3 py-2.5 text-right num font-mono text-rose-700">${fmtMon(r.total_costo)}</td>
-
-        <td class="px-3 py-2.5 text-right num font-mono ${r.margen_unitario >= 0 ? 'text-gray-700' : 'text-rose-600'}">${fmtMon(r.margen_unitario)}</td>
-
+        <td class="px-3 py-2.5 text-right num font-mono text-amber-900 bg-amber-50/20 font-semibold">${fmtMon(r.total_mod || 0)}</td>
+        <td class="px-3 py-2.5 text-right num font-mono text-rose-700 font-bold">${fmtMon(r.total_costo)}</td>
+        <td class="px-3 py-2.5 text-right num font-mono font-bold text-emerald-700">${fmtMon(r.total_venta)}</td>
         <td class="px-3 py-2.5 text-right num font-mono font-semibold ${r.margen_total >= 0 ? 'text-indigo-700' : 'text-rose-600'}">${fmtMon(r.margen_total)}</td>
-
-        <td class="px-3 py-2.5 text-right num font-bold ${pctCls}">${fmt(r.margen_porcentual)}%</td>
-
+        <td class="px-3 py-2.5 text-right num font-extrabold ${pctCls}">${fmt(r.margen_porcentual)}%</td>
       </tr>
-
-      <tr class="vc-detalle-${r.producto_id} hidden"><td colspan="9" class="px-3 py-2 bg-gray-50/50"><p class="text-[10px] text-gray-400 animate-pulse">Cargando documentos...</p></td></tr>
-
+      <tr class="vc-detalle-${r.producto_id} hidden"><td colspan="${colsSpan}" class="px-3 py-2 bg-gray-50/50"><p class="text-[10px] text-gray-400 animate-pulse">Cargando documentos...</p></td></tr>
     `;
-
   }).join('');
 
-  
-
   const margenTotalGeneral = totalVentas - totalCostos;
-
   const pctMargenGeneral = totalVentas > 0 ? (margenTotalGeneral / totalVentas * 100.0) : 0.0;
 
-  
-
   document.getElementById('vc-kpi-ventas').textContent = fmtMon(totalVentas);
-
   document.getElementById('vc-kpi-costos').textContent = fmtMon(totalCostos);
-
+  const subKpi = document.getElementById('vc-kpi-costos-sub');
+  if (subKpi) {
+    subKpi.textContent = `Insumos: ${fmtMon(totalInsumos)} | MOD Est: ${fmtMon(totalMod)}`;
+  }
   document.getElementById('vc-kpi-margen').textContent = fmtMon(margenTotalGeneral);
-
   document.getElementById('vc-kpi-pct').textContent = fmt(pctMargenGeneral) + '%';
 
-  
-
   const promPrecioPonderado = totalCant > 0 ? (totalVentas / totalCant) : 0.0;
-
-  const promCostoPonderado = totalCant > 0 ? (totalCostos / totalCant) : 0.0;
-
-  const promMargenPonderado = promPrecioPonderado - promCostoPonderado;
-
-  
-
   const pctGeneralCls = pctMargenGeneral >= 30 ? 'text-emerald-600' : (pctMargenGeneral >= 15 ? 'text-amber-600' : 'text-rose-600');
-
-  
+  const tiemposHiddenCls = tiemposVisiblesVC ? '' : 'hidden';
 
   tfoot.innerHTML = `
-
-    <tr class="bg-gray-100/80 text-xs text-gray-800">
-
-      <td class="px-3 py-3 text-left font-extrabold">TOTAL / PROMEDIOS PONDERADOS</td>
-
+    <tr class="bg-gray-100/90 text-xs text-gray-800">
+      <td class="px-3 py-3 text-left font-extrabold">TOTAL / RESUMEN</td>
       <td class="px-3 py-3 text-right num font-extrabold">${fmt(totalCant)}</td>
-
       <td class="px-3 py-3 text-right num font-mono font-extrabold text-gray-600">${fmtMon(promPrecioPonderado)}</td>
-
-      <td class="px-3 py-3 text-right num font-mono font-extrabold text-gray-600">${fmtMon(promCostoPonderado)}</td>
-
-      <td class="px-3 py-3 text-right num font-mono font-extrabold text-emerald-800">${fmtMon(totalVentas)}</td>
-
+      <td class="px-3 py-3 text-right num font-mono font-extrabold text-gray-700">${fmtMon(totalInsumos)}</td>
+      <td class="vc-col-tiempos ${tiemposHiddenCls} px-2 py-3 text-center font-mono text-[10px] text-amber-700 bg-amber-50/50">—</td>
+      <td class="px-3 py-3 text-right num font-mono font-extrabold text-amber-900 bg-amber-50/30">${fmtMon(totalMod)}</td>
       <td class="px-3 py-3 text-right num font-mono font-extrabold text-rose-800">${fmtMon(totalCostos)}</td>
-
-      <td class="px-3 py-3 text-right num font-mono font-extrabold ${promMargenPonderado >= 0 ? 'text-gray-800' : 'text-rose-700'}">${fmtMon(promMargenPonderado)}</td>
-
+      <td class="px-3 py-3 text-right num font-mono font-extrabold text-emerald-800">${fmtMon(totalVentas)}</td>
       <td class="px-3 py-3 text-right num font-mono font-extrabold ${margenTotalGeneral >= 0 ? 'text-indigo-800' : 'text-rose-700'}">${fmtMon(margenTotalGeneral)}</td>
-
       <td class="px-3 py-3 text-right num font-extrabold ${pctGeneralCls}">${fmt(pctMargenGeneral)}%</td>
-
     </tr>
-
   `;
-
 }
 
 async function toggleDetalleVC(tr, productoId) {
@@ -19793,25 +19865,15 @@ function ordenarVC(col) {
   
 
   const indicators = {
-
     'nombre_producto': 'sort-vc-nombre',
-
     'cantidad': 'sort-vc-cantidad',
-
     'precio_unitario': 'sort-vc-precio',
-
-    'costo_unitario': 'sort-vc-costo',
-
-    'total_venta': 'sort-vc-tventa',
-
+    'total_costo_insumos': 'sort-vc-cinsumos',
+    'total_mod': 'sort-vc-mod',
     'total_costo': 'sort-vc-tcosto',
-
-    'margen_unitario': 'sort-vc-munit',
-
+    'total_venta': 'sort-vc-tventa',
     'margen_total': 'sort-vc-mtot',
-
     'margen_porcentual': 'sort-vc-mpct'
-
   };
 
   

@@ -324,6 +324,9 @@ def _crear_tablas(conn):
         "CREATE INDEX IF NOT EXISTS idx_ifa_doc ON inventario_fisico_actas(negocio_id, documento_numero)",
         "CREATE INDEX IF NOT EXISTS idx_ifa_modulo ON inventario_fisico_actas(negocio_id, modulo_origen)",
         "ALTER TABLE productos ADD COLUMN IF NOT EXISTS tolerancia_costo_pct NUMERIC(5,2) DEFAULT 15.0",
+        "ALTER TABLE productos ADD COLUMN IF NOT EXISTS tiempo_preparacion_min NUMERIC(6,2) DEFAULT 0",
+        "ALTER TABLE productos ADD COLUMN IF NOT EXISTS tiempo_ensamble_min NUMERIC(6,2) DEFAULT 0",
+        "ALTER TABLE config_negocio ADD COLUMN IF NOT EXISTS costo_hora_mod NUMERIC(12,2) DEFAULT 0",
     ]
     for sql in alters:
         try:
@@ -12161,6 +12164,72 @@ def api_mantenimiento_modificar_documento(negocio_id):
     finally:
         conn.close()
 
+@bp.route('/api/inventario/<int:negocio_id>/configuracion-mod', methods=['GET', 'POST'])
+def api_configuracion_mod(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    from ..db import get_db_connection
+    conn = get_db_connection()
+    try:
+        if request.method == 'POST':
+            data = request.get_json(silent=True) or {}
+            try:
+                costo_hora = max(0.0, float(data.get('costo_hora_mod', 0)))
+            except (ValueError, TypeError):
+                return jsonify({'ok': False, 'error': 'Valor inválido para costo_hora_mod'}), 400
+            
+            conn.execute("""
+                INSERT INTO config_negocio (tercero_id, costo_hora_mod, updated_at)
+                VALUES (%s, %s, NOW())
+                ON CONFLICT (tercero_id) DO UPDATE
+                SET costo_hora_mod = EXCLUDED.costo_hora_mod, updated_at = NOW()
+            """, (negocio_id, costo_hora))
+            conn.commit()
+            return jsonify({'ok': True, 'costo_hora_mod': costo_hora})
+        else:
+            row = conn.execute("SELECT costo_hora_mod FROM config_negocio WHERE tercero_id = %s", (negocio_id,)).fetchone()
+            costo_hora = float(row['costo_hora_mod']) if row and row['costo_hora_mod'] is not None else 0.0
+            return jsonify({'ok': True, 'costo_hora_mod': costo_hora})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/inventario/<int:negocio_id>/producto/<int:producto_id>/tiempos-mod', methods=['POST'])
+def api_producto_tiempos_mod(negocio_id, producto_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    from ..db import get_db_connection
+    data = request.get_json(silent=True) or {}
+    prep = data.get('tiempo_preparacion_min')
+    ens = data.get('tiempo_ensamble_min')
+    conn = get_db_connection()
+    try:
+        sets = []
+        params = []
+        if prep is not None:
+            sets.append("tiempo_preparacion_min = %s")
+            params.append(max(0.0, float(prep)))
+        if ens is not None:
+            sets.append("tiempo_ensamble_min = %s")
+            params.append(max(0.0, float(ens)))
+        if not sets:
+            return jsonify({'ok': False, 'error': 'No se enviaron tiempos para actualizar'}), 400
+        params.extend([producto_id, negocio_id])
+        conn.execute(f"""
+            UPDATE productos
+            SET {', '.join(sets)}
+            WHERE id = %s AND negocio_id = %s
+        """, tuple(params))
+        conn.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
 @bp.route('/api/inventario/<int:negocio_id>/reporte-ventas-costos')
 def api_reporte_ventas_costos(negocio_id):
     if 'usuario_id' not in session:
@@ -12174,15 +12243,18 @@ def api_reporte_ventas_costos(negocio_id):
         
     conn = get_db_connection()
     try:
-        datos = _query_reporte_ventas_costos(conn, negocio_id, desde, hasta, centro_utilidad_id=centro_utilidad_id)
-        return jsonify({'ok': True, 'reporte': datos})
+        cfg_row = conn.execute("SELECT costo_hora_mod FROM config_negocio WHERE tercero_id = %s", (negocio_id,)).fetchone()
+        costo_hora_mod = float(cfg_row['costo_hora_mod']) if cfg_row and cfg_row['costo_hora_mod'] is not None else 0.0
+
+        datos = _query_reporte_ventas_costos(conn, negocio_id, desde, hasta, centro_utilidad_id=centro_utilidad_id, costo_hora_mod=costo_hora_mod)
+        return jsonify({'ok': True, 'reporte': datos, 'costo_hora_mod': costo_hora_mod})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
         conn.close()
 
 
-def _query_reporte_ventas_costos(conn, negocio_id, desde, hasta, centro_utilidad_id=None):
+def _query_reporte_ventas_costos(conn, negocio_id, desde, hasta, centro_utilidad_id=None, costo_hora_mod=0.0):
     cond_cu = ""
     params = [negocio_id, desde, hasta]
     if centro_utilidad_id is not None:
@@ -12198,6 +12270,8 @@ def _query_reporte_ventas_costos(conn, negocio_id, desde, hasta, centro_utilidad
         SELECT 
             pi.producto_id,
             p.nombre AS nombre_producto,
+            COALESCE(p.tiempo_preparacion_min, 0) AS tiempo_preparacion_min,
+            COALESCE(p.tiempo_ensamble_min, 0) AS tiempo_ensamble_min,
             SUM(pi.cantidad) AS cantidad_vendida,
             SUM(pi.cantidad * pi.precio_unitario) AS total_ventas_pesos,
             SUM(pi.cantidad * pi.costo_unitario) AS total_costo_pesos
@@ -12210,21 +12284,32 @@ def _query_reporte_ventas_costos(conn, negocio_id, desde, hasta, centro_utilidad
           AND COALESCE(ped.fecha, ped.created_at::date) >= %s::date 
           AND COALESCE(ped.fecha, ped.created_at::date) <= %s::date
           {cond_cu}
-        GROUP BY pi.producto_id, p.nombre
+        GROUP BY pi.producto_id, p.nombre, p.tiempo_preparacion_min, p.tiempo_ensamble_min
         ORDER BY total_ventas_pesos DESC
     """, tuple(params)).fetchall()
+
+    costo_minuto = (float(costo_hora_mod) / 60.0) if float(costo_hora_mod) > 0 else 0.0
 
     datos = []
     for r in rows:
         cant = float(r['cantidad_vendida'])
         ventas_tot = float(r['total_ventas_pesos'])
-        costos_tot = float(r['total_costo_pesos'])
+        costos_insumos_tot = float(r['total_costo_pesos'])
+
+        tiempo_prep = float(r['tiempo_preparacion_min'] or 0.0)
+        tiempo_ens = float(r['tiempo_ensamble_min'] or 0.0)
+        minutos_totales = tiempo_prep + tiempo_ens
+        mod_unitario = minutos_totales * costo_minuto
+        total_mod = mod_unitario * cant
+
+        costo_primo_tot = costos_insumos_tot + total_mod
 
         px_prom = ventas_tot / cant if cant > 0 else 0.0
-        cx_prom = costos_tot / cant if cant > 0 else 0.0
+        cx_insumos_prom = costos_insumos_tot / cant if cant > 0 else 0.0
+        cx_total_prom = costo_primo_tot / cant if cant > 0 else 0.0
 
-        margen_unitario = px_prom - cx_prom
-        margen_total = ventas_tot - costos_tot
+        margen_unitario = px_prom - cx_total_prom
+        margen_total = ventas_tot - costo_primo_tot
         margen_porcentual = (margen_total / ventas_tot * 100.0) if ventas_tot > 0 else 0.0
 
         datos.append({
@@ -12232,9 +12317,14 @@ def _query_reporte_ventas_costos(conn, negocio_id, desde, hasta, centro_utilidad
             'nombre_producto': r['nombre_producto'],
             'cantidad': cant,
             'precio_unitario': px_prom,
-            'costo_unitario': cx_prom,
-            'total_venta': ventas_tot,
-            'total_costo': costos_tot,
+            'costo_insumos_unitario': cx_insumos_prom,
+            'total_costo_insumos': costos_insumos_tot,
+            'tiempo_preparacion_min': tiempo_prep,
+            'tiempo_ensamble_min': tiempo_ens,
+            'mod_unitario': mod_unitario,
+            'total_mod': total_mod,
+            'costo_unitario': cx_total_prom,
+            'total_costo': costo_primo_tot,
             'margen_unitario': margen_unitario,
             'margen_total': margen_total,
             'margen_porcentual': margen_porcentual
@@ -12550,7 +12640,7 @@ def _pdf_kardex_producto(nombre_negocio, nombre_producto, codigo_producto,
     return pdf
 
 
-def _pdf_reporte_ventas_costos(nombre_negocio, desde, hasta, datos, centro_info=None):
+def _pdf_reporte_ventas_costos(nombre_negocio, desde, hasta, datos, centro_info=None, costo_hora_mod=0.0):
     pdf = FPDF(format='letter', unit='mm')
     pdf.set_auto_page_break(auto=True, margin=14)
     pdf.add_page()
@@ -12565,16 +12655,28 @@ def _pdf_reporte_ventas_costos(nombre_negocio, desde, hasta, datos, centro_info=
 
     total_ventas = sum(d['total_venta'] for d in datos)
     total_costos = sum(d['total_costo'] for d in datos)
+    total_insumos = sum(d.get('total_costo_insumos', 0) for d in datos)
+    total_mod = sum(d.get('total_mod', 0) for d in datos)
     total_margen = total_ventas - total_costos
     pct = (total_margen / total_ventas * 100.0) if total_ventas else 0.0
 
     pdf.ln(2)
-    pdf.set_font('Helvetica', 'B', 10)
-    pdf.cell(0, 6, f"Ventas: ${_pdf_money(total_ventas)}   Costos: ${_pdf_money(total_costos)}   Margen: ${_pdf_money(total_margen)} ({pct:.1f}%)", ln=1)
+    pdf.set_font('Helvetica', 'B', 8.5)
+    if float(costo_hora_mod or 0) > 0 or total_mod > 0:
+        resumen_txt = f"Ventas: ${_pdf_money(total_ventas)}   |   Insumos: ${_pdf_money(total_insumos)}   |   MOD (Est): ${_pdf_money(total_mod)}   |   Costo Total: ${_pdf_money(total_costos)}   |   Margen: ${_pdf_money(total_margen)} ({pct:.1f}%)"
+    else:
+        resumen_txt = f"Ventas: ${_pdf_money(total_ventas)}   |   Costos: ${_pdf_money(total_costos)}   |   Margen: ${_pdf_money(total_margen)} ({pct:.1f}%)"
+    pdf.cell(0, 6, resumen_txt, ln=1, align='C')
     pdf.ln(2)
 
-    col_w = [56, 14, 20, 20, 24, 24, 24, 14]
-    headers = ['Producto', 'Cant', 'P.Unit', 'C.Unit', 'Total Venta', 'Total Costo', 'Margen', '%']
+    has_mod = (float(costo_hora_mod or 0) > 0 or total_mod > 0)
+    if has_mod:
+        col_w = [52, 12, 18, 18, 18, 22, 22, 20, 14]
+        headers = ['Producto', 'Cant', 'P.Unit', 'C.Insumo', 'MOD Est.', 'Costo Tot', 'Total Venta', 'Margen', '%']
+    else:
+        col_w = [56, 14, 20, 20, 24, 24, 24, 14]
+        headers = ['Producto', 'Cant', 'P.Unit', 'C.Unit', 'Total Venta', 'Total Costo', 'Margen', '%']
+
     pdf.set_font('Helvetica', 'B', 7.5)
     pdf.set_fill_color(230, 230, 230)
     for i, h in enumerate(headers):
@@ -12585,16 +12687,29 @@ def _pdf_reporte_ventas_costos(nombre_negocio, desde, hasta, datos, centro_info=
     alto_linea = 5.5
     for d in datos:
         nombre = _pdf_sanitize(d['nombre_producto'])[:80]
-        fila = [
-            nombre,
-            f"{d['cantidad']:.0f}",
-            _pdf_money(d['precio_unitario']),
-            _pdf_money(d['costo_unitario']),
-            _pdf_money(d['total_venta']),
-            _pdf_money(d['total_costo']),
-            _pdf_money(d['margen_total']),
-            f"{d['margen_porcentual']:.1f}",
-        ]
+        if has_mod:
+            fila = [
+                nombre,
+                f"{d['cantidad']:.0f}",
+                _pdf_money(d['precio_unitario']),
+                _pdf_money(d.get('total_costo_insumos', 0)),
+                _pdf_money(d.get('total_mod', 0)),
+                _pdf_money(d['total_costo']),
+                _pdf_money(d['total_venta']),
+                _pdf_money(d['margen_total']),
+                f"{d['margen_porcentual']:.1f}",
+            ]
+        else:
+            fila = [
+                nombre,
+                f"{d['cantidad']:.0f}",
+                _pdf_money(d['precio_unitario']),
+                _pdf_money(d['costo_unitario']),
+                _pdf_money(d['total_venta']),
+                _pdf_money(d['total_costo']),
+                _pdf_money(d['margen_total']),
+                f"{d['margen_porcentual']:.1f}",
+            ]
         lineas = pdf.multi_cell(col_w[0], alto_linea, nombre, split_only=True)
         alto_fila = max(len(lineas) * alto_linea, alto_linea)
         if pdf.get_y() + alto_fila > pdf.page_break_trigger:
@@ -12610,9 +12725,14 @@ def _pdf_reporte_ventas_costos(nombre_negocio, desde, hasta, datos, centro_info=
     pdf.set_font('Helvetica', 'B', 7.5)
     pdf.set_fill_color(235, 245, 235)
     total_cant = sum(d['cantidad'] for d in datos)
-    foot = ['TOTALES', f"{total_cant:.0f}", '', '',
-            _pdf_money(total_ventas), _pdf_money(total_costos),
-            _pdf_money(total_margen), f"{pct:.1f}"]
+    if has_mod:
+        foot = ['TOTALES', f"{total_cant:.0f}", '', _pdf_money(total_insumos),
+                _pdf_money(total_mod), _pdf_money(total_costos),
+                _pdf_money(total_ventas), _pdf_money(total_margen), f"{pct:.1f}"]
+    else:
+        foot = ['TOTALES', f"{total_cant:.0f}", '', '',
+                _pdf_money(total_ventas), _pdf_money(total_costos),
+                _pdf_money(total_margen), f"{pct:.1f}"]
     for i, val in enumerate(foot):
         align = 'C' if i > 0 else 'L'
         pdf.cell(col_w[i], 6, val, border=1, align=align, fill=True)
@@ -12640,7 +12760,11 @@ def api_reporte_ventas_costos_pdf(negocio_id):
     try:
         contexto = _contexto_negocio(conn, negocio_id)
         nombre_negocio = (contexto.get('negocio_nombre') or 'Negocio') if contexto else 'Negocio'
-        datos = _query_reporte_ventas_costos(conn, negocio_id, desde, hasta, centro_utilidad_id=centro_utilidad_id)
+
+        cfg_row = conn.execute("SELECT costo_hora_mod FROM config_negocio WHERE tercero_id = %s", (negocio_id,)).fetchone()
+        costo_hora_mod = float(cfg_row['costo_hora_mod']) if cfg_row and cfg_row['costo_hora_mod'] is not None else 0.0
+
+        datos = _query_reporte_ventas_costos(conn, negocio_id, desde, hasta, centro_utilidad_id=centro_utilidad_id, costo_hora_mod=costo_hora_mod)
         
         centro_info = None
         if centro_utilidad_id:
@@ -12654,7 +12778,7 @@ def api_reporte_ventas_costos_pdf(negocio_id):
                 pass
 
         conn.close()
-        pdf = _pdf_reporte_ventas_costos(nombre_negocio, desde, hasta, datos, centro_info=centro_info)
+        pdf = _pdf_reporte_ventas_costos(nombre_negocio, desde, hasta, datos, centro_info=centro_info, costo_hora_mod=costo_hora_mod)
         resp = Response(bytes(pdf.output()), mimetype='application/pdf')
         filename = f"reporte_ventas_costos_{centro_info['codigo']}.pdf" if centro_info else "reporte_ventas_costos_consolidado.pdf"
         resp.headers['Content-Disposition'] = f'inline; filename={filename}'

@@ -5276,10 +5276,11 @@ async function ejecutarCompartirWhatsApp() {
 
     if (data.ok) {
       btn.innerHTML = '<span>✓ ¡Listo! Abriendo WhatsApp...</span>';
-      await new Promise(r => setTimeout(r, 400));
       cerrarModalCompartir();
       mostrarMensaje('✓ Enlace creado y verificado. Abriendo WhatsApp...', 'ok');
-      window.open(data.wa_url, '_blank');
+      // En móviles, window.open() es bloqueado como ventana emergente tras operaciones asíncronas.
+      // Redirigir directamente a la URL de WhatsApp abre la app nativa sin bloqueo alguno.
+      window.location.href = data.wa_url;
     } else {
       alert(data.error || 'No se pudo generar el enlace');
       btn.disabled = false;
@@ -5988,6 +5989,11 @@ function initProgressBarDrag() {
 }
 
 async function togglePlayPause() {
+  try { initAudioContext(); } catch(e) {}
+  if (audioCtx && audioCtx.state === 'suspended') {
+    try { audioCtx.resume(); } catch(e) {}
+  }
+
   if (esYouTubeActual) {
     const activo = getYtPlayerActivo();
     if (activo && isYtActivoReady() && typeof activo.getPlayerState === 'function') {
@@ -6041,10 +6047,15 @@ async function togglePlayPause() {
             modo: 'reproductor'
           })
         });
-      }).catch((err) => {
-        console.warn('Play manual falló:', err.name || err.message);
-        fallosPlay++;
-        estadoEl.textContent = 'Canción bloqueada — toca play de nuevo';
+      }).catch(async (err) => {
+        console.warn('Play directo inicial falló, reintentando con carga limpia:', err.name || err.message);
+        const c = cancionActualObjeto || (currentCola && currentCola[0]);
+        if (c) {
+          await intentarReproducir(c);
+        } else {
+          fallosPlay++;
+          estadoEl.textContent = 'Canción bloqueada — toca play de nuevo';
+        }
       });
     } else {
       player.pause();

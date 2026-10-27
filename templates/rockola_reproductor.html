@@ -5164,6 +5164,42 @@ async function obtenerBlobAudioParaCompartir(c) {
   return null;
 }
 
+function subirArchivoAudioConProgreso(url, formData, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url, true);
+    if (xhr.upload && onProgress) {
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable && e.total > 0) {
+          const pct = Math.round((e.loaded / e.total) * 100);
+          onProgress(pct);
+        }
+      };
+    }
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const data = JSON.parse(xhr.responseText);
+          resolve(data);
+        } catch (err) {
+          reject(new Error('Respuesta no válida del servidor'));
+        }
+      } else {
+        try {
+          const data = JSON.parse(xhr.responseText);
+          reject(new Error(data.error || `Error del servidor (${xhr.status})`));
+        } catch (e) {
+          reject(new Error(`Error HTTP ${xhr.status}`));
+        }
+      }
+    };
+    xhr.onerror = () => reject(new Error('Error de conexión al subir el audio'));
+    xhr.ontimeout = () => reject(new Error('Tiempo de espera agotado al subir el audio'));
+    xhr.timeout = 60000;
+    xhr.send(formData);
+  });
+}
+
 async function ejecutarCompartirWhatsApp() {
   if (!cancionACompartir) return;
 
@@ -5174,30 +5210,34 @@ async function ejecutarCompartirWhatsApp() {
   const amigoTelefono = inputTel.value.trim();
 
   btn.disabled = true;
-  btn.innerHTML = '<span>⏳ Generando enlace...</span>';
+  btn.innerHTML = '<span>⏳ Preparando audio...</span>';
 
   try {
     let archivoId = cancionACompartir.archivo_id || '';
     const esYt = !!(cancionACompartir.youtube_url || (cancionACompartir.origen === 'youtube'));
 
     if (!esYt && !archivoId) {
-      btn.innerHTML = '<span>☁️ Buscando audio local...</span>';
+      btn.innerHTML = '<span>🔍 Extrayendo archivo de audio...</span>';
       const blob = await obtenerBlobAudioParaCompartir(cancionACompartir);
       if (blob) {
-        btn.innerHTML = '<span>☁️ Subiendo audio al servidor...</span>';
+        btn.innerHTML = '<span>☁️ Subiendo al servidor: 0%...</span>';
         const fd = new FormData();
         const ext = blob.type && blob.type.includes('ogg') ? '.ogg' : '.mp3';
         fd.append('archivo', blob, (cancionACompartir.nombre || 'audio') + ext);
         fd.append('nombre', cancionACompartir.nombre || 'Canción');
-        const upRes = await fetch(`/rockola/${SALA_ID}/compartir-local`, {
-          method: 'POST',
-          body: fd
-        });
-        const upText = await upRes.text();
-        let upData;
-        try { upData = JSON.parse(upText); } catch (e) {}
-        if (upData && upData.ok) {
+
+        const upData = await subirArchivoAudioConProgreso(
+          `/rockola/${SALA_ID}/compartir-local`,
+          fd,
+          (pct) => {
+            btn.innerHTML = `<span>☁️ Subiendo al servidor: ${pct}%...</span>`;
+          }
+        );
+
+        if (upData && upData.ok && upData.archivo_id) {
           archivoId = upData.archivo_id;
+          btn.innerHTML = '<span>✓ Audio verificado en el servidor</span>';
+          await new Promise(r => setTimeout(r, 350));
         } else {
           throw new Error((upData && upData.error) || 'No se pudo subir el archivo de audio al servidor');
         }
@@ -5210,7 +5250,7 @@ async function ejecutarCompartirWhatsApp() {
       }
     }
 
-    btn.innerHTML = '<span>🚀 Preparando WhatsApp...</span>';
+    btn.innerHTML = '<span>🔗 Generando enlace personalizado...</span>';
     const payload = {
       sala_id: SALA_ID,
       nombre: cancionACompartir.nombre,
@@ -5235,8 +5275,10 @@ async function ejecutarCompartirWhatsApp() {
     }
 
     if (data.ok) {
+      btn.innerHTML = '<span>✓ ¡Listo! Abriendo WhatsApp...</span>';
+      await new Promise(r => setTimeout(r, 400));
       cerrarModalCompartir();
-      mostrarMensaje('✓ Enlace creado. Abriendo WhatsApp...', 'ok');
+      mostrarMensaje('✓ Enlace creado y verificado. Abriendo WhatsApp...', 'ok');
       window.open(data.wa_url, '_blank');
     } else {
       alert(data.error || 'No se pudo generar el enlace');

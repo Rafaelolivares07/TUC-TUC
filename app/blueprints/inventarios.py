@@ -3702,6 +3702,143 @@ def api_inventario_kardex(producto_id):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@bp.route('/api/inventario/movimiento/<int:movimiento_id>/reclasificar_bodega', methods=['POST'])
+def api_inventario_movimiento_reclasificar_bodega(movimiento_id):
+    """
+    Reclasifica un movimiento de inventario (o todos los de su documento) a otra bodega / centro de utilidad.
+    Actualiza atómicamente:
+    1. movimientos_inventario.bodega
+    2. movimientos_contables.centro_utilidad_id
+    3. Recostea ambas bodegas (origen y destino) para garantizar la exactitud de saldos y costos promedio.
+    """
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    
+    data = request.get_json(silent=True) or {}
+    nueva_bodega_id = data.get('nueva_bodega_id')
+    reclasificar_todo_documento = bool(data.get('reclasificar_todo_documento', False))
+
+    if not nueva_bodega_id:
+        return jsonify({'ok': False, 'error': 'Debe especificar la nueva bodega o centro de utilidad'}), 400
+
+    try:
+        nueva_bodega_id = int(nueva_bodega_id)
+    except (ValueError, TypeError):
+        return jsonify({'ok': False, 'error': 'ID de bodega inválido'}), 400
+
+    conn = get_db_connection()
+    try:
+        mov = conn.execute("""
+            SELECT id, negocio_id, producto_id, tipo, motivo, cantidad,
+                   valor_unitario, valor_total, costo_und, COALESCE(bodega, 1) AS bodega,
+                   tipo_documento, documento_numero, numero_documento
+            FROM movimientos_inventario
+            WHERE id = %s
+        """, (movimiento_id,)).fetchone()
+
+        if not mov:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Movimiento no encontrado'}), 404
+
+        negocio_id = mov['negocio_id']
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
+        if error:
+            conn.close()
+            return error
+
+        bodega_origen = int(mov['bodega'])
+        if bodega_origen == nueva_bodega_id:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'El movimiento ya pertenece a esa bodega'}), 400
+
+        nueva_cu = conn.execute("""
+            SELECT id, codigo, nombre FROM centros_utilidad
+            WHERE id = %s AND negocio_id = %s AND activo = TRUE
+        """, (nueva_bodega_id, negocio_id)).fetchone()
+
+        if not nueva_cu:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'La bodega de destino no existe o está inactiva'}), 400
+
+        origen_cu = conn.execute("""
+            SELECT id, codigo, nombre FROM centros_utilidad
+            WHERE id = %s AND negocio_id = %s
+        """, (bodega_origen, negocio_id)).fetchone()
+        nombre_origen = origen_cu['nombre'] if origen_cu else f"Sede #{bodega_origen}"
+        nombre_destino = nueva_cu['nombre']
+
+        doc_num = mov['documento_numero'] or mov['numero_documento']
+        tipo_doc = mov['tipo_documento']
+
+        productos_a_recostear = set()
+        productos_a_recostear.add(mov['producto_id'])
+
+        if reclasificar_todo_documento and doc_num and tipo_doc:
+            movs_doc = conn.execute("""
+                SELECT id, producto_id FROM movimientos_inventario
+                WHERE negocio_id = %s AND tipo_documento = %s AND (documento_numero = %s OR numero_documento = %s)
+            """, (negocio_id, tipo_doc, doc_num, doc_num)).fetchall()
+
+            for md in movs_doc:
+                productos_a_recostear.add(md['producto_id'])
+
+            conn.execute("""
+                UPDATE movimientos_inventario
+                SET bodega = %s
+                WHERE negocio_id = %s AND tipo_documento = %s AND (documento_numero = %s OR numero_documento = %s)
+            """, (nueva_bodega_id, negocio_id, tipo_doc, doc_num, doc_num))
+
+            conn.execute("""
+                UPDATE movimientos_contables
+                SET centro_utilidad_id = %s
+                WHERE negocio_id = %s AND (numero_documento = %s OR numero_documento = %s OR numero_documento LIKE %s)
+            """, (nueva_bodega_id, negocio_id, doc_num, f"{tipo_doc}-{doc_num}", f"%{doc_num}%"))
+            total_movs_afectados = len(movs_doc)
+        else:
+            conn.execute("""
+                UPDATE movimientos_inventario
+                SET bodega = %s
+                WHERE id = %s
+            """, (nueva_bodega_id, movimiento_id))
+
+            conn.execute("""
+                UPDATE movimientos_contables
+                SET centro_utilidad_id = %s
+                WHERE movimiento_inventario_id = %s
+            """, (nueva_bodega_id, movimiento_id))
+            total_movs_afectados = 1
+
+        conn.commit()
+
+        # Recosteo atómico de ambas sedes para todos los productos afectados
+        u_id = session.get('usuario_id')
+        u_nom = session.get('usuario_nombre') or 'Admin'
+        for p_id in productos_a_recostear:
+            _recostear_producto(conn, negocio_id, p_id, bodega=bodega_origen,
+                                origen='reclasificacion_bodega',
+                                doc_tipo=tipo_doc, doc_num=doc_num,
+                                usuario_id=u_id, usuario_nombre=u_nom)
+            _recostear_producto(conn, negocio_id, p_id, bodega=nueva_bodega_id,
+                                origen='reclasificacion_bodega',
+                                doc_tipo=tipo_doc, doc_num=doc_num,
+                                usuario_id=u_id, usuario_nombre=u_nom)
+
+        conn.close()
+        return jsonify({
+            'ok': True,
+            'mensaje': f'Se reclasificó a {nombre_destino} exitosamente ({total_movs_afectados} movimiento/s sincronizados con contabilidad y recosteo).',
+            'bodega_origen': bodega_origen,
+            'bodega_destino': nueva_bodega_id,
+            'movimientos_afectados': total_movs_afectados
+        })
+    except Exception as e:
+        try: conn.rollback()
+        except: pass
+        try: conn.close()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @bp.route('/api/inventario/producto/<int:producto_id>/conteo')
 def api_inventario_producto_conteo(producto_id):
     """Consulta ultra rápida que solo cuenta registros en base de datos para verificación inmediata."""

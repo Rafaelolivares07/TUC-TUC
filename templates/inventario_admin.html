@@ -4174,6 +4174,71 @@
 
 
 
+  <!-- MODAL DE RECLASIFICACIÓN DE BODEGA / CENTRO DE UTILIDAD -->
+  <div id="modal-reclasificar-kardex" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-xs items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-150 border border-slate-100">
+      <div class="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 px-5 py-4 text-white flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="text-xl">🏢</span>
+          <h3 class="font-bold text-sm tracking-wide">Reclasificar Bodega / Sede</h3>
+        </div>
+        <button type="button" onclick="cerrarModalReclasificarKardex()" class="text-white/70 hover:text-white text-xl font-bold leading-none cursor-pointer">&times;</button>
+      </div>
+
+      <div class="p-5 space-y-4 text-xs text-slate-700">
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-1">
+          <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Documento / Transacción:</div>
+          <div id="mrk-doc-nombre" class="font-extrabold text-sm text-slate-800">...</div>
+          <div id="mrk-prod-detalle" class="text-slate-600 font-medium text-[11px]">...</div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3 items-center">
+          <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Sede Actual:</label>
+            <div id="mrk-sede-actual-badge" class="px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-800 font-bold border border-slate-300 flex items-center gap-1.5 truncate">
+              <span>🏪</span> <span id="mrk-sede-actual-nombre" class="truncate">...</span>
+            </div>
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold text-indigo-700 uppercase tracking-wider mb-1">Mover a Sede:</label>
+            <select id="mrk-select-nueva-sede" class="w-full bg-white border border-indigo-300 rounded-lg px-2 py-1.5 text-xs font-bold text-indigo-900 focus:outline-none focus:ring-2 focus:ring-indigo-400 cursor-pointer">
+              <!-- Opciones dinámicas de CENTROS_UTILIDAD -->
+            </select>
+          </div>
+        </div>
+
+        <!-- Opción para mover todo el documento si aplica -->
+        <div id="mrk-box-todo-doc" class="flex items-start gap-2 pt-1 hidden">
+          <input type="checkbox" id="mrk-check-todo-doc" checked class="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer">
+          <label for="mrk-check-todo-doc" class="text-[11px] text-slate-700 font-semibold cursor-pointer select-none">
+            Mover todos los ítems asociados a este documento (<span id="mrk-doc-num-label" class="font-mono font-bold">#</span>)
+          </label>
+        </div>
+
+        <!-- Explicación de impacto contable y físico -->
+        <div class="rounded-xl bg-blue-50/70 border border-blue-200/80 p-3 space-y-1 text-[11px] text-blue-900">
+          <div class="font-bold flex items-center gap-1 text-blue-950">
+            <span>🛡️</span> <span>Garantía de Integridad Automática:</span>
+          </div>
+          <ul class="list-disc list-inside space-y-0.5 text-blue-800 text-[10.5px]">
+            <li>Actualiza el Kardex físico de la transacción a la nueva sede.</li>
+            <li>Reclasifica los asientos en <code>movimientos_contables</code> al nuevo Centro de Utilidad.</li>
+            <li>Recostea automáticamente la <strong>Sede Origen</strong> y la <strong>Sede Destino</strong>.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="bg-slate-50 px-5 py-3 border-t border-slate-150 flex items-center justify-end gap-2">
+        <button type="button" onclick="cerrarModalReclasificarKardex()" class="px-3.5 py-1.5 rounded-xl text-slate-600 hover:bg-slate-200 text-xs font-bold transition cursor-pointer">
+          Cancelar
+        </button>
+        <button type="button" id="mrk-btn-confirmar" onclick="confirmarReclasificarSede()" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-extrabold shadow-sm transition flex items-center gap-1.5 cursor-pointer">
+          <span>⚡</span> <span>Reclasificar y Recostear</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal Enriquecido de Verificación y Cambio de Fecha/Hora de Documento (Kardex Drag & Drop) -->
   <div id="modal-fecha-documento" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-xs items-center justify-center p-4">
     <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-gray-100 animate-in fade-in zoom-in-95 duration-150">
@@ -12457,6 +12522,14 @@ function renderizarTablaKardex(d) {
       docDisplay = 'ajuste de inventario';
     }
 
+    const btnReclasificar = `
+      <button type="button" onclick="abrirModalReclasificarKardex(${m.id}, '${encodeURIComponent(String(docDisplay || 'Movimiento #' + m.id))}', ${m.bodega || 1}, ${m.producto_id || kardexProductoActual}, '${encodeURIComponent(String(m.nombre_producto || prod?.nombre || 'Producto'))}', '${_fmtKardexQty(m.cantidad || 0)}', '${m.tipo || ''}', '${encodeURIComponent(String(cleanNum || ''))}')"
+              class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9.5px] font-bold text-slate-600 bg-slate-100 hover:bg-indigo-100 hover:text-indigo-800 border border-slate-200 hover:border-indigo-300 rounded transition cursor-pointer select-none"
+              title="Mover este movimiento a otra bodega o centro de utilidad">
+        <span>🏢</span> <span>Sede</span>
+      </button>
+    `;
+
     let docOrProveedorInfo = '';
     if (docDisplay) {
       const linkUrl = `/admin/mantenimiento/${NEGOCIO_ID}?tool=auditor-documentos&tipo_documento=${encodeURIComponent(docTypeRaw)}&documento_numero=${encodeURIComponent(docNumRaw)}&tercero_id=${encodeURIComponent(m.proveedor_id || '')}`;
@@ -12466,10 +12539,17 @@ function renderizarTablaKardex(d) {
           <span>${docDisplay}</span>
           ${docNumRaw ? `<a href="${linkUrl}" target="_blank" rel="noopener noreferrer" title="Auditar documento en pestaña nueva" class="text-blue-500 hover:text-blue-700 transition font-bold text-xs inline-flex items-center">🔗</a>` : ''}
           ${btnNota}
+          ${btnReclasificar}
         </div>
       `;
-    } else if (btnNota) {
-      docOrProveedorInfo += `<div class="flex items-center">${btnNota}</div>`;
+    } else {
+      docOrProveedorInfo += `
+        <div class="font-semibold text-gray-800 flex items-center gap-1 flex-wrap leading-snug text-[11px]">
+          <span class="text-slate-400 font-mono text-[10px]">#${m.id}</span>
+          ${btnNota}
+          ${btnReclasificar}
+        </div>
+      `;
     }
 
     if (m.proveedor_nombre) {
@@ -12933,6 +13013,126 @@ async function kardexDrop(e) {
   kardexDragEnd(e);
 
   abrirModalFechaDocumento(docTipoId, encodeURIComponent(docNum), docFechaActual, docHoraActual, encodeURIComponent(docTipo), targetFecha, computedHora);
+}
+
+// ── Modal de Reclasificación de Bodega / Sede ─────────────────────────────────
+let _movReclasificarId = null;
+let _movReclasificarProdId = null;
+let _movReclasificarBodegaOrigen = null;
+let _movReclasificarDocNum = null;
+
+function abrirModalReclasificarKardex(movId, docDisplayEncoded, bodegaActualId, prodId, prodNombreEncoded, cantStr, tipoMov, docNumEncoded) {
+  _movReclasificarId = Number(movId);
+  _movReclasificarProdId = Number(prodId);
+  _movReclasificarBodegaOrigen = Number(bodegaActualId);
+  _movReclasificarDocNum = decodeURIComponent(docNumEncoded || '').trim();
+
+  const docDisplay = decodeURIComponent(docDisplayEncoded || 'Movimiento #' + movId);
+  const prodNombre = decodeURIComponent(prodNombreEncoded || 'Producto');
+  
+  const modal = document.getElementById('modal-reclasificar-kardex');
+  if (!modal) return;
+
+  document.getElementById('mrk-doc-nombre').textContent = docDisplay;
+  document.getElementById('mrk-prod-detalle').textContent = `${prodNombre} · ${tipoMov === 'entrada' ? '📥 Entrada' : '📤 Salida'} de ${cantStr} un`;
+
+  // Sede actual
+  const sedeActual = (typeof CENTROS_UTILIDAD !== 'undefined' && CENTROS_UTILIDAD.find(c => Number(c.id) === Number(bodegaActualId)));
+  const sedeActualNombre = sedeActual ? `${sedeActual.nombre} (${sedeActual.codigo})` : `Sede #${bodegaActualId}`;
+  document.getElementById('mrk-sede-actual-nombre').textContent = sedeActualNombre;
+
+  // Poblar select de nuevas sedes (todas excepto la actual)
+  const sel = document.getElementById('mrk-select-nueva-sede');
+  sel.innerHTML = '';
+  
+  const otrasSedes = (typeof CENTROS_UTILIDAD !== 'undefined' ? CENTROS_UTILIDAD : []).filter(c => Number(c.id) !== Number(bodegaActualId) && c.id !== 'consolidado' && c.activo !== false);
+  
+  const btnConf = document.getElementById('mrk-btn-confirmar');
+  if (!otrasSedes.length) {
+    sel.innerHTML = '<option value="">No hay otras sedes activas</option>';
+    if (btnConf) btnConf.disabled = true;
+  } else {
+    otrasSedes.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.id;
+      opt.textContent = `${(c.tipo === 'movil') ? '🛵' : '🏪'} ${c.nombre} (${c.codigo})`;
+      sel.appendChild(opt);
+    });
+    if (btnConf) btnConf.disabled = false;
+  }
+
+  // Checkbox de documento completo
+  const boxTodoDoc = document.getElementById('mrk-box-todo-doc');
+  const checkTodoDoc = document.getElementById('mrk-check-todo-doc');
+  const lblDocNum = document.getElementById('mrk-doc-num-label');
+  if (_movReclasificarDocNum && _movReclasificarDocNum !== 'None') {
+    lblDocNum.textContent = '#' + _movReclasificarDocNum;
+    checkTodoDoc.checked = true;
+    boxTodoDoc.classList.remove('hidden');
+  } else {
+    checkTodoDoc.checked = false;
+    boxTodoDoc.classList.add('hidden');
+  }
+
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+}
+
+function cerrarModalReclasificarKardex() {
+  const modal = document.getElementById('modal-reclasificar-kardex');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
+  _movReclasificarId = null;
+}
+
+async function confirmarReclasificarSede() {
+  if (!_movReclasificarId) return;
+  const sel = document.getElementById('mrk-select-nueva-sede');
+  const nuevaBodegaId = sel ? Number(sel.value) : null;
+  if (!nuevaBodegaId) {
+    toast('Selecciona una sede de destino válida', false);
+    return;
+  }
+
+  const checkTodoDoc = document.getElementById('mrk-check-todo-doc');
+  const moverTodoDoc = checkTodoDoc ? checkTodoDoc.checked : false;
+
+  const btn = document.getElementById('mrk-btn-confirmar');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span>⏳</span> <span>Reclasificando y Recosteando...</span>';
+  }
+
+  try {
+    toast('Reclasificando movimiento y sincronizando contabilidad...');
+    const r = await fetch(`/api/inventario/movimiento/${_movReclasificarId}/reclasificar_bodega`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        nueva_bodega_id: nuevaBodegaId,
+        reclasificar_todo_documento: moverTodoDoc
+      })
+    });
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error(d.error || 'No fue posible reclasificar el movimiento');
+
+    toast(d.mensaje || 'Movimiento reclasificado con éxito');
+    cerrarModalReclasificarKardex();
+
+    // Recargar Kardex en la pantalla
+    if (kardexProductoActual) {
+      await cargarKardex(kardexProductoActual);
+    }
+  } catch (err) {
+    toast(err.message, false);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<span>⚡</span> <span>Reclasificar y Recostear</span>';
+    }
+  }
 }
 
 // ── Modal de Verificación y Cambio de Fecha/Hora ──────────────────────────────

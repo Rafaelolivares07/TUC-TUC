@@ -324,6 +324,7 @@ def _crear_tablas(conn):
         "CREATE INDEX IF NOT EXISTS idx_ifa_doc ON inventario_fisico_actas(negocio_id, documento_numero)",
         "CREATE INDEX IF NOT EXISTS idx_ifa_modulo ON inventario_fisico_actas(negocio_id, modulo_origen)",
         "ALTER TABLE productos ADD COLUMN IF NOT EXISTS tolerancia_costo_pct NUMERIC(5,2) DEFAULT 15.0",
+        "ALTER TABLE productos ADD COLUMN IF NOT EXISTS tolerancia_vigente_desde TIMESTAMP WITH TIME ZONE DEFAULT NOW()",
         "ALTER TABLE productos ADD COLUMN IF NOT EXISTS tiempo_preparacion_min NUMERIC(6,2) DEFAULT 0",
         "ALTER TABLE productos ADD COLUMN IF NOT EXISTS tiempo_ensamble_min NUMERIC(6,2) DEFAULT 0",
         "ALTER TABLE config_negocio ADD COLUMN IF NOT EXISTS costo_hora_mod NUMERIC(12,2) DEFAULT 0",
@@ -342,6 +343,16 @@ def _crear_tablas(conn):
                 conn.rollback()
             except Exception:
                 pass
+
+    # Backfill: la tolerancia de productos existentes rige desde su creacion
+    try:
+        conn.execute("UPDATE productos SET tolerancia_vigente_desde = COALESCE(created_at, NOW()) WHERE tolerancia_vigente_desde IS NULL")
+        conn.commit()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
 
     # Migrar productos_tienda → productos si la tabla origen existe y aún no se migró
     try:
@@ -3494,7 +3505,7 @@ def api_inventario_kardex(producto_id):
 
         rows = conn.execute(f"""
             SELECT m.id, m.producto_id, m.tipo, m.motivo, m.cantidad, m.stock_anterior, m.stock_nuevo,
-                   m.valor_unitario, m.costo_und, m.valor_total, m.notas, m.tipo_documento,
+                   m.valor_unitario, m.costo_und, m.valor_total, m.notas, m.created_at, m.tipo_documento,
                    m.documento_numero, m.documento_fecha, m.tipo_documento_id, m.proveedor_id,
                    COALESCE(t.nombre, m.proveedor_nombre) AS proveedor_nombre, m.iva_total, m.documento_total,
                    COALESCE(TO_CHAR(m.documento_fecha, 'DD/MM/YY') || ' ' || TO_CHAR(m.created_at, 'HH24:MI'), TO_CHAR(m.created_at, 'DD/MM/YY HH24:MI')) AS fecha,
@@ -3540,14 +3551,20 @@ def api_inventario_kardex(producto_id):
         costo_prom_acumulado = Decimal('0')
         val_existencia_acumulado = Decimal('0')
         
-        # Obtener tolerancia_costo_pct del producto
+        # Obtener tolerancia_costo_pct del producto y desde cuando rige
         tol_costo_p = 15.0
+        tol_vigencia = None
         try:
-            prod_tol_row = conn.execute("SELECT COALESCE(tolerancia_costo_pct, 15.0) AS tol FROM productos WHERE id = %s", (producto_id,)).fetchone()
+            prod_tol_row = conn.execute("SELECT COALESCE(tolerancia_costo_pct, 15.0) AS tol, tolerancia_vigente_desde AS vig FROM productos WHERE id = %s", (producto_id,)).fetchone()
             if prod_tol_row and prod_tol_row['tol'] is not None:
                 tol_costo_p = float(prod_tol_row['tol'])
+            if prod_tol_row:
+                tol_vigencia = prod_tol_row['vig']
         except Exception:
-            pass
+            try:
+                conn.rollback()
+            except Exception:
+                pass
 
         for r in rows:
             m_dict = dict(r)
@@ -3573,7 +3590,7 @@ def api_inventario_kardex(producto_id):
 
             if tipo_m == 'entrada' and vu_m is not None and vu_m > Decimal('0') and costo_prom_acumulado > Decimal('0'):
                 diff_pct = ((vu_m - costo_prom_acumulado) / costo_prom_acumulado) * Decimal('100')
-                if abs(diff_pct) > Decimal(str(tol_costo_p)):
+                if abs(diff_pct) > Decimal(str(tol_costo_p)) and _movimiento_en_vigencia_tolerancia(m_dict.get('created_at'), tol_vigencia):
                     ratio = vu_m / costo_prom_acumulado
                     es_multiplo = any(abs(ratio - Decimal(str(f))) < Decimal('0.15') or abs(ratio - Decimal(str(1/f))) < Decimal('0.05') for f in (2, 3, 4, 6, 12, 24))
                     m_dict['alerta_variacion_costo'] = {
@@ -3674,6 +3691,10 @@ def api_inventario_kardex(producto_id):
             'costo_actual': costo_actual,
             'stock_actual': stock_actual,
             'valor_existencia': valor_existencia,
+            'tolerancia': {
+                'pct': tol_costo_p,
+                'vigente_desde': tol_vigencia.isoformat() if tol_vigencia is not None and hasattr(tol_vigencia, 'isoformat') else None,
+            },
             'totales': {
                 'entradas': float(totales['entradas'] or 0),
                 'salidas': float(totales['salidas'] or 0)
@@ -6159,7 +6180,8 @@ def api_inventario_producto_editar(producto_id):
                 dias_min_stock=%s, dias_max_stock=%s, stock_minimo=%s,
                 peso_variable=%s, tolerancia_peso_pct=%s,
                 unidad_medida_id=%s, unidad_visual_id=%s,
-                tolerancia_costo_pct=%s
+                tolerancia_costo_pct=%s,
+                tolerancia_vigente_desde = CASE WHEN COALESCE(tolerancia_costo_pct, 15.0) IS DISTINCT FROM %s THEN NOW() ELSE tolerancia_vigente_desde END
             WHERE id=%s
         """, (
             nombre,
@@ -6177,6 +6199,7 @@ def api_inventario_producto_editar(producto_id):
             tol_peso,
             unidad_medida_id,
             unidad_visual_id,
+            tol_costo,
             tol_costo,
             producto_id,
         ))
@@ -7260,10 +7283,29 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None, origen=None,
     }
 
 
+def _movimiento_en_vigencia_tolerancia(created_at, vigente_desde):
+    """True si el movimiento debe validarse contra la tolerancia actual.
+
+    Los movimientos grabados antes de tolerancia_vigente_desde quedan
+    congelados (ya fueron reportados); solo alertan los posteriores.
+    Fail-open: ante cualquier duda se valida como antes.
+    """
+    if vigente_desde is None or created_at is None:
+        return True
+    try:
+        def _naive(v):
+            if hasattr(v, 'tzinfo') and v.tzinfo is not None:
+                return v.replace(tzinfo=None)
+            return v
+        return _naive(created_at) >= _naive(vigente_desde)
+    except Exception:
+        return True
+
+
 def _auditar_producto_recosteo(conn, negocio_id, producto_id, bodega=None):
     """Reconstruye un producto sin modificarlo y devuelve sus inconsistencias por bodega."""
     producto = conn.execute(
-        "SELECT id, nombre, costo, COALESCE(tolerancia_costo_pct, 15.0) AS tolerancia_costo_pct FROM productos WHERE id = %s AND negocio_id = %s",
+        "SELECT id, nombre, costo, tolerancia_vigente_desde, COALESCE(tolerancia_costo_pct, 15.0) AS tolerancia_costo_pct FROM productos WHERE id = %s AND negocio_id = %s",
         (producto_id, negocio_id)
     ).fetchone()
     if not producto:
@@ -7371,6 +7413,7 @@ def _auditar_producto_recosteo(conn, negocio_id, producto_id, bodega=None):
     # Detección de posibles compras duplicadas y saltos atípicos de costo
     alertas_compras = []
     tol_costo_prod = Decimal(str(producto['tolerancia_costo_pct'] if 'tolerancia_costo_pct' in producto else 15.0))
+    tol_vigencia_aud = producto['tolerancia_vigente_desde'] if 'tolerancia_vigente_desde' in producto else None
     
     # 1. Saltos atípicos de costo frente al costo promedio ponderado vigente
     costo_prom_anterior = Decimal('0')
@@ -7386,7 +7429,7 @@ def _auditar_producto_recosteo(conn, negocio_id, producto_id, bodega=None):
         if m_chk['tipo'] == 'entrada' and vu_c is not None and vu_c > 0:
             if costo_prom_anterior > Decimal('0'):
                 diff_pct = ((vu_c - costo_prom_anterior) / costo_prom_anterior) * Decimal('100')
-                if abs(diff_pct) > tol_costo_prod:
+                if abs(diff_pct) > tol_costo_prod and _movimiento_en_vigencia_tolerancia(m_chk.get('created_at'), tol_vigencia_aud):
                     ratio = vu_c / costo_prom_anterior
                     es_multiplo = any(abs(ratio - Decimal(str(f))) < Decimal('0.15') or abs(ratio - Decimal(str(1/f))) < Decimal('0.05') for f in (2, 3, 4, 6, 12, 24))
                     f_txt = str(m_chk['documento_fecha'] or m_chk['created_at'] or '')[:10]

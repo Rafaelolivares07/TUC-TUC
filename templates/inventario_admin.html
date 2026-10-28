@@ -3973,9 +3973,13 @@
           <span class="block text-slate-400 font-bold uppercase tracking-wider text-[10px] mb-0.5">Costo Prom. Actual</span>
           <span id="kp-costo-prom" class="text-base font-extrabold text-indigo-600 font-mono">0</span>
         </div>
-        <div class="pr-1">
+        <div class="border-r border-slate-200 pr-3.5">
           <span class="block text-slate-400 font-bold uppercase tracking-wider text-[10px] mb-0.5">Valor Inventario</span>
           <span id="kp-valor-existencia" class="text-base font-extrabold text-emerald-600 font-mono">0</span>
+        </div>
+        <div class="pr-1">
+          <span class="block text-slate-400 font-bold uppercase tracking-wider text-[10px] mb-0.5">Tolerancia Costo</span>
+          <span id="kp-tolerancia" class="text-base font-extrabold text-amber-600 font-mono">—</span>
         </div>
       </div>
 
@@ -12486,6 +12490,13 @@ function renderizarTablaKardex(d) {
     document.getElementById('kp-stock').textContent = _fmtKardexQty(d.stock_actual);
     document.getElementById('kp-costo-prom').textContent = _fmtKardexUnit(d.costo_actual);
     document.getElementById('kp-valor-existencia').textContent = _fmtKardexMon(d.valor_existencia ?? (Number(d.costo_actual || 0) * Number(d.stock_actual || 0)));
+    const tolEl = document.getElementById('kp-tolerancia');
+    if (tolEl) {
+      const tPct = (d.tolerancia && d.tolerancia.pct !== undefined && d.tolerancia.pct !== null) ? d.tolerancia.pct : null;
+      const tVigRaw = (d.tolerancia && d.tolerancia.vigente_desde) ? String(d.tolerancia.vigente_desde).slice(0, 10) : null;
+      const tVig = tVigRaw ? tVigRaw.split('-').reverse().join('/') : null;
+      tolEl.textContent = (tPct !== null) ? ('\u00b1' + tPct + '%' + (tVig ? (' desde ' + tVig) : '')) : '\u2014';
+    }
   }
 
   if (!d.movimientos || !d.movimientos.length) {
@@ -12754,6 +12765,8 @@ async function cargarKardex(productoId, pagina = 1) {
     document.getElementById('kp-stock').textContent = _fmtKardexQty(prod.stock);
     document.getElementById('kp-costo-prom').textContent = _fmtKardexUnit(prod.costo);
     document.getElementById('kp-valor-existencia').textContent = _fmtKardexMon(Number(prod.costo || 0) * Number(prod.stock || 0));
+    const tolEl0 = document.getElementById('kp-tolerancia');
+    if (tolEl0) tolEl0.textContent = '\u2014';
     summaryPanel.classList.remove('hidden');
   } else if (summaryPanel) {
     summaryPanel.classList.add('hidden');

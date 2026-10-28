@@ -42,7 +42,7 @@ def main():
         corte = '%s %s' % (DIAS[rs.weekday()], rs.strftime('%d/%m'))
         print('  Cuota Muse [%s]: 5h %d%% usado / %d%% libre, reset %s - semanal %d%% usado / %d%% libre, corte %s' % (
             tier, uw, 100 - uw, rw.strftime('%H:%M'), us, 100 - us, corte))
-        open(TAG, 'w').write('5h:%d%%' % uw)
+        open(TAG, 'w').write('%d%% %s' % (uw, rw.strftime('%H:%M')))
     except Exception as e:
         print('  Cuota Muse: no disponible [%s]' % type(e).__name__)
     return 0

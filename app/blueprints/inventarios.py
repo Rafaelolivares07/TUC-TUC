@@ -3478,18 +3478,19 @@ def api_inventario_kardex(producto_id):
         if error:
             return error
 
-        bodega_kardex = request.args.get('bodega') or session.get('centro_utilidad_id') or 1
-        es_consolidado_k = str(bodega_kardex).lower() in ('consolidado', 'todas', 'all')
+        # Siempre consultar una bodega específica (un centro de utilidad = una bodega física)
+        # para garantizar la trazabilidad pura del inventario físico y exactitud de costos
+        bodega_kardex = request.args.get('bodega')
+        if not bodega_kardex or str(bodega_kardex).lower() in ('consolidado', 'todas', 'all', 'none'):
+            bodega_kardex = session.get('centro_utilidad_id') or 1
 
-        filtro_bodega_sql = ""
-        params_kardex = [producto_id]
-        if not es_consolidado_k:
-            try:
-                bod_int = int(bodega_kardex)
-                filtro_bodega_sql = " AND (m.bodega = %s OR m.bodega IS NULL) "
-                params_kardex.append(bod_int)
-            except Exception:
-                pass
+        try:
+            bod_int = int(bodega_kardex)
+        except Exception:
+            bod_int = 1
+
+        filtro_bodega_sql = " AND (m.bodega = %s OR (m.bodega IS NULL AND %s = 1)) "
+        params_kardex = [producto_id, bod_int, bod_int]
 
         rows = conn.execute(f"""
             SELECT m.id, m.tipo, m.motivo, m.cantidad, m.stock_anterior, m.stock_nuevo,
@@ -3625,48 +3626,43 @@ def api_inventario_kardex(producto_id):
             offset = (pagina - 1) * por_pagina
             movimientos_ui = movimientos_ordenados[offset:offset + por_pagina]
 
-        if not es_consolidado_k:
-            try:
-                bod_int = int(bodega_kardex)
-            except Exception:
-                bod_int = 1
-            prod_info = conn.execute("""
-                SELECT p.costo, COALESCE(s.stock, 0.0) AS stock,
-                       COALESCE(s.valor_existencia, 0.0) AS valor_existencia
-                FROM productos p
-                LEFT JOIN saldos_inventario s ON s.producto_id = p.id AND s.bodega = %s
-                WHERE p.id = %s
-            """, (bod_int, producto_id)).fetchone()
+        # Obtener los saldos por cada centro de utilidad / bodega
+        centros_rows = conn.execute("""
+            SELECT cu.id, cu.codigo, cu.nombre, cu.tipo, cu.color_badge,
+                   COALESCE(s.stock, 0.0) AS stock,
+                   COALESCE(s.costo_und, 0.0) AS costo_und,
+                   COALESCE(s.valor_existencia, 0.0) AS valor_existencia
+            FROM centros_utilidad cu
+            LEFT JOIN saldos_inventario s ON s.producto_id = %s AND s.bodega = cu.id AND s.negocio_id = cu.negocio_id
+            WHERE cu.negocio_id = %s AND cu.activo = TRUE
+            ORDER BY cu.id ASC
+        """, (producto_id, negocio_id)).fetchall()
 
-            totales = conn.execute("""
-                SELECT
-                    COALESCE(SUM(CASE WHEN tipo = 'entrada' THEN cantidad ELSE 0 END), 0) AS entradas,
-                    COALESCE(SUM(CASE WHEN tipo = 'salida' THEN cantidad ELSE 0 END), 0) AS salidas
-                FROM movimientos_inventario
-                WHERE negocio_id = %s AND producto_id = %s AND (bodega = %s OR bodega IS NULL)
-            """, (negocio_id, producto_id, bod_int)).fetchone()
-        else:
-            prod_info = conn.execute("""
-                SELECT p.costo, COALESCE(SUM(s.stock), 0.0) AS stock,
-                       COALESCE(SUM(s.valor_existencia), 0.0) AS valor_existencia
-                FROM productos p
-                LEFT JOIN saldos_inventario s ON s.producto_id = p.id
-                WHERE p.id = %s
-                GROUP BY p.id, p.costo
-            """, (producto_id,)).fetchone()
+        total_empresa_stock = sum(float(c['stock'] or 0) for c in centros_rows)
+        total_empresa_valor = sum(float(c['valor_existencia'] or 0) for c in centros_rows)
+        total_empresa_costo = (total_empresa_valor / total_empresa_stock) if total_empresa_stock > 0 else 0.0
 
-            totales = conn.execute("""
-                SELECT
-                    COALESCE(SUM(CASE WHEN tipo = 'entrada' THEN cantidad ELSE 0 END), 0) AS entradas,
-                    COALESCE(SUM(CASE WHEN tipo = 'salida' THEN cantidad ELSE 0 END), 0) AS salidas
-                FROM movimientos_inventario
-                WHERE negocio_id = %s AND producto_id = %s
-            """, (negocio_id, producto_id)).fetchone()
+        prod_info = conn.execute("""
+            SELECT COALESCE(s.costo_und, p.costo, 0.0) AS costo,
+                   COALESCE(s.stock, 0.0) AS stock,
+                   COALESCE(s.valor_existencia, 0.0) AS valor_existencia
+            FROM productos p
+            LEFT JOIN saldos_inventario s ON s.producto_id = p.id AND s.bodega = %s
+            WHERE p.id = %s
+        """, (bod_int, producto_id)).fetchone()
+
+        totales = conn.execute("""
+            SELECT
+                COALESCE(SUM(CASE WHEN tipo = 'entrada' THEN cantidad ELSE 0 END), 0) AS entradas,
+                COALESCE(SUM(CASE WHEN tipo = 'salida' THEN cantidad ELSE 0 END), 0) AS salidas
+            FROM movimientos_inventario
+            WHERE negocio_id = %s AND producto_id = %s AND (bodega = %s OR (bodega IS NULL AND %s = 1))
+        """, (negocio_id, producto_id, bod_int, bod_int)).fetchone()
         
         costo_actual = float(prod_info['costo']) if prod_info and prod_info['costo'] is not None else 0.0
         stock_actual = float(prod_info['stock']) if prod_info and prod_info['stock'] is not None else 0.0
         valor_existencia = float(prod_info['valor_existencia']) if prod_info else 0.0
-        auditoria = _auditar_producto_recosteo(conn, negocio_id, producto_id)
+        auditoria = _auditar_producto_recosteo(conn, negocio_id, producto_id, bodega=bod_int)
 
         return jsonify({
             'ok': True, 
@@ -3681,6 +3677,24 @@ def api_inventario_kardex(producto_id):
             'totales': {
                 'entradas': float(totales['entradas'] or 0),
                 'salidas': float(totales['salidas'] or 0)
+            },
+            'bodega_activa_id': bod_int,
+            'centros_saldos': [
+                {
+                    'id': c['id'],
+                    'codigo': c['codigo'],
+                    'nombre': c['nombre'],
+                    'tipo': c['tipo'],
+                    'color_badge': c['color_badge'] or '#10b981',
+                    'stock': float(c['stock'] or 0),
+                    'costo_und': float(c['costo_und'] or 0),
+                    'valor_existencia': float(c['valor_existencia'] or 0)
+                } for c in centros_rows
+            ],
+            'total_empresa': {
+                'stock': total_empresa_stock,
+                'costo_prom': total_empresa_costo,
+                'valor_existencia': total_empresa_valor
             },
             'auditoria': auditoria
         })
@@ -3700,8 +3714,14 @@ def api_inventario_producto_conteo(producto_id):
             conn.close()
             return jsonify({'ok': False, 'error': 'Producto no encontrado'}), 404
 
-        bodega_kardex = request.args.get('bodega') or session.get('centro_utilidad_id') or 1
-        es_consolidado_k = str(bodega_kardex).lower() in ('consolidado', 'todas', 'all')
+        bodega_kardex = request.args.get('bodega')
+        if not bodega_kardex or str(bodega_kardex).lower() in ('consolidado', 'todas', 'all', 'none'):
+            bodega_kardex = session.get('centro_utilidad_id') or 1
+
+        try:
+            bod_int = int(bodega_kardex)
+        except Exception:
+            bod_int = 1
 
         # 1. Total Global Empresa (todos los centros/bodegas sin filtro)
         row_global = conn.execute("""
@@ -3711,25 +3731,16 @@ def api_inventario_producto_conteo(producto_id):
         """, (negocio_id, producto_id)).fetchone()
         total_global = int(row_global['total'] or 0) if row_global else 0
 
-        # 2. Total Centro Activo
-        if es_consolidado_k:
-            total_centro = total_global
-            nombre_centro = 'Consolidado (Todas)'
-        else:
-            try:
-                bod_int = int(bodega_kardex)
-            except Exception:
-                bod_int = 1
+        # 2. Total Centro Activo / Bodega
+        row_centro = conn.execute("""
+            SELECT COUNT(*) AS total
+            FROM movimientos_inventario
+            WHERE negocio_id = %s AND producto_id = %s AND (bodega = %s OR (bodega IS NULL AND %s = 1))
+        """, (negocio_id, producto_id, bod_int, bod_int)).fetchone()
+        total_centro = int(row_centro['total'] or 0) if row_centro else 0
 
-            row_centro = conn.execute("""
-                SELECT COUNT(*) AS total
-                FROM movimientos_inventario
-                WHERE negocio_id = %s AND producto_id = %s AND (bodega = %s OR bodega IS NULL)
-            """, (negocio_id, producto_id, bod_int)).fetchone()
-            total_centro = int(row_centro['total'] or 0) if row_centro else 0
-
-            row_nom = conn.execute("SELECT nombre FROM centros_utilidad WHERE id = %s", (bod_int,)).fetchone()
-            nombre_centro = row_nom['nombre'] if row_nom and row_nom['nombre'] else f"Sede {bod_int}"
+        row_nom = conn.execute("SELECT nombre, codigo FROM centros_utilidad WHERE id = %s", (bod_int,)).fetchone()
+        nombre_centro = row_nom['nombre'] if row_nom and row_nom['nombre'] else f"Sede #{bod_int}"
 
         conn.close()
         return jsonify({
@@ -7137,9 +7148,9 @@ def _auditar_producto_recosteo(conn, negocio_id, producto_id, bodega=None):
                  created_at ASC, id ASC
     """, (negocio_id, producto_id)).fetchall()
 
-    stock = Decimal('0')
-    valor_existencia = Decimal('0')
-    costo_und = Decimal('0')
+    stocks_bodega = {}
+    valores_bodega = {}
+    costos_bodega = {}
     negativos = []
     inconsistencias = []
 
@@ -7147,10 +7158,14 @@ def _auditar_producto_recosteo(conn, negocio_id, producto_id, bodega=None):
         return abs(Decimal(str(a or 0)) - Decimal(str(b or 0))) > Decimal('0.0001')
 
     for mov in movimientos:
+        b_actual = mov['bodega']
         cantidad = Decimal(str(mov['cantidad'] or 0))
         signo = Decimal('1') if mov['tipo'] == 'entrada' else Decimal('-1')
-        stock_anterior = stock
+        
+        stock_anterior = stocks_bodega.get(b_actual, Decimal('0'))
         stock_nuevo = stock_anterior + cantidad * signo
+        valor_existencia = valores_bodega.get(b_actual, Decimal('0'))
+        costo_und = costos_bodega.get(b_actual, Decimal('0'))
 
         if mov['tipo'] == 'entrada' and mov['valor_unitario'] is not None:
             valor_unitario = Decimal(str(mov['valor_unitario']))
@@ -7162,6 +7177,10 @@ def _auditar_producto_recosteo(conn, negocio_id, producto_id, bodega=None):
             valor_existencia = (stock_nuevo * costo_und
                                 if stock_nuevo > 0 else Decimal('0'))
 
+        stocks_bodega[b_actual] = stock_nuevo
+        valores_bodega[b_actual] = valor_existencia
+        costos_bodega[b_actual] = costo_und
+
         fecha = mov['documento_fecha'] or mov['created_at']
         fecha_texto = fecha.isoformat() if hasattr(fecha, 'isoformat') else str(fecha or '')
         if stock_nuevo < 0:
@@ -7170,7 +7189,7 @@ def _auditar_producto_recosteo(conn, negocio_id, producto_id, bodega=None):
                 'fecha': fecha_texto,
                 'tipo': mov['tipo'],
                 'stock': float(stock_nuevo),
-                'bodega': mov['bodega']
+                'bodega': b_actual
             })
 
         if (diferente(mov['stock_anterior'], stock_anterior)
@@ -7182,10 +7201,10 @@ def _auditar_producto_recosteo(conn, negocio_id, producto_id, bodega=None):
                 'calculado_anterior': float(stock_anterior),
                 'guardado_nuevo': float(mov['stock_nuevo'] or 0),
                 'calculado_nuevo': float(stock_nuevo),
-                'bodega': mov['bodega']
+                'bodega': b_actual
             })
 
-        stock = stock_nuevo
+    stock = stocks_bodega.get(b_id, Decimal('0')) if b_id else sum(stocks_bodega.values())
 
     if b_id:
         saldo = conn.execute("""

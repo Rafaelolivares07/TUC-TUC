@@ -3926,11 +3926,13 @@
 
     <div class="flex items-end justify-between mb-4 flex-wrap gap-4 border-b border-gray-100 pb-4">
 
-      <div class="relative w-full sm:max-w-md">
+      <div class="relative w-full sm:max-w-[585px] pl-2 sm:pl-3">
 
-        <label class="text-sm font-bold text-gray-600 uppercase tracking-wide">Consultar Producto</label>
+        <label class="text-xs font-extrabold text-gray-600 uppercase tracking-wider block mb-0.5 leading-tight pl-1">Consultar Producto</label>
 
         <input id="kardex-ac-input" type="text" placeholder="Buscar producto…" autocomplete="off"
+               style="padding-left: 20px;"
+               class="pr-4 py-2 font-medium text-gray-800 rounded-xl shadow-2xs focus:border-rose-500 focus:ring-1 focus:ring-rose-500 transition-all"
                oninput="filtrarACKardex()"
                onfocus="filtrarACKardex()"
                onkeydown="onKeydownACKardex(event)"
@@ -4013,6 +4015,46 @@
     </div>
 
 
+
+    <!-- ── BARRA DE SELECCIÓN DE BODEGA / CENTRO DE UTILIDAD Y TOTAL CONSOLIDADO ── -->
+    <div id="kardex-bodegas-bar" class="mb-3.5 bg-slate-50/80 border border-slate-200 rounded-2xl p-3 shadow-2xs">
+      <div class="flex items-center justify-between flex-wrap gap-3">
+        <!-- Selector interactivo de bodegas -->
+        <div class="flex items-center flex-wrap gap-2">
+          <div class="flex items-center gap-1.5 pr-2.5 border-r border-slate-200">
+            <span class="text-xs font-extrabold text-slate-700 uppercase tracking-wider flex items-center gap-1">
+              <span>🏬</span> Bodega / Centro:
+            </span>
+          </div>
+          <!-- Contenedor dinámico de píldoras de bodegas -->
+          <div id="kardex-bodegas-pills" class="flex items-center flex-wrap gap-1.5">
+            <span class="text-xs text-slate-400 font-medium">Seleccione o consulte un producto para ver sus bodegas...</span>
+          </div>
+        </div>
+
+        <!-- Tarjeta de Total Consolidado Empresa (Solo Informativo) -->
+        <div id="kardex-total-empresa-box" class="flex items-center gap-3 bg-white border border-indigo-150 px-3 py-1.5 rounded-xl shadow-2xs ml-auto" title="Sumatoria consolidada de existencias en todas las sedes de la empresa (Informativo, no se mezclan movimientos)">
+          <div class="flex items-center gap-1.5 text-indigo-900 font-bold text-xs">
+            <span>🏢</span>
+            <span>Total Empresa:</span>
+          </div>
+          <div class="text-xs font-extrabold text-slate-800 font-mono">
+            <span id="kte-stock">0</span> <span class="text-[10px] text-slate-400 font-normal">unid</span>
+          </div>
+          <div class="text-xs font-extrabold text-emerald-700 font-mono pl-2 border-l border-indigo-100">
+            <span id="kte-valor">$0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Aclaración explícita sobre Centros de Utilidad = Bodegas -->
+      <div class="mt-2.5 pt-2 border-t border-slate-200/70 flex items-start gap-2 text-[11px] text-slate-600 leading-normal">
+        <span class="text-blue-500 text-xs shrink-0 mt-0.5">ℹ️</span>
+        <span>
+          <strong class="text-slate-800">Regla de Inventario:</strong> En el sistema, cada <strong>Centro de Utilidad representa una bodega física independiente (relación 1:1)</strong>. Los registros no se mezclan en la tabla cronológica para garantizar la exactitud matemática de saldos y costos promedio. Actualmente no es posible crear más de una bodega por centro de utilidad.
+        </span>
+      </div>
+    </div>
 
     <div id="kardex-auditoria" class="hidden mb-3 rounded-xl border p-3 text-xs"></div>
 
@@ -12090,6 +12132,53 @@ let _kardexTotalBdContado = null;
 let _kardexCentroNombreContado = '';
 let _kardexEsConsolidado = false;
 
+let _kardexBodegaActual = (typeof CENTRO_ACTIVO !== 'undefined' && CENTRO_ACTIVO && CENTRO_ACTIVO.id && CENTRO_ACTIVO.id !== 'consolidado')
+  ? Number(CENTRO_ACTIVO.id)
+  : 1;
+
+function cambiarBodegaKardex(bodegaId) {
+  _kardexBodegaActual = Number(bodegaId);
+  if (kardexProductoActual) {
+    cargarKardex(kardexProductoActual, 1);
+  }
+}
+
+function renderizarBodegasKardex(centros, bodegaActivaId, totalEmpresa) {
+  const container = document.getElementById('kardex-bodegas-pills');
+  if (!container) return;
+  if (!centros || !centros.length) {
+    container.innerHTML = '<span class="text-xs text-slate-400">Sin sedes configuradas</span>';
+    return;
+  }
+
+  container.innerHTML = centros.map(c => {
+    const esActivo = Number(c.id) === Number(bodegaActivaId);
+    const icono = (c.tipo === 'movil') ? '🛵' : '🏪';
+    const activeClasses = esActivo
+      ? 'bg-indigo-600 text-white font-extrabold shadow-sm ring-2 ring-indigo-300 ring-offset-1 scale-[1.02]'
+      : 'bg-white hover:bg-slate-100 text-slate-700 font-semibold border border-slate-200';
+
+    return `
+      <button type="button" onclick="cambiarBodegaKardex(${c.id})"
+              class="px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer ${activeClasses}"
+              title="Ver kardex exclusivo de ${c.nombre} (Código: ${c.codigo})">
+        <span>${icono}</span>
+        <span>${c.nombre}</span>
+        <span class="font-mono text-[11px] px-1.5 py-0.2 rounded-md ${esActivo ? 'bg-indigo-700 text-white' : 'bg-slate-100 text-slate-700 font-bold'}">
+          ${_fmtKardexQty(c.stock)} un
+        </span>
+      </button>
+    `;
+  }).join('');
+
+  const kteStock = document.getElementById('kte-stock');
+  const kteValor = document.getElementById('kte-valor');
+  if (totalEmpresa && kteStock && kteValor) {
+    kteStock.textContent = _fmtKardexQty(totalEmpresa.stock);
+    kteValor.textContent = _fmtKardexMon(totalEmpresa.valor_existencia);
+  }
+}
+
 async function consultarConteoRapidoKardex(productoId) {
   const panel = document.getElementById('kardex-conteo-cotejo');
   const lblGlobal = document.getElementById('kardex-conteo-global');
@@ -12113,7 +12202,7 @@ async function consultarConteoRapidoKardex(productoId) {
   _kardexTotalBdContado = null;
 
   try {
-    const bodParam = (CENTRO_ACTIVO && CENTRO_ACTIVO.id) ? `?bodega=${encodeURIComponent(CENTRO_ACTIVO.id)}` : '';
+    const bodParam = `?bodega=${encodeURIComponent(_kardexBodegaActual)}`;
     const r = await fetch(`/api/inventario/producto/${productoId}/conteo${bodParam}`);
     const d = await r.json();
     if (d.ok) {
@@ -12562,7 +12651,7 @@ async function cargarKardex(productoId, pagina = 1) {
     summaryPanel.classList.add('hidden');
   }
 
-  const bodParam = (CENTRO_ACTIVO && CENTRO_ACTIVO.id) ? `&bodega=${encodeURIComponent(CENTRO_ACTIVO.id)}` : '';
+  const bodParam = `&bodega=${encodeURIComponent(_kardexBodegaActual)}`;
   const porPagParam = encodeURIComponent(_kardexPorPagina);
   const r = await fetch(`/api/inventario/producto/${productoId}/kardex?pagina=${_kardexPaginaActual}&por_pagina=${porPagParam}${bodParam}`);
   const d = await r.json();
@@ -12572,6 +12661,10 @@ async function cargarKardex(productoId, pagina = 1) {
   _kardexTotalMovimientos = d.total_movimientos ?? (d.movimientos ? d.movimientos.length : 0);
   _kardexTotalPaginas = d.total_paginas ?? 1;
   _kardexPaginaActual = d.pagina ?? 1;
+
+  if (d.centros_saldos) {
+    renderizarBodegasKardex(d.centros_saldos, d.bodega_activa_id, d.total_empresa);
+  }
 
   renderizarAuditoriaKardex(d.auditoria, productoId);
 
@@ -12674,7 +12767,7 @@ async function generarPdfKardex() {
   if (!_kardexPdfInfo) { toast('Selecciona un producto para generar el PDF', false); return; }
   toast('Generando PDF…');
   const pid = _kardexPdfInfo.producto_id;
-  const bodParam = (CENTRO_ACTIVO && CENTRO_ACTIVO.id) ? `?bodega=${encodeURIComponent(CENTRO_ACTIVO.id)}` : '';
+  const bodParam = `?bodega=${encodeURIComponent(_kardexBodegaActual)}`;
   window.open(`/api/inventario/producto/${pid}/kardex/pdf${bodParam}`, '_blank');
 }
 

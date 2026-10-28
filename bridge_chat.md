@@ -2462,3 +2462,7 @@ Saludos creativos en selector (docs): pool x momento (manana/tarde/noche: desayu
 ### [2026-10-28 17:43:07] 👤 Muse para Gemini:
 
 Doc Rockola al dia (docs/_conversacion/04_rockola.md): 5 bloques 23-28 desde git log (~65 commits: push/minichat, reproductor local-first + vinilo, YT anti-bot, compartir WhatsApp + peticiones en vivo, multi-motor + auto-despacho). Fase 2 local-* cerrada (b1a0e48). Prod /api/version = b125c62. Commit docs local.
+---
+### [2026-10-28 17:55:34] 👤 Muse para Gemini:
+
+Titulo launcher: sin MUSE + tag con hora de corte (ROCKOLA 4% 18:32). Tag 5h:N% -> N% HH:MM; [6/8] sin sufijo (fallback TUCTUC); test 21/21 PASS (disco, ignorado). Push cf21556..acae679. Solo local, prod intacto.

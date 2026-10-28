@@ -1982,14 +1982,16 @@ Hola Rafael, analicé el reporte de diagnóstico de la Rockola que pegaste desde
 ### 🔍 Diagnóstico del Estado:
 1. **Reproduciendo: No / Player paused: true**:
    - Actualmente el reproductor no tiene ninguna pista sonando.
-   - El **AudioContext** y el nodo **Analyser** se inicializan bajo demanda al comenzar la reproducción (eproducirCancion -> iniciarVisualizerCompacto()). Por políticas de autoplay y ahorro de energía de los navegadores móviles (Chrome/Safari), el AudioContext requiere una interacción táctil del usuario para activarse.
+   - El **AudioContext** y el nodo **Analyser** se inicializan bajo demanda al comenzar la reproducción (
+eproducirCancion -> iniciarVisualizerCompacto()). Por políticas de autoplay y ahorro de energía de los navegadores móviles (Chrome/Safari), el AudioContext requiere una interacción táctil del usuario para activarse.
 2. **Canvas: 0x0**:
    - El canvas #visualizer-canvas toma dimensiones dinámicas vía getBoundingClientRect() en getCanvasCtx(). Si no ha iniciado la reproducción o el contenedor .now-card no ha completado el layout al cargar, reporta 0x0 hasta que se ejecuta el primer frame o se prueba.
 3. **Sin conexión ✗**:
    - El polling hacia el servidor (/rockola/cola) está fallando o el móvil está offline/en red local. Tus canciones están cargadas localmente en **IndexedDB** ("este dispositivo"), pero la sala no tiene conexión activa con AWS.
 
 ### 🛠️ Pasos para probarlo en el móvil:
-1. **Tocar "Probar canvas (verde)"**: Debe pintar el recuadro color turquesa y confirmar si ect.width x rect.height ya tiene tamaño real en pantalla.
+1. **Tocar "Probar canvas (verde)"**: Debe pintar el recuadro color turquesa y confirmar si 
+ect.width x rect.height ya tiene tamaño real en pantalla.
 2. **Tocar "Forzar AudioContext"**: Creará y desbloqueará el contexto de audio con tu toque directo.
 3. **Poner una canción en cola y dar Play**: Toca **"Poner"** en cualquier canción de tu biblioteca local ("Morena Mía", etc.) y presiona el botón/vinilo de Play. Al comenzar el audio, el visualizador arrancará automáticamente.
 ---
@@ -2414,3 +2416,13 @@ Amortizaciones: nota del concepto ahora visible (parse base/soporte/nota igual q
 
 Deploy amortizaciones live: `/api/version` = `f0c8e56` (push `44214dc..f0c8e56`). Falta prueba visual de Rafael en la pestana.
 
+---
+
+### [2026-10-28 14:01:54] 👤 Muse para Gemini:
+
+Tolerancia costo con vigencia live (`9eddc68`, `/api/version` OK): columna `tolerancia_vigente_desde` en productos (backfill created_at), PUT re-sella al cambiar el %, Kardex y auditoria solo alertan `variacion_costo` en movimientos posteriores. Kardex muestra `kp-tolerancia` (±X% desde DD/MM/AAAA). Tocados: `app/blueprints/inventarios.py`, `templates/inventario_admin.html` (CRLF puro), test 11/11 en disco (git lo ignora). Pendiente: E2E de Rafael en vivo.
+---
+
+### [2026-10-28 14:22:21] 👤 Muse para Gemini:
+
+Kardex: tarjeta cascada amarrada a `requiereRecosteo` (`7476412` live al primer poll). 1 linea en `inventario_admin.html`, backend intacto. Verificado: node 5/5, CRLF puro, probe estatico OK.

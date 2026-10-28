@@ -449,6 +449,74 @@
       cursor: pointer;
     }
 
+    /* Sugerencias de búsqueda inteligente en modal de petición */
+    .sug-wrapper {
+      position: relative;
+      width: 100%;
+    }
+    .sug-box {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      max-height: 220px;
+      overflow-y: auto;
+      background: #0b1528;
+      border: 1px solid rgba(0, 212, 255, 0.4);
+      border-radius: 12px;
+      z-index: 1000;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.7);
+    }
+    .sug-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      cursor: pointer;
+      transition: background 0.15s;
+      text-align: left;
+    }
+    .sug-item:last-child {
+      border-bottom: none;
+    }
+    .sug-item:hover, .sug-item.selected {
+      background: rgba(0, 212, 255, 0.15);
+    }
+    .sug-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #fff;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      margin-right: 8px;
+    }
+    .sug-badge {
+      font-size: 10px;
+      padding: 3px 8px;
+      border-radius: 8px;
+      font-weight: 700;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .sug-badge-servidor {
+      background: rgba(34, 197, 94, 0.2);
+      color: #4ade80;
+      border: 1px solid rgba(34, 197, 94, 0.4);
+    }
+    .sug-badge-rep {
+      background: rgba(147, 51, 234, 0.2);
+      color: #c084fc;
+      border: 1px solid rgba(147, 51, 234, 0.4);
+    }
+    .sug-empty {
+      padding: 12px;
+      font-size: 12px;
+      color: var(--muted);
+      text-align: center;
+    }
+
     /* Contenedor IFrame de YouTube Oculto para audio */
     #yt-hidden-wrap {
       position: absolute;
@@ -592,9 +660,12 @@
         Escribe la canción o artista que quieras y nuestro DJ te la busca y despacha en vivo.
       </div>
 
-      <div class="input-grp">
+      <div class="input-grp" style="position: relative;">
         <label class="input-label" for="input-pet-cancion">Canción o Artista</label>
-        <input type="text" id="input-pet-cancion" class="input-field" placeholder="Ej: Diomedes Díaz - Mi Muchacho" autofocus>
+        <div class="sug-wrapper">
+          <input type="text" id="input-pet-cancion" class="input-field" placeholder="Ej: Diomedes Díaz - Mi Muchacho" autocomplete="off" oninput="onInputBuscarCancion(this.value)" autofocus>
+          <div id="sug-peticion-box" class="sug-box" style="display:none;"></div>
+        </div>
       </div>
 
       <div class="input-grp" id="grp-pet-nombre">
@@ -864,6 +935,7 @@
     // Gestión de Peticiones en Vivo al DJ
     let pollingPeticionTimer = null;
     let ultimaCancionDespachadaNombre = '';
+    let sugDebounceTimer = null;
 
     function abrirModalPeticion() {
       const localNombre = localStorage.getItem('rockola_nombre') || DESTINATARIO_NOMBRE || '';
@@ -880,7 +952,69 @@
 
     function cerrarModalPeticion() {
       document.getElementById('modal-peticion').classList.remove('visible');
+      const box = document.getElementById('sug-peticion-box');
+      if (box) {
+        box.style.display = 'none';
+        box.innerHTML = '';
+      }
     }
+
+    function onInputBuscarCancion(valor) {
+      clearTimeout(sugDebounceTimer);
+      const val = (valor || '').trim();
+      const box = document.getElementById('sug-peticion-box');
+      if (!box) return;
+
+      if (val.length < 2) {
+        box.style.display = 'none';
+        box.innerHTML = '';
+        return;
+      }
+
+      sugDebounceTimer = setTimeout(async () => {
+        try {
+          const res = await fetch(`/rockola/c/${TOKEN}/sugerencias?q=${encodeURIComponent(val)}`);
+          const data = await res.json();
+          if (data.ok && Array.isArray(data.sugerencias) && data.sugerencias.length > 0) {
+            box.innerHTML = data.sugerencias.map(sug => {
+              const badgeClass = sug.en_servidor ? 'sug-badge-servidor' : 'sug-badge-rep';
+              const badgeText = sug.en_servidor ? '⚡ Suena al instante' : '🎧 Repertorio del DJ';
+              const safeNombre = sug.nombre.replace(/"/g, '&quot;');
+              return `
+                <div class="sug-item" onclick="seleccionarSugerencia('${safeNombre}')">
+                  <span class="sug-title">${sug.nombre}</span>
+                  <span class="sug-badge ${badgeClass}">${badgeText}</span>
+                </div>
+              `;
+            }).join('');
+            box.style.display = 'block';
+          } else {
+            box.innerHTML = '<div class="sug-empty">No está en la lista inmediata. El DJ la recibirá y la despachará.</div>';
+            box.style.display = 'block';
+          }
+        } catch(e) {
+          console.error("Error buscando sugerencias:", e);
+        }
+      }, 220);
+    }
+
+    function seleccionarSugerencia(nombre) {
+      const input = document.getElementById('input-pet-cancion');
+      const box = document.getElementById('sug-peticion-box');
+      if (input) input.value = nombre;
+      if (box) {
+        box.style.display = 'none';
+        box.innerHTML = '';
+      }
+    }
+
+    document.addEventListener('click', (e) => {
+      const box = document.getElementById('sug-peticion-box');
+      const input = document.getElementById('input-pet-cancion');
+      if (box && input && !box.contains(e.target) && e.target !== input) {
+        box.style.display = 'none';
+      }
+    });
 
     async function verificarPeticionInicial() {
       try {
@@ -938,6 +1072,20 @@
           }
           cerrarModalPeticion();
           inputCancion.value = '';
+
+          if (data.autodespachada && data.cancion) {
+            // ¡Auto-despachada de inmediato porque ya existe en el servidor!
+            const banner = document.getElementById('dj-status-banner');
+            const songLabel = document.getElementById('dj-banner-song');
+            if (banner && songLabel) {
+              songLabel.textContent = `⚡ ¡Sonando ahora: "${data.cancion.nombre}"!`;
+              banner.style.display = 'block';
+              setTimeout(() => { if (banner) banner.style.display = 'none'; }, 6000);
+            }
+            ultimaCancionDespachadaNombre = data.cancion.nombre;
+            await ejecutarCrossfadeNuevaCancion(data.cancion);
+            return;
+          }
 
           // Mostrar banner de espera activa
           const banner = document.getElementById('dj-status-banner');

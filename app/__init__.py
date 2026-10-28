@@ -145,7 +145,8 @@ def create_app():
             if partes[0] == 'c' and len(partes) >= 2:
                 from .blueprints.rockola import (
                     escuchar_cancion_compartida, audio_cancion_compartida,
-                    peticion_cancion_compartida, estado_peticion_compartida
+                    peticion_cancion_compartida, estado_peticion_compartida,
+                    sugerencias_canciones_compartidas
                 )
                 if len(partes) >= 3:
                     if partes[2] == 'audio':
@@ -154,6 +155,8 @@ def create_app():
                         return peticion_cancion_compartida(partes[1])
                     if partes[2] == 'estado-peticion':
                         return estado_peticion_compartida(partes[1])
+                    if partes[2] == 'sugerencias':
+                        return sugerencias_canciones_compartidas(partes[1])
                 return escuchar_cancion_compartida(partes[1])
             if partes[0] == 'buscar-terceros':
                 from .blueprints.rockola import buscar_terceros_rockola

@@ -1106,9 +1106,132 @@ def registro_rapido_rockola():
         conn.close()
 
 
+def _asegurar_conversacion_chat_peticion(conn, dj_id, oyente_id, nombre_oyente):
+    if not dj_id or not oyente_id or dj_id == oyente_id:
+        return None
+    try:
+        conv = conn.execute("""
+            SELECT id, token FROM conversaciones
+            WHERE (creador_id = %s AND invitado_id = %s)
+               OR (creador_id = %s AND invitado_id = %s)
+            ORDER BY id ASC LIMIT 1
+        """, (dj_id, oyente_id, oyente_id, dj_id)).fetchone()
+        if conv:
+            return conv
+        import secrets
+        token_conv = secrets.token_urlsafe(12)
+        conv = conn.execute("""
+            INSERT INTO conversaciones (creador_id, invitado_id, token, nombre_invitado, origen, activa)
+            VALUES (%s, %s, %s, %s, 'rockola', TRUE)
+            RETURNING id, token
+        """, (dj_id, oyente_id, token_conv, nombre_oyente or 'Oyente')).fetchone()
+        conn.commit()
+        return conv
+    except Exception as e:
+        print(f"[chat_peticion] Warning asegurando conversación: {e}")
+        return None
+
+
+def _enviar_mensaje_chat_peticion(conn, dj_id, oyente_id, oyente_nombre, cancion, autodespachada=False):
+    try:
+        conv = _asegurar_conversacion_chat_peticion(conn, dj_id, oyente_id, oyente_nombre)
+        if not conv:
+            return
+        if autodespachada:
+            msg_texto = f'⚡ ¡Pedí "{cancion}" en la Rockola y se reprodujo automáticamente!'
+        else:
+            msg_texto = f'🎧 Hola DJ, ¿puedes poner esta canción en la Rockola? 👉 "{cancion}"'
+
+        conn.execute("""
+            INSERT INTO mensajes (remitente_id, destinatario_id, mensaje, tipo, conversacion_id, estado, fecha)
+            VALUES (%s, %s, %s, 'cancion', %s, 'pendiente', CURRENT_TIMESTAMP)
+        """, (oyente_id, dj_id, msg_texto, conv['id']))
+        conn.commit()
+
+        # Push notification al DJ
+        try:
+            from .crm import _despachar_push_asincrono
+            _despachar_push_asincrono(
+                dj_id,
+                f"🎧 Petición Rockola · {oyente_nombre or 'Oyente'}",
+                msg_texto,
+                token=conv['token'],
+                url=f"/chat2?open_token={conv['token']}"
+            )
+        except Exception:
+            pass
+    except Exception as e:
+        print(f"[chat_peticion] Warning enviando mensaje: {e}")
+
+
+@bp.route('/c/<token>/sugerencias')
+def sugerencias_canciones_compartidas(token):
+    """Buscador en tiempo real para autocompletar peticiones desde el vinilo."""
+    q = (request.args.get('q') or '').strip()
+    if len(q) < 2:
+        return jsonify(ok=True, sugerencias=[])
+
+    conn = _connect()
+    try:
+        row_comp = conn.execute("SELECT sala_id FROM rockola_compartidos WHERE token = %s", (token,)).fetchone()
+        sala_id = row_comp['sala_id'] if row_comp else 'default'
+
+        q_like = f"%{q}%"
+        sugerencias = []
+        nombres_vistos = set()
+
+        # 1. Canciones YA en el servidor (listas para sonar de una)
+        rows_servidor = conn.execute("""
+            SELECT nombre, origen, archivo_id, youtube_url FROM (
+                SELECT nombre, origen, archivo_id, youtube_url FROM rockola_compartidos
+                WHERE (archivo_id IS NOT NULL AND archivo_id != '') OR (youtube_url IS NOT NULL AND youtube_url != '')
+                UNION
+                SELECT nombre, origen, archivo_id, youtube_url FROM rockola_biblioteca
+                WHERE (archivo_id IS NOT NULL AND archivo_id != '') OR (youtube_url IS NOT NULL AND youtube_url != '')
+            ) s
+            WHERE nombre ILIKE %s
+            ORDER BY nombre ASC
+            LIMIT 10
+        """, (q_like,)).fetchall()
+
+        for r in rows_servidor:
+            nom_norm = r['nombre'].strip().lower()
+            if nom_norm not in nombres_vistos:
+                nombres_vistos.add(nom_norm)
+                sugerencias.append({
+                    'nombre': r['nombre'],
+                    'origen': r['origen'],
+                    'en_servidor': True,
+                    'etiqueta': '⚡ Suena al instante'
+                })
+
+        # 2. Canciones del repertorio general indexado (dispositivos)
+        rows_canciones = conn.execute("""
+            SELECT titulo as nombre FROM rockola_canciones
+            WHERE titulo ILIKE %s OR archivo_nombre ILIKE %s
+            ORDER BY titulo ASC
+            LIMIT 15
+        """, (q_like, q_like)).fetchall()
+
+        for r in rows_canciones:
+            nom_norm = r['nombre'].strip().lower()
+            if nom_norm not in nombres_vistos:
+                nombres_vistos.add(nom_norm)
+                sugerencias.append({
+                    'nombre': r['nombre'],
+                    'origen': 'local',
+                    'en_servidor': False,
+                    'etiqueta': '🎧 Repertorio del DJ'
+                })
+
+        return jsonify(ok=True, sugerencias=sugerencias[:18])
+    finally:
+        conn.close()
+
+
 @bp.route('/c/<token>/pedir', methods=['POST'])
 def peticion_cancion_compartida(token):
-    """El oyente remoto pide una cancion al DJ en vivo desde el vinilo web."""
+    """El oyente remoto pide una cancion al DJ en vivo desde el vinilo web con auto-despacho inteligente."""
     data = request.get_json(silent=True) or {}
     cancion = (data.get('cancion') or '').strip()
     nombre = (data.get('nombre') or '').strip()
@@ -1126,6 +1249,11 @@ def peticion_cancion_compartida(token):
 
         sala_id = row_comp['sala_id']
         tercero_id = row_comp['tercero_id']
+        dj_id = row_comp['creado_por']
+
+        if not dj_id:
+            r_adm = conn.execute("SELECT id FROM terceros WHERE tipo_tercero IN ('admin', 'vendedor') ORDER BY id ASC LIMIT 1").fetchone()
+            dj_id = r_adm['id'] if r_adm else None
 
         tel_limpio = ''.join(c for c in telefono if c.isdigit())
         if tel_limpio and len(tel_limpio) >= 7:
@@ -1150,7 +1278,73 @@ def peticion_cancion_compartida(token):
                 nombre = row_t['nombre'] or 'Oyente'
                 tel_limpio = row_t['telefono'] or ''
 
-        # Insertar la peticion
+        # 1. Comprobar si la canción ya existe en el servidor para auto-despacho inmediato
+        row_servidor = conn.execute("""
+            SELECT nombre, origen, archivo_id, youtube_url FROM rockola_compartidos
+            WHERE sala_id = %s AND LOWER(TRIM(nombre)) = LOWER(TRIM(%s))
+              AND (
+                  (origen = 'archivo' AND archivo_id IS NOT NULL AND archivo_id != '')
+                  OR (origen = 'youtube' AND youtube_url IS NOT NULL AND youtube_url != '')
+              )
+            ORDER BY creado_en DESC LIMIT 1
+        """, (sala_id, cancion)).fetchone()
+        if not row_servidor:
+            row_servidor = conn.execute("""
+                SELECT nombre, origen, archivo_id, youtube_url FROM rockola_biblioteca
+                WHERE sala_id = %s AND LOWER(TRIM(nombre)) = LOWER(TRIM(%s))
+                  AND (
+                      (origen = 'archivo' AND archivo_id IS NOT NULL AND archivo_id != '')
+                      OR (origen = 'youtube' AND youtube_url IS NOT NULL AND youtube_url != '')
+                  )
+                ORDER BY creado_en DESC LIMIT 1
+            """, (sala_id, cancion)).fetchone()
+
+        if row_servidor:
+            # ¡AUTO-DESPACHO INMEDIATO!
+            nombre_final = row_servidor['nombre']
+            origen_final = row_servidor['origen']
+            archivo_id_final = row_servidor['archivo_id'] or ''
+            youtube_url_final = row_servidor['youtube_url'] or ''
+            yt_id = _extraer_youtube_id(youtube_url_final) if youtube_url_final else ''
+
+            cur_p = conn.execute("""
+                INSERT INTO rockola_peticiones (
+                    sala_id, token_origen, solicitante_nombre, solicitante_telefono,
+                    tercero_id, cancion_solicitada, estado,
+                    respuesta_nombre, respuesta_origen, respuesta_youtube_url, respuesta_archivo_id,
+                    despachado_en
+                ) VALUES (%s, %s, %s, %s, %s, %s, 'despachada', %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                RETURNING id
+            """, (sala_id, token, nombre or 'Oyente', tel_limpio or '', tercero_id, cancion,
+                  nombre_final, origen_final, youtube_url_final, archivo_id_final))
+            peticion_id = cur_p.fetchone()['id']
+
+            # Actualizar rockola_compartidos de este token
+            conn.execute("""
+                UPDATE rockola_compartidos
+                SET nombre = %s, origen = %s, youtube_url = %s, archivo_id = %s
+                WHERE token = %s
+            """, (nombre_final, origen_final, youtube_url_final, archivo_id_final, token))
+            conn.commit()
+
+            # Notificar chat 1 a 1 al DJ
+            if dj_id and tercero_id:
+                _enviar_mensaje_chat_peticion(conn, dj_id, tercero_id, nombre, cancion, autodespachada=True)
+
+            return jsonify(
+                ok=True,
+                autodespachada=True,
+                peticion_id=peticion_id,
+                cancion={
+                    'nombre': nombre_final,
+                    'origen': origen_final,
+                    'youtube_url': youtube_url_final,
+                    'youtube_id': yt_id,
+                    'archivo_id': archivo_id_final
+                }
+            )
+
+        # Si NO está en el servidor: queda pendiente para el DJ
         cur_p = conn.execute("""
             INSERT INTO rockola_peticiones (
                 sala_id, token_origen, solicitante_nombre, solicitante_telefono,
@@ -1161,7 +1355,11 @@ def peticion_cancion_compartida(token):
         peticion_id = cur_p.fetchone()['id']
         conn.commit()
 
-        return jsonify(ok=True, peticion_id=peticion_id, mensaje='Petición enviada al DJ')
+        # Notificar chat 1 a 1 al DJ
+        if dj_id and tercero_id:
+            _enviar_mensaje_chat_peticion(conn, dj_id, tercero_id, nombre, cancion, autodespachada=False)
+
+        return jsonify(ok=True, autodespachada=False, peticion_id=peticion_id, mensaje='Petición enviada al DJ')
     finally:
         conn.close()
 
@@ -1886,11 +2084,11 @@ def _descargar_youtube_con_ytdlp(url, upload_dir, nombre_id):
         'no_warnings': True,
         'extractor_args': {
             'youtube': {
-                'player_client': ['android', 'ios']
+                'player_client': ['ios', 'mweb', 'web_creator']
             }
         },
         'http_headers': {
-            'User-Agent': 'com.google.android.youtube/19.29.37 (Linux; U; Android 11) gzip',
+            'User-Agent': 'com.google.ios.youtube/19.29.1 (iPhone14,5; U; CPU iOS 17_5_1 like Mac OS X)',
             'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
         }
     }

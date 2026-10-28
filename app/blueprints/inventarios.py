@@ -3493,7 +3493,7 @@ def api_inventario_kardex(producto_id):
         params_kardex = [producto_id, bod_int, bod_int]
 
         rows = conn.execute(f"""
-            SELECT m.id, m.tipo, m.motivo, m.cantidad, m.stock_anterior, m.stock_nuevo,
+            SELECT m.id, m.producto_id, m.tipo, m.motivo, m.cantidad, m.stock_anterior, m.stock_nuevo,
                    m.valor_unitario, m.costo_und, m.valor_total, m.notas, m.tipo_documento,
                    m.documento_numero, m.documento_fecha, m.tipo_documento_id, m.proveedor_id,
                    COALESCE(t.nombre, m.proveedor_nombre) AS proveedor_nombre, m.iva_total, m.documento_total,

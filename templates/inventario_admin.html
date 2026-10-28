@@ -12471,6 +12471,10 @@ function renderizarTablaKardex(d) {
   const tb = document.getElementById('tabla-kardex');
   if (!tb || !d) return;
 
+  const prod = (typeof productos !== 'undefined' && Array.isArray(productos))
+    ? productos.find(p => Number(p.id) === Number(kardexProductoActual))
+    : null;
+
   const container = document.getElementById('kardex-table-container');
   if (container) {
     container.classList.toggle('kardex-ocultar-valores', _kardexOcultarValores);
@@ -12551,7 +12555,7 @@ function renderizarTablaKardex(d) {
     }
 
     const btnReclasificar = `
-      <button type="button" onclick="abrirModalReclasificarKardex(${m.id}, '${encodeURIComponent(String(docDisplay || 'Movimiento #' + m.id))}', ${m.bodega || 1}, ${m.producto_id || kardexProductoActual}, '${encodeURIComponent(String(m.nombre_producto || prod?.nombre || 'Producto'))}', '${_fmtKardexQty(m.cantidad || 0)}', '${m.tipo || ''}', '${encodeURIComponent(String(cleanNum || ''))}')"
+      <button type="button" onclick="abrirModalReclasificarKardex(${m.id}, '${encodeURIComponent(String(docDisplay || 'Movimiento #' + m.id))}', ${m.bodega || 1}, ${m.producto_id || kardexProductoActual || 0}, '${encodeURIComponent(String(m.nombre_producto || (prod ? prod.nombre : '') || 'Producto'))}', '${_fmtKardexQty(m.cantidad || 0)}', '${m.tipo || ''}', '${encodeURIComponent(String(cleanNum || ''))}')"
               class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9.5px] font-bold text-slate-600 bg-slate-100 hover:bg-indigo-100 hover:text-indigo-800 border border-slate-200 hover:border-indigo-300 rounded transition cursor-pointer select-none"
               title="Mover este movimiento a otra bodega o centro de utilidad">
         <span>🏢</span> <span>Sede</span>

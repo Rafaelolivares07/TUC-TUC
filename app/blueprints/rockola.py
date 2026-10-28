@@ -2109,13 +2109,14 @@ def _descargar_youtube_con_pytubefix(url, upload_dir, nombre_id):
     except Exception:
         return None, 'pytubefix no esta instalado'
 
-    last_err = None
+    errores = []
     # MWEB evade la proteccion SABR PoToken de YouTube en IPs de centros de datos
     for client_name in ['MWEB', 'WEB']:
         try:
             yt = YouTube(url, client=client_name)
             audio = yt.streams.get_audio_only()
             if not audio:
+                errores.append(f"{client_name}: sin audio")
                 continue
             ext = '.m4a' if 'mp4' in (audio.mime_type or '') else '.webm'
             filename = nombre_id + ext
@@ -2123,11 +2124,13 @@ def _descargar_youtube_con_pytubefix(url, upload_dir, nombre_id):
             title = yt.title or 'audio'
             if os.path.exists(out_path) and os.path.getsize(out_path) > 1000:
                 return {'path': out_path, 'nombre': title + ext}, None
+            else:
+                errores.append(f"{client_name}: archivo vacio o no existe")
         except Exception as e:
-            last_err = e
+            errores.append(f"{client_name}: {e}")
             continue
 
-    return None, f'pytubefix: {last_err}'
+    return None, f'pytubefix: {" | ".join(errores)}'
 
 
 @bp.route('/<sala_id>/youtube', methods=['POST'])

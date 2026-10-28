@@ -20,7 +20,7 @@
 
     .kardex-ocultar-valores .kardex-col-valores { display: none !important; }
     .kardex-ocultar-valores table { width: auto !important; min-width: 0 !important; }
-    #kardex-table-container table { zoom: 0.93; }
+    #kardex-table-container table { zoom: 0.79; }
     .no-spinners::-webkit-inner-spin-button,
     .no-spinners::-webkit-outer-spin-button {
       -webkit-appearance: none;
@@ -4097,7 +4097,9 @@
 
           <tr class="text-gray-500 uppercase text-[9.5px]">
 
-            <th rowspan="2" class="px-2 py-1 text-left align-middle bg-gray-50 whitespace-nowrap min-w-[140px]">Fecha / Doc</th>
+            <th rowspan="2" class="px-2 py-1 text-left align-middle bg-gray-50 whitespace-nowrap min-w-[110px]">Fecha</th>
+
+            <th rowspan="2" class="px-2 py-1 text-left align-middle bg-gray-50 min-w-[95px]">Documento</th>
 
             <th rowspan="2" class="px-2.5 py-1 text-left align-middle bg-gray-50 min-w-[130px]">Proveedor</th>
 
@@ -4143,7 +4145,7 @@
 
         <tbody id="tabla-kardex" class="divide-y divide-gray-100">
 
-          <tr><td colspan="10" class="text-center text-gray-400 py-8">Selecciona un producto</td></tr>
+          <tr><td colspan="11" class="text-center text-gray-400 py-8">Selecciona un producto</td></tr>
 
         </tbody>
 
@@ -12501,7 +12503,7 @@ function renderizarTablaKardex(d) {
   }
 
   if (!d.movimientos || !d.movimientos.length) {
-    tb.innerHTML = '<tr><td colspan="10" class="text-center text-gray-400 py-8">Sin movimientos</td></tr>';
+    tb.innerHTML = '<tr><td colspan="11" class="text-center text-gray-400 py-8">Sin movimientos</td></tr>';
     return;
   }
 
@@ -12572,9 +12574,17 @@ function renderizarTablaKardex(d) {
 
     const linkDocUrl = (docDisplay && docNumRaw) ? `/admin/mantenimiento/${NEGOCIO_ID}?tool=auditor-documentos&tipo_documento=${encodeURIComponent(docTypeRaw)}&documento_numero=${encodeURIComponent(docNumRaw)}&tercero_id=${encodeURIComponent(m.proveedor_id || '')}` : '';
 
-    const docLineaFecha = docDisplay
-      ? `<div class="font-semibold text-gray-800 flex items-center gap-1 flex-wrap leading-snug text-[11px] mt-0.5"><span>${docDisplay}</span>${docNumRaw ? `<a href="${linkDocUrl}" target="_blank" rel="noopener noreferrer" title="Auditar documento en pestaña nueva" class="text-blue-500 hover:text-blue-700 transition font-bold text-xs inline-flex items-center">🔗</a>` : ''}</div>`
-      : `<div class="text-slate-400 font-mono text-[10px] mt-0.5">#${m.id}</div>`;
+    let docColTipo = '', docColNum = '';
+    if (cleanType && cleanNum) {
+      if (cleanType.toLowerCase().endsWith(cleanNum.toLowerCase())) { docColTipo = cleanType.toLowerCase(); }
+      else { docColTipo = cleanType.toLowerCase(); docColNum = cleanNum; }
+    } else if (cleanType) { docColTipo = cleanType.toLowerCase(); }
+    else if (cleanNum) { docColNum = cleanNum; }
+    else if (docDisplay) { docColTipo = docDisplay; }
+    const docLinkIcono = docNumRaw ? `<a href="${linkDocUrl}" target="_blank" rel="noopener noreferrer" title="Auditar documento en pestaña nueva" class="text-blue-500 hover:text-blue-700 transition font-bold text-xs inline-flex items-center">🔗</a>` : '';
+    const docColumna = (docColTipo || docColNum)
+      ? `<div class="leading-snug"><div class="font-semibold text-gray-800 text-[11px]">${docColTipo}${(!docColNum && docLinkIcono) ? ' ' + docLinkIcono : ''}</div>${docColNum ? `<div class="text-gray-700 text-[11px] flex items-center gap-1 mt-0.5"><span>${docColNum}</span>${docLinkIcono}</div>` : ''}</div>`
+      : `<div class="text-slate-400 font-mono text-[10px]">#${m.id}</div>`;
 
     let docOrProveedorInfo = '';
     if (m.proveedor_nombre) {
@@ -12673,8 +12683,8 @@ function renderizarTablaKardex(d) {
 
     const fechaSoloKardex = String(m.fecha || '').split(' ')[0];
     const fechaCelda = esDocValido
-      ? `<div><button type="button" onclick="abrirModalFechaDocumento(${m.tipo_documento_id || 'null'}, '${encodeURIComponent(String(m.documento_numero))}', '${fechaKardex}', '${horaDoc}', '${encodeURIComponent(String(m.tipo_documento || ''))}')" class="text-left text-blue-600 hover:text-blue-800 hover:underline font-semibold text-[11px] leading-tight block" title="Clic para cambiar fecha/hora o arrastra la fila">${fechaSoloKardex}</button>${horaSubtext}${docLineaFecha}</div>`
-      : `<div><span class="text-[11px] font-medium text-gray-600 leading-tight block">${fechaSoloKardex}</span>${horaSubtext}${docLineaFecha}</div>`;
+      ? `<div><button type="button" onclick="abrirModalFechaDocumento(${m.tipo_documento_id || 'null'}, '${encodeURIComponent(String(m.documento_numero))}', '${fechaKardex}', '${horaDoc}', '${encodeURIComponent(String(m.tipo_documento || ''))}')" class="text-left text-blue-600 hover:text-blue-800 hover:underline font-semibold text-[11px] leading-tight block" title="Clic para cambiar fecha/hora o arrastra la fila">${fechaSoloKardex}</button>${horaSubtext}</div>`
+      : `<div><span class="text-[11px] font-medium text-gray-600 leading-tight block">${fechaSoloKardex}</span>${horaSubtext}</div>`;
 
     const dragAttrs = esDocValido
       ? `draggable="true" ondragstart="kardexDragStart(event)" ondragover="kardexDragOver(event)" ondragleave="kardexDragLeave(event)" ondrop="kardexDrop(event)" ondragend="kardexDragEnd(event)"`
@@ -12694,6 +12704,7 @@ function renderizarTablaKardex(d) {
         <td class="px-2 py-1 text-[11px] text-gray-600 align-middle">
           <div class="flex items-center">${dragHandle}${fechaCelda}</div>
         </td>
+        <td class="px-2 py-1 text-[11px] align-middle">${docColumna}</td>
         <td class="px-2.5 py-1 text-[11px] text-gray-700 align-middle">${docOrProveedorInfo}</td>
         <td class="px-2 py-1 text-[11px] text-gray-700 align-middle">${origenInfo}</td>
         <td class="px-2 py-1 text-right num font-mono text-[11px] border-r border-gray-100/50 ${entradaClass}">${entradaQty}</td>
@@ -12720,7 +12731,7 @@ function renderizarTablaKardex(d) {
     const filaNota = tieneNota
       ? `
       <tr id="kardex-nota-${m.id}" class="hidden bg-amber-50/40 text-gray-700 text-xs border-b border-amber-100/60">
-        <td colspan="10" class="px-6 py-2 italic">
+        <td colspan="11" class="px-6 py-2 italic">
           <span class="font-bold not-italic text-amber-800">📝 Nota:</span> ${notaTexto}
         </td>
       </tr>
@@ -12791,7 +12802,7 @@ async function cargarKardex(productoId, pagina = 1) {
 
   const paginacionBar = document.getElementById('kardex-paginacion-bar');
   if (!d.movimientos || !d.movimientos.length) {
-    tb.innerHTML = '<tr><td colspan="10" class="text-center text-gray-400 py-8">Sin movimientos</td></tr>';
+    tb.innerHTML = '<tr><td colspan="11" class="text-center text-gray-400 py-8">Sin movimientos</td></tr>';
     _kardexPdfInfo = null;
     const btnPdf = document.getElementById('kardex-btn-pdf');
     if (btnPdf) { btnPdf.classList.add('hidden'); btnPdf.classList.remove('flex'); }

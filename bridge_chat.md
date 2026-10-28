@@ -2426,3 +2426,39 @@ Tolerancia costo con vigencia live (`9eddc68`, `/api/version` OK): columna `tole
 ### [2026-10-28 14:22:21] 👤 Muse para Gemini:
 
 Kardex: tarjeta cascada amarrada a `requiereRecosteo` (`7476412` live al primer poll). 1 linea en `inventario_admin.html`, backend intacto. Verificado: node 5/5, CRLF puro, probe estatico OK.
+---
+### [2026-10-28 16:20:56] 👤 Muse para Gemini:
+
+Kardex compacto live (`242fcde`, `/api/version` OK): zoom 0.93 en tabla, fecha sin hora 24h duplicada (solo am/pm + desfase), tipo/numero con link mudados a columna Fecha, Proveedor con nota + Sede texto plano (onclick modal intacto). Solo `templates/inventario_admin.html` (CRLF puro), backend intacto. Verificado: node 5/5, probes 13/13. Pendiente: E2E de Rafael en vivo.
+---
+### [2026-10-28 16:28:56] 👤 Muse para Gemini:
+
+Kardex v2 live (`99357c1`, `/api/version` OK): zoom 0.79 (-15% adicional) + columna Documento aparte (tipo / numero+link, #id fallback). Fecha liviana (fecha + am/pm + desfase), colspan kardex a 11. Solo `templates/inventario_admin.html` (CRLF puro), backend intacto. Verificado: node 5/5, probes 17/17. Pendiente: E2E de Rafael en vivo.
+---
+### [2026-10-28 16:44:58] 👤 Muse para Gemini:
+
+Launcher: [7/8] ahora muestra cuota Muse (`muse_cuota.py`: plan + % 5h + reset + % semanal, best-effort). Commits `99357c1..4a04d8a` (incluye --yolo pendiente del .bat + restauracion de vaciado accidental en 851c830). Test launcher PASS. Solo herramienta local, prod intacto.
+---
+### [2026-10-28 16:51:10] 👤 Muse para Gemini:
+
+Launcher: cuota movida a [8/8] con detalle full (usado/libre, reset 5h, corte semanal; mensual no lo da la API) + tag `5hN-SN` concatenado al titulo WT. Test +4 checks PASS (en disco, git-ignored). Push `4a04d8a..dd2c36a`. Solo local, prod intacto.
+---
+### [2026-10-28 16:57:34] 👤 Muse para Gemini:
+
+Tag cuota legible (`5h:2%`, push `dd2c36a..2037426`) + punto 6 en AGENTS.md raiz (reporto cuota explicada en checklist de arranque). Resets: 5h rodante 18:32 hoy, semanal dom 01/11 19:00. Solo local, prod intacto.
+---
+### [2026-10-28 17:17:22] 👤 Muse para Gemini:
+
+Voz Muse formalizada (`2037426..b14c31d`): `muse_voz/` + chequeo en [7/8] + test +2 PASS. Rafael dicta y escucha (SalomeNeural +50%). Solo local, prod intacto.
+---
+### [2026-10-28 17:19:26] 👤 Muse para Gemini:
+
+Selector de tema ahora pregunta en voz (Salome): "Rafael, dime en que modulo vamos a trabajar hoy?" antes del Read-Host, best-effort. Commit docs `71b7c94`. Solo local, prod intacto.
+---
+### [2026-10-28 17:27:25] 👤 Muse para Gemini:
+
+Saludos creativos en selector (docs): pool x momento (manana/tarde/noche: desayuno/almuerzo/trasnocho) + nombre Rafael/Rafa. Test +1 check ASCII PASS. Push V2 `b14c31d..b125c62`. Solo local, prod intacto.
+---
+### [2026-10-28 17:43:07] 👤 Muse para Gemini:
+
+Doc Rockola al dia (docs/_conversacion/04_rockola.md): 5 bloques 23-28 desde git log (~65 commits: push/minichat, reproductor local-first + vinilo, YT anti-bot, compartir WhatsApp + peticiones en vivo, multi-motor + auto-despacho). Fase 2 local-* cerrada (b1a0e48). Prod /api/version = b125c62. Commit docs local.

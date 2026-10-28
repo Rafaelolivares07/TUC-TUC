@@ -20,6 +20,7 @@
 
     .kardex-ocultar-valores .kardex-col-valores { display: none !important; }
     .kardex-ocultar-valores table { width: auto !important; min-width: 0 !important; }
+    #kardex-table-container table { zoom: 0.93; }
     .no-spinners::-webkit-inner-spin-button,
     .no-spinners::-webkit-outer-spin-button {
       -webkit-appearance: none;
@@ -4096,9 +4097,9 @@
 
           <tr class="text-gray-500 uppercase text-[9.5px]">
 
-            <th rowspan="2" class="px-2 py-1 text-left align-middle bg-gray-50 whitespace-nowrap min-w-[110px]">Fecha</th>
+            <th rowspan="2" class="px-2 py-1 text-left align-middle bg-gray-50 whitespace-nowrap min-w-[140px]">Fecha / Doc</th>
 
-            <th rowspan="2" class="px-2.5 py-1 text-left align-middle bg-gray-50 min-w-[175px]">Documento / Proveedor</th>
+            <th rowspan="2" class="px-2.5 py-1 text-left align-middle bg-gray-50 min-w-[130px]">Proveedor</th>
 
             <th rowspan="2" class="px-2 py-1 text-left align-middle bg-gray-50 min-w-[170px]">Origen / Empaque</th>
 
@@ -12563,37 +12564,28 @@ function renderizarTablaKardex(d) {
 
     const btnReclasificar = `
       <button type="button" onclick="abrirModalReclasificarKardex(${m.id}, '${encodeURIComponent(String(docDisplay || 'Movimiento #' + m.id))}', ${m.bodega || 1}, ${m.producto_id || kardexProductoActual || 0}, '${encodeURIComponent(String(m.nombre_producto || (prod ? prod.nombre : '') || 'Producto'))}', '${_fmtKardexQty(m.cantidad || 0)}', '${m.tipo || ''}', '${encodeURIComponent(String(cleanNum || ''))}')"
-              class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9.5px] font-bold text-slate-600 bg-slate-100 hover:bg-indigo-100 hover:text-indigo-800 border border-slate-200 hover:border-indigo-300 rounded transition cursor-pointer select-none"
+              class="inline-flex items-center gap-0.5 text-[10px] font-semibold text-slate-500 hover:text-indigo-700 hover:underline transition cursor-pointer select-none"
               title="Mover este movimiento a otra bodega o centro de utilidad">
         <span>🏢</span> <span>Sede</span>
       </button>
     `;
 
+    const linkDocUrl = (docDisplay && docNumRaw) ? `/admin/mantenimiento/${NEGOCIO_ID}?tool=auditor-documentos&tipo_documento=${encodeURIComponent(docTypeRaw)}&documento_numero=${encodeURIComponent(docNumRaw)}&tercero_id=${encodeURIComponent(m.proveedor_id || '')}` : '';
+
+    const docLineaFecha = docDisplay
+      ? `<div class="font-semibold text-gray-800 flex items-center gap-1 flex-wrap leading-snug text-[11px] mt-0.5"><span>${docDisplay}</span>${docNumRaw ? `<a href="${linkDocUrl}" target="_blank" rel="noopener noreferrer" title="Auditar documento en pestaña nueva" class="text-blue-500 hover:text-blue-700 transition font-bold text-xs inline-flex items-center">🔗</a>` : ''}</div>`
+      : `<div class="text-slate-400 font-mono text-[10px] mt-0.5">#${m.id}</div>`;
+
     let docOrProveedorInfo = '';
-    if (docDisplay) {
-      const linkUrl = `/admin/mantenimiento/${NEGOCIO_ID}?tool=auditor-documentos&tipo_documento=${encodeURIComponent(docTypeRaw)}&documento_numero=${encodeURIComponent(docNumRaw)}&tercero_id=${encodeURIComponent(m.proveedor_id || '')}`;
-
-      docOrProveedorInfo += `
-        <div class="font-semibold text-gray-800 flex items-center gap-1 flex-wrap leading-snug text-[11px]">
-          <span>${docDisplay}</span>
-          ${docNumRaw ? `<a href="${linkUrl}" target="_blank" rel="noopener noreferrer" title="Auditar documento en pestaña nueva" class="text-blue-500 hover:text-blue-700 transition font-bold text-xs inline-flex items-center">🔗</a>` : ''}
-          ${btnNota}
-          ${btnReclasificar}
-        </div>
-      `;
-    } else {
-      docOrProveedorInfo += `
-        <div class="font-semibold text-gray-800 flex items-center gap-1 flex-wrap leading-snug text-[11px]">
-          <span class="text-slate-400 font-mono text-[10px]">#${m.id}</span>
-          ${btnNota}
-          ${btnReclasificar}
-        </div>
-      `;
-    }
-
     if (m.proveedor_nombre) {
-      docOrProveedorInfo += `<div class="text-gray-500 text-xs leading-snug truncate max-w-[195px] mt-0.5 text-[10px]" title="${m.proveedor_nombre}">${m.proveedor_nombre}</div>`;
+      docOrProveedorInfo += `<div class="text-gray-600 font-medium leading-snug truncate max-w-[195px] text-[11px]" title="${m.proveedor_nombre}">${m.proveedor_nombre}</div>`;
     }
+    docOrProveedorInfo += `
+      <div class="flex items-center gap-1.5 flex-wrap leading-snug mt-0.5">
+        ${btnNota}
+        ${btnReclasificar}
+      </div>
+    `;
 
     let origenInfo = '';
     if (m.producto_padre_nombre) {
@@ -12679,9 +12671,10 @@ function renderizarTablaKardex(d) {
       ? `<div class="text-[10px] text-gray-400 font-mono leading-none mt-0.5 flex items-center gap-1"><span>${m.created_at_hora}</span>${desfaseBadge}</div>`
       : (desfaseBadge ? `<div class="mt-0.5">${desfaseBadge}</div>` : '');
 
+    const fechaSoloKardex = String(m.fecha || '').split(' ')[0];
     const fechaCelda = esDocValido
-      ? `<div><button type="button" onclick="abrirModalFechaDocumento(${m.tipo_documento_id || 'null'}, '${encodeURIComponent(String(m.documento_numero))}', '${fechaKardex}', '${horaDoc}', '${encodeURIComponent(String(m.tipo_documento || ''))}')" class="text-left text-blue-600 hover:text-blue-800 hover:underline font-semibold text-[11px] leading-tight block" title="Clic para cambiar fecha/hora o arrastra la fila">${m.fecha}</button>${horaSubtext}</div>`
-      : `<div><span class="text-[11px] font-medium text-gray-600 leading-tight block">${m.fecha}</span>${horaSubtext}</div>`;
+      ? `<div><button type="button" onclick="abrirModalFechaDocumento(${m.tipo_documento_id || 'null'}, '${encodeURIComponent(String(m.documento_numero))}', '${fechaKardex}', '${horaDoc}', '${encodeURIComponent(String(m.tipo_documento || ''))}')" class="text-left text-blue-600 hover:text-blue-800 hover:underline font-semibold text-[11px] leading-tight block" title="Clic para cambiar fecha/hora o arrastra la fila">${fechaSoloKardex}</button>${horaSubtext}${docLineaFecha}</div>`
+      : `<div><span class="text-[11px] font-medium text-gray-600 leading-tight block">${fechaSoloKardex}</span>${horaSubtext}${docLineaFecha}</div>`;
 
     const dragAttrs = esDocValido
       ? `draggable="true" ondragstart="kardexDragStart(event)" ondragover="kardexDragOver(event)" ondragleave="kardexDragLeave(event)" ondrop="kardexDrop(event)" ondragend="kardexDragEnd(event)"`
@@ -12698,7 +12691,7 @@ function renderizarTablaKardex(d) {
           data-created-at-iso="${createdAtIso}"
           class="hover:bg-gray-50/70 transition-colors ${alertaMovimiento ? 'bg-amber-50/60' : ''} ${esDocValido ? 'cursor-default' : ''}" 
           title="${movimientosNegativos.has(Number(m.id)) ? 'Stock negativo en este punto. ' : ''}${movimientosInconsistentes.has(Number(m.id)) ? 'Stock guardado diferente al stock reconstruido.' : ''}">
-        <td class="px-2 py-1 text-[11px] text-gray-600 whitespace-nowrap align-middle">
+        <td class="px-2 py-1 text-[11px] text-gray-600 align-middle">
           <div class="flex items-center">${dragHandle}${fechaCelda}</div>
         </td>
         <td class="px-2.5 py-1 text-[11px] text-gray-700 align-middle">${docOrProveedorInfo}</td>

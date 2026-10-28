@@ -4020,51 +4020,51 @@
 
     <div id="kardex-table-container" ondragover="handleKardexAutoScroll(event)" class="overflow-x-auto overflow-y-auto max-h-[700px] border border-gray-150 rounded-xl custom-scrollbar scroll-smooth bg-white w-full">
 
-      <table class="w-full text-sm min-w-[1380px]">
+      <table class="w-full text-xs min-w-[1170px]">
 
         <thead class="bg-gray-50 border-b border-gray-200 sticky top-0 z-10 select-none">
 
-          <tr class="text-gray-500 uppercase text-xs">
+          <tr class="text-gray-500 uppercase text-[10.5px]">
 
-            <th rowspan="2" class="px-3 py-2 text-left align-middle bg-gray-50 whitespace-nowrap min-w-[135px]">Fecha</th>
+            <th rowspan="2" class="px-2.5 py-1.5 text-left align-middle bg-gray-50 whitespace-nowrap min-w-[115px]">Fecha</th>
 
-            <th rowspan="2" class="px-3.5 py-2 text-left align-middle bg-gray-50 min-w-[220px]">Documento / Proveedor</th>
+            <th rowspan="2" class="px-3 py-1.5 text-left align-middle bg-gray-50 min-w-[185px]">Documento / Proveedor</th>
 
-            <th rowspan="2" class="px-3 py-2 text-left align-middle bg-gray-50 min-w-[210px]">Origen / Empaque</th>
+            <th rowspan="2" class="px-2.5 py-1.5 text-left align-middle bg-gray-50 min-w-[180px]">Origen / Empaque</th>
 
-            <th colspan="3" class="px-2 py-1 text-center border-b border-gray-200/60 font-bold bg-gray-100 text-xs">CANTIDADES</th>
+            <th colspan="3" class="px-1.5 py-1 text-center border-b border-gray-200/60 font-bold bg-gray-100 text-[10.5px]">CANTIDADES</th>
 
-            <th colspan="2" class="px-2 py-1 text-center border-b border-gray-200/60 font-bold bg-gray-100 text-xs kardex-col-valores">COSTOS UNITARIOS</th>
+            <th colspan="2" class="px-1.5 py-1 text-center border-b border-gray-200/60 font-bold bg-gray-100 text-[10.5px] kardex-col-valores">COSTOS UNITARIOS</th>
 
-            <th rowspan="2" class="px-3 py-2 text-right num align-middle bg-gray-50 whitespace-nowrap min-w-[125px] kardex-col-valores">Total Línea</th>
+            <th rowspan="2" class="px-2.5 py-1.5 text-right num align-middle bg-gray-50 whitespace-nowrap min-w-[105px] kardex-col-valores">Total Línea</th>
 
-            <th rowspan="2" class="px-3 py-2 text-right num align-middle bg-gray-50 whitespace-nowrap text-emerald-800 font-bold min-w-[135px] kardex-col-valores" title="Valor monetario del stock en existencia (Saldo x Promedio)">Total Stock $</th>
+            <th rowspan="2" class="px-2.5 py-1.5 text-right num align-middle bg-gray-50 whitespace-nowrap text-emerald-800 font-bold min-w-[115px] kardex-col-valores" title="Valor monetario del stock en existencia (Saldo x Promedio)">Total Stock $</th>
 
           </tr>
 
-          <tr class="text-gray-500 uppercase text-xs">
+          <tr class="text-gray-500 uppercase text-[10.5px]">
 
-            <th class="px-3 py-2 text-right num font-semibold bg-gray-50 text-emerald-800 border-r border-gray-100 min-w-[105px]">
+            <th class="px-2.5 py-1.5 text-right num font-semibold bg-gray-50 text-emerald-800 border-r border-gray-100 min-w-[90px]">
 
               Entradas
 
-              <span id="kardex-sum-entradas" class="block text-sm font-mono font-bold text-emerald-600 mt-0.5" title="Total entradas en consulta">0</span>
+              <span id="kardex-sum-entradas" class="block text-xs font-mono font-bold text-emerald-600 mt-0.5" title="Total entradas en consulta">0</span>
 
             </th>
 
-            <th class="px-3 py-2 text-right num font-semibold bg-gray-50 text-rose-800 border-r border-gray-100 min-w-[105px]">
+            <th class="px-2.5 py-1.5 text-right num font-semibold bg-gray-50 text-rose-800 border-r border-gray-100 min-w-[90px]">
 
               Salidas
 
-              <span id="kardex-sum-salidas" class="block text-sm font-mono font-bold text-rose-600 mt-0.5" title="Total salidas en consulta">0</span>
+              <span id="kardex-sum-salidas" class="block text-xs font-mono font-bold text-rose-600 mt-0.5" title="Total salidas en consulta">0</span>
 
             </th>
 
-            <th class="px-3 py-2 text-right num font-semibold bg-gray-50 text-gray-800 min-w-[110px]">Saldo</th>
+            <th class="px-2.5 py-1.5 text-right num font-semibold bg-gray-50 text-gray-800 min-w-[95px]">Saldo</th>
 
-            <th class="px-2.5 py-2 text-right num font-semibold bg-gray-50 text-blue-800 border-r border-gray-100 min-w-[115px] kardex-col-valores" title="Costo unitario de la transacción">Transacción</th>
+            <th class="px-2 py-1.5 text-right num font-semibold bg-gray-50 text-blue-800 border-r border-gray-100 min-w-[98px] kardex-col-valores" title="Costo unitario de la transacción">Transacción</th>
 
-            <th class="px-2.5 py-2 text-right num font-semibold bg-gray-50 text-purple-800 min-w-[115px] kardex-col-valores" title="Costo promedio ponderado resultante">Promedio</th>
+            <th class="px-2 py-1.5 text-right num font-semibold bg-gray-50 text-purple-800 min-w-[98px] kardex-col-valores" title="Costo promedio ponderado resultante">Promedio</th>
 
           </tr>
 
@@ -10498,7 +10498,7 @@ async function escanearFacturaArchivo(archivo) {
 
         bannerDup.classList.remove('hidden');
       }
-      toast(d.posible_duplicada.mensaje, false);
+      toast(d.posible_duplicada.mensaje, 'warn', 7000);
     } else {
       if (bannerDup) bannerDup.classList.add('hidden');
     }
@@ -12373,9 +12373,9 @@ function renderizarTablaKardex(d) {
       const linkUrl = `/admin/mantenimiento/${NEGOCIO_ID}?tool=auditor-documentos&tipo_documento=${encodeURIComponent(docTypeRaw)}&documento_numero=${encodeURIComponent(docNumRaw)}&tercero_id=${encodeURIComponent(m.proveedor_id || '')}`;
 
       docOrProveedorInfo += `
-        <div class="font-semibold text-gray-800 flex items-center gap-1.5 flex-wrap leading-snug text-sm">
+        <div class="font-semibold text-gray-800 flex items-center gap-1 flex-wrap leading-snug text-xs">
           <span>${docDisplay}</span>
-          ${docNumRaw ? `<a href="${linkUrl}" target="_blank" rel="noopener noreferrer" title="Auditar documento en pestaña nueva" class="text-blue-500 hover:text-blue-700 transition font-bold text-sm inline-flex items-center">🔗</a>` : ''}
+          ${docNumRaw ? `<a href="${linkUrl}" target="_blank" rel="noopener noreferrer" title="Auditar documento en pestaña nueva" class="text-blue-500 hover:text-blue-700 transition font-bold text-xs inline-flex items-center">🔗</a>` : ''}
           ${btnNota}
         </div>
       `;
@@ -12384,7 +12384,7 @@ function renderizarTablaKardex(d) {
     }
 
     if (m.proveedor_nombre) {
-      docOrProveedorInfo += `<div class="text-gray-500 text-xs leading-snug truncate max-w-[260px] mt-0.5" title="${m.proveedor_nombre}">${m.proveedor_nombre}</div>`;
+      docOrProveedorInfo += `<div class="text-gray-500 text-xs leading-snug truncate max-w-[220px] mt-0.5 text-[11px]" title="${m.proveedor_nombre}">${m.proveedor_nombre}</div>`;
     }
 
     let origenInfo = '';
@@ -12472,8 +12472,8 @@ function renderizarTablaKardex(d) {
       : (desfaseBadge ? `<div class="mt-0.5">${desfaseBadge}</div>` : '');
 
     const fechaCelda = esDocValido
-      ? `<div><button type="button" onclick="abrirModalFechaDocumento(${m.tipo_documento_id || 'null'}, '${encodeURIComponent(String(m.documento_numero))}', '${fechaKardex}', '${horaDoc}', '${encodeURIComponent(String(m.tipo_documento || ''))}')" class="text-left text-blue-600 hover:text-blue-800 hover:underline font-semibold text-sm leading-tight block" title="Clic para cambiar fecha/hora o arrastra la fila">${m.fecha}</button>${horaSubtext}</div>`
-      : `<div><span class="text-sm font-medium text-gray-600 leading-tight block">${m.fecha}</span>${horaSubtext}</div>`;
+      ? `<div><button type="button" onclick="abrirModalFechaDocumento(${m.tipo_documento_id || 'null'}, '${encodeURIComponent(String(m.documento_numero))}', '${fechaKardex}', '${horaDoc}', '${encodeURIComponent(String(m.tipo_documento || ''))}')" class="text-left text-blue-600 hover:text-blue-800 hover:underline font-semibold text-xs leading-tight block" title="Clic para cambiar fecha/hora o arrastra la fila">${m.fecha}</button>${horaSubtext}</div>`
+      : `<div><span class="text-xs font-medium text-gray-600 leading-tight block">${m.fecha}</span>${horaSubtext}</div>`;
 
     const dragAttrs = esDocValido
       ? `draggable="true" ondragstart="kardexDragStart(event)" ondragover="kardexDragOver(event)" ondragleave="kardexDragLeave(event)" ondrop="kardexDrop(event)" ondragend="kardexDragEnd(event)"`
@@ -12490,29 +12490,29 @@ function renderizarTablaKardex(d) {
           data-created-at-iso="${createdAtIso}"
           class="hover:bg-gray-50/70 transition-colors ${alertaMovimiento ? 'bg-amber-50/60' : ''} ${esDocValido ? 'cursor-default' : ''}" 
           title="${movimientosNegativos.has(Number(m.id)) ? 'Stock negativo en este punto. ' : ''}${movimientosInconsistentes.has(Number(m.id)) ? 'Stock guardado diferente al stock reconstruido.' : ''}">
-        <td class="px-3 py-2 text-sm text-gray-600 whitespace-nowrap align-middle">
+        <td class="px-2.5 py-1.5 text-xs text-gray-600 whitespace-nowrap align-middle">
           <div class="flex items-center">${dragHandle}${fechaCelda}</div>
         </td>
-        <td class="px-3.5 py-2 text-sm text-gray-700 align-middle">${docOrProveedorInfo}</td>
-        <td class="px-3 py-2 text-sm text-gray-700 align-middle">${origenInfo}</td>
-        <td class="px-3 py-2 text-right num font-mono text-sm border-r border-gray-100/50 ${entradaClass}">${entradaQty}</td>
-        <td class="px-3 py-2 text-right num font-mono text-sm border-r border-gray-100/50 ${salidaClass}">${salidaQty}</td>
-        <td class="px-3 py-2 text-right num font-mono text-sm font-semibold text-gray-900 bg-gray-100/5">${_fmtKardexQty(m.saldo_calculado ?? m.stock_nuevo)}</td>
-        <td class="px-2.5 py-2 text-right num font-mono text-sm text-gray-600 border-r border-gray-100/50 kardex-col-valores">
+        <td class="px-3 py-1.5 text-xs text-gray-700 align-middle">${docOrProveedorInfo}</td>
+        <td class="px-2.5 py-1.5 text-xs text-gray-700 align-middle">${origenInfo}</td>
+        <td class="px-2.5 py-1.5 text-right num font-mono text-xs border-r border-gray-100/50 ${entradaClass}">${entradaQty}</td>
+        <td class="px-2.5 py-1.5 text-right num font-mono text-xs border-r border-gray-100/50 ${salidaClass}">${salidaQty}</td>
+        <td class="px-2.5 py-1.5 text-right num font-mono text-xs font-semibold text-gray-900 bg-gray-100/5">${_fmtKardexQty(m.saldo_calculado ?? m.stock_nuevo)}</td>
+        <td class="px-2 py-1.5 text-right num font-mono text-xs text-gray-600 border-r border-gray-100/50 kardex-col-valores">
           <div>${_fmtKardexUnit(transCostVal)}</div>
           ${m.alerta_variacion_costo ? `
             <div class="mt-0.5">
-              <span class="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[10px] font-black ${m.alerta_variacion_costo.diff_pct > 0 ? 'bg-rose-100 text-rose-800 border border-rose-300' : 'bg-blue-100 text-blue-800 border border-blue-300'}" 
+              <span class="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9.5px] font-black ${m.alerta_variacion_costo.diff_pct > 0 ? 'bg-rose-100 text-rose-800 border border-rose-300' : 'bg-blue-100 text-blue-800 border border-blue-300'}" 
                     title="Variación de ${m.alerta_variacion_costo.diff_pct > 0 ? '+' : ''}${m.alerta_variacion_costo.diff_pct}% frente al costo promedio ponderado ($${m.alerta_variacion_costo.costo_promedio_anterior}). Tolerancia: ${m.alerta_variacion_costo.tolerancia_pct}%">
                 ${m.alerta_variacion_costo.diff_pct > 0 ? '🔺' : '🔻'} ${m.alerta_variacion_costo.diff_pct > 0 ? '+' : ''}${m.alerta_variacion_costo.diff_pct}%
               </span>
-              ${m.alerta_variacion_costo.es_multiplo_empaque ? '<span class="block text-[9px] text-amber-700 font-bold" title="El costo unitario es múltiplo exacto de una presentación">⚠️ Posible empaque</span>' : ''}
+              ${m.alerta_variacion_costo.es_multiplo_empaque ? '<span class="block text-[8.5px] text-amber-700 font-bold" title="El costo unitario es múltiplo exacto de una presentación">⚠️ Posible empaque</span>' : ''}
             </div>
           ` : ''}
         </td>
-        <td class="px-2.5 py-2 text-right num font-mono text-sm text-gray-600 kardex-col-valores">${_fmtKardexUnit(avgCostVal)}</td>
-        <td class="px-3 py-2 text-right num font-mono text-sm font-semibold text-gray-900 kardex-col-valores">${_fmtKardexMon(lineTotal)}</td>
-        <td class="px-3 py-2 text-right num font-mono text-sm font-bold text-emerald-700 bg-emerald-50/20 kardex-col-valores">${_fmtKardexMon(Number((m.saldo_calculado ?? m.stock_nuevo) || 0) * Number(avgCostVal || 0))}</td>
+        <td class="px-2 py-1.5 text-right num font-mono text-xs text-gray-600 kardex-col-valores">${_fmtKardexUnit(avgCostVal)}</td>
+        <td class="px-2.5 py-1.5 text-right num font-mono text-xs font-semibold text-gray-900 kardex-col-valores">${_fmtKardexMon(lineTotal)}</td>
+        <td class="px-2.5 py-1.5 text-right num font-mono text-xs font-bold text-emerald-700 bg-emerald-50/20 kardex-col-valores">${_fmtKardexMon(Number((m.saldo_calculado ?? m.stock_nuevo) || 0) * Number(avgCostVal || 0))}</td>
       </tr>
     `;
 

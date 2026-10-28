@@ -333,7 +333,7 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
         txt = b['texto']
         if any(k in txt.lower() for k in ["resolucion", "vigencia", "vence"]):
             continue
-        m1 = re.search(r'(?:generacion|fecha|focha|expedicion|emision)?\s*[:#-]?\s*(\d{4})[/.-](\d{1,2})[/.-](\d{2})', txt, re.IGNORECASE)
+        m1 = re.search(r'(?:generacion|fecha|focha|expedicion|emision)?\s*[:#-]?\s*(\d{4})[\s/.-]+(\d{1,2})[\s/.-]+(\d{1,2})', txt, re.IGNORECASE)
         if m1:
             y, m, d = m1.group(1), int(m1.group(2)), int(m1.group(3))
             if 1 <= m <= 12 and 1 <= d <= 31 and 2020 <= int(y) <= 2035:
@@ -350,6 +350,20 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
     # 2. NÚMERO DE DOCUMENTO / FACTURA
     # =========================================================================
     num_doc_detectado = ""
+
+    # Prioridad 00: Detección especializada de Facturas Electrónicas DIAN con prefijo (ej: PG - 198374, FE-1234, SETP556)
+    # Inspeccionar líneas completas y bloques que contengan prefijo alfanumérico junto a 'Factura' o en cabecera
+    for l_txt in lineas_texto_completas[:15]:
+        if any(k in l_txt.lower() for k in ["resolucion", "vigencia", "rango", "autoriza", "cufe", "telefono", "tel:", "cel:", "nit", "cliente"]):
+            continue
+        # Buscar patrón de prefijo alfanumérico DIAN de 1-4 letras seguido de guión/espacio y 4-10 dígitos
+        m_dian = re.search(r'\b([A-Z]{1,4})\s*[-–]\s*(\d{4,10})\b', l_txt)
+        if m_dian:
+            cand_pref = m_dian.group(1).upper()
+            cand_num = m_dian.group(2)
+            if cand_pref not in ('TEL', 'NIT', 'RES', 'PAG', 'CEL', 'HORA', 'DIA', 'MES', 'ANO', 'AÑO'):
+                num_doc_detectado = f"{cand_pref}-{cand_num}"
+                break
 
     # Prioridad 0A: Factura Electrónica de Venta directa con prefijo alfanumérico (ej: PG-198374, SETP556, FEV1234)
     for b in bloques:

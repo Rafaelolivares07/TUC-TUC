@@ -7288,6 +7288,9 @@ def _auditar_producto_recosteo(conn, negocio_id, producto_id, bodega=None):
     stocks_bodega = {}
     valores_bodega = {}
     costos_bodega = {}
+    costo_und = Decimal('0')
+    valor_existencia = Decimal('0')
+    stock = Decimal('0')
     negativos = []
     inconsistencias = []
 
@@ -7341,7 +7344,14 @@ def _auditar_producto_recosteo(conn, negocio_id, producto_id, bodega=None):
                 'bodega': b_actual
             })
 
-    stock = stocks_bodega.get(b_id, Decimal('0')) if b_id else sum(stocks_bodega.values())
+    if b_id:
+        stock = stocks_bodega.get(b_id, Decimal('0'))
+        costo_und = costos_bodega.get(b_id, Decimal('0'))
+        valor_existencia = valores_bodega.get(b_id, Decimal('0'))
+    else:
+        stock = sum(stocks_bodega.values()) if stocks_bodega else Decimal('0')
+        valor_existencia = sum(valores_bodega.values()) if valores_bodega else Decimal('0')
+        costo_und = (valor_existencia / stock) if stock > Decimal('0') else Decimal('0')
 
     if b_id:
         saldo = conn.execute("""

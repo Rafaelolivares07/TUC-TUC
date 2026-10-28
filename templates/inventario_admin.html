@@ -13394,7 +13394,7 @@ function renderizarAuditoriaKardex(auditoria, productoId) {
     ` : ''}
 
     <!-- 2. ALERTA DE EFECTO CASCADA EN RECETAS / ENSAMBLES -->
-    ${auditoria.cascada_ensambles && auditoria.cascada_ensambles.es_insumo ? `
+    ${auditoria.cascada_ensambles && auditoria.cascada_ensambles.es_insumo && requiereRecosteo ? `
       <div class="w-full bg-amber-50/90 border-2 border-amber-300 rounded-xl p-3 text-amber-950 text-xs shadow-xs">
         <div class="flex items-start gap-2.5">
           <span class="text-xl shrink-0">⚠️</span>

@@ -3752,7 +3752,7 @@ def api_inventario_producto_conteo(producto_id):
             'total_bd': total_centro,
             'centro_id': bodega_kardex,
             'centro_nombre': nombre_centro,
-            'es_consolidado': es_consolidado_k
+            'es_consolidado': False
         })
     except Exception as e:
         try: conn.close()

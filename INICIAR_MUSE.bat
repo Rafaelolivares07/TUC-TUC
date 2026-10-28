@@ -80,7 +80,6 @@ for %%c in (muse muse-code) do (
   )
 )
 if defined MUSECMD (echo   CLI: !MUSECMD!) else (echo   AVISO: muse no esta en PATH.)
-if defined MUSECMD C:\Tools\Python313\python.exe "%V2%\muse_cuota.py" 2>nul
 set "LNK=%USERPROFILE%\Desktop\INICIAR MUSE.lnk"
 if exist "%LNK%" echo   acceso OK
 if exist "%LNK%" goto :lnk_ok
@@ -90,6 +89,12 @@ if %errorlevel% equ 0 (echo   acceso creado.) else (echo   no se pudo crear acce
 if not defined MUSECMD (pause & exit /b 1)
 
 echo [8/8] Abrir pestana !ETIQUETA!
+C:\Tools\Python313\python.exe "%V2%\muse_cuota.py" 2>nul
+set "CUOTATAG="
+set /p CUOTATAG=<"%TEMP%\muse_cuota_tag.txt" 2>nul
+del "%TEMP%\muse_cuota_tag.txt" 2>nul
+if defined CUOTATAG set "ETIQUETA=!ETIQUETA! !CUOTATAG!"
+echo   Titulo: !ETIQUETA!
 where wt >nul 2>nul
 if %errorlevel% neq 0 goto :sin_wt
 echo   wt --title "!ETIQUETA!" --suppressApplicationTitle -d "%CD%" cmd /k !MUSECMD! --yolo

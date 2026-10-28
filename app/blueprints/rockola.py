@@ -2109,18 +2109,25 @@ def _descargar_youtube_con_pytubefix(url, upload_dir, nombre_id):
     except Exception:
         return None, 'pytubefix no esta instalado'
 
-    try:
-        yt = YouTube(url)
-        audio = yt.streams.get_audio_only()
-        if not audio:
-            return None, 'pytubefix no encontro stream de audio'
-        ext = '.m4a' if 'mp4' in (audio.mime_type or '') else '.webm'
-        filename = nombre_id + ext
-        out_path = audio.download(output_path=upload_dir, filename=filename)
-        title = yt.title or 'audio'
-        return {'path': out_path, 'nombre': title + ext}, None
-    except Exception as e:
-        return None, f'pytubefix: {e}'
+    last_err = None
+    # MWEB evade la proteccion SABR PoToken de YouTube en IPs de centros de datos
+    for client_name in ['MWEB', 'WEB']:
+        try:
+            yt = YouTube(url, client=client_name)
+            audio = yt.streams.get_audio_only()
+            if not audio:
+                continue
+            ext = '.m4a' if 'mp4' in (audio.mime_type or '') else '.webm'
+            filename = nombre_id + ext
+            out_path = audio.download(output_path=upload_dir, filename=filename)
+            title = yt.title or 'audio'
+            if os.path.exists(out_path) and os.path.getsize(out_path) > 1000:
+                return {'path': out_path, 'nombre': title + ext}, None
+        except Exception as e:
+            last_err = e
+            continue
+
+    return None, f'pytubefix: {last_err}'
 
 
 @bp.route('/<sala_id>/youtube', methods=['POST'])
@@ -2204,13 +2211,13 @@ def resolver(sala_id):
 
     destino = os.path.join(upload_dir, item_id + '.mp3')
     try:
-        # 1. Intentar con yt-dlp usando clientes optimizados
-        descarga, error_ytdlp = _descargar_youtube_con_ytdlp(target_url, upload_dir, item_id)
+        # 1. Intentar primero con pytubefix MWEB (probado que evade el SABR PoToken de YouTube en servidores AWS)
+        descarga, error_pytube = _descargar_youtube_con_pytubefix(target_url, upload_dir, item_id)
         
-        # 2. Si falla yt-dlp (o bloqueo anti-bot en datacenter), intentar con pytubefix
-        error_pytube = None
+        # 2. Si falla pytubefix, intentar con yt-dlp
+        error_ytdlp = None
         if not descarga:
-            descarga, error_pytube = _descargar_youtube_con_pytubefix(target_url, upload_dir, item_id)
+            descarga, error_ytdlp = _descargar_youtube_con_ytdlp(target_url, upload_dir, item_id)
 
         # 3. Fallback adicional con cobalt
         if not descarga:

@@ -2077,19 +2077,15 @@ def _descargar_youtube_con_ytdlp(url, upload_dir, nombre_id):
 
     outtmpl = os.path.join(upload_dir, nombre_id + '.%(ext)s')
     opts = {
-        'format': 'bestaudio[ext=m4a]/bestaudio/best',
+        'format': 'bestaudio/best',
         'outtmpl': outtmpl,
         'noplaylist': True,
         'quiet': True,
         'no_warnings': True,
         'extractor_args': {
             'youtube': {
-                'player_client': ['ios', 'mweb', 'web_creator']
+                'player_client': ['visionos', 'tv_embedded', 'android', 'web']
             }
-        },
-        'http_headers': {
-            'User-Agent': 'com.google.ios.youtube/19.29.1 (iPhone14,5; U; CPU iOS 17_5_1 like Mac OS X)',
-            'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
         }
     }
     try:
@@ -2097,14 +2093,34 @@ def _descargar_youtube_con_ytdlp(url, upload_dir, nombre_id):
             info = ydl.extract_info(url, download=True)
             path = ydl.prepare_filename(info)
     except Exception as error:
-        return None, f'yt-dlp no pudo descargar el audio: {error}'
+        return None, f'yt-dlp: {error}'
 
-    if not os.path.exists(path):
+    if not path or not os.path.exists(path):
         return None, 'yt-dlp no genero archivo de audio'
 
     title = info.get('title') or 'audio'
-    ext = os.path.splitext(path)[1] or '.m4a'
+    ext = os.path.splitext(path)[1] or '.webm'
     return {'path': path, 'nombre': title + ext}, None
+
+
+def _descargar_youtube_con_pytubefix(url, upload_dir, nombre_id):
+    try:
+        from pytubefix import YouTube
+    except Exception:
+        return None, 'pytubefix no esta instalado'
+
+    try:
+        yt = YouTube(url)
+        audio = yt.streams.get_audio_only()
+        if not audio:
+            return None, 'pytubefix no encontro stream de audio'
+        ext = '.m4a' if 'mp4' in (audio.mime_type or '') else '.webm'
+        filename = nombre_id + ext
+        out_path = audio.download(output_path=upload_dir, filename=filename)
+        title = yt.title or 'audio'
+        return {'path': out_path, 'nombre': title + ext}, None
+    except Exception as e:
+        return None, f'pytubefix: {e}'
 
 
 @bp.route('/<sala_id>/youtube', methods=['POST'])
@@ -2188,13 +2204,19 @@ def resolver(sala_id):
 
     destino = os.path.join(upload_dir, item_id + '.mp3')
     try:
-        # 1. Intentar primero con yt-dlp (emulando cliente oficial móvil para evitar anti-bot)
+        # 1. Intentar con yt-dlp usando clientes optimizados
         descarga, error_ytdlp = _descargar_youtube_con_ytdlp(target_url, upload_dir, item_id)
+        
+        # 2. Si falla yt-dlp (o bloqueo anti-bot en datacenter), intentar con pytubefix
+        error_pytube = None
         if not descarga:
-            # 2. Fallback con cobalt
+            descarga, error_pytube = _descargar_youtube_con_pytubefix(target_url, upload_dir, item_id)
+
+        # 3. Fallback adicional con cobalt
+        if not descarga:
             descarga, error_cobalt = _descargar_youtube_con_cobalt(target_url, destino)
             if not descarga:
-                err_final = error_ytdlp or error_cobalt or 'No se pudo resolver el audio de este enlace'
+                err_final = error_pytube or error_ytdlp or error_cobalt or 'No se pudo resolver el audio de este enlace'
                 return jsonify(ok=False, error=err_final), 200
         _limpiar_archivos_antiguos(upload_dir)
     except Exception as error:

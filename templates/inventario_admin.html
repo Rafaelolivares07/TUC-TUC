@@ -13026,37 +13026,35 @@ function renderizarAuditoriaKardex(auditoria, productoId) {
 
     <!-- 1. ALERTAS CRÍTICAS DE COMPRAS (PRIMERO EN LA JERARQUÍA VISUAL) -->
     ${tieneAlertasCompras ? `
-      <div class="w-full bg-rose-50 border-2 border-rose-300 rounded-xl p-3 text-rose-950 text-xs shadow-xs">
-        <div class="flex items-start gap-2.5">
-          <span class="text-xl shrink-0">🚨</span>
-          <div class="flex-1">
-            <span class="font-black text-rose-950 block text-xs uppercase tracking-wide">¡Alertas Críticas de Compras! Revise antes de recostear:</span>
-            <ul class="list-disc pl-4 mt-1.5 space-y-1 text-[11px] text-rose-900 font-semibold">
-              ${auditoria.alertas_compras.slice(0, 5).map(al => {
-                let lbl = 'Variación atípica de costo';
-                let icon = '🔺';
-                if (al.tipo === 'posible_duplicado') { lbl = 'Posible compra duplicada'; icon = '🚨'; }
-                else if (al.tipo === 'registro_retroactivo') { lbl = 'Entrada retroactiva (desfase temporal)'; icon = '⏱️'; }
-                return `<li><strong>${icon} ${lbl}:</strong> ${al.mensaje}</li>`;
-              }).join('')}
-            </ul>
-            ${auditoria.alertas_compras.length > 5 ? `
-              <details class="mt-2 text-[11px] text-rose-950 font-semibold">
-                <summary class="cursor-pointer text-rose-800 hover:text-rose-950 hover:underline select-none">
-                  📁 Ver ${auditoria.alertas_compras.length - 5} alertas históricas anteriores...
-                </summary>
-                <ul class="list-disc pl-4 mt-1.5 space-y-1 text-[11px] text-rose-900 font-medium">
-                  ${auditoria.alertas_compras.slice(5).map(al => {
-                    let lbl = 'Variación atípica de costo';
-                    let icon = '🔺';
-                    if (al.tipo === 'posible_duplicado') { lbl = 'Posible compra duplicada'; icon = '🚨'; }
-                    else if (al.tipo === 'registro_retroactivo') { lbl = 'Entrada retroactiva'; icon = '⏱️'; }
-                    return `<li><strong>${icon} ${lbl}:</strong> ${al.mensaje}</li>`;
-                  }).join('')}
-                </ul>
-              </details>
-            ` : ''}
+      <details class="w-full bg-rose-50/90 border border-rose-300 rounded-xl p-2.5 text-rose-950 text-xs shadow-2xs group mb-2.5">
+        <summary class="font-bold flex items-center justify-between cursor-pointer select-none text-rose-950 hover:text-rose-900 list-none">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="text-sm shrink-0">⚠️</span>
+            <span class="font-extrabold uppercase tracking-wide text-xs">Advertencias de Compras (${auditoria.alertas_compras.length})</span>
+            <span class="text-[11px] font-normal text-rose-800">· Revisar antes de recostear</span>
           </div>
+          <span class="text-[11px] font-bold text-rose-700 hover:text-rose-900 underline ml-2">Ver detalle ▼</span>
+        </summary>
+        <div class="mt-2.5 pt-2 border-t border-rose-200/80">
+          <ul class="list-disc pl-4 space-y-1.5 text-[11px] text-rose-900 font-medium">
+            ${auditoria.alertas_compras.map(al => {
+              let lbl = 'Variación atípica de costo';
+              let icon = '🔺';
+              if (al.tipo === 'posible_duplicado') { lbl = 'Posible compra duplicada'; icon = '🚨'; }
+              else if (al.tipo === 'registro_retroactivo') { lbl = 'Entrada retroactiva'; icon = '⏱️'; }
+              return `<li><strong>${icon} ${lbl}:</strong> ${al.mensaje}</li>`;
+            }).join('')}
+          </ul>
+        </div>
+      </details>
+    ` : ''}
+
+    <!-- EXPLICACIÓN CLARA DE FILAS AMARILLAS SI HAY INCONSISTENCIAS -->
+    ${(auditoria.inconsistencias_movimientos && auditoria.inconsistencias_movimientos.length > 0) ? `
+      <div class="w-full bg-amber-50/80 border border-amber-300 rounded-xl px-3 py-1.5 text-[11px] text-amber-950 flex items-center gap-2 shadow-2xs mb-2.5">
+        <span class="text-sm shrink-0">🟡</span>
+        <div class="flex-1 leading-snug">
+          <strong>Filas en amarillo en la tabla:</strong> Indican movimientos donde el saldo guardado en su momento difiere de la historia cronológica recalculada (habitual cuando se digitan compras con fecha del pasado). Se sincronizan automáticamente al hacer clic en <strong>Recostear</strong>.
         </div>
       </div>
     ` : ''}
@@ -13107,7 +13105,7 @@ function renderizarAuditoriaKardex(auditoria, productoId) {
         <button type="button" onclick="ejecutarRecosteoKardex(${productoId})" id="btn-recosteo-kardex"
                 class="px-3 py-1.5 ${tieneAlertasCompras ? 'bg-rose-600 hover:bg-rose-700' : 'bg-amber-600 hover:bg-amber-700'} text-white font-bold text-[11px] rounded-lg shadow-xs transition flex items-center gap-1.5 cursor-pointer ml-auto shrink-0"
                 title="Recalcular cronológicamente los saldos y el costo promedio de este producto">
-          <span>⚡</span> <span>${tieneAlertasCompras ? 'Recostear de todos modos' : 'Ejecutar Recosteo'}</span>
+          <span>⚡</span> <span>${tieneAlertasCompras ? 'Recostear y Sincronizar' : 'Ejecutar Recosteo'}</span>
         </button>
       ` : `
         <span class="text-[11px] text-emerald-700 font-medium flex items-center gap-1">

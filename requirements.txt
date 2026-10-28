@@ -58,7 +58,8 @@ psutil==6.1.1
 flask-socketio==5.6.1
 gevent==24.11.1
 gevent-websocket==0.10.1
-yt-dlp==2026.6.9
+yt-dlp>=2026.10.26
+pytubefix>=11.2.1
 fpdf2==2.8.2
 
 pywebpush>=2.5.0

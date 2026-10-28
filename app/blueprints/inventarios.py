@@ -7317,19 +7317,91 @@ def _auditar_producto_recosteo(conn, negocio_id, producto_id, bodega=None):
                             )
                         })
 
-    # 3. Detección de entradas retroactivas que rompen la cronología histórica
+    # 3. Detección de entradas retroactivas que realmente afectaron salidas intermedias
+    inconsistencias_ids = set(inc['movimiento_id'] for inc in inconsistencias)
+    
+    # Mapeo del costo promedio histórico previo a cada entrada
+    costo_prom_al_momento = {}
+    st_track = Decimal('0')
+    val_track = Decimal('0')
+    cp_track = Decimal('0')
+    for m in movimientos:
+        c_m = Decimal(str(m['cantidad'] or 0))
+        s_m = Decimal('1') if m['tipo'] == 'entrada' else Decimal('-1')
+        st_nuevo = st_track + c_m * s_m
+        if m['tipo'] == 'entrada':
+            costo_prom_al_momento[m['id']] = cp_track
+            vu_in = abs(Decimal(str(m['valor_unitario'] or 0))) if m.get('valor_unitario') is not None else cp_track
+            if st_nuevo > Decimal('0'):
+                val_track = val_track + (c_m * vu_in)
+                cp_track = val_track / st_nuevo
+            else:
+                cp_track = vu_in
+                val_track = Decimal('0')
+        else:
+            val_track = st_nuevo * cp_track if st_nuevo > Decimal('0') else Decimal('0')
+        st_track = st_nuevo
+
     for m_chk in movimientos:
         if m_chk['tipo'] == 'entrada':
             doc_f = m_chk['documento_fecha']
             cr_at = m_chk['created_at']
             if doc_f and cr_at and hasattr(cr_at, 'date'):
                 diff_retro = (cr_at.date() - doc_f).days
-                if diff_retro >= 2:
+                if diff_retro >= 1:
+                    # A. Buscar salidas intermedias entre la fecha contable y la fecha real de digitación
+                    salidas_intermedias = [
+                        m for m in movimientos
+                        if m['tipo'] == 'salida'
+                        and m.get('documento_fecha')
+                        and doc_f <= m['documento_fecha'] <= cr_at.date()
+                        and m.get('created_at') and m['created_at'] < cr_at
+                    ]
+
+                    # Si no hubo salidas intermedias en ese lapso, no hubo ventas afectadas
+                    if not salidas_intermedias:
+                        continue
+
+                    # B. Verificar si ya fue subsanada/sincronizada mediante Recosteo:
+                    tiene_inconsistencias = (m_chk['id'] in inconsistencias_ids) or any(s['id'] in inconsistencias_ids for s in salidas_intermedias)
+                    if not tiene_inconsistencias:
+                        # Si ya no tiene inconsistencias en el Kardex, el recosteo ya la sincronizó
+                        continue
+
+                    # C. Evaluar las dos condiciones de daño real:
+                    # 1. Saldo insuficiente en salidas intermedias
+                    hubo_saldo_negativo = any(
+                        (s.get('stock_anterior') is not None and Decimal(str(s['stock_anterior'])) < Decimal(str(s['cantidad'] or 0)))
+                        or (s.get('stock_nuevo') is not None and Decimal(str(s['stock_nuevo'])) < Decimal('0'))
+                        for s in salidas_intermedias
+                    )
+
+                    # 2. Costo compra difiere del costo promedio ponderado que traía
+                    vu_compra = abs(Decimal(str(m_chk.get('valor_unitario') or 0)))
+                    cp_previo = costo_prom_al_momento.get(m_chk['id'], Decimal('0'))
+                    cambio_costo = False
+                    if cp_previo > Decimal('0') and vu_compra > Decimal('0'):
+                        cambio_costo = abs(vu_compra - cp_previo) > Decimal('0.50')
+                    elif vu_compra > Decimal('0') and cp_previo == Decimal('0'):
+                        cambio_costo = True
+
+                    # Si había saldo suficiente Y el costo no varió, no alertar
+                    if not hubo_saldo_negativo and not cambio_costo:
+                        continue
+
                     f_txt = str(doc_f)[:10]
                     cr_txt = cr_at.strftime('%d/%m/%Y %I:%M %p') if hasattr(cr_at, 'strftime') else str(cr_at)[:16]
                     doc_lbl = f"{m_chk['tipo_documento'] or 'Doc'} #{m_chk['documento_numero'] or m_chk['id']}"
                     ya_en_dup = any(doc_lbl in a.get('mensaje', '') for a in alertas_compras if a.get('tipo') == 'posible_duplicado')
+                    
                     if not ya_en_dup:
+                        detalles_razon = []
+                        if hubo_saldo_negativo:
+                            detalles_razon.append("ventas operaron con saldo insuficiente")
+                        if cambio_costo:
+                            detalles_razon.append(f"costo compra (${vu_compra:,.0f}) varió vs prom. previo (${cp_previo:,.0f})")
+                        
+                        razon_str = " y ".join(detalles_razon)
                         alertas_compras.append({
                             'tipo': 'registro_retroactivo',
                             'fecha': f_txt,
@@ -7338,8 +7410,9 @@ def _auditar_producto_recosteo(conn, negocio_id, producto_id, bodega=None):
                             'documento': doc_lbl,
                             'created_at': cr_txt,
                             'mensaje': (
-                                f"{doc_lbl}: Fecha del documento {f_txt}, pero digitada en el sistema {diff_retro} días después ({cr_txt}). "
-                                f"Esta entrada retroactiva alteró el costo promedio y saldos de ventas intermedias."
+                                f"{doc_lbl}: Fecha del documento {f_txt}, digitada {diff_retro} días después ({cr_txt}). "
+                                f"Afecta a {len(salidas_intermedias)} salida(s) intermedia(s) ({razon_str}). "
+                                f"Requiere Recostear para sincronizar costos y saldos."
                             )
                         })
 

@@ -21,11 +21,11 @@ jobs:
             git fetch origin v2
             git reset --hard origin/v2
             if [ -f /home/ubuntu/tuctucv2/venv/bin/pip ]; then
-              /home/ubuntu/tuctucv2/venv/bin/pip install pywebpush py-vapid --quiet
+              /home/ubuntu/tuctucv2/venv/bin/pip install -U yt-dlp pytubefix pywebpush py-vapid --quiet
             elif [ -f /home/ubuntu/tuctucv2/.venv/bin/pip ]; then
-              /home/ubuntu/tuctucv2/.venv/bin/pip install pywebpush py-vapid --quiet
+              /home/ubuntu/tuctucv2/.venv/bin/pip install -U yt-dlp pytubefix pywebpush py-vapid --quiet
             else
-              pip3 install pywebpush py-vapid --quiet
+              pip3 install -U yt-dlp pytubefix pywebpush py-vapid --quiet
             fi
             python3 -m py_compile app/blueprints/inventarios.py app/blueprints/contabilidad.py app/blueprints/restaurantes.py
             sudo systemctl restart tuctuc

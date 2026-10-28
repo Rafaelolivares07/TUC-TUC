@@ -5080,7 +5080,28 @@ function cambiarModalDescargaError(mensaje) {
   const tag = document.getElementById('modal-descarga-tag');
 
   if (tag) tag.textContent = 'Aviso de descarga';
-  if (errMsgEl) errMsgEl.textContent = mensaje || 'Error desconocido al descargar el audio';
+  
+  const msgStr = String(mensaje || '');
+  const esBloqueoBot = msgStr.toLowerCase().includes('bot') || msgStr.toLowerCase().includes('sign in') || msgStr.toLowerCase().includes('potoken');
+  
+  if (esBloqueoBot) {
+    if (errMsgEl) {
+      errMsgEl.innerHTML = `
+        <div style="margin-bottom:8px; font-weight:700; color:#fff;">
+          Seguridad de YouTube (IP del servidor en la nube):
+        </div>
+        <div style="font-size:12px; color:var(--text); line-height:1.45; margin-bottom:8px;">
+          YouTube bloquea la extracción automática de archivos MP3 directos desde IPs de centros de datos (AWS).
+        </div>
+        <div style="background:rgba(0,212,255,0.1); border:1px solid rgba(0,212,255,0.3); border-radius:10px; padding:10px; font-size:12px; color:#00d4ff;">
+          🎵 <strong>¡Buenas noticias!</strong> Esta canción <strong>sí sonará perfectamente en vivo</strong> en la Rockola cuando le llegue el turno mediante el reproductor oficial de YouTube integrado. Solo no se puede almacenar como archivo local en tu disco sin cookies de autenticación.
+        </div>
+      `;
+    }
+  } else {
+    if (errMsgEl) errMsgEl.textContent = mensaje || 'Error desconocido al descargar el audio';
+  }
+
   if (secCargando) secCargando.style.display = 'none';
   if (secListo) secListo.style.display = 'none';
   if (secError) secError.style.display = 'block';

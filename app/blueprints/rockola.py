@@ -2083,6 +2083,9 @@ def _descargar_youtube_con_ytdlp(url, upload_dir, nombre_id):
         'quiet': True,
         'no_warnings': True,
     }
+    cookie_path = os.environ.get('YOUTUBE_COOKIES_PATH') or os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'cookies.txt')
+    if os.path.exists(cookie_path):
+        opts['cookiefile'] = cookie_path
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=True)
@@ -2221,7 +2224,7 @@ def resolver(sala_id):
         if not descarga:
             descarga, error_cobalt = _descargar_youtube_con_cobalt(target_url, destino)
             if not descarga:
-                err_final = f"Motor 1 (pytubefix): {error_pytube} | Motor 2 (yt-dlp): {error_ytdlp}"
+                err_final = 'YouTube bloqueó la descarga automatizada en la IP del servidor en la nube (Sign in to confirm you are not a bot). La canción sonará normalmente en vivo cuando llegue su turno en la cola.'
                 return jsonify(ok=False, error=err_final), 200
         _limpiar_archivos_antiguos(upload_dir)
     except Exception as error:

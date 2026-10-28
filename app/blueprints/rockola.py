@@ -2072,8 +2072,8 @@ def _descargar_youtube_con_cobalt(url, tmp_path):
 def _descargar_youtube_con_ytdlp(url, upload_dir, nombre_id):
     try:
         import yt_dlp
-    except Exception:
-        return None, 'yt-dlp no esta disponible en el servidor'
+    except Exception as e:
+        return None, f'yt-dlp no esta disponible: {e}'
 
     outtmpl = os.path.join(upload_dir, nombre_id + '.%(ext)s')
     opts = {
@@ -2082,11 +2082,6 @@ def _descargar_youtube_con_ytdlp(url, upload_dir, nombre_id):
         'noplaylist': True,
         'quiet': True,
         'no_warnings': True,
-        'extractor_args': {
-            'youtube': {
-                'player_client': ['visionos', 'tv_embedded', 'android', 'web']
-            }
-        }
     }
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
@@ -2226,7 +2221,7 @@ def resolver(sala_id):
         if not descarga:
             descarga, error_cobalt = _descargar_youtube_con_cobalt(target_url, destino)
             if not descarga:
-                err_final = error_pytube or error_ytdlp or error_cobalt or 'No se pudo resolver el audio de este enlace'
+                err_final = f"Motor 1 (pytubefix): {error_pytube} | Motor 2 (yt-dlp): {error_ytdlp}"
                 return jsonify(ok=False, error=err_final), 200
         _limpiar_archivos_antiguos(upload_dir)
     except Exception as error:

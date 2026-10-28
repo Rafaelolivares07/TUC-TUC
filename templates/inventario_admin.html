@@ -1170,24 +1170,32 @@
         </div>
         <div class="flex items-center gap-2 flex-wrap">
           <!-- Selectores interactivos de decimales para la Ficha Técnica -->
-          <div class="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2 py-1 rounded-lg text-xs shadow-2xs">
-            <div class="flex items-center gap-1">
+          <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg text-xs shadow-2xs">
+            <div class="flex items-center gap-1.5">
               <label for="modal-tarjetas-dec-cant" class="text-[10px] font-extrabold text-slate-600 uppercase tracking-wide select-none">
                 🔢 Cant:
               </label>
               <input id="modal-tarjetas-dec-cant" type="number" min="0" max="4" step="1" value="2"
-                     oninput="cambiarDecimalesTarjetasCantidad(this.value)" onchange="cambiarDecimalesTarjetasCantidad(this.value)" onblur="validarDecimalesTarjetasCantidadInput(this)"
-                     class="w-9 text-center font-mono font-bold text-xs bg-white border border-slate-300 rounded px-1 py-0.5 outline-none text-slate-800 focus:border-rose-500"
+                     oninput="cambiarDecimalesTarjetasCantidad(this.value)"
+                     onchange="cambiarDecimalesTarjetasCantidad(this.value)"
+                     onblur="validarDecimalesTarjetasCantidadInput(this)"
+                     onfocus="setTimeout(() => this.select(), 50)"
+                     class="no-spinners w-10 text-center font-mono font-black text-xs bg-white border border-slate-300 rounded px-1 py-0.5 outline-none text-slate-800 focus:bg-blue-50 focus:text-blue-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-400 selection:bg-blue-600 selection:text-white transition-all"
+                     style="-moz-appearance: textfield; appearance: textfield;"
                      title="Decimales para cantidades de componentes en esta ficha">
             </div>
-            <div class="h-3 w-px bg-slate-300"></div>
-            <div class="flex items-center gap-1">
+            <div class="h-3.5 w-px bg-slate-300"></div>
+            <div class="flex items-center gap-1.5">
               <label for="modal-tarjetas-dec-mon" class="text-[10px] font-extrabold text-slate-600 uppercase tracking-wide select-none">
                 💲 Costo:
               </label>
               <input id="modal-tarjetas-dec-mon" type="number" min="0" max="6" step="1" value="2"
-                     oninput="cambiarDecimalesTarjetasMoneda(this.value)" onchange="cambiarDecimalesTarjetasMoneda(this.value)" onblur="validarDecimalesTarjetasMonedaInput(this)"
-                     class="w-9 text-center font-mono font-bold text-xs bg-white border border-slate-300 rounded px-1 py-0.5 outline-none text-slate-800 focus:border-rose-500"
+                     oninput="cambiarDecimalesTarjetasMoneda(this.value)"
+                     onchange="cambiarDecimalesTarjetasMoneda(this.value)"
+                     onblur="validarDecimalesTarjetasMonedaInput(this)"
+                     onfocus="setTimeout(() => this.select(), 50)"
+                     class="no-spinners w-10 text-center font-mono font-black text-xs bg-white border border-slate-300 rounded px-1 py-0.5 outline-none text-slate-800 focus:bg-blue-50 focus:text-blue-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-400 selection:bg-blue-600 selection:text-white transition-all"
+                     style="-moz-appearance: textfield; appearance: textfield;"
                      title="Decimales para costos unitarios y subtotales en esta ficha">
             </div>
           </div>
@@ -2349,23 +2357,31 @@
         <div class="flex items-center gap-3 w-full sm:w-auto flex-wrap">
           <!-- Selector interactivo de decimales para Tarjetas Estándar (Separado Cantidad y Moneda) -->
           <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-xl shadow-2xs shrink-0">
-            <div class="flex items-center gap-1">
-              <label for="tarjetas-dec-cant-input" class="text-[10px] font-extrabold text-slate-600 uppercase tracking-wide select-none">
+            <div class="flex items-center gap-1.5">
+              <label for="tarjetas-dec-cant-input" class="text-[10.5px] font-extrabold text-slate-600 uppercase tracking-wide select-none">
                 🔢 Cant:
               </label>
               <input id="tarjetas-dec-cant-input" type="number" min="0" max="4" step="1" value="2"
-                     oninput="cambiarDecimalesTarjetasCantidad(this.value)" onchange="cambiarDecimalesTarjetasCantidad(this.value)" onblur="validarDecimalesTarjetasCantidadInput(this)"
-                     class="w-10 text-center font-mono font-bold text-xs bg-white border border-slate-300 rounded-lg px-1 py-0.5 outline-none text-slate-800 focus:border-rose-500 focus:ring-1 focus:ring-rose-400"
+                     oninput="cambiarDecimalesTarjetasCantidad(this.value)"
+                     onchange="cambiarDecimalesTarjetasCantidad(this.value)"
+                     onblur="validarDecimalesTarjetasCantidadInput(this)"
+                     onfocus="setTimeout(() => this.select(), 50)"
+                     class="no-spinners w-11 text-center font-mono font-black text-xs bg-white border border-slate-300 rounded-lg px-1 py-1 outline-none text-slate-800 focus:bg-blue-50 focus:text-blue-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-400 selection:bg-blue-600 selection:text-white transition-all shadow-2xs"
+                     style="-moz-appearance: textfield; appearance: textfield;"
                      title="Decimales visibles para cantidades de ingredientes (0 a 4)">
             </div>
-            <div class="h-3.5 w-px bg-slate-300"></div>
-            <div class="flex items-center gap-1">
-              <label for="tarjetas-dec-mon-input" class="text-[10px] font-extrabold text-slate-600 uppercase tracking-wide select-none">
+            <div class="h-4 w-px bg-slate-300"></div>
+            <div class="flex items-center gap-1.5">
+              <label for="tarjetas-dec-mon-input" class="text-[10.5px] font-extrabold text-slate-600 uppercase tracking-wide select-none">
                 💲 Costo:
               </label>
               <input id="tarjetas-dec-mon-input" type="number" min="0" max="6" step="1" value="2"
-                     oninput="cambiarDecimalesTarjetasMoneda(this.value)" onchange="cambiarDecimalesTarjetasMoneda(this.value)" onblur="validarDecimalesTarjetasMonedaInput(this)"
-                     class="w-10 text-center font-mono font-bold text-xs bg-white border border-slate-300 rounded-lg px-1 py-0.5 outline-none text-slate-800 focus:border-rose-500 focus:ring-1 focus:ring-rose-400"
+                     oninput="cambiarDecimalesTarjetasMoneda(this.value)"
+                     onchange="cambiarDecimalesTarjetasMoneda(this.value)"
+                     onblur="validarDecimalesTarjetasMonedaInput(this)"
+                     onfocus="setTimeout(() => this.select(), 50)"
+                     class="no-spinners w-11 text-center font-mono font-black text-xs bg-white border border-slate-300 rounded-lg px-1 py-1 outline-none text-slate-800 focus:bg-blue-50 focus:text-blue-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-400 selection:bg-blue-600 selection:text-white transition-all shadow-2xs"
+                     style="-moz-appearance: textfield; appearance: textfield;"
                      title="Decimales visibles para costos y precios en Tarjetas Estándar (0 a 6)">
             </div>
           </div>
@@ -2472,23 +2488,31 @@
         <div class="flex items-center gap-3 w-full sm:w-auto flex-wrap">
           <!-- Selector interactivo de decimales para Vista Insumos (Separado Cantidad y Moneda) -->
           <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-xl shadow-2xs shrink-0">
-            <div class="flex items-center gap-1">
-              <label for="insumos-dec-cant-input" class="text-[10px] font-extrabold text-slate-600 uppercase tracking-wide select-none">
+            <div class="flex items-center gap-1.5">
+              <label for="insumos-dec-cant-input" class="text-[10.5px] font-extrabold text-slate-600 uppercase tracking-wide select-none">
                 🔢 Cant:
               </label>
               <input id="insumos-dec-cant-input" type="number" min="0" max="4" step="1" value="2"
-                     oninput="cambiarDecimalesTarjetasCantidad(this.value)" onchange="cambiarDecimalesTarjetasCantidad(this.value)" onblur="validarDecimalesTarjetasCantidadInput(this)"
-                     class="w-10 text-center font-mono font-bold text-xs bg-white border border-slate-300 rounded-lg px-1 py-0.5 outline-none text-slate-800 focus:border-rose-500 focus:ring-1 focus:ring-rose-400"
+                     oninput="cambiarDecimalesTarjetasCantidad(this.value)"
+                     onchange="cambiarDecimalesTarjetasCantidad(this.value)"
+                     onblur="validarDecimalesTarjetasCantidadInput(this)"
+                     onfocus="setTimeout(() => this.select(), 50)"
+                     class="no-spinners w-11 text-center font-mono font-black text-xs bg-white border border-slate-300 rounded-lg px-1 py-1 outline-none text-slate-800 focus:bg-blue-50 focus:text-blue-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-400 selection:bg-blue-600 selection:text-white transition-all shadow-2xs"
+                     style="-moz-appearance: textfield; appearance: textfield;"
                      title="Decimales visibles para cantidades (0 a 4)">
             </div>
-            <div class="h-3.5 w-px bg-slate-300"></div>
-            <div class="flex items-center gap-1">
-              <label for="insumos-dec-mon-input" class="text-[10px] font-extrabold text-slate-600 uppercase tracking-wide select-none">
+            <div class="h-4 w-px bg-slate-300"></div>
+            <div class="flex items-center gap-1.5">
+              <label for="insumos-dec-mon-input" class="text-[10.5px] font-extrabold text-slate-600 uppercase tracking-wide select-none">
                 💲 Costo:
               </label>
               <input id="insumos-dec-mon-input" type="number" min="0" max="6" step="1" value="2"
-                     oninput="cambiarDecimalesTarjetasMoneda(this.value)" onchange="cambiarDecimalesTarjetasMoneda(this.value)" onblur="validarDecimalesTarjetasMonedaInput(this)"
-                     class="w-10 text-center font-mono font-bold text-xs bg-white border border-slate-300 rounded-lg px-1 py-0.5 outline-none text-slate-800 focus:border-rose-500 focus:ring-1 focus:ring-rose-400"
+                     oninput="cambiarDecimalesTarjetasMoneda(this.value)"
+                     onchange="cambiarDecimalesTarjetasMoneda(this.value)"
+                     onblur="validarDecimalesTarjetasMonedaInput(this)"
+                     onfocus="setTimeout(() => this.select(), 50)"
+                     class="no-spinners w-11 text-center font-mono font-black text-xs bg-white border border-slate-300 rounded-lg px-1 py-1 outline-none text-slate-800 focus:bg-blue-50 focus:text-blue-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-400 selection:bg-blue-600 selection:text-white transition-all shadow-2xs"
+                     style="-moz-appearance: textfield; appearance: textfield;"
                      title="Decimales visibles para costos unitarios y totales en Insumos (0 a 6)">
             </div>
           </div>
@@ -3999,8 +4023,12 @@
             <span>🔢 Decimales:</span>
           </label>
           <input id="kardex-decimales-input" type="number" min="0" max="6" step="1" value="2"
-                 oninput="cambiarDecimalesKardex(this.value)" onchange="cambiarDecimalesKardex(this.value)" onblur="validarDecimalesKardexInput(this)"
-                 class="w-14 text-center font-mono font-bold text-sm bg-white border border-slate-300 rounded-lg px-2 py-1 outline-none text-slate-800 focus:border-rose-500 focus:ring-1 focus:ring-rose-400"
+                 oninput="cambiarDecimalesKardex(this.value)"
+                 onchange="cambiarDecimalesKardex(this.value)"
+                 onblur="validarDecimalesKardexInput(this)"
+                 onfocus="setTimeout(() => this.select(), 50)"
+                 class="no-spinners w-12 text-center font-mono font-black text-sm bg-white border border-slate-300 rounded-lg px-2 py-1 outline-none text-slate-800 focus:bg-blue-50 focus:text-blue-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-400 selection:bg-blue-600 selection:text-white transition-all shadow-2xs"
+                 style="-moz-appearance: textfield; appearance: textfield;"
                  title="Número de decimales visibles para cantidades, costos y valores en Kardex (0 a 6)">
         </div>
 

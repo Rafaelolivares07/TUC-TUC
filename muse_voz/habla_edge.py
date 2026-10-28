@@ -13,7 +13,7 @@ async def main():
     txt, mp3 = sys.argv[1], sys.argv[2]
     voz = sys.argv[3] if len(sys.argv) > 3 else 'es-CO-SalomeNeural'
     vol = sys.argv[4] if len(sys.argv) > 4 else '+50%'
-    texto = open(txt, encoding='utf-8').read().strip()
+    texto = open(txt, encoding='utf-8-sig').read().strip()
     await edge_tts.Communicate(texto, voz, volume=vol).save(mp3)
 
 asyncio.run(main())

@@ -3,7 +3,7 @@ chcp 65001 >nul
 REM ============================================================
 REM  INICIAR_MUSE.bat - Arranque diario de Muse (TUC TUC V2)
 REM  Uso: doble clic cada dia. Pide tema, chequea entorno,
-REM  abre pestana WT con titulo fijo e invoca muse.
+REM  abre pestana WT con titulo fijo e invoca muse --yolo.
 REM  Idempotente. Directorio de trabajo: raiz (AGENTS.md + V2 + docs).
 REM  Regla cmd: cero parentesis literales en echos dentro de
 REM  bloques (...) - el texto con ) aborta el parseo. Estilo goto.
@@ -80,6 +80,7 @@ for %%c in (muse muse-code) do (
   )
 )
 if defined MUSECMD (echo   CLI: !MUSECMD!) else (echo   AVISO: muse no esta en PATH.)
+if defined MUSECMD C:\Tools\Python313\python.exe "%V2%\muse_cuota.py" 2>nul
 set "LNK=%USERPROFILE%\Desktop\INICIAR MUSE.lnk"
 if exist "%LNK%" echo   acceso OK
 if exist "%LNK%" goto :lnk_ok
@@ -91,8 +92,8 @@ if not defined MUSECMD (pause & exit /b 1)
 echo [8/8] Abrir pestana !ETIQUETA!
 where wt >nul 2>nul
 if %errorlevel% neq 0 goto :sin_wt
-echo   wt --title "!ETIQUETA!" --suppressApplicationTitle -d "%CD%" cmd /k !MUSECMD!
-wt --title "!ETIQUETA!" --suppressApplicationTitle -d "%CD%" cmd /k !MUSECMD!
+echo   wt --title "!ETIQUETA!" --suppressApplicationTitle -d "%CD%" cmd /k !MUSECMD! --yolo
+wt --title "!ETIQUETA!" --suppressApplicationTitle -d "%CD%" cmd /k !MUSECMD! --yolo
 if %errorlevel% neq 0 goto :wt_fallo
 echo   Listo. Trabaja en la pestana !ETIQUETA!.
 exit /b 0
@@ -102,4 +103,4 @@ pause
 :sin_wt
 title !ETIQUETA!
 echo   Abriendo !MUSECMD! aqui...
-!MUSECMD!
+!MUSECMD! --yolo

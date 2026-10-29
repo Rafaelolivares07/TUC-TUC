@@ -11999,7 +11999,7 @@ def api_ajuste_guardar_item(negocio_id):
             'documento_numero': doc_num_final,
             'consecutivo_actualizado': consecutivo_actualizado,
             'cotizacion_creada': cotizacion_creada,
-            'warnings': warnings,
+            'warnings': [],
             'centro_utilidad_id': centro_utilidad_id
         })
     except Exception as e:

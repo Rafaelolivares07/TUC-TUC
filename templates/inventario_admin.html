@@ -4772,8 +4772,9 @@
       <table class="w-full text-left border-collapse">
         <thead class="sticky top-0 z-10">
           <tr class="bg-gray-50 text-[10px] uppercase text-gray-500 border-b border-gray-150 select-none">
-            <th onclick="ordenarVC('nombre_producto')" class="px-3 py-2 text-left cursor-pointer hover:bg-gray-100 transition-colors min-w-[170px] align-bottom">
-              <span>Producto</span> <span id="sort-vc-nombre" class="text-gray-400 text-[9px]">↕</span>
+            <th onclick="ordenarVC('nombre_producto')" class="px-3 py-2 text-left cursor-pointer hover:bg-gray-100 transition-colors min-w-[120px] align-bottom">
+              <div><span>Producto</span> <span id="sort-vc-nombre" class="text-gray-400 text-[9px]">↕</span></div>
+              <div class="text-[9px] font-normal normal-case text-gray-400">(clic para expandir)</div>
             </th>
             <th onclick="ordenarVC('cantidad')" class="px-2 py-2 text-right num cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap align-bottom">
               <div>Cant.</div>
@@ -20218,7 +20219,7 @@ async function actualizarTiempoProdVC(productoId, prep, ens) {
   const ind = document.getElementById(`save-ind-${productoId}`);
   if (ind) {
     ind.textContent = '⏳';
-    ind.className = 'text-[11px] text-amber-500 opacity-100 transition-opacity font-bold';
+    ind.className = 'text-[11px] text-amber-500 opacity-100 transition-opacity font-bold absolute right-0';
   }
 
   try {
@@ -20231,14 +20232,14 @@ async function actualizarTiempoProdVC(productoId, prep, ens) {
     if (d.ok) {
       if (ind) {
         ind.textContent = '✓';
-        ind.className = 'text-[11px] text-emerald-600 font-bold opacity-100 transition-opacity';
+        ind.className = 'text-[11px] text-emerald-600 font-bold opacity-100 transition-opacity absolute right-0';
         setTimeout(() => { if (ind) ind.classList.add('opacity-0'); }, 1500);
       }
       renderTablaVC();
     } else {
       if (ind) {
         ind.textContent = '✗';
-        ind.className = 'text-[11px] text-rose-600 font-bold opacity-100 transition-opacity';
+        ind.className = 'text-[11px] text-rose-600 font-bold opacity-100 transition-opacity absolute right-0';
       }
       toast(d.error || 'Error al guardar tiempos', false);
     }
@@ -20246,7 +20247,7 @@ async function actualizarTiempoProdVC(productoId, prep, ens) {
     console.error(e);
     if (ind) {
       ind.textContent = '✗';
-      ind.className = 'text-[11px] text-rose-600 font-bold opacity-100 transition-opacity';
+      ind.className = 'text-[11px] text-rose-600 font-bold opacity-100 transition-opacity absolute right-0';
     }
   }
 }
@@ -20473,7 +20474,7 @@ function renderTablaVC() {
       <tr class="hover:bg-gray-50 border-b border-gray-100 text-xs cursor-pointer transition-colors" onclick="toggleDetalleVC(this, ${r.producto_id})" data-producto="${r.producto_id}">
         <td class="px-3 py-2 font-semibold text-gray-800">
           <div class="flex items-center gap-1.5 flex-wrap">
-            <span class="whitespace-nowrap">${r.nombre_producto} <span class="text-[10px] font-normal text-gray-400">(clic para expandir)</span></span>
+            <span class="truncate max-w-[160px] min-w-0" title="${r.nombre_producto}">${r.nombre_producto}</span>
             ${r.tiene_desfase ? `
               <button type="button"
                       onclick="event.stopPropagation(); irAPantallaReparacion('', ${r.producto_id}, '')"
@@ -20494,7 +20495,7 @@ function renderTablaVC() {
         <td class="vc-col-desglose ${desgHiddenCls} px-2 py-2 text-right num font-mono text-slate-700 bg-slate-50/60 whitespace-nowrap">${fmtMon(r.costo_insumos_unitario || 0)}</td>
         <td class="vc-col-desglose ${desgHiddenCls} px-2 py-2 text-right num font-mono text-amber-900 bg-amber-50/30 whitespace-nowrap">${fmtMon(r.mod_unitario || 0)}</td>
         <td class="vc-col-desglose ${desgHiddenCls} px-1 py-1 text-center whitespace-nowrap" onclick="event.stopPropagation()">
-          <div class="flex items-center justify-center gap-1 w-full">
+          <div class="flex items-center justify-center gap-1 w-full relative">
             <input type="number" min="0" max="999" step="0.5" value="${r.tiempo_preparacion_min || 0}"
                    title="Preparaciones: ${minPrepUnit} min/und — Total período: ${fmt(minPrepTotal)} min (${fmt(minPrepTotal/60)} hrs)"
                    onfocus="this.select()"
@@ -20505,7 +20506,7 @@ function renderTablaVC() {
                    onfocus="this.select()"
                    onchange="actualizarTiempoProdVC(${r.producto_id}, null, this.value)"
                    class="w-9 text-center font-mono text-xs font-bold border border-gray-300 rounded-lg py-0.5 px-1 bg-white text-gray-800 focus:outline-none focus:ring-1.5 focus:ring-amber-500 shadow-2xs no-spinners">
-            <span id="save-ind-${r.producto_id}" class="text-xs opacity-0 transition-opacity w-2.5 inline-block">✓</span>
+            <span id="save-ind-${r.producto_id}" class="absolute right-0 text-xs opacity-0 transition-opacity font-bold">✓</span>
           </div>
         </td>
 

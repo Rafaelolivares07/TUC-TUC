@@ -4645,7 +4645,10 @@
           <button id="btn-vincular-global" onclick="vincularIdsGlobal()" class="px-3.5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 transition cursor-pointer">
             🔗 Vincular IDs (Global)
           </button>
-          <!-- Reparación global desactivada para evitar inconsistencias por lote; se repara puntual documento por documento -->
+          <button id="btn-reparar-global" onclick="repararCostosGlobal()" class="px-3.5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 transition cursor-pointer">
+            ⚡ Reparar Todo el Período
+          </button>
+          <span id="reparar-global-prog" class="text-[11px] font-bold text-amber-900"></span>
         </div>
       </div>
 
@@ -21609,17 +21612,26 @@ async function cargarReporteEnsambles() {
       }
     }
 
+    function paresConDiferenciaProducto(prod) {
+      return (prod.facturas || []).filter(f => f.tiene_diferencia)
+        .map(f => ({producto_padre_id: Number(prod.producto_padre_id), numero_doc: f.documento_numero}));
+    }
+
     async function repararCostosProducto(productoPadreId) {
       const currentScroll = window.scrollY;
       if (productoPadreId) window._openRepairAccordions.add(`prod-acc-${productoPadreId}`);
-      const { ini, fin } = getReparadorFechas();
-      toast('Reparando todos los documentos de este producto...');
+      const prod = (window._repairData?.productos || []).find(p => Number(p.producto_padre_id) === Number(productoPadreId));
+      const pares = prod ? paresConDiferenciaProducto(prod) : [];
+      if (!pares.length) { toast('Este producto ya está cuadrado'); return; }
+      const confirmed = confirm(`¿Reparar ${pares.length} documento(s) de ${prod.producto_padre_nombre || 'este producto'}?`);
+      if (!confirmed) return;
+      toast(`Reparando ${pares.length} documentos...`);
 
       try {
         const r = await fetch(`/api/inventario/${NEGOCIO_ID}/reparar-costos-documento`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ producto_padre_id: productoPadreId, fecha_desde: ini, fecha_hasta: fin })
+          body: JSON.stringify({ pares })
         });
         const d = await r.json();
         if (!d.ok) {
@@ -21627,7 +21639,11 @@ async function cargarReporteEnsambles() {
           return;
         }
 
-        toast(`✅ ${d.documentos_modificados} documentos reparados`);
+        toast(`✅ ${d.documentos_modificados}/${d.documentos_procesados} reparados` + (d.documentos_fallidos ? `, ${d.documentos_fallidos} fallidos` : ''));
+        if (d.documentos_fallidos) {
+          const f0 = (d.resultados || []).find(x => x.ok === false);
+          if (f0) setTimeout(() => toast(`Doc ${f0.numero_doc}: ${f0.error || 'falló'}`, false, 6000), 600);
+        }
         await repararCostosPreview(true, currentScroll);
       } catch (e) {
         toast(e.message, false);
@@ -21636,29 +21652,38 @@ async function cargarReporteEnsambles() {
 
     async function repararCostosGlobal() {
       const currentScroll = window.scrollY;
-      const { ini, fin } = getReparadorFechas();
-      const confirmed = confirm(`¿Estás seguro de que deseas reparar automáticamente TODOS los costos del período ${ini} al ${fin}?`);
+      const prods = (window._repairData?.productos || []).filter(p => (p.facturas || []).some(f => f.tiene_diferencia));
+      const total = prods.reduce((s, p) => s + paresConDiferenciaProducto(p).length, 0);
+      if (!total) { toast('Período cuadrado'); return; }
+      const confirmed = confirm(`¿Reparar ${total} documento(s) de ${prods.length} producto(s) del período?`);
       if (!confirmed) return;
-
-      toast('Reparando todos los documentos del período...');
-
-      try {
-        const r = await fetch(`/api/inventario/${NEGOCIO_ID}/reparar-costos-documento`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fecha_desde: ini, fecha_hasta: fin })
-        });
-        const d = await r.json();
-        if (!d.ok) {
-          toast(d.error || 'Error al reparar período', false);
-          return;
+      const prog = document.getElementById('reparar-global-prog');
+      let mod = 0, proc = 0, fail = 0;
+      for (let i = 0; i < prods.length; i++) {
+        const p = prods[i];
+        const pares = paresConDiferenciaProducto(p);
+        if (prog) prog.textContent = `Reparando ${i + 1}/${prods.length}: ${p.producto_padre_nombre} (${pares.length})...`;
+        try {
+          const r = await fetch(`/api/inventario/${NEGOCIO_ID}/reparar-costos-documento`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pares })
+          });
+          const d = await r.json();
+          if (d.ok) {
+            mod += d.documentos_modificados || 0;
+            proc += d.documentos_procesados || 0;
+            fail += d.documentos_fallidos || 0;
+          } else {
+            fail += pares.length;
+          }
+        } catch (e) {
+          fail += pares.length;
         }
-
-        toast(`✅ ${d.documentos_modificados} de ${d.documentos_procesados} documentos reparados`);
-        await repararCostosPreview(true, currentScroll);
-      } catch (e) {
-        toast(e.message, false);
       }
+      if (prog) prog.textContent = '';
+      toast(`✅ Período: ${mod}/${proc} reparados` + (fail ? `, ${fail} fallidos` : ''), fail === 0);
+      await repararCostosPreview(true, currentScroll);
     }
 
     function htmlVsdDocProp(v) {
@@ -21832,6 +21857,7 @@ async function cargarReporteEnsambles() {
         const r = await fetch(url);
         const d = await r.json();
         if (!d.ok) { preview.innerHTML = `<div class="text-red-500 text-xs py-4">${d.error || 'Error al obtener diagnóstico'}</div>`; return; }
+        window._repairData = d;
         const res = d.resumen || { total_productos: 0, total_facturas: 0, con_diferencia: 0, monto_corregir: 0 };
 
         const btnRepGlobal = document.getElementById('btn-reparar-global');
@@ -21863,7 +21889,6 @@ async function cargarReporteEnsambles() {
           const costTotalContab = Number(prod.costo_total_contable || 0);
           const costTotalKardex = Number(prod.costo_total_kardex || 0);
           const difProd = costTotalContab - costTotalKardex;
-          const tieneDifProd = prod.con_diferencia > 0 || Math.abs(difProd) > 0.01;
 
           let totalContrasProd = 0;
           let tieneDesvinculadosProd = false;
@@ -21885,8 +21910,9 @@ async function cargarReporteEnsambles() {
             ? `<button type="button" onclick="desvincularIds(null, ${prod.producto_padre_id})" class="min-w-[150px] px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl border border-gray-300 transition flex items-center justify-center gap-1.5 cursor-pointer">🔓 Desvincular</button>`
             : `<button type="button" disabled title="No hay IDs vinculados para desvincular" class="min-w-[150px] px-4 py-2 bg-gray-50 text-gray-400 border border-gray-200 text-xs font-semibold rounded-xl opacity-70 cursor-not-allowed flex items-center justify-center gap-1.5 shadow-none">🔓 Desvincular</button>`;
 
-          const btnRepararProd = tieneDifProd
-            ? `<span class="px-3 py-1.5 bg-amber-100 text-amber-900 border border-amber-300 text-[11px] font-bold rounded-xl flex items-center justify-center gap-1 shadow-none">👇 Despliegue para reparar por documento</span>`
+          const nDifProd = prod.facturas.filter(f => f.tiene_diferencia).length;
+          const btnRepararProd = nDifProd > 0
+            ? `<button type="button" onclick="repararCostosProducto(${prod.producto_padre_id})" title="Reparar los ${nDifProd} documento(s) con diferencia de este producto" class="min-w-[170px] px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer">⚡ Reparar Producto (${nDifProd})</button>`
             : `<button type="button" disabled title="Todos los documentos de este producto están cuadrados ($0 diferencia)" class="min-w-[170px] px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-300 text-xs font-bold rounded-xl opacity-90 cursor-default flex items-center justify-center gap-1.5 shadow-none">✅ Cuadrado ($0)</button>`;
 
           const totalCantProd = prod.facturas.reduce((s, ff) => s + parseFloat(ff.cantidad_base || 0), 0);

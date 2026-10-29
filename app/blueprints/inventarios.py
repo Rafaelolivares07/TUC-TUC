@@ -5803,22 +5803,59 @@ def api_reparar_costos_preview(negocio_id):
         conn.close()
 
 
+def _reparar_pares(conn, negocio_id, pares, td_codigo_map):
+    """Ciclo sobre el motor por documento con savepoint por par.
+
+    pares: [(producto_padre_id, numero_doc)]. Un par venenoso no mata el lote:
+    se revierte solo ese par y queda reportado con ok=False + error.
+    """
+    resultados = []
+    for i, (ppid, doc_num) in enumerate(pares):
+        conn.execute(f"SAVEPOINT rp_{i}")
+        try:
+            r = _reparar_un_documento(conn, negocio_id, ppid, doc_num, td_codigo_map)
+            r['ok'] = True
+            conn.execute(f"RELEASE SAVEPOINT rp_{i}")
+        except Exception as e:
+            conn.execute(f"ROLLBACK TO SAVEPOINT rp_{i}")
+            r = {'producto_padre_id': ppid, 'numero_doc': doc_num, 'ok': False,
+                 'error': str(e)[:300], 'cambios_contables': []}
+        resultados.append(r)
+    return resultados
+
+
 @bp.route('/api/inventario/<int:negocio_id>/reparar-costos-documento', methods=['POST'])
 def api_reparar_costos_documento(negocio_id):
-    """Repara costos. Acepta tres alcances:
+    """Repara costos llamando al motor por documento. Dos cuerpos:
     - Documento: { numero_doc, producto_padre_id }
-    - Producto: { producto_padre_id, fecha_desde, fecha_hasta }
-    - Global: { fecha_desde, fecha_hasta }
+    - Lote: { pares: [{producto_padre_id, numero_doc}, ...] } (lo que muestra el informe)
     Ajusta movimientos_contables 14*, contrapartida 6xxx y pedido_items.costo_unitario.
     """
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
 
     data = request.get_json(silent=True) or {}
-    numero_doc = str(data.get('numero_doc', '')).strip()
-    prod_padre_id = data.get('producto_padre_id')
-    fecha_desde = data.get('fecha_desde', '').strip()
-    fecha_hasta = data.get('fecha_hasta', '').strip()
+    pares = []
+    if isinstance(data.get('pares'), list) and data['pares']:
+        for p in data['pares'][:2000]:
+            try:
+                ppid = int(p.get('producto_padre_id'))
+                doc = str(p.get('numero_doc', '')).strip()
+            except (ValueError, TypeError, AttributeError):
+                continue
+            if ppid > 0 and doc:
+                pares.append((ppid, doc))
+        if not pares:
+            return jsonify({'ok': False, 'error': 'Pares vacíos o inválidos'}), 400
+    else:
+        numero_doc = str(data.get('numero_doc', '')).strip()
+        try:
+            ppid = int(data.get('producto_padre_id'))
+        except (ValueError, TypeError):
+            return jsonify({'ok': False, 'error': 'Envía numero_doc+producto_padre_id o pares:[...]'}), 400
+        if not numero_doc or ppid <= 0:
+            return jsonify({'ok': False, 'error': 'Envía numero_doc+producto_padre_id o pares:[...]'}), 400
+        pares = [(ppid, numero_doc)]
 
     conn = get_db_connection()
     try:
@@ -5833,77 +5870,18 @@ def api_reparar_costos_documento(negocio_id):
         ).fetchall()
         td_codigo_map = {td['id']: td['codigo'] for td in td_rows}
 
-        # Determinar pares (producto_padre_id, numero_doc) a reparar
-        pares = []
-
-        if numero_doc and prod_padre_id:
-            # Nivel documento
-            pares.append((prod_padre_id, numero_doc))
-
-        elif prod_padre_id and not numero_doc:
-            # Nivel producto: todos los documentos de ese producto en rango (tanto ventas como producciones)
-            where_fechas = ""
-            params_k = [negocio_id, prod_padre_id, prod_padre_id, prod_padre_id]
-            if fecha_desde:
-                where_fechas += " AND COALESCE(m.documento_fecha, m.created_at::date) >= %s"
-                params_k.append(fecha_desde)
-            if fecha_hasta:
-                where_fechas += " AND COALESCE(m.documento_fecha, m.created_at::date) <= %s"
-                params_k.append(fecha_hasta)
-            docs = conn.execute(f"""
-                SELECT DISTINCT m.documento_numero
-                FROM movimientos_inventario m
-                WHERE m.negocio_id = %s
-                  AND (
-                      (m.producto_padre_id = %s AND m.tipo = 'salida')
-                      OR (m.producto_id = %s AND m.tipo = 'entrada' AND m.referencia_tipo = 'produccion')
-                      OR (m.producto_padre_id = %s AND m.tipo = 'salida' AND m.referencia_tipo = 'produccion')
-                  )
-                  {where_fechas}
-            """, params_k).fetchall()
-            for d in docs:
-                if d['documento_numero']:
-                    pares.append((prod_padre_id, str(d['documento_numero'])))
-
-        elif fecha_desde and fecha_hasta:
-            # Nivel global: todos los productos con salidas o producciones en rango
-            docs = conn.execute("""
-                SELECT DISTINCT
-                    COALESCE(m.producto_padre_id, m.producto_id) AS producto_padre_id,
-                    m.documento_numero
-                FROM movimientos_inventario m
-                WHERE m.negocio_id = %s
-                  AND (
-                      (m.producto_padre_id IS NOT NULL AND m.tipo = 'salida')
-                      OR (m.tipo = 'entrada' AND m.referencia_tipo = 'produccion')
-                  )
-                  AND COALESCE(documento_fecha, created_at::date) >= %s
-                  AND COALESCE(documento_fecha, created_at::date) <= %s
-            """, (negocio_id, fecha_desde, fecha_hasta)).fetchall()
-            for d in docs:
-                if d['documento_numero']:
-                    pares.append((d['producto_padre_id'], str(d['documento_numero'])))
-        else:
-            return jsonify({'ok': False, 'error': 'Parmetros insuficientes. Envía numero_doc+producto_padre_id, o producto_padre_id+fechas, o solo fechas.'}), 400
-
-        if not pares:
-            return jsonify({'ok': True, 'documentos_procesados': 0, 'mensaje': 'No hay documentos para reparar con los filtros indicados'})
-
-        # Procesar cada par (producto, documento)
-        resultados = []
-        for ppid, doc_num in pares:
-            resultado = _reparar_un_documento(conn, negocio_id, ppid, doc_num, td_codigo_map)
-            resultados.append(resultado)
-
+        resultados = _reparar_pares(conn, negocio_id, pares, td_codigo_map)
         conn.commit()
 
         total_cambios = sum(len(r.get('cambios_contables', [])) for r in resultados)
         total_docs_modificados = sum(1 for r in resultados if r.get('cambios_contables') or r.get('cogs_modificado') or r.get('pedido_item_modificado') or r.get('debito_modificado'))
+        total_fallidos = sum(1 for r in resultados if r.get('ok') is False)
 
         return jsonify({
             'ok': True,
             'documentos_procesados': len(resultados),
             'documentos_modificados': total_docs_modificados,
+            'documentos_fallidos': total_fallidos,
             'total_cambios_contables': total_cambios,
             'resultados': resultados,
         })

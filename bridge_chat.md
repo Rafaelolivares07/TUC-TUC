@@ -2466,3 +2466,151 @@ Doc Rockola al dia (docs/_conversacion/04_rockola.md): 5 bloques 23-28 desde git
 ### [2026-10-28 17:55:34] 👤 Muse para Gemini:
 
 Titulo launcher: sin MUSE + tag con hora de corte (ROCKOLA 4% 18:32). Tag 5h:N% -> N% HH:MM; [6/8] sin sufijo (fallback TUCTUC); test 21/21 PASS (disco, ignorado). Push cf21556..acae679. Solo local, prod intacto.
+
+---
+
+### [2026-10-28 18:26:40] 👤 Rafael (vía Telegram):
+
+Mándame mensaje convertidos en audios
+
+---
+
+### [2026-10-28 18:30:37] 👤 Rafael (vía Telegram):
+
+Bueno y te puedo enviar audios y creo que de pronto le das el mismo manejo el servidor se encarga de convertirte los a texto
+
+---
+
+### [2026-10-28 18:31:11] 👤 Rafael (vía Telegram):
+
+Nada que te llegan los mensajes parece que algo falla y
+
+---
+
+### [2026-10-28 18:36:51] 👤 Rafael (vía Telegram):
+
+Bueno y te puedo enviar audios y creo que de pronto le das el mismo manejo el servidor se encarga de convertirte los a texto
+
+---
+
+### [2026-10-28 18:36:51] 👤 Rafael (vía Telegram):
+
+Nada que te llegan los mensajes parece que algo falla y
+
+---
+
+### [2026-10-28 18:37:22] 👤 Rafael (vía Telegram):
+
+Bueno y te puedo enviar audios y creo que de pronto le das el mismo manejo el servidor se encarga de convertirte los a texto
+
+---
+
+### [2026-10-28 18:40:16] 👤 Rafael (vía Telegram):
+
+[mensaje sin texto]
+
+---
+
+### [2026-10-28 18:40:21] 👤 Rafael (vía Telegram):
+
+[mensaje sin texto]
+
+---
+
+### [2026-10-28 18:47:55] 👤 Rafael (vía Telegram):
+
+[audio 10s] Bueno, pero contestame también tu por telegram, a mí me encanta escucharte y si te escucho por  todo el lado mejor.
+
+---
+
+### [2026-10-28 18:50:46] 👤 Rafael (vía Telegram):
+
+[audio no se pudo transcribir]
+
+---
+
+### [2026-10-28 18:56:22] 👤 Rafael (vía Telegram):
+
+[audio 2s] De tercer al día de prueba.
+
+---
+
+### [2026-10-28 19:02:52] 👤 Rafael (vía Telegram):
+
+[audio 13s] A ver qué tanto te puedo decir, vamos a hacer que el mensaje sea un poco más largo simplemente  para que tengas un mensaje de más de 10 segundos ya logrado
+
+---
+
+### [2026-10-28 19:04:33] 👤 Rafael (vía Telegram):
+
+[audio 3s] y volvamos a probar con este corto
+
+---
+
+### [2026-10-28 19:05:22] 👤 Rafael (vía Telegram):
+
+[audio 19s] De hecho en la terminal B que te salió un error y que lo corregista algo que  tenía que ver con UTF-8 creo, en todo caso B que te salió Exit Code en  igual a uno y como que eso es un código de error yo creo.
+
+---
+
+### [2026-10-28 19:07:31] 👤 Rafael (vía Telegram):
+
+No revisa como se logró en el daemon de los agentes anteriores cuando se escribe en tu terminal _merlin_
+
+---
+
+### [2026-10-28 19:15:29] 👤 Rafael (vía Telegram):
+
+Probando
+
+---
+
+### [2026-10-28 19:15:39] 👤 Rafael (vía Telegram):
+
+Otra vez
+
+---
+
+### [2026-10-28 19:16:45] 👤 Rafael (vía Telegram):
+
+Otra vez
+
+---
+
+### [2026-10-28 19:17:59] 👤 Rafael (vía Telegram):
+
+Okey 1
+
+---
+
+### [2026-10-28 19:18:11] 👤 Rafael (vía Telegram):
+
+Okey 2
+
+---
+
+### [2026-10-28 19:19:10] 👤 Rafael (vía Telegram):
+
+Sigamos probando
+
+---
+
+### [2026-10-28 19:21:54] 👤 Rafael (vía Telegram):
+
+Estoy lejos del computador
+
+---
+
+### [2026-10-28 19:22:13] 👤 Rafael (vía Telegram):
+
+Es necesario que me puedas hablar por aquí (telegram)
+
+---
+
+### [2026-10-28 19:31:53] 👤 Rafael (vía Telegram):
+
+Ya lo he hecho
+---
+### [2026-10-28 19:51:50] 👤 Muse para Gemini:
+
+Wake Telegram vivo (muse): listener+STT Whisper local+ConPTY exacto+outbox texto/voz, trigger __MUSE__ probado 2x limpio. Archivos muse_*.py en V2, inbox/outbox separados de Claude. Commit V2 en camino.

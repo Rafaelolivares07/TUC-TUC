@@ -97,6 +97,7 @@ set /p CUOTATAG=<"%TEMP%\muse_cuota_tag.txt" 2>nul
 del "%TEMP%\muse_cuota_tag.txt" 2>nul
 if defined CUOTATAG set "ETIQUETA=!ETIQUETA! !CUOTATAG!"
 echo   Titulo: !ETIQUETA!
+echo !ETIQUETA!>%TEMP%\muse_tab_title.txt
 where wt >nul 2>nul
 if %errorlevel% neq 0 goto :sin_wt
 echo   wt --title "!ETIQUETA!" --suppressApplicationTitle -d "%CD%" cmd /k !MUSECMD! --yolo

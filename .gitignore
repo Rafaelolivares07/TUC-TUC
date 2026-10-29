@@ -79,3 +79,7 @@ mensaje_antigravity_*.md
 # Remote assist secrets & private agent settings
 remote-assist/telegram_config.json
 .agents/
+
+# Muse inbox/outbox (estado runtime del wake Telegram)
+muse_inbox.json
+muse_outbox.json

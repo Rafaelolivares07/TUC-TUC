@@ -4657,7 +4657,7 @@
 
   <!-- ── TAB VENTAS/COSTOS ────────────────────────────────────────── -->
 
-  <div id="tab-ventas_costos" class="hidden bg-white rounded-2xl shadow p-4 sm:p-6 w-full">
+  <div id="tab-ventas_costos" class="hidden bg-white rounded-2xl shadow p-4 sm:p-6 w-full sm:w-[110%] sm:-ml-[5%]">
 
     <div class="border-b border-gray-150 pb-4 mb-4 flex items-center justify-between flex-wrap gap-4">
 
@@ -4768,9 +4768,9 @@
       </div>
     </div>
 
-    <div class="overflow-x-auto w-full -mx-1 sm:mx-0">
+    <div class="overflow-x-auto max-h-[75vh] overflow-y-auto w-full -mx-1 sm:mx-0">
       <table class="w-full text-left border-collapse">
-        <thead>
+        <thead class="sticky top-0 z-10">
           <tr class="bg-gray-50 text-[10px] uppercase text-gray-500 border-b border-gray-150 select-none">
             <th onclick="ordenarVC('nombre_producto')" class="px-3 py-2 text-left cursor-pointer hover:bg-gray-100 transition-colors min-w-[170px] align-bottom">
               <span>Producto</span> <span id="sort-vc-nombre" class="text-gray-400 text-[9px]">↕</span>
@@ -4793,9 +4793,9 @@
               <div>MOD</div>
               <div>Unit. <span id="sort-vc-cumod" class="text-gray-400 text-[9px]">↕</span></div>
             </th>
-            <th class="vc-col-desglose hidden px-2 py-2 text-center transition-all border-x border-gray-100 whitespace-nowrap align-bottom">
+            <th class="vc-col-desglose hidden px-2 py-2 text-center transition-all border-x border-gray-100 align-bottom max-w-[105px]">
               <div title="Tiempos estimados en minutos: Preparaciones / Ensambles">Tiempos</div>
-              <div class="text-[9px]">Preparaciones / Ensambles</div>
+              <div class="text-[9px] whitespace-normal leading-tight">Preparaciones / Ensambles</div>
             </th>
 
             <th onclick="ordenarVC('costo_unitario')" class="px-2 py-2 text-right num cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap align-bottom text-rose-900 bg-rose-50/30">
@@ -20473,8 +20473,8 @@ function renderTablaVC() {
       <tr class="hover:bg-gray-50 border-b border-gray-100 text-xs cursor-pointer transition-colors" onclick="toggleDetalleVC(this, ${r.producto_id})" data-producto="${r.producto_id}">
         <td class="px-3 py-2 font-semibold text-gray-800">
           <div class="flex items-center gap-1.5 flex-wrap">
-            <span class="vc-arrow text-gray-400 mr-1 text-[10px]">▶</span>
             <span>${r.nombre_producto}</span>
+            <span class="text-[10px] font-normal text-gray-400 whitespace-nowrap">(clic para expandir)</span>
             ${r.tiene_desfase ? `
               <button type="button"
                       onclick="event.stopPropagation(); irAPantallaReparacion('', ${r.producto_id}, '')"
@@ -20494,18 +20494,18 @@ function renderTablaVC() {
         <!-- Desglose unitario colapsado por defecto -->
         <td class="vc-col-desglose ${desgHiddenCls} px-2 py-2 text-right num font-mono text-slate-700 bg-slate-50/60 whitespace-nowrap">${fmtMon(r.costo_insumos_unitario || 0)}</td>
         <td class="vc-col-desglose ${desgHiddenCls} px-2 py-2 text-right num font-mono text-amber-900 bg-amber-50/30 whitespace-nowrap">${fmtMon(r.mod_unitario || 0)}</td>
-        <td class="vc-col-desglose ${desgHiddenCls} px-1.5 py-1 text-center whitespace-nowrap border-x border-gray-100" onclick="event.stopPropagation()">
+        <td class="vc-col-desglose ${desgHiddenCls} px-1 py-1 text-center whitespace-nowrap border-x border-gray-100" onclick="event.stopPropagation()">
           <div class="inline-flex items-center gap-1">
             <input type="number" min="0" max="999" step="0.5" value="${r.tiempo_preparacion_min || 0}"
                    title="Preparaciones: ${minPrepUnit} min/und — Total período: ${fmt(minPrepTotal)} min (${fmt(minPrepTotal/60)} hrs)"
                    onfocus="this.select()"
                    onchange="actualizarTiempoProdVC(${r.producto_id}, this.value, null)"
-                   class="w-11 text-center font-mono text-xs font-bold border border-gray-300 rounded-lg py-0.5 px-1 bg-white text-gray-800 focus:outline-none focus:ring-1.5 focus:ring-amber-500 shadow-2xs no-spinners">
+                   class="w-9 text-center font-mono text-xs font-bold border border-gray-300 rounded-lg py-0.5 px-1 bg-white text-gray-800 focus:outline-none focus:ring-1.5 focus:ring-amber-500 shadow-2xs no-spinners">
             <input type="number" min="0" max="999" step="0.5" value="${r.tiempo_ensamble_min || 0}"
                    title="Ensambles: ${minEnsUnit} min/und — Total período: ${fmt(minEnsTotal)} min (${fmt(minEnsTotal/60)} hrs)"
                    onfocus="this.select()"
                    onchange="actualizarTiempoProdVC(${r.producto_id}, null, this.value)"
-                   class="w-11 text-center font-mono text-xs font-bold border border-gray-300 rounded-lg py-0.5 px-1 bg-white text-gray-800 focus:outline-none focus:ring-1.5 focus:ring-amber-500 shadow-2xs no-spinners">
+                   class="w-9 text-center font-mono text-xs font-bold border border-gray-300 rounded-lg py-0.5 px-1 bg-white text-gray-800 focus:outline-none focus:ring-1.5 focus:ring-amber-500 shadow-2xs no-spinners">
             <span id="save-ind-${r.producto_id}" class="text-xs opacity-0 transition-opacity w-2.5 inline-block">✓</span>
           </div>
         </td>
@@ -20765,8 +20765,8 @@ async function toggleDetalleVC(tr, productoId) {
         <!-- Tabla detallada por factura -->
         <div class="overflow-x-auto">
           <table class="w-full text-[11px]">
-            <thead>
-              <tr class="text-gray-500 bg-gray-50/70 border-b border-gray-200 text-[10px] uppercase tracking-wider font-semibold">
+            <thead class="sticky top-0">
+              <tr class="text-gray-500 bg-gray-50 border-b border-gray-200 text-[10px] uppercase tracking-wider font-semibold">
                 <th class="px-2 py-1.5 text-left">Fecha</th>
                 <th class="px-2 py-1.5 text-left">Factura</th>
                 <th class="px-2 py-1.5 text-left">Cliente</th>

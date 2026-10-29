@@ -21696,13 +21696,17 @@ async function cargarReporteEnsambles() {
       }
       h += `</div></div></div>`;
       h += `<div class="grid grid-cols-5 gap-2 text-[10px] text-gray-500 font-bold uppercase px-2 mb-0.5">`;
-      h += `<span>Componente / Insumo</span><span class="text-right">Kardex evidencia</span><span class="text-right">Contable (14* Crédito)</span><span class="text-right">Acción</span><span class="text-center">Origen</span>`;
+      h += `<span>Componente / Insumo</span><span class="text-right">Kardex (existe → genera)</span><span class="text-right">Contable 14* (existe → crea)</span><span class="text-right">Dif pendiente</span><span class="text-center">Acción</span>`;
       h += `</div>`;
-      let suma14 = 0;
+      let suma14 = 0, sumaKx = 0;
       prop.componentes.forEach(c => {
         const ex14 = (est.contables_14 || []).find(a => Number(a.producto_id) === Number(c.componente_id));
         const m14 = ex14 ? Number(ex14.monto || 0) : 0;
         suma14 += m14;
+        const exKx = (est.kardex_salidas || []).find(a => Number(a.producto_id) === Number(c.componente_id));
+        const mKx = exKx ? Number(exKx.total || 0) : 0;
+        sumaKx += mKx;
+        const difC = c.costo_total - m14;
         const acc = !ex14
           ? `<span class="text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-300 px-1.5 py-0.5 rounded">SE CREA</span>`
           : (Math.abs(m14 - c.costo_total) > 0.01
@@ -21714,19 +21718,19 @@ async function cargarReporteEnsambles() {
           ? `<input type="number" min="0" step="any" value="${c.costo_und}" data-comp="${c.componente_id}" oninput="recalcVsd(${pedidoId}, ${productoId})" class="w-24 border border-rose-300 rounded-lg px-1.5 py-0.5 text-right font-mono text-xs">`
           : `<span class="font-mono">${fmt(c.costo_und)}</span>`;
         h += `<div class="grid grid-cols-5 gap-2 px-2 py-1 items-center text-xs border-t border-gray-100">`;
-        h += `<span class="text-gray-800"><b>${c.nombre}</b> <span class="text-gray-400">× ${c.cantidad}</span></span>`;
-        h += `<span class="text-right"><span class="flex items-center justify-end gap-2">${costoCell}<b id="vsd-ct-${pedidoId}-${productoId}-${c.componente_id}" class="font-mono text-gray-800">${fmt(c.costo_total)}</b></span>${ev}</span>`;
-        h += `<span class="text-right font-mono ${ex14 ? 'text-gray-800' : 'text-gray-300'}">${ex14 ? fmt(m14) : '—'}</span>`;
-        h += `<span class="text-right">${acc}</span>`;
-        h += `<span class="text-center text-[10px]">[${tag}]</span>`;
+        h += `<span class="text-gray-800"><b>${c.nombre}</b> <span class="text-gray-400">× ${c.cantidad}</span><span class="block text-[10px]">[${tag}]</span>${ev}</span>`;
+        h += `<span class="text-right font-mono text-xs"><span class="block ${exKx ? 'text-gray-800' : 'text-gray-300'}">existe ${fmt(mKx)}</span><span class="flex items-center justify-end gap-2">genera ${costoCell}<b id="vsd-ct-${pedidoId}-${productoId}-${c.componente_id}" class="text-gray-800">${fmt(c.costo_total)}</b></span></span>`;
+        h += `<span class="text-right font-mono text-xs"><span class="block ${ex14 ? 'text-gray-800' : 'text-gray-300'}">existe ${fmt(m14)}</span><span class="block text-gray-800">crea <b id="vsd-c14-${pedidoId}-${productoId}-${c.componente_id}">${fmt(c.costo_total)}</b></span></span>`;
+        h += `<span class="text-right font-mono font-extrabold ${Math.abs(difC) > 0.01 ? 'text-red-600' : 'text-green-600'}" id="vsd-dif-${pedidoId}-${productoId}-${c.componente_id}">${fmt(difC)}</span>`;
+        h += `<span class="text-center">${acc}</span>`;
         h += `</div>`;
       });
-      const dif14 = suma14 - prop.total;
+      const difT = prop.total - suma14;
       h += `<div class="grid grid-cols-5 gap-2 text-xs font-bold px-2 py-1.5 bg-slate-100/90 rounded-lg border border-slate-200 text-gray-800 items-center">`;
       h += `<span class="text-[11px] uppercase">🥗 Total (${prop.componentes.length})</span>`;
-      h += `<span class="text-right font-mono">${fmt(prop.total)}</span>`;
-      h += `<span class="text-right font-mono">${fmt(suma14)}</span>`;
-      h += `<span class="text-right font-mono font-extrabold ${Math.abs(dif14) > 0.01 ? 'text-red-600' : 'text-green-600'}">${Math.abs(dif14) > 0.01 ? 'Σ Dif: ' + fmt(dif14) : 'Σ OK ($0)'}</span>`;
+      h += `<span class="text-right font-mono">${fmt(sumaKx)} → <b id="vsd-tk-${pedidoId}-${productoId}">${fmt(prop.total)}</b></span>`;
+      h += `<span class="text-right font-mono">${fmt(suma14)} → <b id="vsd-tc14-${pedidoId}-${productoId}">${fmt(prop.total)}</b></span>`;
+      h += `<span class="text-right font-mono font-extrabold ${Math.abs(difT) > 0.01 ? 'text-red-600' : 'text-green-600'}" id="vsd-td-${pedidoId}-${productoId}">${Math.abs(difT) > 0.01 ? 'Σ Dif: ' + fmt(difT) : 'Σ OK ($0)'}</span>`;
       h += `<span></span></div>`;
       h += `<div class="flex items-center justify-end gap-2"><span class="text-[10px] text-gray-400">Al ejecutar: salidas + COGS 61* + bajas 14* + pedido_items (débito = crédito)</span>`;
       h += `<button type="button" onclick="ejecutarVsd(${pedidoId}, ${productoId})" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow cursor-pointer">✅ Ejecutar reparación</button></div>`;
@@ -21739,7 +21743,9 @@ async function cargarReporteEnsambles() {
       if (!cont) return;
       const v = (window._vsdData || []).find(x => x.pedido_id === pedidoId && x.producto_id === productoId);
       if (!v || !v.propuesta) return;
-      let tot = 0;
+      const est14 = (v.estado || {}).contables_14 || [];
+      const fmt = n => '$' + Number(n || 0).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+      let tot = 0, s14 = 0;
       (v.propuesta.componentes || []).forEach(c => {
         let cu = c.costo_und;
         if (c.editable) {
@@ -21748,11 +21754,19 @@ async function cargarReporteEnsambles() {
         }
         const ct = cu * Number(c.cantidad || 0);
         tot += ct;
-        const cell = document.getElementById(`vsd-ct-${pedidoId}-${productoId}-${c.componente_id}`);
-        if (cell) cell.textContent = '$' + ct.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        const ex = est14.find(a => Number(a.producto_id) === Number(c.componente_id));
+        const m14 = ex ? Number(ex.monto || 0) : 0;
+        s14 += m14;
+        const set = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+        set(`vsd-ct-${pedidoId}-${productoId}-${c.componente_id}`, fmt(ct));
+        set(`vsd-c14-${pedidoId}-${productoId}-${c.componente_id}`, fmt(ct));
+        set(`vsd-dif-${pedidoId}-${productoId}-${c.componente_id}`, fmt(ct - m14));
       });
-      const gt = document.getElementById(`vsd-tot-${pedidoId}-${productoId}`);
-      if (gt) gt.textContent = '$' + tot.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+      const setT = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+      setT(`vsd-tot-${pedidoId}-${productoId}`, fmt(tot));
+      setT(`vsd-tk-${pedidoId}-${productoId}`, fmt(tot));
+      setT(`vsd-tc14-${pedidoId}-${productoId}`, fmt(tot));
+      setT(`vsd-td-${pedidoId}-${productoId}`, Math.abs(tot - s14) > 0.01 ? 'Σ Dif: ' + fmt(tot - s14) : 'Σ OK ($0)');
     }
 
     async function ejecutarVsd(pedidoId, productoId) {

@@ -21651,6 +21651,81 @@ async function cargarReporteEnsambles() {
       }
     }
 
+    function toggleVsdProp(pedidoId, productoId) {
+      const cont = document.getElementById(`vsd-prop-${pedidoId}-${productoId}`);
+      if (!cont) return;
+      if (!cont.classList.contains('hidden')) { cont.classList.add('hidden'); cont.innerHTML = ''; return; }
+      const v = (window._vsdData || []).find(x => x.pedido_id === pedidoId && x.producto_id === productoId);
+      if (!v || !v.propuesta || !v.propuesta.componentes) return;
+      const prop = v.propuesta;
+      const fmt = n => '$' + Number(n || 0).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+      let h = `<div class="bg-white border border-rose-200 rounded-xl px-3 py-2 mt-1 mb-2">`;
+      h += `<div class="text-[11px] font-bold text-rose-900 mb-1.5">Propuesta: tarjeta actual × costos al ${v.fecha}${prop.tipo === 'kardex_propio' ? ' (costo propio histórico)' : ''} — total <span id="vsd-tot-${pedidoId}-${productoId}" class="font-mono">${fmt(prop.total)}</span></div>`;
+      prop.componentes.forEach(c => {
+        const tag = c.origen === 'kardex' ? '<span class="text-emerald-600">kardex</span>' : (c.origen === 'digitado' ? '<span class="text-blue-600">digitado</span>' : '<span class="text-rose-600 font-bold">digitar↓</span>');
+        const costoCell = c.editable
+          ? `<input type="number" min="0" step="any" value="${c.costo_und}" data-comp="${c.componente_id}" oninput="recalcVsd(${pedidoId}, ${productoId})" class="w-24 border border-rose-300 rounded-lg px-1.5 py-0.5 text-right font-mono text-xs">`
+          : `<span class="font-mono">${fmt(c.costo_und)}</span>`;
+        h += `<div class="flex items-center justify-between gap-2 text-xs py-1 border-t border-gray-100">`;
+        h += `<span class="text-gray-800"><b>${c.nombre}</b> <span class="text-gray-400">× ${c.cantidad}</span> <span class="text-[10px]">[${tag}]</span></span>`;
+        h += `<span class="flex items-center gap-2">${costoCell}<span id="vsd-ct-${pedidoId}-${productoId}-${c.componente_id}" class="font-mono font-bold text-gray-800 w-24 text-right">${fmt(c.costo_total)}</span></span>`;
+        h += `</div>`;
+      });
+      h += `<div class="flex items-center justify-end gap-2 mt-2">`;
+      h += `<span class="text-[10px] text-gray-400">Genera salidas + COGS 61* + bajas 14* + pedido_items (balanceado)</span>`;
+      h += `<button type="button" onclick="ejecutarVsd(${pedidoId}, ${productoId})" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow cursor-pointer">✅ Ejecutar reparación</button>`;
+      h += `</div></div>`;
+      cont.innerHTML = h;
+      cont.classList.remove('hidden');
+    }
+
+    function recalcVsd(pedidoId, productoId) {
+      const cont = document.getElementById(`vsd-prop-${pedidoId}-${productoId}`);
+      if (!cont) return;
+      const v = (window._vsdData || []).find(x => x.pedido_id === pedidoId && x.producto_id === productoId);
+      if (!v || !v.propuesta) return;
+      let tot = 0;
+      (v.propuesta.componentes || []).forEach(c => {
+        let cu = c.costo_und;
+        if (c.editable) {
+          const inp = cont.querySelector(`input[data-comp="${c.componente_id}"]`);
+          cu = inp ? (parseFloat(inp.value) || 0) : 0;
+        }
+        const ct = cu * Number(c.cantidad || 0);
+        tot += ct;
+        const cell = document.getElementById(`vsd-ct-${pedidoId}-${productoId}-${c.componente_id}`);
+        if (cell) cell.textContent = '$' + ct.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+      });
+      const gt = document.getElementById(`vsd-tot-${pedidoId}-${productoId}`);
+      if (gt) gt.textContent = '$' + tot.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
+
+    async function ejecutarVsd(pedidoId, productoId) {
+      const cont = document.getElementById(`vsd-prop-${pedidoId}-${productoId}`);
+      if (!cont) return;
+      const overrides = {};
+      cont.querySelectorAll('input[data-comp]').forEach(inp => {
+        overrides[inp.dataset.comp] = parseFloat(inp.value) || 0;
+      });
+      if (!confirm('¿Ejecutar reparación completa? Genera salidas, COGS 61*, bajas 14* y corrige pedido_items.')) return;
+      toast('Ejecutando reparación...');
+      try {
+        const r = await fetch(`/api/inventario/${NEGOCIO_ID}/reparar-sin-descarga`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pedido_id: pedidoId, producto_id: productoId, overrides })
+        });
+        const d = await r.json();
+        if (!d.ok) { toast(d.error || 'Error al reparar', false); return; }
+        if (!d.reparado) { toast(d.detalle || 'Ya estaba reparado'); await repararCostosPreview(); return; }
+        toast(`✅ Reparado: $${Number(d.total).toLocaleString('es-CO')} balanceado` + ((d.warnings && d.warnings.length) ? ` (${d.warnings.length} aviso(s))` : ''));
+        if (d.warnings && d.warnings.length) setTimeout(() => toast(d.warnings.join(' | '), false, 6000), 600);
+        await repararCostosPreview();
+      } catch (e) {
+        toast(e.message, false);
+      }
+    }
+
     async function repararCostosPreview(preserveState = false, targetScroll = null) {
       const prevScrollY = targetScroll !== null ? targetScroll : (window.scrollY || document.documentElement.scrollTop);
       const preview = document.getElementById('reparador-preview');
@@ -22130,6 +22205,7 @@ async function cargarReporteEnsambles() {
         });
         html += '</div>';
         const vsd = d.ventas_sin_descarga || [];
+        window._vsdData = vsd;
         if (vsd.length > 0) {
           const totVsd = vsd.reduce((a, v) => a + Number(v.costo_pos_total || 0), 0);
           html += `<div class="mt-4 border-2 border-rose-300 bg-rose-50/60 rounded-2xl p-4 space-y-2" id="vsd-bloque">`;
@@ -22143,7 +22219,14 @@ async function cargarReporteEnsambles() {
             html += `<span class="flex items-center gap-1.5">`;
             if (audUrl) html += `<a href="${audUrl}" target="_blank" rel="noopener" class="px-2 py-1 bg-white hover:bg-amber-100 text-amber-900 font-bold text-[11px] rounded-lg border border-amber-300 cursor-pointer">🔗 Auditoría</a>`;
             html += `<button type="button" onclick="verKardex(${v.producto_id})" class="px-2 py-1 bg-white hover:bg-rose-100 text-rose-900 font-bold text-[11px] rounded-lg border border-rose-300 cursor-pointer">📦 Ver Kardex</button>`;
+            const prop0 = v.propuesta || {tipo: 'sin_costo'};
+            if (prop0.tipo === 'sin_costo') {
+              html += `<span class="text-[11px] text-gray-400 italic">sin costo reconstruible</span>`;
+            } else {
+              html += `<button type="button" onclick="toggleVsdProp(${v.pedido_id}, ${v.producto_id})" class="px-2 py-1 bg-rose-600 hover:bg-rose-700 text-white font-bold text-[11px] rounded-lg shadow-2xs cursor-pointer">🛠 Reparar</button>`;
+            }
             html += `</span></div>`;
+            html += `<div id="vsd-prop-${v.pedido_id}-${v.producto_id}" class="hidden"></div>`;
           });
           html += `</div></div>`;
         }

@@ -4513,7 +4513,298 @@ def _ventas_sin_descarga(conn, negocio_id, fecha_desde, fecha_hasta, prod_padre_
             'cantidad': float(r['cantidad'] or 0),
             'costo_pos_total': float(r['costo_pos_total'] or 0),
         })
+        d = out[-1]
+        d['propuesta'] = _propuesta_sin_descarga(conn, negocio_id, d['producto_id'], d['cantidad'], d['fecha'])
     return out
+
+
+def _costo_historico(conn, negocio_id, producto_id, fecha):
+    """Ultimo costo_und kardex conocido a fecha <= `fecha` (YYYY-MM-DD).
+
+    Prefiere entradas (costo vigente), fallback a cualquier movimiento.
+    Retorna (costo_float|None, 'kardex'|None).
+    """
+    row = conn.execute("""
+        SELECT costo_und, tipo FROM movimientos_inventario
+        WHERE negocio_id = %s AND producto_id = %s
+          AND COALESCE(documento_fecha, created_at::date) <= %s::date
+          AND costo_und IS NOT NULL AND costo_und > 0
+        ORDER BY CASE WHEN tipo = 'entrada' THEN 0 ELSE 1 END,
+                 COALESCE(documento_fecha, created_at::date) DESC, id DESC
+        LIMIT 1
+    """, (negocio_id, producto_id, fecha)).fetchone()
+    if not row:
+        return None, None
+    return float(row['costo_und']), 'kardex'
+
+
+def _propuesta_sin_descarga(conn, negocio_id, producto_id, cantidad, fecha, overrides=None):
+    """Reconstruccion de costo para una venta sin descarga.
+
+    Con tarjeta actual: componentes x costo kardex <= fecha (cero editable
+    si el insumo no existia). Sin tarjeta: costo propio historico. Sin
+    nada: tipo 'sin_costo'. `overrides` {componente_id: costo_und digitado}.
+    """
+    overrides = overrides or {}
+    tarjeta = conn.execute("""
+        SELECT t.componente_id, t.cantidad, p.nombre
+        FROM tarjeta_estandar t
+        JOIN productos p ON p.id = t.componente_id
+        WHERE t.producto_id = %s
+    """, (producto_id,)).fetchall()
+    componentes = []
+    if tarjeta:
+        for t in tarjeta:
+            cid = t['componente_id']
+            cant = float(t['cantidad'] or 0) * float(cantidad or 0)
+            if cid in overrides:
+                cu, origen = float(overrides[cid]), 'digitado'
+            else:
+                h, _o = _costo_historico(conn, negocio_id, cid, fecha)
+                if h is None:
+                    cu, origen = 0.0, 'cero'
+                else:
+                    cu, origen = h, 'kardex'
+            componentes.append({
+                'componente_id': cid, 'nombre': t['nombre'], 'cantidad': round(cant, 4),
+                'costo_und': round(cu, 4), 'costo_total': round(cant * cu, 2),
+                'origen': origen, 'editable': origen != 'kardex',
+            })
+        tipo = 'tarjeta'
+    else:
+        h, _o = _costo_historico(conn, negocio_id, producto_id, fecha)
+        if h is None and producto_id not in overrides:
+            return {'tipo': 'sin_costo', 'componentes': [], 'total': 0.0, 'cantidad': float(cantidad or 0)}
+        cu = float(overrides[producto_id]) if producto_id in overrides else h
+        origen = 'digitado' if producto_id in overrides else 'kardex'
+        cant = float(cantidad or 0)
+        prod = conn.execute("SELECT nombre FROM productos WHERE id = %s", (producto_id,)).fetchone()
+        componentes.append({
+            'componente_id': producto_id, 'nombre': prod['nombre'] if prod else f'ID {producto_id}',
+            'cantidad': round(cant, 4), 'costo_und': round(cu, 4),
+            'costo_total': round(cant * cu, 2), 'origen': origen, 'editable': origen != 'kardex',
+        })
+        tipo = 'kardex_propio'
+    total = round(sum(c['costo_total'] for c in componentes), 2)
+    return {'tipo': tipo, 'componentes': componentes, 'total': total, 'cantidad': float(cantidad or 0)}
+
+
+def _ejecutar_reparacion_sin_descarga(conn, negocio_id, pedido_id, producto_id, overrides, usuario_id):
+    """Reparacion completa de una venta sin descarga (sin commit).
+
+    Genera salidas faltantes (tarjeta actual x costos historicos/digitados),
+    bajas 14*, COGS 61* y correccion de pedido_items. Contabilidad balanceada
+    por construccion (61* = Σ 14* = total reconstruido).
+    """
+    ped = conn.execute("""
+        SELECT id, numero_documento, tipo_documento_id,
+               COALESCE(fecha, created_at::date) AS fecha, centro_utilidad_id
+        FROM pedidos WHERE id = %s AND negocio_id = %s
+    """, (pedido_id, negocio_id)).fetchone()
+    if not ped:
+        return {'ok': False, 'error': 'Pedido no encontrado'}
+    numero_doc = ped['numero_documento'] or str(pedido_id)
+    consecutive = numero_doc.split('-')[-1].strip() if '-' in numero_doc else numero_doc
+    fecha = ped['fecha'].isoformat() if hasattr(ped['fecha'], 'isoformat') else str(ped['fecha'])
+    items = conn.execute("""
+        SELECT COALESCE(SUM(cantidad), 0) AS cant
+        FROM pedido_items WHERE pedido_id = %s AND producto_id = %s
+    """, (pedido_id, producto_id)).fetchone()
+    qty = float(items['cant'] or 0)
+    if qty <= 0:
+        return {'ok': False, 'error': 'El pedido no tiene ese producto'}
+    prop = _propuesta_sin_descarga(conn, negocio_id, producto_id, qty, fecha, overrides=overrides)
+    if prop['tipo'] == 'sin_costo':
+        return {'ok': False, 'error': 'Sin tarjeta ni kardex: no hay costo reconstruible'}
+    pendientes = [c['nombre'] for c in prop['componentes'] if c['origen'] == 'cero']
+    if pendientes:
+        return {'ok': False, 'error': 'Insumos en cero sin digitar: ' + ', '.join(pendientes)}
+    total = prop['total']
+    if total <= 0:
+        return {'ok': False, 'error': 'Total reconstruido en cero: digite los costos faltantes'}
+    ya = conn.execute("""
+        SELECT id FROM movimientos_inventario
+        WHERE negocio_id = %s AND tipo = 'salida' AND producto_padre_id = %s
+          AND (documento_numero = %s OR documento_numero = %s
+               OR (referencia_id = %s AND referencia_tipo LIKE 'pedido%%'))
+        LIMIT 1
+    """, (negocio_id, producto_id, consecutive, numero_doc, pedido_id)).fetchone()
+    if ya:
+        return {'ok': True, 'reparado': False, 'motivo': 'ya_existe',
+                'detalle': 'El documento ya tiene salidas para este producto'}
+    sib = conn.execute("""
+        SELECT tipo_documento, documento_numero, tipo_documento_id, referencia_tipo, bodega
+        FROM movimientos_inventario
+        WHERE negocio_id = %s AND referencia_id = %s AND tipo = 'salida'
+        LIMIT 1
+    """, (negocio_id, pedido_id)).fetchone()
+    bodega = (sib['bodega'] if sib and sib['bodega'] else None) or ped['centro_utilidad_id'] or 1
+    try:
+        bodega = int(bodega)
+    except (ValueError, TypeError):
+        bodega = 1
+    tipo_doc_mov = sib['tipo_documento'] if sib else 'FACTURA_DE_VENTA'
+    ref_tipo = sib['referencia_tipo'] if sib and sib['referencia_tipo'] else 'pedido_tienda'
+    tipo_doc_id = (sib['tipo_documento_id'] if sib and sib['tipo_documento_id'] else None) or ped['tipo_documento_id']
+    padre = conn.execute("SELECT nombre, categoria FROM productos WHERE id = %s", (producto_id,)).fetchone()
+    padre_nombre = padre['nombre'] if padre else f'ID {producto_id}'
+    warnings = []
+    salidas_ids = []
+    for c in prop['componentes']:
+        cid, cant_c, cu = c['componente_id'], c['cantidad'], c['costo_und']
+        tot_c = round(cant_c * cu, 2)
+        srow = conn.execute(
+            "SELECT stock, costo_und, valor_existencia FROM saldos_inventario "
+            "WHERE negocio_id = %s AND producto_id = %s AND bodega = %s",
+            (negocio_id, cid, bodega)).fetchone()
+        stock_ant = float(srow['stock']) if srow else 0.0
+        costo_ant = float(srow['costo_und']) if srow else 0.0
+        val_ant = float(srow['valor_existencia']) if srow else 0.0
+        stock_nvo = stock_ant - cant_c
+        if stock_ant < cant_c:
+            warnings.append(f"{c['nombre']}: stock {stock_ant} < requerido {cant_c} (quedará {stock_nvo})")
+        val_nvo = max(0.0, round(val_ant - tot_c, 2))
+        costo_nvo = round(val_nvo / stock_nvo, 6) if stock_nvo > 0 else costo_ant
+        mov = conn.execute("""
+            INSERT INTO movimientos_inventario
+                (negocio_id, producto_id, nombre_producto, tipo, motivo,
+                 cantidad, stock_anterior, stock_nuevo, registrado_por, notas,
+                 valor_unitario, valor_total, costo_und, referencia_id, referencia_tipo,
+                 tipo_documento, documento_numero, numero_documento, documento_fecha,
+                 producto_padre_id, tipo_documento_id, bodega)
+            VALUES (%s,%s,%s,'salida','venta',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            RETURNING id
+        """, (negocio_id, cid, c['nombre'], cant_c, stock_ant, stock_nvo, usuario_id,
+              f"Reparación sin-descarga doc {numero_doc}", cu, tot_c, cu,
+              pedido_id, ref_tipo, tipo_doc_mov, consecutive, consecutive, fecha,
+              producto_id, tipo_doc_id, bodega)).fetchone()
+        salidas_ids.append(mov['id'])
+        if srow:
+            conn.execute("UPDATE saldos_inventario SET stock = %s, costo_und = %s, valor_existencia = %s, updated_at = NOW() WHERE negocio_id = %s AND producto_id = %s AND bodega = %s",
+                         (stock_nvo, costo_nvo, val_nvo, negocio_id, cid, bodega))
+        else:
+            conn.execute("INSERT INTO saldos_inventario (negocio_id, producto_id, bodega, stock, costo_und, valor_existencia) VALUES (%s,%s,%s,%s,%s,%s)",
+                         (negocio_id, cid, bodega, stock_nvo, costo_nvo, val_nvo))
+        conn.execute("UPDATE productos SET costo = %s WHERE id = %s AND negocio_id = %s", (costo_nvo, cid, negocio_id))
+    doc_ref = conn.execute("""
+        SELECT comprobante_id, tipo_documento_id, tipo_documento, fecha
+        FROM movimientos_contables
+        WHERE negocio_id = %s AND (numero_documento = %s OR numero_documento = %s)
+        ORDER BY id LIMIT 1
+    """, (negocio_id, consecutive, numero_doc)).fetchone()
+    comprobante_id = doc_ref['comprobante_id'] if doc_ref and doc_ref['comprobante_id'] else None
+    if not comprobante_id:
+        c_next = conn.execute("SELECT nextval('seq_comprobante_id')").fetchone()
+        comprobante_id = c_next[0] if c_next else None
+    tipo_doc_id_c = (doc_ref['tipo_documento_id'] if doc_ref and doc_ref['tipo_documento_id'] else None) or tipo_doc_id
+    tipo_doc_nombre = (doc_ref['tipo_documento'] if doc_ref and doc_ref['tipo_documento'] else None) or tipo_doc_mov or 'FACTURA_DE_VENTA'
+    fecha_ref = (doc_ref['fecha'] if doc_ref and doc_ref.get('fecha') else None) or fecha
+    cta14 = conn.execute("SELECT id FROM cuentas_puc WHERE codigo = '140505' LIMIT 1").fetchone()
+    cta14_id = cta14['id'] if cta14 else None
+    bajas_ids = []
+    for c in prop['componentes']:
+        tot_c = c['costo_total']
+        ex = conn.execute("""
+            SELECT id FROM movimientos_contables
+            WHERE negocio_id = %s AND LEFT(cuenta, 2) = '14' AND (tipo = 'credito' OR tipo IS NULL)
+              AND (numero_documento = %s OR numero_documento = %s) AND producto_id = %s
+              AND (producto_padre_id = %s OR producto_padre_id IS NULL)
+            ORDER BY id LIMIT 1
+        """, (negocio_id, consecutive, numero_doc, c['componente_id'], producto_id)).fetchone()
+        if ex:
+            conn.execute("UPDATE movimientos_contables SET monto = %s, producto_padre_id = %s WHERE id = %s", (tot_c, producto_id, ex['id']))
+            bajas_ids.append(ex['id'])
+        else:
+            ins = conn.execute("""
+                INSERT INTO movimientos_contables (negocio_id, comprobante_id, cuenta, cuenta_id, tipo, monto,
+                    concepto, producto_id, producto_padre_id, numero_documento, tipo_documento,
+                    tipo_documento_id, fecha, created_at)
+                VALUES (%s, %s, '140505', %s, 'credito', %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                RETURNING id
+            """, (negocio_id, comprobante_id, cta14_id, tot_c, f"Baja Inv: {c['nombre']}",
+                  c['componente_id'], producto_id, consecutive, tipo_doc_nombre, tipo_doc_id_c, fecha_ref)).fetchone()
+            bajas_ids.append(ins['id'] if ins else None)
+    cogs = conn.execute("""
+        SELECT id FROM movimientos_contables
+        WHERE negocio_id = %s AND LEFT(cuenta, 2) = '61'
+          AND (numero_documento = %s OR numero_documento = %s)
+          AND (producto_padre_id = %s OR producto_id = %s)
+        ORDER BY id LIMIT 1
+    """, (negocio_id, consecutive, numero_doc, producto_id, producto_id)).fetchone()
+    cogs_id = None
+    if cogs:
+        conn.execute("UPDATE movimientos_contables SET monto = %s, producto_id = %s, producto_padre_id = %s WHERE id = %s",
+                     (total, producto_id, producto_id, cogs['id']))
+        cogs_id = cogs['id']
+    else:
+        cod61 = None
+        if padre and padre.get('categoria'):
+            gi = conn.execute("SELECT c.codigo AS cod FROM grupos_inventario gi LEFT JOIN cuentas_puc c ON c.id = gi.cuenta_cos_id WHERE gi.negocio_id = %s AND gi.nombre = %s",
+                              (negocio_id, padre['categoria'])).fetchone()
+            cod61 = gi['cod'] if gi and gi['cod'] else None
+        if not cod61:
+            r61 = conn.execute("SELECT codigo FROM cuentas_puc WHERE (creada_por_negocio_id = %s OR creada_por_negocio_id IS NULL) AND codigo LIKE '61%%' ORDER BY codigo ASC LIMIT 1", (negocio_id,)).fetchone()
+            cod61 = r61['codigo'] if r61 else '614005'
+        id61 = conn.execute("SELECT id FROM cuentas_puc WHERE codigo = %s LIMIT 1", (cod61,)).fetchone()
+        ins = conn.execute("""
+            INSERT INTO movimientos_contables (negocio_id, comprobante_id, tipo_documento, tipo_documento_id,
+                numero_documento, cuenta, cuenta_id, concepto, tipo, monto,
+                producto_id, producto_padre_id, fecha, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'debito', %s, %s, %s, %s, CURRENT_TIMESTAMP)
+            RETURNING id
+        """, (negocio_id, comprobante_id, tipo_doc_nombre, tipo_doc_id_c, consecutive,
+              cod61, id61['id'] if id61 else None, f"Costo Venta: {padre_nombre}",
+              total, producto_id, producto_id, fecha_ref)).fetchone()
+        cogs_id = ins['id'] if ins else None
+    cur_pi = conn.execute("UPDATE pedido_items SET costo_unitario = %s WHERE pedido_id = %s AND producto_id = %s",
+                          (round(total / qty, 2), pedido_id, producto_id))
+    n_pi = cur_pi.rowcount if hasattr(cur_pi, 'rowcount') else 0
+    credito_total = round(sum(c['costo_total'] for c in prop['componentes']), 2)
+    return {'ok': True, 'reparado': True, 'total': total,
+            'salidas_ids': salidas_ids, 'bajas_ids': bajas_ids, 'cogs_id': cogs_id,
+            'pedido_items_n': n_pi, 'debito_total': total, 'credito_total': credito_total,
+            'balanceado': abs(total - credito_total) < 0.01, 'warnings': warnings,
+            'tipo_propuesta': prop['tipo']}
+
+
+@bp.route('/api/inventario/<int:negocio_id>/reparar-sin-descarga', methods=['POST'])
+def api_reparar_sin_descarga(negocio_id):
+    """Ejecuta reparacion completa de una venta sin descarga."""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json() or {}
+    try:
+        pedido_id = int(data.get('pedido_id') or 0)
+        producto_id = int(data.get('producto_id') or 0)
+    except (ValueError, TypeError):
+        return jsonify({'ok': False, 'error': 'pedido_id y producto_id requeridos'}), 400
+    if not pedido_id or not producto_id:
+        return jsonify({'ok': False, 'error': 'pedido_id y producto_id requeridos'}), 400
+    overrides = {}
+    for k, v in (data.get('overrides') or {}).items():
+        try:
+            cid = int(k)
+            val = float(v)
+            if cid > 0 and val >= 0:
+                overrides[cid] = val
+        except (ValueError, TypeError):
+            continue
+    conn = get_db_connection()
+    try:
+        contexto = _contexto_negocio(conn, negocio_id)
+        if not contexto or not _puede_gestionar_negocio(contexto):
+            return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+        res = _ejecutar_reparacion_sin_descarga(conn, negocio_id, pedido_id, producto_id, overrides, session.get('usuario_id'))
+        if not res.get('ok'):
+            conn.rollback()
+            return jsonify(res), 400
+        conn.commit()
+        return jsonify(res)
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
 
 
 @bp.route('/api/inventario/<int:negocio_id>/reparar-costos-venta', methods=['GET', 'POST'])

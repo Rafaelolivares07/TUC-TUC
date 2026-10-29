@@ -4921,6 +4921,23 @@ def api_reparar_sin_descarga(negocio_id):
         conn.close()
 
 
+def _tiene_diferencia_venta(dif_pi, dif_cogs):
+    """Un documento necesita reparo si pedido o contable difieren (> 0.01).
+
+    Misma regla que el botón Reparar Doc (frontend): sin redondeo previo,
+    para no esconder desfases de centavos.
+    """
+    try:
+        dpi = abs(float(dif_pi or 0))
+    except (ValueError, TypeError):
+        dpi = 0.0
+    try:
+        dco = abs(float(dif_cogs or 0))
+    except (ValueError, TypeError):
+        dco = 0.0
+    return dpi > 0.01 or dco > 0.01
+
+
 @bp.route('/api/inventario/<int:negocio_id>/reparar-costos-venta', methods=['GET', 'POST'])
 def api_reparar_costos_venta(negocio_id):
     """Preview (GET) o ejecucion (POST) de reparacion de costos de venta.
@@ -5340,7 +5357,7 @@ def api_reparar_costos_venta(negocio_id):
                         'diferencia': dif_cogs,
                     },
                     'contrapartidas': contras_list,
-                    'tiene_diferencia': round(abs(dif_pi), 2) > 0.50 or round(abs(dif_cogs), 2) > 0.05,
+                    'tiene_diferencia': _tiene_diferencia_venta(dif_pi, dif_cogs),
                     'num_lineas': len(lineas_detalle),
                     'lineas_detalle': lineas_detalle,
                 })

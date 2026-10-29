@@ -21929,9 +21929,9 @@ async function cargarReporteEnsambles() {
             ? `<span class="text-xs px-2.5 py-0.5 bg-amber-200/90 text-amber-950 rounded-full font-bold border border-amber-300 flex items-center gap-1">🍳 ${cantProdStr} Elaboradas</span>`
             : `<span class="text-xs px-2.5 py-0.5 bg-emerald-100 text-emerald-950 rounded-full font-bold border border-emerald-300 flex items-center gap-1">🍽️ ${cantProdStr} Vendidas</span>`;
 
-          const docsConDifContab = prod.facturas.filter(f => Math.abs((f.cogs_contable ? Number(f.cogs_contable.monto_actual || 0) : 0) - Number(f.costo_real_kardex || 0)) > 0.05).length;
-          const docsConDifPedido = prod.facturas.filter(f => f.pedido_item && Math.abs(Number(f.pedido_item.diferencia || 0)) > 0.50).length;
-          const montoDifPedidoProd = prod.facturas.reduce((s, ff) => s + (ff.pedido_item && Math.abs(Number(ff.pedido_item.diferencia || 0)) > 0.50 ? Math.abs(Number(ff.pedido_item.diferencia || 0)) : 0), 0);
+          const docsConDifContab = prod.facturas.filter(f => Math.abs((f.cogs_contable ? Number(f.cogs_contable.monto_actual || 0) : 0) - Number(f.costo_real_kardex || 0)) > 0.01).length;
+          const docsConDifPedido = prod.facturas.filter(f => f.pedido_item && Math.abs(Number(f.pedido_item.diferencia || 0)) > 0.01).length;
+          const montoDifPedidoProd = prod.facturas.reduce((s, ff) => s + (ff.pedido_item && Math.abs(Number(ff.pedido_item.diferencia || 0)) > 0.01 ? Math.abs(Number(ff.pedido_item.diferencia || 0)) : 0), 0);
 
           let badgesStatusList = [];
           if (docsConDifContab > 0) {

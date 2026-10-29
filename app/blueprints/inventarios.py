@@ -4509,23 +4509,26 @@ def _ventas_sin_descarga(conn, negocio_id, fecha_desde, fecha_hasta, prod_padre_
             'numero_documento': r['numero_documento'],
             'tipo_documento_id': r['tipo_documento_id'],
             'cliente_tercero_id': r['cliente_tercero_id'],
-            'fecha': f.isoformat() if hasattr(f, 'isoformat') else str(f or ''),
+            'fecha': (f.date().isoformat() if hasattr(f, 'date') else f.isoformat()) if hasattr(f, 'isoformat') else str(f or ''),
             'cantidad': float(r['cantidad'] or 0),
             'costo_pos_total': float(r['costo_pos_total'] or 0),
         })
         d = out[-1]
         d['propuesta'] = _propuesta_sin_descarga(conn, negocio_id, d['producto_id'], d['cantidad'], d['fecha'])
+        d['estado'] = _estado_sin_descarga(conn, negocio_id, d['pedido_id'], d['producto_id'], d['numero_documento'])
     return out
 
 
-def _costo_historico(conn, negocio_id, producto_id, fecha):
-    """Ultimo costo_und kardex conocido a fecha <= `fecha` (YYYY-MM-DD).
+def _costo_historico_full(conn, negocio_id, producto_id, fecha):
+    """Ultimo costo_und kardex conocido a fecha <= `fecha` (YYYY-MM-DD) + evidencia.
 
     Prefiere entradas (costo vigente), fallback a cualquier movimiento.
-    Retorna (costo_float|None, 'kardex'|None).
+    Retorna dict {costo_und|None, origen, movimiento_id, fecha, tipo, documento} .
     """
     row = conn.execute("""
-        SELECT costo_und, tipo FROM movimientos_inventario
+        SELECT id, costo_und, tipo, documento_numero,
+               COALESCE(documento_fecha, created_at::date) AS fecha
+        FROM movimientos_inventario
         WHERE negocio_id = %s AND producto_id = %s
           AND COALESCE(documento_fecha, created_at::date) <= %s::date
           AND costo_und IS NOT NULL AND costo_und > 0
@@ -4534,8 +4537,69 @@ def _costo_historico(conn, negocio_id, producto_id, fecha):
         LIMIT 1
     """, (negocio_id, producto_id, fecha)).fetchone()
     if not row:
-        return None, None
-    return float(row['costo_und']), 'kardex'
+        return {'costo_und': None, 'origen': None, 'movimiento_id': None,
+                'fecha': None, 'tipo': None, 'documento': None}
+    f = row['fecha']
+    return {'costo_und': float(row['costo_und']), 'origen': 'kardex',
+            'movimiento_id': row['id'],
+            'fecha': f.isoformat() if hasattr(f, 'isoformat') else str(f or ''),
+            'tipo': row['tipo'], 'documento': row['documento_numero']}
+
+
+def _costo_historico(conn, negocio_id, producto_id, fecha):
+    """Compat: (costo_float|None, 'kardex'|None). Ver _costo_historico_full."""
+    full = _costo_historico_full(conn, negocio_id, producto_id, fecha)
+    return full['costo_und'], full['origen']
+
+
+def _estado_sin_descarga(conn, negocio_id, pedido_id, producto_id, numero_doc):
+    """Estado actual en las 3 tablas para una venta sin descarga.
+
+    Retorna {pedido_items, kardex_salidas, contables_61, contables_14} con
+    montos float. Lo normal: solo pedido_items con el snapshot POS.
+    """
+    consecutive = numero_doc.split('-')[-1].strip() if '-' in numero_doc else numero_doc
+    pi_rows = conn.execute("""
+        SELECT id, cantidad, COALESCE(costo_unitario, 0) AS costo_unitario,
+               cantidad * COALESCE(costo_unitario, 0) AS total
+        FROM pedido_items WHERE pedido_id = %s AND producto_id = %s ORDER BY id
+    """, (pedido_id, producto_id)).fetchall()
+    kx_rows = conn.execute("""
+        SELECT id, producto_id, nombre_producto, cantidad, costo_und,
+               COALESCE(valor_total, cantidad * costo_und, 0) AS total
+        FROM movimientos_inventario
+        WHERE negocio_id = %s AND tipo = 'salida' AND producto_padre_id = %s
+          AND (documento_numero = %s OR documento_numero = %s
+               OR (referencia_id = %s AND referencia_tipo LIKE 'pedido%%'))
+        ORDER BY id
+    """, (negocio_id, producto_id, consecutive, numero_doc, pedido_id)).fetchall()
+    c61_rows = conn.execute("""
+        SELECT id, cuenta, concepto, monto FROM movimientos_contables
+        WHERE negocio_id = %s AND LEFT(cuenta, 2) = '61'
+          AND (numero_documento = %s OR numero_documento = %s)
+          AND (producto_padre_id = %s OR producto_id = %s)
+        ORDER BY id
+    """, (negocio_id, consecutive, numero_doc, producto_id, producto_id)).fetchall()
+    c14_rows = conn.execute("""
+        SELECT id, cuenta, concepto, monto, producto_id FROM movimientos_contables
+        WHERE negocio_id = %s AND LEFT(cuenta, 2) = '14' AND (tipo = 'credito' OR tipo IS NULL)
+          AND (numero_documento = %s OR numero_documento = %s)
+          AND (producto_padre_id = %s OR producto_id = %s)
+        ORDER BY id
+    """, (negocio_id, consecutive, numero_doc, producto_id, producto_id)).fetchall()
+    return {
+        'pedido_items': [{'id': r['id'], 'cantidad': float(r['cantidad'] or 0),
+                          'costo_unitario': float(r['costo_unitario'] or 0),
+                          'total': float(r['total'] or 0)} for r in pi_rows],
+        'kardex_salidas': [{'id': r['id'], 'producto_id': r['producto_id'],
+                            'nombre': r['nombre_producto'], 'cantidad': float(r['cantidad'] or 0),
+                            'costo_und': float(r['costo_und'] or 0),
+                            'total': float(r['total'] or 0)} for r in kx_rows],
+        'contables_61': [{'id': r['id'], 'cuenta': r['cuenta'], 'concepto': r['concepto'],
+                          'monto': float(r['monto'] or 0)} for r in c61_rows],
+        'contables_14': [{'id': r['id'], 'cuenta': r['cuenta'], 'concepto': r['concepto'],
+                          'monto': float(r['monto'] or 0), 'producto_id': r['producto_id']} for r in c14_rows],
+    }
 
 
 def _propuesta_sin_descarga(conn, negocio_id, producto_id, cantidad, fecha, overrides=None):
@@ -4558,31 +4622,39 @@ def _propuesta_sin_descarga(conn, negocio_id, producto_id, cantidad, fecha, over
             cid = t['componente_id']
             cant = float(t['cantidad'] or 0) * float(cantidad or 0)
             if cid in overrides:
-                cu, origen = float(overrides[cid]), 'digitado'
+                cu, origen, ev = float(overrides[cid]), 'digitado', None
             else:
-                h, _o = _costo_historico(conn, negocio_id, cid, fecha)
-                if h is None:
-                    cu, origen = 0.0, 'cero'
+                full = _costo_historico_full(conn, negocio_id, cid, fecha)
+                if full['costo_und'] is None:
+                    cu, origen, ev = 0.0, 'cero', None
                 else:
-                    cu, origen = h, 'kardex'
+                    cu, origen = full['costo_und'], 'kardex'
+                    ev = {'movimiento_id': full['movimiento_id'], 'fecha': full['fecha'],
+                          'tipo': full['tipo'], 'documento': full['documento'],
+                          'costo_und': full['costo_und']}
             componentes.append({
                 'componente_id': cid, 'nombre': t['nombre'], 'cantidad': round(cant, 4),
                 'costo_und': round(cu, 4), 'costo_total': round(cant * cu, 2),
-                'origen': origen, 'editable': origen != 'kardex',
+                'origen': origen, 'editable': origen != 'kardex', 'evidencia': ev,
             })
         tipo = 'tarjeta'
     else:
-        h, _o = _costo_historico(conn, negocio_id, producto_id, fecha)
+        full = _costo_historico_full(conn, negocio_id, producto_id, fecha)
+        h = full['costo_und']
         if h is None and producto_id not in overrides:
             return {'tipo': 'sin_costo', 'componentes': [], 'total': 0.0, 'cantidad': float(cantidad or 0)}
         cu = float(overrides[producto_id]) if producto_id in overrides else h
         origen = 'digitado' if producto_id in overrides else 'kardex'
+        ev = None if origen == 'digitado' else {'movimiento_id': full['movimiento_id'], 'fecha': full['fecha'],
+                                                'tipo': full['tipo'], 'documento': full['documento'],
+                                                'costo_und': full['costo_und']}
         cant = float(cantidad or 0)
         prod = conn.execute("SELECT nombre FROM productos WHERE id = %s", (producto_id,)).fetchone()
         componentes.append({
             'componente_id': producto_id, 'nombre': prod['nombre'] if prod else f'ID {producto_id}',
             'cantidad': round(cant, 4), 'costo_und': round(cu, 4),
             'costo_total': round(cant * cu, 2), 'origen': origen, 'editable': origen != 'kardex',
+            'evidencia': ev,
         })
         tipo = 'kardex_propio'
     total = round(sum(c['costo_total'] for c in componentes), 2)

@@ -21658,23 +21658,73 @@ async function cargarReporteEnsambles() {
       const v = (window._vsdData || []).find(x => x.pedido_id === pedidoId && x.producto_id === productoId);
       if (!v || !v.propuesta || !v.propuesta.componentes) return;
       const prop = v.propuesta;
+      const est = v.estado || {pedido_items: [], kardex_salidas: [], contables_61: [], contables_14: []};
       const fmt = n => '$' + Number(n || 0).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-      let h = `<div class="bg-white border border-rose-200 rounded-xl px-3 py-2 mt-1 mb-2">`;
-      h += `<div class="text-[11px] font-bold text-rose-900 mb-1.5">Propuesta: tarjeta actual × costos al ${v.fecha}${prop.tipo === 'kardex_propio' ? ' (costo propio histórico)' : ''} — total <span id="vsd-tot-${pedidoId}-${productoId}" class="font-mono">${fmt(prop.total)}</span></div>`;
+      const cantVendida = Number(prop.cantidad || v.cantidad || 0);
+      const unitProp = cantVendida > 0 ? prop.total / cantVendida : 0;
+      const piTot = (est.pedido_items || []).reduce((s, l) => s + Number(l.total || 0), 0);
+      const piUnit = cantVendida > 0 ? piTot / cantVendida : 0;
+      const difPi = piTot - prop.total;
+      const c61 = (est.contables_61 || [])[0];
+      const m61 = c61 ? Number(c61.monto || 0) : 0;
+      let h = `<div class="bg-white border border-rose-200 rounded-xl px-3 py-2 mt-1 mb-2 space-y-2">`;
+      h += `<div class="text-[11px] font-bold text-rose-900">Propuesta: tarjeta actual × costos al ${v.fecha}${prop.tipo === 'kardex_propio' ? ' (costo propio histórico)' : ''}</div>`;
+      h += `<div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">`;
+      h += `<div class="p-2.5 bg-rose-50/60 rounded-lg border border-rose-200/80">`;
+      h += `<span class="text-[10px] text-rose-800 font-bold uppercase block mb-1">📦 Kardex: salidas a generar</span>`;
+      h += `<div class="font-mono font-bold text-gray-800 text-xs">Cantidad: <span class="text-rose-900">${cantVendida}</span> | Unitario: <span class="text-rose-900">${fmt(unitProp)}</span></div>`;
+      h += `<div class="text-[11px] text-gray-500 mt-0.5">Total propuesta: <b class="text-gray-800 font-mono" id="vsd-tot-${pedidoId}-${productoId}">${fmt(prop.total)}</b></div>`;
+      const nKx = (est.kardex_salidas || []).length;
+      h += `<div class="text-[11px] mt-0.5 ${nKx === 0 ? 'text-rose-700 font-bold' : 'text-gray-500'}">${nKx === 0 ? `Existente: sin salidas (se generan ${prop.componentes.length})` : `Existente: ${nKx} salida(s) — revisar`}</div>`;
+      h += `</div>`;
+      h += `<div class="p-2.5 bg-slate-50 rounded-lg border border-gray-200">`;
+      h += `<span class="text-[10px] text-gray-600 font-bold uppercase block mb-1">🏛️ Contabilidad 61* vs costo POS</span>`;
+      h += `<div class="font-mono text-xs text-gray-800 flex flex-col gap-0.5">`;
+      h += `<div class="flex items-center justify-between"><span>Asiento 61* (Débito):</span><b>${c61 ? fmt(m61) + ` <span class="text-[10px] text-amber-700">→ SE ACTUALIZA ${fmt(prop.total)}</span>` : `<span class="text-gray-400">no existe</span> → SE CREA ${fmt(prop.total)}`}</b></div>`;
+      h += `<div class="flex items-center justify-between"><span>Costo grabado en pedido (POS):</span><b>${fmt(piUnit)} / und</b></div>`;
+      h += `<div class="flex items-center justify-between"><span>Costo nuevo pedido:</span><b>${fmt(unitProp)} / und</b></div>`;
+      if (Math.abs(difPi) > 0.01) {
+        h += `<div class="flex items-center justify-between pt-1 mt-1 border-t border-rose-200 text-rose-700 font-extrabold text-[11px] bg-rose-50/80 px-1.5 py-0.5 rounded"><span>⚠️ Desfase POS vs propuesta:</span><span>${difPi > 0 ? '+' : ''}${fmt(difPi)} (total)</span></div>`;
+      } else {
+        h += `<div class="flex items-center justify-between pt-1 mt-1 border-t border-gray-200 text-emerald-700 font-bold text-[11px]"><span>✅ POS vs propuesta:</span><span>$0,00</span></div>`;
+      }
+      h += `</div></div></div>`;
+      h += `<div class="grid grid-cols-5 gap-2 text-[10px] text-gray-500 font-bold uppercase px-2 mb-0.5">`;
+      h += `<span>Componente / Insumo</span><span class="text-right">Kardex evidencia</span><span class="text-right">Contable (14* Crédito)</span><span class="text-right">Acción</span><span class="text-center">Origen</span>`;
+      h += `</div>`;
+      let suma14 = 0;
       prop.componentes.forEach(c => {
+        const ex14 = (est.contables_14 || []).find(a => Number(a.producto_id) === Number(c.componente_id));
+        const m14 = ex14 ? Number(ex14.monto || 0) : 0;
+        suma14 += m14;
+        const acc = !ex14
+          ? `<span class="text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-300 px-1.5 py-0.5 rounded">SE CREA</span>`
+          : (Math.abs(m14 - c.costo_total) > 0.01
+            ? `<span class="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-300 px-1.5 py-0.5 rounded">SE ACTUALIZA</span>`
+            : `<span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-300 px-1.5 py-0.5 rounded">✅ OK</span>`);
         const tag = c.origen === 'kardex' ? '<span class="text-emerald-600">kardex</span>' : (c.origen === 'digitado' ? '<span class="text-blue-600">digitado</span>' : '<span class="text-rose-600 font-bold">digitar↓</span>');
+        const ev = c.evidencia ? `<span class="block text-[10px] text-gray-400 font-normal">doc ${c.evidencia.documento || '?'} · ${c.evidencia.fecha || ''} · ${c.evidencia.tipo || ''}</span>` : '';
         const costoCell = c.editable
           ? `<input type="number" min="0" step="any" value="${c.costo_und}" data-comp="${c.componente_id}" oninput="recalcVsd(${pedidoId}, ${productoId})" class="w-24 border border-rose-300 rounded-lg px-1.5 py-0.5 text-right font-mono text-xs">`
           : `<span class="font-mono">${fmt(c.costo_und)}</span>`;
-        h += `<div class="flex items-center justify-between gap-2 text-xs py-1 border-t border-gray-100">`;
-        h += `<span class="text-gray-800"><b>${c.nombre}</b> <span class="text-gray-400">× ${c.cantidad}</span> <span class="text-[10px]">[${tag}]</span></span>`;
-        h += `<span class="flex items-center gap-2">${costoCell}<span id="vsd-ct-${pedidoId}-${productoId}-${c.componente_id}" class="font-mono font-bold text-gray-800 w-24 text-right">${fmt(c.costo_total)}</span></span>`;
+        h += `<div class="grid grid-cols-5 gap-2 px-2 py-1 items-center text-xs border-t border-gray-100">`;
+        h += `<span class="text-gray-800"><b>${c.nombre}</b> <span class="text-gray-400">× ${c.cantidad}</span></span>`;
+        h += `<span class="text-right"><span class="flex items-center justify-end gap-2">${costoCell}<b id="vsd-ct-${pedidoId}-${productoId}-${c.componente_id}" class="font-mono text-gray-800">${fmt(c.costo_total)}</b></span>${ev}</span>`;
+        h += `<span class="text-right font-mono ${ex14 ? 'text-gray-800' : 'text-gray-300'}">${ex14 ? fmt(m14) : '—'}</span>`;
+        h += `<span class="text-right">${acc}</span>`;
+        h += `<span class="text-center text-[10px]">[${tag}]</span>`;
         h += `</div>`;
       });
-      h += `<div class="flex items-center justify-end gap-2 mt-2">`;
-      h += `<span class="text-[10px] text-gray-400">Genera salidas + COGS 61* + bajas 14* + pedido_items (balanceado)</span>`;
-      h += `<button type="button" onclick="ejecutarVsd(${pedidoId}, ${productoId})" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow cursor-pointer">✅ Ejecutar reparación</button>`;
-      h += `</div></div>`;
+      const dif14 = suma14 - prop.total;
+      h += `<div class="grid grid-cols-5 gap-2 text-xs font-bold px-2 py-1.5 bg-slate-100/90 rounded-lg border border-slate-200 text-gray-800 items-center">`;
+      h += `<span class="text-[11px] uppercase">🥗 Total (${prop.componentes.length})</span>`;
+      h += `<span class="text-right font-mono">${fmt(prop.total)}</span>`;
+      h += `<span class="text-right font-mono">${fmt(suma14)}</span>`;
+      h += `<span class="text-right font-mono font-extrabold ${Math.abs(dif14) > 0.01 ? 'text-red-600' : 'text-green-600'}">${Math.abs(dif14) > 0.01 ? 'Σ Dif: ' + fmt(dif14) : 'Σ OK ($0)'}</span>`;
+      h += `<span></span></div>`;
+      h += `<div class="flex items-center justify-end gap-2"><span class="text-[10px] text-gray-400">Al ejecutar: salidas + COGS 61* + bajas 14* + pedido_items (débito = crédito)</span>`;
+      h += `<button type="button" onclick="ejecutarVsd(${pedidoId}, ${productoId})" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow cursor-pointer">✅ Ejecutar reparación</button></div>`;
+      h += `</div>`;
       cont.innerHTML = h;
       cont.classList.remove('hidden');
     }

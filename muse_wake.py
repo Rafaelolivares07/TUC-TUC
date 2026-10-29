@@ -42,9 +42,15 @@ def build_inbox(text, chat_id, message_id):
             'fecha': time.strftime('%Y-%m-%d %H:%M:%S')}
 
 
-def write_inbox(payload):
-    with open(INBOX, 'w', encoding='utf-8') as f:
-        json.dump(payload, f, ensure_ascii=False)
+def write_inbox(payload, path=INBOX):
+    try:
+        cur = json.load(open(path, encoding='utf-8'))
+        items = cur if isinstance(cur, list) else [cur]
+    except (OSError, ValueError):
+        items = []
+    items.append(payload)
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump(items, f, ensure_ascii=False)
 
 
 def load_title(path=TITLE_FILE):

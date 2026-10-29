@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """muse_stt: voz -> texto con faster-whisper local (CPU int8, español).
 Decodifica con PyAV propio (faster-whisper 1.2.1 + av 19 son incompatibles
-en decode_audio). Modelo 'base', lazy singleton.
+en decode_audio). Modelo 'small', lazy singleton.
 """
 import numpy as np
 
@@ -32,7 +32,7 @@ def transcribe(path, lang='es'):
     global _MODEL
     if _MODEL is None:
         from faster_whisper import WhisperModel
-        _MODEL = WhisperModel('base', device='cpu', compute_type='int8')
+        _MODEL = WhisperModel('small', device='cpu', compute_type='int8')
     audio = decode_audio(path)
     segs, _info = _MODEL.transcribe(audio, language=lang)
     return ' '.join(s.text for s in segs).strip()

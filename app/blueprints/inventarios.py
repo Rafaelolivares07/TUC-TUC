@@ -13065,7 +13065,7 @@ def api_reporte_ventas_costos(negocio_id):
         mod_activo_mod = bool(cfg_row['mod_activo_mod']) if cfg_row and cfg_row.get('mod_activo_mod') is not None else True
         costo_hora_ef = costo_hora_mod if mod_activo_mod else 0.0
 
-        datos = _query_reporte_ventas_costos(conn, negocio_id, desde, hasta, centro_utilidad_id=centro_utilidad_id, costo_hora_mod=costo_hora_ef)
+        datos = _query_reporte_ventas_costos(conn, negocio_id, desde, hasta, centro_utilidad_id=centro_utilidad_id, costo_hora_mod=costo_hora_ef, personas_mod=personas_mod)
 
         # Resumen de alertas de auditoría
         alertas = {
@@ -13092,7 +13092,7 @@ def api_reporte_ventas_costos(negocio_id):
         conn.close()
 
 
-def _query_reporte_ventas_costos(conn, negocio_id, desde, hasta, centro_utilidad_id=None, costo_hora_mod=0.0):
+def _query_reporte_ventas_costos(conn, negocio_id, desde, hasta, centro_utilidad_id=None, costo_hora_mod=0.0, personas_mod=1.0):
     cond_cu = ""
     params = [negocio_id, desde, hasta]
     if centro_utilidad_id is not None:
@@ -13146,7 +13146,10 @@ def _query_reporte_ventas_costos(conn, negocio_id, desde, hasta, centro_utilidad
         ORDER BY total_ventas_pesos DESC
     """, tuple(params)).fetchall()
 
-    costo_minuto = (float(costo_hora_mod) / 60.0) if float(costo_hora_mod) > 0 else 0.0
+    nper = float(personas_mod or 1.0)
+    if nper <= 0:
+        nper = 1.0
+    costo_minuto = (float(costo_hora_mod) / 60.0 * nper) if float(costo_hora_mod) > 0 else 0.0
 
     datos = []
     for r in rows:
@@ -13543,7 +13546,7 @@ def _pdf_kardex_producto(nombre_negocio, nombre_producto, codigo_producto,
     return pdf
 
 
-def _pdf_reporte_ventas_costos(nombre_negocio, desde, hasta, datos, centro_info=None, costo_hora_mod=0.0):
+def _pdf_reporte_ventas_costos(nombre_negocio, desde, hasta, datos, centro_info=None, costo_hora_mod=0.0, personas_mod=1.0):
     pdf = FPDF(format='letter', unit='mm')
     pdf.set_auto_page_break(auto=True, margin=14)
     pdf.add_page()
@@ -13566,7 +13569,11 @@ def _pdf_reporte_ventas_costos(nombre_negocio, desde, hasta, datos, centro_info=
     pdf.ln(2)
     pdf.set_font('Helvetica', 'B', 8.5)
     if float(costo_hora_mod or 0) > 0 or total_mod > 0:
-        resumen_txt = f"Ventas: ${_pdf_money(total_ventas)}   |   Insumos: ${_pdf_money(total_insumos)}   |   MOD (Est): ${_pdf_money(total_mod)}   |   Costo Total: ${_pdf_money(total_costos)}   |   Margen: ${_pdf_money(total_margen)} ({pct:.1f}%)"
+        npdf = float(personas_mod or 1.0)
+        if npdf <= 0:
+            npdf = 1.0
+        eq_txt = '' if npdf == 1 else f" (eq. {npdf:g})"
+        resumen_txt = f"Ventas: ${_pdf_money(total_ventas)}   |   Insumos: ${_pdf_money(total_insumos)}   |   MOD (Est{eq_txt}): ${_pdf_money(total_mod)}   |   Costo Total: ${_pdf_money(total_costos)}   |   Margen: ${_pdf_money(total_margen)} ({pct:.1f}%)"
     else:
         resumen_txt = f"Ventas: ${_pdf_money(total_ventas)}   |   Costos: ${_pdf_money(total_costos)}   |   Margen: ${_pdf_money(total_margen)} ({pct:.1f}%)"
     pdf.cell(0, 6, resumen_txt, ln=1, align='C')
@@ -13669,12 +13676,13 @@ def api_reporte_ventas_costos_pdf(negocio_id):
         contexto = _contexto_negocio(conn, negocio_id)
         nombre_negocio = (contexto.get('negocio_nombre') or 'Negocio') if contexto else 'Negocio'
 
-        cfg_row = conn.execute("SELECT costo_hora_mod, mod_activo_mod FROM config_negocio WHERE tercero_id = %s", (negocio_id,)).fetchone()
+        cfg_row = conn.execute("SELECT costo_hora_mod, personas_mod, mod_activo_mod FROM config_negocio WHERE tercero_id = %s", (negocio_id,)).fetchone()
+        personas_mod_pdf = float(cfg_row['personas_mod']) if cfg_row and cfg_row.get('personas_mod') is not None else 1.0
         costo_hora_mod = float(cfg_row['costo_hora_mod']) if cfg_row and cfg_row['costo_hora_mod'] is not None else 0.0
         mod_activo_pdf = bool(cfg_row['mod_activo_mod']) if cfg_row and cfg_row.get('mod_activo_mod') is not None else True
         costo_hora_mod = costo_hora_mod if mod_activo_pdf else 0.0
 
-        datos = _query_reporte_ventas_costos(conn, negocio_id, desde, hasta, centro_utilidad_id=centro_utilidad_id, costo_hora_mod=costo_hora_mod)
+        datos = _query_reporte_ventas_costos(conn, negocio_id, desde, hasta, centro_utilidad_id=centro_utilidad_id, costo_hora_mod=costo_hora_mod, personas_mod=personas_mod_pdf)
         
         centro_info = None
         if centro_utilidad_id:
@@ -13688,7 +13696,7 @@ def api_reporte_ventas_costos_pdf(negocio_id):
                 pass
 
         conn.close()
-        pdf = _pdf_reporte_ventas_costos(nombre_negocio, desde, hasta, datos, centro_info=centro_info, costo_hora_mod=costo_hora_mod)
+        pdf = _pdf_reporte_ventas_costos(nombre_negocio, desde, hasta, datos, centro_info=centro_info, costo_hora_mod=costo_hora_mod, personas_mod=personas_mod_pdf)
         resp = Response(bytes(pdf.output()), mimetype='application/pdf')
         filename = f"reporte_ventas_costos_{centro_info['codigo']}.pdf" if centro_info else "reporte_ventas_costos_consolidado.pdf"
         resp.headers['Content-Disposition'] = f'inline; filename={filename}'

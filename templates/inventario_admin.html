@@ -4797,7 +4797,7 @@
               <div>Unit. <span id="sort-vc-cuinsumos" class="text-gray-400 text-[9px]">↕</span></div>
             </th>
             <th onclick="ordenarVC('mod_unitario')" class="vc-col-desglose hidden px-2 py-2 text-right num cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap align-bottom text-amber-900 bg-amber-50/40">
-              <div>MOD</div>
+              <div>MOD <span id="vc-mod-xn-u">(×1)</span></div>
               <div>Unit. <span id="sort-vc-cumod" class="text-gray-400 text-[9px]">↕</span></div>
             </th>
             <th class="vc-col-desglose hidden px-2 py-2 text-center transition-all align-bottom max-w-[105px]">
@@ -4826,7 +4826,7 @@
               <div>Total <span id="sort-vc-cinsumos" class="text-gray-400 text-[9px]">↕</span></div>
             </th>
             <th onclick="ordenarVC('total_mod')" class="vc-col-desglose hidden px-2 py-2 text-right num cursor-pointer hover:bg-gray-100 transition-colors text-amber-900 bg-amber-50/30 whitespace-nowrap align-bottom">
-              <div>MOD Total</div>
+              <div>MOD Total <span id="vc-mod-xn-t">(×1)</span></div>
               <div>(Estimada) <span id="sort-vc-mod" class="text-gray-400 text-[9px]">↕</span></div>
             </th>
 
@@ -20171,14 +20171,21 @@ function getHorasPorDiaMOD() {
 function actualizarBadgesMOD() {
   const bMin = document.getElementById('vc-costo-min-badge');
   if (bMin) {
-    const minVal = costoHoraModVC > 0 ? Math.round(costoHoraModVC / 60.0) : 0;
-    bMin.innerHTML = `Equivale a: <strong class="text-gray-800">$${minVal.toLocaleString('es-CO')}</strong> / min`;
+    const nPersB = Math.max(1, parseFloat(personasModVC) || 1.0);
+    const minBase = costoHoraModVC > 0 ? Math.round(costoHoraModVC / 60.0) : 0;
+    const minEq = Math.round(minBase * nPersB);
+    bMin.innerHTML = `= <strong class="text-gray-800">$${minBase.toLocaleString('es-CO')}/min</strong> × ${fmt(nPersB)} pers = <strong class="text-gray-800">$${minEq.toLocaleString('es-CO')}/min equipo</strong>`;
   }
   const bJornada = document.getElementById('vc-jornada-diaria-badge');
   if (bJornada) {
     const hDia = getHorasPorDiaMOD();
     bJornada.innerHTML = `⚡ Turno: <strong>${fmt(hDia)}h</strong> / día`;
   }
+  const nPersH = Math.max(1, parseFloat(personasModVC) || 1.0);
+  const xnU = document.getElementById('vc-mod-xn-u');
+  if (xnU) xnU.textContent = `(×${fmt(nPersH)})`;
+  const xnT = document.getElementById('vc-mod-xn-t');
+  if (xnT) xnT.textContent = `(×${fmt(nPersH)})`;
 }
 
 function actualizarBadgeMinutoVC(hora) {
@@ -20225,7 +20232,8 @@ async function guardarCostoHoraMOD(val) {
 
 function recalcularFilaMOD(prod) {
   const horaEf = modActivoVC ? costoHoraModVC : 0;
-  const costoMinuto = horaEf > 0 ? (horaEf / 60.0) : 0;
+  const nPers = Math.max(1, parseFloat(personasModVC) || 1.0);
+  const costoMinuto = horaEf > 0 ? (horaEf / 60.0) * nPers : 0;
   const minutosTotales = (prod.tiempo_preparacion_min || 0) + (prod.tiempo_ensamble_min || 0);
   prod.mod_unitario = minutosTotales * costoMinuto;
   prod.total_mod = prod.mod_unitario * prod.cantidad;
@@ -20237,6 +20245,13 @@ function recalcularFilaMOD(prod) {
   prod.margen_unitario = prod.precio_unitario - prod.costo_unitario;
   prod.margen_total = prod.total_venta - prod.total_costo;
   prod.margen_porcentual = prod.total_venta > 0 ? (prod.margen_total / prod.total_venta * 100.0) : 0;
+}
+
+function tipMOD(minutos, monto) {
+  const nP = Math.max(1, parseFloat(personasModVC) || 1.0);
+  const hE = modActivoVC ? costoHoraModVC : 0;
+  const base = hE > 0 ? Math.round(hE / 60.0).toLocaleString('es-CO') : '0';
+  return `${fmt(minutos)} min × $${base}/min × ${fmt(nP)} pers = ${fmtMon(monto || 0)}`;
 }
 
 async function actualizarTiempoProdVC(productoId, prep, ens) {
@@ -20529,7 +20544,7 @@ function renderTablaVC() {
 
         <!-- Desglose unitario colapsado por defecto -->
         <td class="vc-col-desglose ${desgHiddenCls} px-2 py-2 text-right num font-mono text-slate-700 bg-slate-50/60 whitespace-nowrap">${fmtMon(r.costo_insumos_unitario || 0)}</td>
-        <td class="vc-col-desglose ${desgHiddenCls} px-2 py-2 text-right num font-mono text-amber-900 bg-amber-50/30 whitespace-nowrap">${fmtMon(r.mod_unitario || 0)}</td>
+        <td class="vc-col-desglose ${desgHiddenCls} px-2 py-2 text-right num font-mono text-amber-900 bg-amber-50/30 whitespace-nowrap" title="${tipMOD(minPrepUnit + minEnsUnit, r.mod_unitario)}">${fmtMon(r.mod_unitario || 0)}</td>
         <td class="vc-col-desglose ${desgHiddenCls} px-1 py-1 text-center whitespace-nowrap" onclick="event.stopPropagation()">
           <div class="flex items-center justify-center gap-1 w-full relative">
             <input type="number" min="0" max="999" step="0.5" value="${r.tiempo_preparacion_min || 0}"
@@ -20555,7 +20570,7 @@ function renderTablaVC() {
 
         <!-- Desglose total colapsado por defecto -->
         <td class="vc-col-desglose ${desgHiddenCls} px-2 py-2 text-right num font-mono text-slate-700 bg-slate-50/60 whitespace-nowrap">${fmtMon(r.total_costo_insumos || 0)}</td>
-        <td class="vc-col-desglose ${desgHiddenCls} px-2 py-2 text-right num font-mono text-amber-900 bg-amber-50/30 font-semibold whitespace-nowrap" title="Tiempo total mano de obra: ${fmt(minGlobalTotal)} min (${fmt(minGlobalTotal/60)} hrs) @ ${fmtMon(costoHoraModVC)}/h">${fmtMon(r.total_mod || 0)}</td>
+        <td class="vc-col-desglose ${desgHiddenCls} px-2 py-2 text-right num font-mono text-amber-900 bg-amber-50/30 font-semibold whitespace-nowrap" title="${tipMOD(minGlobalTotal, r.total_mod)}">${fmtMon(r.total_mod || 0)}</td>
 
         <td class="px-2 py-2 text-right num font-mono text-rose-700 font-bold whitespace-nowrap">${fmtMon(r.total_costo)}</td>
         <td class="px-2 py-2 text-right num font-mono font-semibold whitespace-nowrap ${r.margen_total >= 0 ? 'text-indigo-700' : 'text-rose-600'}">${fmtMon(r.margen_total)}</td>

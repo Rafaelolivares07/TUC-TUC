@@ -82,6 +82,8 @@ for %%c in (muse muse-code) do (
 if defined MUSECMD (echo   CLI: !MUSECMD!) else (echo   AVISO: muse no esta en PATH.)
 C:\Tools\Python313\python.exe -c "import edge_tts" 2>nul && echo   voz OK || echo   AVISO: falta edge-tts, sin voz
 if not exist "%V2%\muse_voz\habla_edge.py" echo   AVISO: falta muse_voz
+call "%V2%\muse_telegram_autostart.bat" >nul 2>nul
+echo   canal Telegram OK
 set "LNK=%USERPROFILE%\Desktop\INICIAR MUSE.lnk"
 if exist "%LNK%" echo   acceso OK
 if exist "%LNK%" goto :lnk_ok

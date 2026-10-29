@@ -119,15 +119,27 @@ def fetch_voice_text(base, file_id):
     return text, dur
 
 
-def single_flight():
-    """Una sola instancia: lock exclusivo; si existe, salir en silencio."""
+_lockfh = None
+
+
+def single_flight(path=LOCK_FILE):
+    """Una sola instancia: byte-lock msvcrt (el SO lo libera al morir).
+    A prueba de reinicio: sin pid-stale, sin steals manuales."""
+    global _lockfh
+    import msvcrt
+    _lockfh = open(path, 'a+b')
     try:
-        fd = os.open(LOCK_FILE, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-        os.write(fd, str(os.getpid()).encode())
-        os.close(fd)
-        return True
-    except FileExistsError:
+        _lockfh.seek(0)
+        msvcrt.locking(_lockfh.fileno(), msvcrt.LK_NBLCK, 1)
+    except OSError:
+        _lockfh.close()
+        _lockfh = None
         return False
+    _lockfh.seek(0)
+    _lockfh.truncate()
+    _lockfh.write(str(os.getpid()).encode())
+    _lockfh.flush()
+    return True
 
 
 def read_token():

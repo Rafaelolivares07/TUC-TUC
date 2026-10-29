@@ -21787,7 +21787,13 @@ async function cargarReporteEnsambles() {
         const d = await r.json();
         if (!d.ok) { toast(d.error || 'Error al reparar', false); return; }
         if (!d.reparado) { toast(d.detalle || 'Ya estaba reparado'); await repararCostosPreview(); return; }
-        toast(`✅ Reparado: $${Number(d.total).toLocaleString('es-CO')} balanceado` + ((d.warnings && d.warnings.length) ? ` (${d.warnings.length} aviso(s))` : ''));
+        const contab = Number((d.contabilizado ?? d.total) || 0);
+        const prop = Number((d.propuesto ?? d.total) || 0);
+        const difPC = Math.abs(contab - prop) > 0.01 ? ` (prop $${prop.toLocaleString('es-CO')})` : '';
+        const recMov = (d.recosteos || []).reduce((s, r) => s + Number(r.movimientos_ajustados || 0), 0);
+        const recPed = (d.recosteos || []).reduce((s, r) => s + Number(r.pedidos_ajustados || 0), 0);
+        const recTxt = recMov ? ` + recosteo ${recMov} mov${recPed ? `/${recPed} ped` : ''}` : '';
+        toast(`✅ Reparado: $${contab.toLocaleString('es-CO')} balanceado${difPC}${recTxt}` + ((d.warnings && d.warnings.length) ? ` (${d.warnings.length} aviso(s))` : ''));
         if (d.warnings && d.warnings.length) setTimeout(() => toast(d.warnings.join(' | '), false, 6000), 600);
         await repararCostosPreview();
       } catch (e) {

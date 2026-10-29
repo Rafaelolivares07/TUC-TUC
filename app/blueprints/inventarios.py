@@ -4722,6 +4722,9 @@ def _ejecutar_reparacion_sin_descarga(conn, negocio_id, pedido_id, producto_id, 
     padre_nombre = padre['nombre'] if padre else f'ID {producto_id}'
     warnings = []
     salidas_ids = []
+    recosteos = []
+    overrides_aplicados = []
+    booked = {}
     for c in prop['componentes']:
         cid, cant_c, cu = c['componente_id'], c['cantidad'], c['costo_und']
         tot_c = round(cant_c * cu, 2)
@@ -4758,6 +4761,43 @@ def _ejecutar_reparacion_sin_descarga(conn, negocio_id, pedido_id, producto_id, 
             conn.execute("INSERT INTO saldos_inventario (negocio_id, producto_id, bodega, stock, costo_und, valor_existencia) VALUES (%s,%s,%s,%s,%s,%s)",
                          (negocio_id, cid, bodega, stock_nvo, costo_nvo, val_nvo))
         conn.execute("UPDATE productos SET costo = %s WHERE id = %s AND negocio_id = %s", (costo_nvo, cid, negocio_id))
+        _sync_precio(conn, negocio_id, cid)
+        # Recosteo por componente: se tocó el kardex con insertos históricos
+        res_rec = _recostear_producto(conn, negocio_id, cid, bodega=bodega,
+                                      origen='reparacion_sin_descarga',
+                                      doc_tipo=tipo_doc_mov, doc_num=consecutive,
+                                      usuario_id=usuario_id)
+        recosteos.append({'producto_id': cid, 'nombre': c['nombre'],
+                          'movimientos_procesados': res_rec.get('movimientos_procesados', 0),
+                          'movimientos_ajustados': res_rec.get('movimientos_ajustados', 0),
+                          'asientos_14_ajustados': res_rec.get('asientos_14_ajustados', 0),
+                          'asientos_cp_ajustados': res_rec.get('asientos_cp_ajustados', 0),
+                          'pedidos_ajustados': res_rec.get('pedidos_ajustados', 0),
+                          'costo_final': res_rec.get('costo_final', 0)})
+        rep = conn.execute("SELECT costo_und, valor_total FROM movimientos_inventario WHERE id = %s",
+                           (salidas_ids[-1],)).fetchone()
+        b_cu = float(rep['costo_und'] or 0)
+        b_tot = float(rep['valor_total'] or 0)
+        if cid in (overrides or {}) and c.get('origen') == 'digitado':
+            # El replay valora salidas al promedio corrido: reimponer lo digitado
+            t_tot = round(cant_c * float(overrides[cid]), 2)
+            if abs(t_tot - b_tot) > 0.01:
+                conn.execute("UPDATE movimientos_inventario SET costo_und = %s, valor_unitario = %s, valor_total = %s WHERE id = %s",
+                             (float(overrides[cid]), float(overrides[cid]), t_tot, salidas_ids[-1]))
+                s2 = conn.execute("SELECT stock, costo_und, valor_existencia FROM saldos_inventario WHERE negocio_id = %s AND producto_id = %s AND bodega = %s",
+                                  (negocio_id, cid, bodega)).fetchone()
+                if s2:
+                    v2 = max(0.0, round(float(s2['valor_existencia'] or 0) + (t_tot - b_tot), 2))
+                    st2 = float(s2['stock'] or 0)
+                    c2 = round(v2 / st2, 6) if st2 > 0 else float(s2['costo_und'] or 0)
+                    conn.execute("UPDATE saldos_inventario SET costo_und = %s, valor_existencia = %s, updated_at = NOW() WHERE negocio_id = %s AND producto_id = %s AND bodega = %s",
+                                 (c2, v2, negocio_id, cid, bodega))
+                    conn.execute("UPDATE productos SET costo = %s WHERE id = %s AND negocio_id = %s", (c2, cid, negocio_id))
+                overrides_aplicados.append({'componente_id': cid, 'nombre': c['nombre'],
+                                            'recosteado': b_tot, 'digitado': t_tot})
+                b_cu, b_tot = float(overrides[cid]), t_tot
+        booked[cid] = {'costo_und': b_cu, 'costo_total': b_tot}
+    total_booked = round(sum(b['costo_total'] for b in booked.values()), 2)
     doc_ref = conn.execute("""
         SELECT comprobante_id, tipo_documento_id, tipo_documento, fecha
         FROM movimientos_contables
@@ -4775,7 +4815,7 @@ def _ejecutar_reparacion_sin_descarga(conn, negocio_id, pedido_id, producto_id, 
     cta14_id = cta14['id'] if cta14 else None
     bajas_ids = []
     for c in prop['componentes']:
-        tot_c = c['costo_total']
+        tot_c = booked[c['componente_id']]['costo_total']
         ex = conn.execute("""
             SELECT id FROM movimientos_contables
             WHERE negocio_id = %s AND LEFT(cuenta, 2) = '14' AND (tipo = 'credito' OR tipo IS NULL)
@@ -4806,7 +4846,7 @@ def _ejecutar_reparacion_sin_descarga(conn, negocio_id, pedido_id, producto_id, 
     cogs_id = None
     if cogs:
         conn.execute("UPDATE movimientos_contables SET monto = %s, producto_id = %s, producto_padre_id = %s WHERE id = %s",
-                     (total, producto_id, producto_id, cogs['id']))
+                     (total_booked, producto_id, producto_id, cogs['id']))
         cogs_id = cogs['id']
     else:
         cod61 = None
@@ -4826,17 +4866,19 @@ def _ejecutar_reparacion_sin_descarga(conn, negocio_id, pedido_id, producto_id, 
             RETURNING id
         """, (negocio_id, comprobante_id, tipo_doc_nombre, tipo_doc_id_c, consecutive,
               cod61, id61['id'] if id61 else None, f"Costo Venta: {padre_nombre}",
-              total, producto_id, producto_id, fecha_ref)).fetchone()
+              total_booked, producto_id, producto_id, fecha_ref)).fetchone()
         cogs_id = ins['id'] if ins else None
     cur_pi = conn.execute("UPDATE pedido_items SET costo_unitario = %s WHERE pedido_id = %s AND producto_id = %s",
-                          (round(total / qty, 2), pedido_id, producto_id))
+                          (round(total_booked / qty, 2), pedido_id, producto_id))
     n_pi = cur_pi.rowcount if hasattr(cur_pi, 'rowcount') else 0
-    credito_total = round(sum(c['costo_total'] for c in prop['componentes']), 2)
-    return {'ok': True, 'reparado': True, 'total': total,
+    credito_total = round(sum(b['costo_total'] for b in booked.values()), 2)
+    return {'ok': True, 'reparado': True, 'total': total_booked,
+            'propuesto': total, 'contabilizado': total_booked,
             'salidas_ids': salidas_ids, 'bajas_ids': bajas_ids, 'cogs_id': cogs_id,
-            'pedido_items_n': n_pi, 'debito_total': total, 'credito_total': credito_total,
-            'balanceado': abs(total - credito_total) < 0.01, 'warnings': warnings,
-            'tipo_propuesta': prop['tipo']}
+            'pedido_items_n': n_pi, 'debito_total': total_booked, 'credito_total': credito_total,
+            'balanceado': abs(total_booked - credito_total) < 0.01, 'warnings': warnings,
+            'tipo_propuesta': prop['tipo'], 'recosteos': recosteos,
+            'overrides_aplicados': overrides_aplicados}
 
 
 @bp.route('/api/inventario/<int:negocio_id>/reparar-sin-descarga', methods=['POST'])

@@ -4657,7 +4657,7 @@
 
   <!-- ── TAB VENTAS/COSTOS ────────────────────────────────────────── -->
 
-  <div id="tab-ventas_costos" class="hidden bg-white rounded-2xl shadow p-4 sm:p-6 w-full sm:w-[110%] sm:-ml-[5%]">
+  <div id="tab-ventas_costos" class="hidden bg-white rounded-2xl shadow p-4 sm:p-6 w-full sm:w-[115%] sm:-ml-[7.5%]">
 
     <div class="border-b border-gray-150 pb-4 mb-4 flex items-center justify-between flex-wrap gap-4">
 
@@ -4772,7 +4772,7 @@
       <table class="w-full text-left border-collapse">
         <thead class="sticky top-0 z-10">
           <tr class="bg-gray-50 text-[10px] uppercase text-gray-500 border-b border-gray-150 select-none">
-            <th onclick="ordenarVC('nombre_producto')" class="px-3 py-2 text-left cursor-pointer hover:bg-gray-100 transition-colors min-w-[120px] align-bottom">
+            <th onclick="ordenarVC('nombre_producto')" class="px-3 py-2 text-left cursor-pointer hover:bg-gray-100 transition-colors min-w-[150px] align-bottom">
               <div><span>Producto</span> <span id="sort-vc-nombre" class="text-gray-400 text-[9px]">↕</span></div>
               <div class="text-[9px] font-normal normal-case text-gray-400">(clic para expandir)</div>
             </th>
@@ -20415,6 +20415,7 @@ function generarPdfVentasCostos() {
 
 
 function renderTablaVC() {
+  const fmtMon = n => (n == null ? '—' : Number(n).toLocaleString('es-CO', {minimumFractionDigits: 0, maximumFractionDigits: 0}));
   const tbody = document.getElementById('tabla-ventas-costos');
   const tfoot = document.getElementById('tabla-ventas-costos-foot');
   if (!tbody) return;
@@ -20474,7 +20475,7 @@ function renderTablaVC() {
       <tr class="hover:bg-gray-50 border-b border-gray-100 text-xs cursor-pointer transition-colors" onclick="toggleDetalleVC(this, ${r.producto_id})" data-producto="${r.producto_id}">
         <td class="px-3 py-2 font-semibold text-gray-800">
           <div class="flex items-center gap-1.5 flex-wrap">
-            <span class="truncate max-w-[160px] min-w-0" title="${r.nombre_producto}">${r.nombre_producto}</span>
+            <span class="truncate max-w-[240px] min-w-0" title="${r.nombre_producto}">${r.nombre_producto}</span>
             ${r.tiene_desfase ? `
               <button type="button"
                       onclick="event.stopPropagation(); irAPantallaReparacion('', ${r.producto_id}, '')"

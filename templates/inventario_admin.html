@@ -4738,9 +4738,9 @@
                 class="px-3 py-1.5 bg-white hover:bg-amber-100 text-amber-900 font-bold text-xs rounded-xl border border-amber-300 shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer">
           <span>🔍</span> <span id="btn-filtro-alertas-txt">Ver solo productos con alertas</span>
         </button>
-        <button onclick="mostrarTab('ensambles_historicos')" type="button"
+        <button onclick="irAPantallaReparacion('', null, '')" type="button" title="Abre el reparador en pestaña nueva sin salir de Ventas/Costos"
                 class="px-3 py-1.5 bg-amber-900 hover:bg-black text-white font-bold text-xs rounded-xl shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer">
-          <span>⚡</span> <span>Ir a Ensambles Históricos</span>
+          <span>⚡</span> <span>Ir a Ensambles Históricos ↗</span>
         </button>
       </div>
     </div>
@@ -18584,6 +18584,21 @@ document.addEventListener('DOMContentLoaded', async () => {
           }
           if (!targetEl && qFocusProd) {
             targetEl = document.getElementById(`prod-acc-${qFocusProd}`) || document.getElementById(`arrow-prod-acc-${qFocusProd}`)?.closest('button');
+          }
+          if (!targetEl && qFocusProd) {
+            // Producto sin ensambles en el rango: aviso + atajo a Kardex en vez de foco al vacío
+            toast('Este producto no tiene ensambles en el rango consultado', false);
+            const cont = document.getElementById('reparador-preview');
+            if (cont && !document.getElementById('focus-sin-ensambles')) {
+              const av = document.createElement('div');
+              av.id = 'focus-sin-ensambles';
+              av.className = 'mb-3 p-3 bg-amber-50 border border-amber-300 rounded-xl text-xs text-amber-900 flex items-center justify-between flex-wrap gap-2';
+              av.innerHTML = `<span>⚠️ El producto (#${qFocusProd}) no tiene movimientos de ensamble en este rango (ventas sin salidas). Revísalo en Kardex.</span><button onclick="verKardex(Number(${JSON.stringify(qFocusProd)}))" class="px-3 py-1.5 bg-white hover:bg-amber-100 text-amber-900 font-bold text-xs rounded-xl border border-amber-300 shadow-2xs cursor-pointer">📦 Ver Kardex</button>`;
+              cont.prepend(av);
+              targetEl = av;
+            } else {
+              targetEl = cont || document.getElementById('ensambles-reparador');
+            }
           }
           if (!targetEl) {
             targetEl = document.getElementById('ensambles-reparador');

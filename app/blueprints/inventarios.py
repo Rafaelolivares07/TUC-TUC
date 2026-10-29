@@ -4448,6 +4448,74 @@ def api_desvincular_ids_contabilidad(negocio_id):
 
 
 # ── Reparador de Costos de Venta ─────────────────────────────────────────────
+def _ventas_sin_descarga(conn, negocio_id, fecha_desde, fecha_hasta, prod_padre_id=None, numero_doc=''):
+    """Ventas del rango sin salidas kardex (producto_padre_id) — ej. bondiola 328/FV-440.
+
+    Contrato: lista de dicts por documento {producto_id, producto_nombre,
+    pedido_id, numero_documento, tipo_documento_id, cliente_tercero_id,
+    fecha ISO, cantidad float, costo_pos_total float}. Excluidas de la
+    reparación automática por copia (no hay kardex contra el cual copiar).
+    """
+    filt = ""
+    params = [negocio_id, fecha_desde, fecha_hasta]
+    if prod_padre_id:
+        filt += " AND pi.producto_id = %s"
+        params.append(prod_padre_id)
+    if numero_doc:
+        bare = numero_doc.split('-')[-1].strip() if '-' in numero_doc else numero_doc
+        filt += (" AND (ped.numero_documento = %s OR ped.numero_documento = %s"
+                 " OR SPLIT_PART(ped.numero_documento, '-', 2) = %s)")
+        params.extend([numero_doc, bare, bare])
+    params.extend([negocio_id, fecha_desde, fecha_hasta])
+    rows = conn.execute(f"""
+        SELECT
+            pi.producto_id,
+            p.nombre AS producto_nombre,
+            ped.id AS pedido_id,
+            ped.numero_documento,
+            ped.tipo_documento_id,
+            COALESCE(ped.cliente_id, ped.id_tercero) AS cliente_tercero_id,
+            COALESCE(ped.fecha, ped.created_at::date) AS fecha,
+            SUM(pi.cantidad) AS cantidad,
+            SUM(pi.cantidad * COALESCE(pi.costo_unitario, 0)) AS costo_pos_total
+        FROM pedido_items pi
+        JOIN pedidos ped ON ped.id = pi.pedido_id
+        JOIN productos p ON p.id = pi.producto_id
+        WHERE ped.negocio_id = %s
+          AND (ped.estado IS NULL OR ped.estado = '' OR ped.estado NOT IN ('anulado', 'premontado'))
+          AND ped.numero_documento IS NOT NULL AND ped.numero_documento != ''
+          AND COALESCE(ped.fecha, ped.created_at::date) >= %s::date
+          AND COALESCE(ped.fecha, ped.created_at::date) <= %s::date
+          {filt}
+          AND NOT EXISTS (
+            SELECT 1 FROM movimientos_inventario mi
+            WHERE mi.negocio_id = %s AND mi.tipo = 'salida'
+              AND mi.producto_padre_id = pi.producto_id
+              AND COALESCE(mi.documento_fecha, mi.created_at::date) >= %s::date
+              AND COALESCE(mi.documento_fecha, mi.created_at::date) <= %s::date
+          )
+        GROUP BY pi.producto_id, p.nombre, ped.id, ped.numero_documento,
+                 ped.tipo_documento_id, COALESCE(ped.cliente_id, ped.id_tercero),
+                 COALESCE(ped.fecha, ped.created_at::date)
+        ORDER BY p.nombre, COALESCE(ped.fecha, ped.created_at::date), ped.id
+    """, tuple(params)).fetchall()
+    out = []
+    for r in rows:
+        f = r['fecha']
+        out.append({
+            'producto_id': r['producto_id'],
+            'producto_nombre': r['producto_nombre'],
+            'pedido_id': r['pedido_id'],
+            'numero_documento': r['numero_documento'],
+            'tipo_documento_id': r['tipo_documento_id'],
+            'cliente_tercero_id': r['cliente_tercero_id'],
+            'fecha': f.isoformat() if hasattr(f, 'isoformat') else str(f or ''),
+            'cantidad': float(r['cantidad'] or 0),
+            'costo_pos_total': float(r['costo_pos_total'] or 0),
+        })
+    return out
+
+
 @bp.route('/api/inventario/<int:negocio_id>/reparar-costos-venta', methods=['GET', 'POST'])
 def api_reparar_costos_venta(negocio_id):
     """Preview (GET) o ejecucion (POST) de reparacion de costos de venta.
@@ -4509,9 +4577,13 @@ def api_reparar_costos_venta(negocio_id):
               AND COALESCE(m.documento_fecha, m.created_at::date) <= %s
             ORDER BY m.producto_padre_id, m.documento_numero, m.nombre_producto
         """, params_where).fetchall()
+        sin_descarga = _ventas_sin_descarga(conn, negocio_id, fecha_desde, fecha_hasta,
+                                            prod_padre_id=prod_padre_id, numero_doc=numero_doc)
+        monto_sd = round(sum(s['costo_pos_total'] for s in sin_descarga), 2)
         if not salidas:
-            return jsonify({'ok': True, 'productos': [], 'resumen': {
-                'total_productos': 0, 'total_facturas': 0, 'con_diferencia': 0, 'monto_corregir': 0
+            return jsonify({'ok': True, 'productos': [], 'ventas_sin_descarga': sin_descarga, 'resumen': {
+                'total_productos': 0, 'total_facturas': 0, 'con_diferencia': 0, 'monto_corregir': 0,
+                'total_sin_descarga': len(sin_descarga), 'monto_sin_descarga': monto_sd,
             }})
         # Obtener nombres de productos padres
         padres_ids = list(set(s['producto_padre_id'] for s in salidas))
@@ -4971,8 +5043,10 @@ def api_reparar_costos_venta(negocio_id):
                 'total_facturas': total_facturas,
                 'con_diferencia': con_diferencia,
                 'monto_corregir': round(monto_corregir, 2),
+                'total_sin_descarga': len(sin_descarga), 'monto_sin_descarga': monto_sd,
             },
             'productos': todos_resultados,
+            'ventas_sin_descarga': sin_descarga,
         })
     except Exception as e:
         conn.rollback()

@@ -18586,7 +18586,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             targetEl = document.getElementById(`prod-acc-${qFocusProd}`) || document.getElementById(`arrow-prod-acc-${qFocusProd}`)?.closest('button');
           }
           if (!targetEl && qFocusProd) {
-            // Producto sin ensambles en el rango: aviso + atajo a Kardex en vez de foco al vacío
+            targetEl = document.querySelector(`[id^="vsd-prod-${qFocusProd}-"]`);
+            if (targetEl) toast('Producto sin descargas: ver sección Ventas sin descarga');
+          }
+          if (!targetEl && qFocusProd) {
+            // Producto sin ensambles ni ventas sin descarga en el rango: aviso + atajo a Kardex
             toast('Este producto no tiene ensambles en el rango consultado', false);
             const cont = document.getElementById('reparador-preview');
             if (cont && !document.getElementById('focus-sin-ensambles')) {
@@ -22125,6 +22129,24 @@ async function cargarReporteEnsambles() {
           html += `</div>`;
         });
         html += '</div>';
+        const vsd = d.ventas_sin_descarga || [];
+        if (vsd.length > 0) {
+          const totVsd = vsd.reduce((a, v) => a + Number(v.costo_pos_total || 0), 0);
+          html += `<div class="mt-4 border-2 border-rose-300 bg-rose-50/60 rounded-2xl p-4 space-y-2" id="vsd-bloque">`;
+          html += `<div class="text-xs font-bold text-rose-900">🚫 Ventas sin descarga en Kardex — excluidas de reparación automática (${vsd.length} documento(s), $${totVsd.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})} POS sin respaldo). El POS costeó pero no hay salidas de insumos: revisar tarjeta/Kardex antes de decidir.</div>`;
+          html += `<div class="space-y-1.5">`;
+          vsd.forEach(v => {
+            const numLimpio = (v.numero_documento || '').replace(/^[^-]+-/, '');
+            const audUrl = (v.tipo_documento_id && v.numero_documento) ? `/admin/mantenimiento/${NEGOCIO_ID}?tool=auditor-documentos&tipo_documento=${encodeURIComponent(v.tipo_documento_id)}&documento_numero=${encodeURIComponent(v.numero_documento)}&tercero_id=${encodeURIComponent(v.cliente_tercero_id || '')}` : '';
+            html += `<div id="vsd-prod-${v.producto_id}-${v.pedido_id}" class="flex items-center justify-between flex-wrap gap-2 bg-white border border-rose-200 rounded-xl px-3 py-2">`;
+            html += `<span class="text-xs text-gray-800"><b>${v.producto_nombre}</b> <span class="text-gray-400 font-mono">#${v.producto_id}</span> · <span class="font-mono font-bold">${numLimpio}</span> <span class="text-gray-400">${v.fecha || ''}</span> · cant ${v.cantidad} · POS <b class="font-mono">$${Number(v.costo_pos_total || 0).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</b> vs Kardex <b class="font-mono">$0,00</b></span>`;
+            html += `<span class="flex items-center gap-1.5">`;
+            if (audUrl) html += `<a href="${audUrl}" target="_blank" rel="noopener" class="px-2 py-1 bg-white hover:bg-amber-100 text-amber-900 font-bold text-[11px] rounded-lg border border-amber-300 cursor-pointer">🔗 Auditoría</a>`;
+            html += `<button type="button" onclick="verKardex(${v.producto_id})" class="px-2 py-1 bg-white hover:bg-rose-100 text-rose-900 font-bold text-[11px] rounded-lg border border-rose-300 cursor-pointer">📦 Ver Kardex</button>`;
+            html += `</span></div>`;
+          });
+          html += `</div></div>`;
+        }
         preview.innerHTML = html;
 
         // Restaurar estado de flechas de acordeones abiertos

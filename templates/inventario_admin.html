@@ -4706,6 +4706,11 @@
 
         </button>
 
+        <button id="btn-toggle-tiempos" onclick="toggleDesgloseVC()" type="button"
+                class="px-3.5 py-1.5 bg-white hover:bg-amber-100/70 text-gray-700 hover:text-amber-900 font-bold text-xs rounded-xl border border-gray-200 hover:border-amber-300 shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer">
+          <span>⏱️</span> <span id="btn-toggle-tiempos-txt">Ver Desglose MOD / Insumos</span>
+        </button>
+
       </div>
 
     </div>
@@ -4732,70 +4737,7 @@
       </div>
     </div>
 
-    <!-- BANNER PARÁMETROS MOD -->
-    <div class="bg-gradient-to-r from-amber-50/80 via-orange-50/50 to-amber-50/30 border border-amber-200/80 rounded-2xl p-3 mb-5 flex items-center justify-between flex-wrap gap-3">
-      <div class="flex items-center gap-3 flex-wrap">
-        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-500/15 text-amber-900 border border-amber-300 text-[11px] font-extrabold rounded-xl uppercase tracking-wider">
-          ⏱️ Mano de Obra Directa
-        </span>
-        <!-- Costo Hora -->
-        <div class="flex items-center gap-1.5">
-          <label class="text-xs font-semibold text-gray-700">Base Hora:</label>
-          <div class="relative inline-flex items-center">
-            <span class="absolute left-2.5 text-xs font-bold text-gray-400">$</span>
-            <input type="number" id="vc-costo-hora-mod" min="0" step="500" placeholder="0"
-                   class="w-28 pl-6 pr-2 py-1 border border-gray-200 rounded-xl bg-white font-mono font-bold text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-2xs no-spinners"
-                   onfocus="this.select()"
-                   onchange="guardarParametrosMOD()">
-          </div>
-          <span id="vc-costo-min-badge" class="text-xs text-gray-600 font-mono bg-white px-2 py-1 rounded-xl border border-gray-200 shadow-2xs">
-            $0/min
-          </span>
-        </div>
-
-        <div class="h-4 w-px bg-amber-300/70 hidden sm:block"></div>
-
-        <!-- Horas por Semana -->
-        <div class="flex items-center gap-1.5">
-          <label class="text-xs font-semibold text-gray-700" title="Horas de trabajo aproximadas por semana (ej. 42 o 40)">Hrs/Sem:</label>
-          <input type="number" id="vc-horas-semana-mod" min="1" max="168" step="1" value="42" placeholder="42"
-                 class="w-14 text-center py-1 border border-gray-200 rounded-xl bg-white font-mono font-bold text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-2xs no-spinners"
-                 onfocus="this.select()"
-                 onchange="guardarParametrosMOD()">
-        </div>
-
-        <!-- Días por Semana -->
-        <div class="flex items-center gap-1.5">
-          <label class="text-xs font-semibold text-gray-700" title="Días laborales por semana (ej. 6 o 5)">Días/Sem:</label>
-          <input type="number" id="vc-dias-semana-mod" min="1" max="7" step="1" value="6" placeholder="6"
-                 class="w-12 text-center py-1 border border-gray-200 rounded-xl bg-white font-mono font-bold text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-2xs no-spinners"
-                 onfocus="this.select()"
-                 onchange="guardarParametrosMOD()">
-        </div>
-
-        <div class="h-4 w-px bg-amber-300/70 hidden sm:block"></div>
-
-        <!-- Personas en Operación -->
-        <div class="flex items-center gap-1.5">
-          <label class="text-xs font-semibold text-gray-700" title="Número de operarios o cocineros en simultáneo (ej. 1, 2, 3...)">👥 Personas:</label>
-          <input type="number" id="vc-personas-mod" min="1" max="99" step="1" value="1" placeholder="1"
-                 class="w-12 text-center py-1 border border-gray-200 rounded-xl bg-white font-mono font-bold text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-2xs no-spinners"
-                 onfocus="this.select()"
-                 onchange="guardarParametrosMOD()">
-        </div>
-
-        <!-- Badge Turno Diario Calculado -->
-        <span id="vc-jornada-diaria-badge" class="text-xs text-amber-900 font-mono font-bold bg-amber-100/70 px-2.5 py-1 rounded-xl border border-amber-200 shadow-2xs" title="Horas laborales por día = Horas por semana / Días por semana">
-          ⚡ Turno: <strong>7.0h</strong> / día
-        </span>
-      </div>
-      <div>
-        <button id="btn-toggle-tiempos" onclick="toggleDesgloseVC()" type="button"
-                class="px-3.5 py-1.5 bg-white hover:bg-amber-100/70 text-gray-700 hover:text-amber-900 font-bold text-xs rounded-xl border border-gray-200 hover:border-amber-300 shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer">
-          <span>⏱️</span> <span id="btn-toggle-tiempos-txt">Ver Desglose MOD / Insumos</span>
-        </button>
-      </div>
-    </div>
+    <!-- Parámetros MOD movidos al bloque unificado inferior; botón desglose en el header -->
 
     <!-- KPI SUMMARY CARDS -->
     <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
@@ -4907,8 +4849,66 @@
 
     </div>
 
-    <!-- TARJETA INFORMATIVA DE TIEMPOS Y CAPACIDAD LABORAL (MOD) -->
-    <div id="vc-tarjeta-tiempos" class="hidden mt-5 bg-gradient-to-br from-amber-50/90 via-orange-50/40 to-white border border-amber-200 rounded-2xl p-4 shadow-sm">
+    <!-- BLOQUE MOD UNIFICADO: parámetros + resultados -->
+    <div class="mt-5 bg-gradient-to-br from-amber-50/90 via-orange-50/40 to-white border border-amber-200 rounded-2xl p-4 shadow-sm">
+      <!-- Parámetros MOD (antes banner superior) -->
+      <div class="flex items-center gap-3 flex-wrap pb-3 mb-3 border-b border-amber-200/70">
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-500/15 text-amber-900 border border-amber-300 text-[11px] font-extrabold rounded-xl uppercase tracking-wider">
+          ⏱️ Mano de Obra Directa
+        </span>
+        <!-- Costo Hora -->
+        <div class="flex items-center gap-1.5">
+          <label class="text-xs font-semibold text-gray-700">Base Hora:</label>
+          <div class="relative inline-flex items-center">
+            <span class="absolute left-2.5 text-xs font-bold text-gray-400">$</span>
+            <input type="number" id="vc-costo-hora-mod" min="0" step="500" placeholder="0"
+                   class="w-28 pl-6 pr-2 py-1 border border-gray-200 rounded-xl bg-white font-mono font-bold text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-2xs no-spinners"
+                   onfocus="this.select()"
+                   onchange="guardarParametrosMOD()">
+          </div>
+          <span id="vc-costo-min-badge" class="text-xs text-gray-600 font-mono bg-white px-2 py-1 rounded-xl border border-gray-200 shadow-2xs">
+            $0/min
+          </span>
+        </div>
+
+        <div class="h-4 w-px bg-amber-300/70 hidden sm:block"></div>
+
+        <!-- Horas por Semana -->
+        <div class="flex items-center gap-1.5">
+          <label class="text-xs font-semibold text-gray-700" title="Horas de trabajo aproximadas por semana (ej. 42 o 40)">Hrs/Sem:</label>
+          <input type="number" id="vc-horas-semana-mod" min="1" max="168" step="1" value="42" placeholder="42"
+                 class="w-14 text-center py-1 border border-gray-200 rounded-xl bg-white font-mono font-bold text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-2xs no-spinners"
+                 onfocus="this.select()"
+                 onchange="guardarParametrosMOD()">
+        </div>
+
+        <!-- Días por Semana -->
+        <div class="flex items-center gap-1.5">
+          <label class="text-xs font-semibold text-gray-700" title="Días laborales por semana (ej. 6 o 5)">Días/Sem:</label>
+          <input type="number" id="vc-dias-semana-mod" min="1" max="7" step="1" value="6" placeholder="6"
+                 class="w-12 text-center py-1 border border-gray-200 rounded-xl bg-white font-mono font-bold text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-2xs no-spinners"
+                 onfocus="this.select()"
+                 onchange="guardarParametrosMOD()">
+        </div>
+
+        <div class="h-4 w-px bg-amber-300/70 hidden sm:block"></div>
+
+        <!-- Personas en Operación -->
+        <div class="flex items-center gap-1.5">
+          <label class="text-xs font-semibold text-gray-700" title="Número de operarios o cocineros en simultáneo (ej. 1, 2, 3...)">👥 Personas:</label>
+          <input type="number" id="vc-personas-mod" min="1" max="99" step="1" value="1" placeholder="1"
+                 class="w-12 text-center py-1 border border-gray-200 rounded-xl bg-white font-mono font-bold text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-2xs no-spinners"
+                 onfocus="this.select()"
+                 onchange="guardarParametrosMOD()">
+        </div>
+
+        <!-- Badge Turno Diario Calculado -->
+        <span id="vc-jornada-diaria-badge" class="text-xs text-amber-900 font-mono font-bold bg-amber-100/70 px-2.5 py-1 rounded-xl border border-amber-200 shadow-2xs" title="Horas laborales por día = Horas por semana / Días por semana">
+          ⚡ Turno: <strong>7.0h</strong> / día
+        </span>
+      </div>
+      <!-- Resultados del período (se muestran al consultar) -->
+      <div id="vc-tarjeta-tiempos" class="hidden">
       <div class="flex items-center justify-between pb-3 mb-3 border-b border-amber-200/70 flex-wrap gap-2">
         <div class="flex items-center gap-2">
           <span class="text-base">⏱️</span>
@@ -5001,6 +5001,7 @@
             </div>
           </div>
         </div>
+      </div>
       </div>
     </div>
 

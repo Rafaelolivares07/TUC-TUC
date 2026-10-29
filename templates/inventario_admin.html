@@ -18559,12 +18559,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (qFocusProd) {
       window._openRepairAccordions = window._openRepairAccordions || new Set();
       window._openRepairAccordions.add(`prod-acc-${qFocusProd}`);
+      window._openRepairAccordions.add(`vsd-acc-${qFocusProd}`);
       if (qFocusDoc) {
         window._openRepairAccordions.add(`doc-acc-${qFocusProd}-${qFocusDoc}`);
         // Limpieza de prefijo por si vino como FV-165 o #165
         const docNumClean = qFocusDoc.replace(/^[#A-Za-z_-]+/, '');
         if (docNumClean && docNumClean !== qFocusDoc) {
           window._openRepairAccordions.add(`doc-acc-${qFocusProd}-${docNumClean}`);
+        }
+        if (docNumClean) {
+          window._openRepairAccordions.add(`vsd-doc-${qFocusProd}-${docNumClean}`);
         }
       }
     }
@@ -18586,7 +18590,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             targetEl = document.getElementById(`prod-acc-${qFocusProd}`) || document.getElementById(`arrow-prod-acc-${qFocusProd}`)?.closest('button');
           }
           if (!targetEl && qFocusProd) {
-            targetEl = document.querySelector(`[id^="vsd-prod-${qFocusProd}-"]`);
+            if (qFocusDoc) {
+              const docNumClean = qFocusDoc.replace(/^[#A-Za-z_-]+/, '');
+              targetEl = document.getElementById(`vsd-card-${qFocusProd}-${docNumClean}`)
+                || document.querySelector(`[id^="vsd-card-${qFocusProd}-"]`);
+            } else {
+              targetEl = document.getElementById(`vsd-acc-${qFocusProd}`);
+            }
             if (targetEl) toast('Producto sin descargas: ver sección Ventas sin descarga');
           }
           if (!targetEl && qFocusProd) {
@@ -21651,12 +21661,8 @@ async function cargarReporteEnsambles() {
       }
     }
 
-    function toggleVsdProp(pedidoId, productoId) {
-      const cont = document.getElementById(`vsd-prop-${pedidoId}-${productoId}`);
-      if (!cont) return;
-      if (!cont.classList.contains('hidden')) { cont.classList.add('hidden'); cont.innerHTML = ''; return; }
-      const v = (window._vsdData || []).find(x => x.pedido_id === pedidoId && x.producto_id === productoId);
-      if (!v || !v.propuesta || !v.propuesta.componentes) return;
+    function htmlVsdDocProp(v) {
+      const pedidoId = v.pedido_id, productoId = v.producto_id;
       const prop = v.propuesta;
       const est = v.estado || {pedido_items: [], kardex_salidas: [], contables_61: [], contables_14: []};
       const fmt = n => '$' + Number(n || 0).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
@@ -21667,7 +21673,7 @@ async function cargarReporteEnsambles() {
       const difPi = piTot - prop.total;
       const c61 = (est.contables_61 || [])[0];
       const m61 = c61 ? Number(c61.monto || 0) : 0;
-      let h = `<div class="bg-white border border-rose-200 rounded-xl px-3 py-2 mt-1 mb-2 space-y-2">`;
+      let h = `<div id="vsd-prop-${pedidoId}-${productoId}" class="bg-white border border-rose-200 rounded-xl px-3 py-2 mt-1 mb-2 space-y-2">`;
       h += `<div class="text-[11px] font-bold text-rose-900">Propuesta: tarjeta actual × costos al ${v.fecha}${prop.tipo === 'kardex_propio' ? ' (costo propio histórico)' : ''}</div>`;
       h += `<div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">`;
       h += `<div class="p-2.5 bg-rose-50/60 rounded-lg border border-rose-200/80">`;
@@ -21725,8 +21731,7 @@ async function cargarReporteEnsambles() {
       h += `<div class="flex items-center justify-end gap-2"><span class="text-[10px] text-gray-400">Al ejecutar: salidas + COGS 61* + bajas 14* + pedido_items (débito = crédito)</span>`;
       h += `<button type="button" onclick="ejecutarVsd(${pedidoId}, ${productoId})" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow cursor-pointer">✅ Ejecutar reparación</button></div>`;
       h += `</div>`;
-      cont.innerHTML = h;
-      cont.classList.remove('hidden');
+      return h;
     }
 
     function recalcVsd(pedidoId, productoId) {
@@ -21776,6 +21781,18 @@ async function cargarReporteEnsambles() {
       }
     }
 
+    function htmlBannerReparador(res, vsdLen) {
+      const nVsd = Number(res.total_sin_descarga || vsdLen || 0);
+      const mVsd = Number(res.monto_sin_descarga || 0);
+      if (res.con_diferencia === 0 && nVsd === 0) {
+        return `<div class="text-green-700 text-xs font-bold mb-3 bg-green-50 border border-green-300 rounded-xl px-4 py-2.5 text-center">✅ Todos los costos del período están cuadrados ($0 diferencia). Puedes desplegar cualquier producto para auditar sus documentos y componentes.</div>`;
+      }
+      if (res.con_diferencia === 0) {
+        return `<div class="text-xs text-amber-900 font-bold mb-3 flex items-center justify-between bg-amber-100/70 border border-amber-300 rounded-xl px-4 py-2.5 flex-wrap gap-2"><span>✅ Costos con descarga cuadrados ($0).</span><span class="text-rose-700 font-mono font-extrabold text-sm">🚫 ${nVsd} sin descarga ($${mVsd.toLocaleString('es-CO')} POS sin respaldo) — ver abajo</span></div>`;
+      }
+      return `<div class="text-xs text-amber-900 font-bold mb-3 flex items-center justify-between bg-amber-100/70 border border-amber-300 rounded-xl px-4 py-2.5 flex-wrap gap-2"><span>Diagnóstico: ${res.total_productos} producto(s), ${res.con_diferencia} documento(s) con diferencia de ${res.total_facturas} totales${nVsd > 0 ? ` <span class="text-rose-700">+ ${nVsd} sin descarga</span>` : ''}</span><span class="text-rose-700 font-mono font-extrabold text-sm">Monto a corregir: $${Number(res.monto_corregir || 0).toLocaleString('es-CO')}</span></div>`;
+    }
+
     async function repararCostosPreview(preserveState = false, targetScroll = null) {
       const prevScrollY = targetScroll !== null ? targetScroll : (window.scrollY || document.documentElement.scrollTop);
       const preview = document.getElementById('reparador-preview');
@@ -21812,9 +21829,7 @@ async function cargarReporteEnsambles() {
           }
         }
 
-        let banner = res.con_diferencia === 0
-          ? `<div class="text-green-700 text-xs font-bold mb-3 bg-green-50 border border-green-300 rounded-xl px-4 py-2.5 text-center">✅ Todos los costos del período están cuadrados ($0 diferencia). Puedes desplegar cualquier producto para auditar sus documentos y componentes.</div>`
-          : `<div class="text-xs text-amber-900 font-bold mb-3 flex items-center justify-between bg-amber-100/70 border border-amber-300 rounded-xl px-4 py-2.5 flex-wrap gap-2"><span>Diagnóstico: ${res.total_productos} producto(s), ${res.con_diferencia} documento(s) con diferencia de ${res.total_facturas} totales</span><span class="text-rose-700 font-mono font-extrabold text-sm">Monto a corregir: $${Number(res.monto_corregir || 0).toLocaleString('es-CO')}</span></div>`;
+        const banner = htmlBannerReparador(res, (d.ventas_sin_descarga || []).length);
 
         let html = banner;
         html += '<div class="space-y-3">';
@@ -22260,23 +22275,60 @@ async function cargarReporteEnsambles() {
           const totVsd = vsd.reduce((a, v) => a + Number(v.costo_pos_total || 0), 0);
           html += `<div class="mt-4 border-2 border-rose-300 bg-rose-50/60 rounded-2xl p-4 space-y-2" id="vsd-bloque">`;
           html += `<div class="text-xs font-bold text-rose-900">🚫 Ventas sin descarga en Kardex — excluidas de reparación automática (${vsd.length} documento(s), $${totVsd.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})} POS sin respaldo). El POS costeó pero no hay salidas de insumos: revisar tarjeta/Kardex antes de decidir.</div>`;
-          html += `<div class="space-y-1.5">`;
-          vsd.forEach(v => {
-            const numLimpio = (v.numero_documento || '').replace(/^[^-]+-/, '');
-            const audUrl = (v.tipo_documento_id && v.numero_documento) ? `/admin/mantenimiento/${NEGOCIO_ID}?tool=auditor-documentos&tipo_documento=${encodeURIComponent(v.tipo_documento_id)}&documento_numero=${encodeURIComponent(v.numero_documento)}&tercero_id=${encodeURIComponent(v.cliente_tercero_id || '')}` : '';
-            html += `<div id="vsd-prod-${v.producto_id}-${v.pedido_id}" class="flex items-center justify-between flex-wrap gap-2 bg-white border border-rose-200 rounded-xl px-3 py-2">`;
-            html += `<span class="text-xs text-gray-800"><b>${v.producto_nombre}</b> <span class="text-gray-400 font-mono">#${v.producto_id}</span> · <span class="font-mono font-bold">${numLimpio}</span> <span class="text-gray-400">${v.fecha || ''}</span> · cant ${v.cantidad} · POS <b class="font-mono">$${Number(v.costo_pos_total || 0).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</b> vs Kardex <b class="font-mono">$0,00</b></span>`;
-            html += `<span class="flex items-center gap-1.5">`;
-            if (audUrl) html += `<a href="${audUrl}" target="_blank" rel="noopener" class="px-2 py-1 bg-white hover:bg-amber-100 text-amber-900 font-bold text-[11px] rounded-lg border border-amber-300 cursor-pointer">🔗 Auditoría</a>`;
-            html += `<button type="button" onclick="verKardex(${v.producto_id})" class="px-2 py-1 bg-white hover:bg-rose-100 text-rose-900 font-bold text-[11px] rounded-lg border border-rose-300 cursor-pointer">📦 Ver Kardex</button>`;
-            const prop0 = v.propuesta || {tipo: 'sin_costo'};
-            if (prop0.tipo === 'sin_costo') {
-              html += `<span class="text-[11px] text-gray-400 italic">sin costo reconstruible</span>`;
-            } else {
-              html += `<button type="button" onclick="toggleVsdProp(${v.pedido_id}, ${v.producto_id})" class="px-2 py-1 bg-rose-600 hover:bg-rose-700 text-white font-bold text-[11px] rounded-lg shadow-2xs cursor-pointer">🛠 Reparar</button>`;
-            }
-            html += `</span></div>`;
-            html += `<div id="vsd-prop-${v.pedido_id}-${v.producto_id}" class="hidden"></div>`;
+          html += `<div class="space-y-3">`;
+          const vsdPorProd = {};
+          vsd.forEach(v => { (vsdPorProd[v.producto_id] = vsdPorProd[v.producto_id] || []).push(v); });
+          Object.keys(vsdPorProd).forEach(pid => {
+            const docs = vsdPorProd[pid];
+            const v0 = docs[0];
+            const prodAccId = `vsd-acc-${pid}`;
+            const isProdOpen = window._openRepairAccordions && window._openRepairAccordions.has(prodAccId);
+            const sumPos = docs.reduce((s, x) => s + Number(x.costo_pos_total || 0), 0);
+            const sumProp = docs.reduce((s, x) => s + Number((x.propuesta || {}).total || 0), 0);
+            const difP = sumPos - sumProp;
+            html += `<div class="border border-rose-300 rounded-xl overflow-hidden bg-white shadow-xs">`;
+            html += `<button type="button" onclick="toggleRepairLevel('${prodAccId}')" class="w-full flex items-center justify-between px-4 py-3 bg-rose-100/70 hover:bg-rose-200/70 text-left transition-colors flex-wrap gap-2 cursor-pointer">`;
+            html += `<div class="flex items-center gap-2 flex-wrap">`;
+            html += `<svg class="w-4 h-4 text-rose-700 transition-transform repair-arrow" id="arrow-${prodAccId}"${isProdOpen ? ' style="transform: rotate(90deg)"' : ''} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>`;
+            html += `<span class="text-sm font-bold text-rose-950">${v0.producto_nombre}</span>`;
+            html += `<span class="text-xs px-2.5 py-0.5 bg-rose-200/90 text-rose-950 rounded-full font-bold border border-rose-300">🚫 ${docs.length} sin descarga</span>`;
+            html += `</div>`;
+            html += `<div class="flex items-center gap-2 flex-wrap">`;
+            html += `<span class="text-xs text-gray-600">POS: <b>$${sumPos.toLocaleString('es-CO')}</b> → Propuesta: <b>$${sumProp.toLocaleString('es-CO')}</b></span>`;
+            html += `<span class="text-sm font-bold ${Math.abs(difP) > 0.01 ? 'text-red-600' : 'text-green-600'}">${Math.abs(difP) > 0.01 ? 'Dif: $' + difP.toLocaleString('es-CO') : '✅ $0'}</span>`;
+            html += `</div></button>`;
+            html += `<div id="${prodAccId}" class="${isProdOpen ? '' : 'hidden'} px-4 pb-4 pt-2 space-y-3 bg-rose-50/40 border-t border-rose-200/60">`;
+            docs.forEach(v => {
+              const numLimpio = (v.numero_documento || '').replace(/^[^-]+-/, '');
+              const docAccId = `vsd-doc-${pid}-${numLimpio}`;
+              const isDocOpen = window._openRepairAccordions && window._openRepairAccordions.has(docAccId);
+              const prop = v.propuesta || {tipo: 'sin_costo', total: 0};
+              const posT = Number(v.costo_pos_total || 0);
+              const difD = posT - Number(prop.total || 0);
+              const audUrl = (v.tipo_documento_id && v.numero_documento) ? `/admin/mantenimiento/${NEGOCIO_ID}?tool=auditor-documentos&tipo_documento=${encodeURIComponent(v.tipo_documento_id)}&documento_numero=${encodeURIComponent(v.numero_documento)}&tercero_id=${encodeURIComponent(v.cliente_tercero_id || '')}` : '';
+              html += `<div id="vsd-card-${pid}-${numLimpio}" class="border border-rose-300 bg-white rounded-xl overflow-hidden shadow-xs">`;
+              html += `<div class="w-full flex items-center justify-between px-3.5 py-2.5 bg-gray-50 flex-wrap gap-2">`;
+              html += `<button type="button" onclick="toggleRepairLevel('${docAccId}')" class="flex items-center gap-2 flex-wrap text-left cursor-pointer">`;
+              html += `<svg class="w-3.5 h-3.5 text-gray-500 transition-transform repair-arrow" id="arrow-${docAccId}"${isDocOpen ? ' style="transform: rotate(90deg)"' : ''} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>`;
+              html += `<span class="text-[10px] font-bold text-rose-900 bg-rose-100 border border-rose-300 px-2 py-0.5 rounded-md">🚫 SIN DESCARGA</span>`;
+              html += `<span class="text-sm font-bold text-gray-900 font-mono">Doc ${numLimpio}</span><span class="text-xs text-gray-500 font-mono">${v.fecha || ''}</span>`;
+              html += `<span class="text-xs font-bold text-emerald-950 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded font-mono">🍽️ ${Number(v.cantidad || 0)} Vendidas</span>`;
+              html += `</button>`;
+              html += `<div class="flex items-center gap-1.5 flex-wrap">`;
+              html += `<span class="text-xs text-gray-500 mr-1">POS <b>$${posT.toLocaleString('es-CO')}</b> → Prop <b>$${Number(prop.total || 0).toLocaleString('es-CO')}</b></span>`;
+              html += `<span class="text-xs font-bold ${Math.abs(difD) > 0.01 ? 'text-red-600' : 'text-green-600'} font-mono mr-1">${Math.abs(difD) > 0.01 ? 'Dif $' + difD.toLocaleString('es-CO') : '✅ $0'}</span>`;
+              if (audUrl) html += `<a href="${audUrl}" target="_blank" rel="noopener" class="px-2 py-1 bg-white hover:bg-amber-100 text-amber-900 font-bold text-[11px] rounded-lg border border-amber-300 cursor-pointer">🔗 Auditoría</a>`;
+              html += `<button type="button" onclick="verKardex(${v.producto_id})" class="px-2 py-1 bg-white hover:bg-rose-100 text-rose-900 font-bold text-[11px] rounded-lg border border-rose-300 cursor-pointer">📦 Kardex</button>`;
+              html += `</div></div>`;
+              html += `<div id="${docAccId}" class="${isDocOpen ? '' : 'hidden'} px-3.5 pb-3 pt-2 border-t border-gray-100">`;
+              if (prop.tipo === 'sin_costo' || !prop.componentes) {
+                html += `<div class="text-xs text-gray-400 italic py-2">Sin tarjeta ni kardex: no hay costo reconstruible para este documento.</div>`;
+              } else {
+                html += htmlVsdDocProp(v);
+              }
+              html += `</div></div>`;
+            });
+            html += `</div></div>`;
           });
           html += `</div></div>`;
         }

@@ -20,8 +20,10 @@ OUTBOX = os.path.join(V2, 'muse_outbox.json')
 TITLE_FILE = os.path.join(tempfile.gettempdir(), 'muse_tab_title.txt')
 TRIGGER = '__MUSE__'
 COOLDOWN_SEC = 30
+VERIFY_SEC = 45
 _started = False
 _last_wake = 0.0
+_wake_scheduled = False
 _log = None
 
 
@@ -320,17 +322,64 @@ def wake_tab(title):
         return False
 
 
+def _still_pending(ids, path=INBOX):
+    """Ids que siguen en inbox (sin consumir). Sin archivo = nada pendiente."""
+    try:
+        cur = json.load(open(path, encoding='utf-8'))
+    except (OSError, ValueError):
+        return []
+    items = cur if isinstance(cur, list) else [cur]
+    have = set(str(m.get('message_id')) for m in items)
+    return [i for i in ids if str(i) in have]
+
+
+def _verify_loop(ids):
+    """Entrega verificada: si el inbox no se consume, re-inyecta una vez."""
+    time.sleep(VERIFY_SEC)
+    if not _still_pending(ids):
+        _l('wake: entrega confirmada')
+        return
+    _l('wake: sin confirmacion, reintento ids=%s' % ids)
+    if wake_tab(load_title()):
+        _l('wake: reintento enviado')
+    time.sleep(VERIFY_SEC)
+    pend = _still_pending(ids)
+    if pend:
+        _l('wake: SIN CONFIRMACION ids=%s (revisar manual)' % pend)
+    else:
+        _l('wake: entrega confirmada (2do intento)')
+
+
+def _delayed_wake(delay, ids):
+    """Wake diferido tras cooldown (cierra la carrera read-vs-queue)."""
+    global _wake_scheduled, _last_wake
+    time.sleep(delay)
+    _wake_scheduled = False
+    if not _still_pending(ids):
+        return
+    _last_wake = time.time()
+    if wake_tab(load_title()):
+        _l('wake: trigger diferido enviado')
+        threading.Thread(target=_verify_loop, args=(ids,), daemon=True).start()
+
+
 def notify(text, chat_id, message_id):
     """Escribe inbox y despierta (con cooldown). True si inbox quedo."""
-    global _last_wake
+    global _last_wake, _wake_scheduled
     write_inbox(build_inbox(text, chat_id, message_id))
     now = time.time()
     if now - _last_wake < COOLDOWN_SEC:
         _l('wake: cooldown, solo inbox')
+        if not _wake_scheduled:
+            _wake_scheduled = True
+            delay = COOLDOWN_SEC - (now - _last_wake) + 1
+            threading.Thread(target=_delayed_wake, args=(delay, [message_id]),
+                             daemon=True).start()
         return True
     _last_wake = now
     if wake_tab(load_title()):
         _l('wake: trigger enviado')
+        threading.Thread(target=_verify_loop, args=([message_id],), daemon=True).start()
     return True
 
 

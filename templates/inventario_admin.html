@@ -20785,6 +20785,7 @@ async function toggleDetalleVC(tr, productoId) {
 
     for (const doc of docs) {
       const numLimpio = (doc.numero_documento || '').replace(/^[^-]+-/, '');
+      const audUrl = (doc.tipo_documento_id && doc.numero_documento) ? `/admin/mantenimiento/${NEGOCIO_ID}?tool=auditor-documentos&tipo_documento=${encodeURIComponent(doc.tipo_documento_id)}&documento_numero=${encodeURIComponent(doc.numero_documento)}&tercero_id=${encodeURIComponent(doc.cliente_tercero_id || '')}` : '';
       const kardexVal = doc.total_costo_kardex || 0;
       const posVal = doc.total_costo || 0;
       const desfase = doc.desfase_kardex !== undefined ? doc.desfase_kardex : (kardexVal - posVal);
@@ -20792,7 +20793,7 @@ async function toggleDetalleVC(tr, productoId) {
 
       html += `<tr class="hover:bg-amber-50/20 transition-colors">
         <td class="px-2 py-1 font-mono text-gray-600 whitespace-nowrap">${doc.fecha || ''}</td>
-        <td class="px-2 py-1 font-mono font-bold text-blue-700 whitespace-nowrap">#${numLimpio}</td>
+        <td class="px-2 py-1 font-mono font-bold text-blue-700 whitespace-nowrap">#${numLimpio}${audUrl ? ` <a href="${audUrl}" target="_blank" rel="noopener noreferrer" title="Auditar documento en pestaña nueva" class="text-blue-500 hover:text-blue-700 transition">🔗</a>` : ''}</td>
         <td class="px-2 py-1 truncate max-w-[130px] text-gray-700" title="${doc.nombre_cliente || ''}">${doc.nombre_cliente || '—'}</td>
         <td class="px-2 py-1 text-right font-semibold text-gray-700">${fmt(doc.cantidad)}</td>
         <td class="px-2 py-1 text-right font-mono text-gray-600">${fmtMon(doc.precio_unitario)}</td>

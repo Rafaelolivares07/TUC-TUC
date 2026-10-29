@@ -12782,6 +12782,8 @@ def api_reporte_ventas_costos_detalle(negocio_id):
                 ped.id AS pedido_id,
                 COALESCE(ped.fecha, ped.created_at::date) AS fecha,
                 ped.numero_documento,
+                ped.tipo_documento_id,
+                COALESCE(ped.cliente_id, ped.id_tercero) AS cliente_tercero_id,
                 ped.nombre_cliente,
                 ped.estado,
                 ia.cantidad,

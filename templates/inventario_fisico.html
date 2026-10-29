@@ -1242,6 +1242,7 @@ function abrirModalValidacionGenerica(product, physicalQty, overrideCosto = null
   const basePhysicalQty = physicalQty / fv;
   const baseCostoUnitario = costoVisual * fv;
   const baseDiff = basePhysicalQty - parseFloat(product.stock || 0);
+  const diff = baseDiff;
   
   activeAjustePayload = {
     producto_id: product.id,

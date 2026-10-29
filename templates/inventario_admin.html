@@ -21612,8 +21612,15 @@ async function cargarReporteEnsambles() {
       }
     }
 
+    function docNecesitaReparo(f) {
+      if (f.tiene_diferencia) return true;
+      if (Math.abs(Number(f.pedido_item?.diferencia || 0)) > 0.01) return true;
+      const difC = Math.abs(Number(f.cogs_contable?.monto_actual || 0) - Number(f.costo_real_kardex || 0));
+      return difC > 0.01;
+    }
+
     function paresConDiferenciaProducto(prod) {
-      return (prod.facturas || []).filter(f => f.tiene_diferencia)
+      return (prod.facturas || []).filter(docNecesitaReparo)
         .map(f => ({producto_padre_id: Number(prod.producto_padre_id), numero_doc: f.documento_numero}));
     }
 
@@ -21652,7 +21659,7 @@ async function cargarReporteEnsambles() {
 
     async function repararCostosGlobal() {
       const currentScroll = window.scrollY;
-      const prods = (window._repairData?.productos || []).filter(p => (p.facturas || []).some(f => f.tiene_diferencia));
+      const prods = (window._repairData?.productos || []).filter(p => (p.facturas || []).some(docNecesitaReparo));
       const total = prods.reduce((s, p) => s + paresConDiferenciaProducto(p).length, 0);
       if (!total) { toast('Período cuadrado'); return; }
       const confirmed = confirm(`¿Reparar ${total} documento(s) de ${prods.length} producto(s) del período?`);
@@ -21910,7 +21917,7 @@ async function cargarReporteEnsambles() {
             ? `<button type="button" onclick="desvincularIds(null, ${prod.producto_padre_id})" class="min-w-[150px] px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl border border-gray-300 transition flex items-center justify-center gap-1.5 cursor-pointer">🔓 Desvincular</button>`
             : `<button type="button" disabled title="No hay IDs vinculados para desvincular" class="min-w-[150px] px-4 py-2 bg-gray-50 text-gray-400 border border-gray-200 text-xs font-semibold rounded-xl opacity-70 cursor-not-allowed flex items-center justify-center gap-1.5 shadow-none">🔓 Desvincular</button>`;
 
-          const nDifProd = prod.facturas.filter(f => f.tiene_diferencia).length;
+          const nDifProd = prod.facturas.filter(docNecesitaReparo).length;
           const btnRepararProd = nDifProd > 0
             ? `<button type="button" onclick="repararCostosProducto(${prod.producto_padre_id})" title="Reparar los ${nDifProd} documento(s) con diferencia de este producto" class="min-w-[170px] px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer">⚡ Reparar Producto (${nDifProd})</button>`
             : `<button type="button" disabled title="Todos los documentos de este producto están cuadrados ($0 diferencia)" class="min-w-[170px] px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-300 text-xs font-bold rounded-xl opacity-90 cursor-default flex items-center justify-center gap-1.5 shadow-none">✅ Cuadrado ($0)</button>`;
@@ -21964,7 +21971,7 @@ async function cargarReporteEnsambles() {
           html += `</div>`;
           
           // Lista de documentos con diferencias para identificación inmediata
-          const docsConProblema = prod.facturas.filter(f => f.tiene_diferencia);
+          const docsConProblema = prod.facturas.filter(docNecesitaReparo);
           if (docsConProblema.length > 0) {
             html += `<div class="p-2.5 bg-amber-50 rounded-xl border border-amber-300 flex items-center justify-between flex-wrap gap-2 text-xs">`;
             html += `<div class="text-amber-950 font-bold flex items-center gap-1.5 flex-wrap">`;

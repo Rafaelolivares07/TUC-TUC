@@ -5282,6 +5282,77 @@ function toast(msg, ok = true, duracion = 3200) {
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 
+let datosLibroActas = [];
+
+const MODULO_ACTA_LABEL = {
+  inventario_fisico: 'Físico General',
+  inventario_distribuido: 'Distribuido',
+  caja_pos_tienda: 'Caja POS Tienda',
+  pos_restaurante: 'Caja POS Rest.'
+};
+
+async function cargarLibroActas() {
+  const body = document.getElementById('libro-actas-body');
+  if (body) body.innerHTML = '<tr><td colspan="9" class="text-center py-6 text-gray-400 italic">Cargando libro de actas...</td></tr>';
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/libro-actas`);
+    const d = await r.json();
+    if (!d.ok) {
+      if (body) body.innerHTML = `<tr><td colspan="9" class="text-center py-6 text-red-500">${d.error || 'Error al cargar actas'}</td></tr>`;
+      return;
+    }
+    datosLibroActas = d.actas || [];
+    filtrarLibroActas();
+  } catch (e) {
+    if (body) body.innerHTML = `<tr><td colspan="9" class="text-center py-6 text-red-500">${e.message}</td></tr>`;
+  }
+}
+
+function filtrarLibroActas() {
+  const body = document.getElementById('libro-actas-body');
+  const qEl = document.getElementById('actas-filtro-buscar');
+  const mEl = document.getElementById('actas-filtro-modulo');
+  const tEl = document.getElementById('actas-filtro-tipo');
+  const q = ((qEl && qEl.value) || '').toLowerCase();
+  const mod = (mEl && mEl.value) || '';
+  const tipo = (tEl && tEl.value) || '';
+  const rows = (datosLibroActas || []).filter(a => {
+    if (mod && a.modulo_origen !== mod) return false;
+    const dif = parseFloat(a.diferencia) || 0;
+    if (tipo === 'diferencias' && dif === 0) return false;
+    if (tipo === 'sobrantes' && dif <= 0) return false;
+    if (tipo === 'faltantes' && dif >= 0) return false;
+    if (tipo === 'conformes' && dif !== 0) return false;
+    if (q && (((a.producto_nombre || '') + ' ' + (a.notas || '')).toLowerCase().indexOf(q) < 0)) return false;
+    return true;
+  });
+  const cnt = document.getElementById('actas-total-count');
+  if (cnt) cnt.textContent = rows.length;
+  if (!body) return;
+  if (!rows.length) {
+    body.innerHTML = '<tr><td colspan="9" class="text-center py-6 text-gray-400 italic">Sin actas para los filtros.</td></tr>';
+    return;
+  }
+  body.innerHTML = rows.map(a => {
+    const dif = parseFloat(a.diferencia) || 0;
+    const clsDif = dif > 0 ? 'text-emerald-700' : (dif < 0 ? 'text-rose-600' : 'text-gray-400');
+    const doc = a.documento_numero ? ' · ' + a.documento_numero : '';
+    const origen = (MODULO_ACTA_LABEL[a.modulo_origen] || a.modulo_origen || '—') + doc;
+    const notas = a.notas || '';
+    return `<tr class="hover:bg-gray-50 text-xs">
+      <td class="px-3 py-2 whitespace-nowrap text-gray-500">${a.fecha_txt || ''}</td>
+      <td class="px-3 py-2 font-semibold text-gray-800">${a.producto_nombre || ('#' + a.producto_id)}</td>
+      <td class="px-3 py-2 text-gray-600">${a.sede_nombre || '—'}</td>
+      <td class="px-3 py-2 text-right font-mono font-bold">${fmt(a.cantidad_contada)}</td>
+      <td class="px-3 py-2 text-right font-mono text-gray-600">${fmt(a.stock_sistema)}</td>
+      <td class="px-3 py-2 text-right font-mono font-black ${clsDif}">${dif > 0 ? '+' : ''}${fmt(a.diferencia)}</td>
+      <td class="px-3 py-2 text-gray-600">${a.usuario_nombre || '—'}</td>
+      <td class="px-3 py-2 text-gray-600">${origen}</td>
+      <td class="px-3 py-2 text-gray-500 max-w-[220px] truncate" title="${notas.replace(/"/g, '&quot;')}">${notas}</td>
+    </tr>`;
+  }).join('');
+}
+
 const TABS = ['productos', 'tarjetas', 'entradas', 'produccion', 'compras_sugerencias', 'cotizaciones', 'kardex', 'traslados', 'ensambles', 'ensambles_historicos', 'ventas_costos', 'desembolsos', 'estado_resultados', 'recosteo', 'actas_inventario'];
 
 function mostrarTab(t) {

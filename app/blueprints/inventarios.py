@@ -12941,6 +12941,54 @@ def api_mantenimiento_modificar_documento(negocio_id):
     finally:
         conn.close()
 
+@bp.route('/api/inventario/<int:negocio_id>/libro-actas')
+def api_libro_actas(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        _, err = _validar_negocio_json(conn, negocio_id)
+        if err:
+            return err
+        rows = conn.execute("""
+            SELECT a.id, a.producto_id, a.producto_nombre,
+                   TO_CHAR(a.fecha_hora, 'DD/MM/YYYY HH24:MI') AS fecha_txt,
+                   a.usuario_nombre, a.modulo_origen, a.metodologia,
+                   a.tipo_documento, a.documento_numero,
+                   a.cantidad_contada, a.stock_sistema, a.diferencia,
+                   a.costo_unitario, a.valor_diferencia, a.notas,
+                   COALESCE(cu.nombre, '') AS sede_nombre
+            FROM inventario_fisico_actas a
+            LEFT JOIN centros_utilidad cu ON cu.id = a.centro_utilidad_id
+            WHERE a.negocio_id = %s
+            ORDER BY a.fecha_hora DESC NULLS LAST, a.id DESC
+            LIMIT 500
+        """, (negocio_id,)).fetchall()
+        actas = []
+        for r in rows:
+            actas.append({
+                'id': r['id'],
+                'producto_id': r['producto_id'],
+                'producto_nombre': r['producto_nombre'] or '',
+                'fecha_txt': r['fecha_txt'] or '',
+                'usuario_nombre': r['usuario_nombre'] or '',
+                'modulo_origen': r['modulo_origen'] or '',
+                'metodologia': r['metodologia'] or '',
+                'tipo_documento': r['tipo_documento'] or '',
+                'documento_numero': r['documento_numero'] or '',
+                'cantidad_contada': float(r['cantidad_contada'] or 0),
+                'stock_sistema': float(r['stock_sistema'] or 0),
+                'diferencia': float(r['diferencia'] or 0),
+                'costo_unitario': float(r['costo_unitario'] or 0),
+                'valor_diferencia': float(r['valor_diferencia'] or 0),
+                'notas': r['notas'] or '',
+                'sede_nombre': r['sede_nombre'] or '',
+            })
+        return jsonify({'ok': True, 'actas': actas})
+    finally:
+        conn.close()
+
+
 @bp.route('/api/inventario/<int:negocio_id>/configuracion-mod', methods=['GET', 'POST'])
 def api_configuracion_mod(negocio_id):
     if 'usuario_id' not in session:

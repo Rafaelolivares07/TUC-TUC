@@ -352,6 +352,9 @@
 
     .num { text-align: right; }
 
+    /* Ventas/Costos: encabezados centrados */
+    #tab-ventas_costos thead th { text-align: center; }
+
     .sticky-table-header th {
       position: sticky;
       top: 0;
@@ -4781,8 +4784,8 @@
               <div>Vendida <span id="sort-vc-cantidad" class="text-gray-400 text-[9px]">↕</span></div>
             </th>
             <th onclick="ordenarVC('precio_unitario')" class="px-2 py-2 text-right num cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap align-bottom">
-              <div>Precio Prom.</div>
-              <div>Venta <span id="sort-vc-precio" class="text-gray-400 text-[9px]">↕</span></div>
+              <div>Precio</div>
+              <div>Promedio <span id="sort-vc-precio" class="text-gray-400 text-[9px]">↕</span></div>
             </th>
 
             <!-- Desglose unitario colapsado por defecto -->
@@ -4800,8 +4803,8 @@
             </th>
 
             <th onclick="ordenarVC('costo_unitario')" class="px-2 py-2 text-right num cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap align-bottom text-rose-900 bg-rose-50/30">
-              <div>Costo Prom.</div>
-              <div>Unitario <span id="sort-vc-costo" class="text-gray-400 text-[9px]">↕</span></div>
+              <div>Costo</div>
+              <div>Promedio <span id="sort-vc-costo" class="text-gray-400 text-[9px]">↕</span></div>
             </th>
             <th onclick="ordenarVC('margen_unitario')" class="px-2 py-2 text-right num cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap align-bottom text-indigo-900 bg-indigo-50/30">
               <div>Margen</div>
@@ -20475,7 +20478,7 @@ function renderTablaVC() {
       <tr class="hover:bg-gray-50 border-b border-gray-100 text-xs cursor-pointer transition-colors" onclick="toggleDetalleVC(this, ${r.producto_id})" data-producto="${r.producto_id}">
         <td class="px-3 py-2 font-semibold text-gray-800">
           <div class="flex items-center gap-1.5 flex-wrap">
-            <span class="truncate max-w-[240px] min-w-0" title="${r.nombre_producto}">${r.nombre_producto}</span>
+            <span class="truncate max-w-[280px] min-w-0" title="${r.nombre_producto}">${r.nombre_producto}</span>
             ${r.tiene_desfase ? `
               <button type="button"
                       onclick="event.stopPropagation(); irAPantallaReparacion('', ${r.producto_id}, '')"

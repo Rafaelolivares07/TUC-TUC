@@ -331,6 +331,7 @@ def _crear_tablas(conn):
         "ALTER TABLE config_negocio ADD COLUMN IF NOT EXISTS horas_semana_mod NUMERIC(5,2) DEFAULT 42.0",
         "ALTER TABLE config_negocio ADD COLUMN IF NOT EXISTS dias_semana_mod NUMERIC(4,2) DEFAULT 6.0",
         "ALTER TABLE config_negocio ADD COLUMN IF NOT EXISTS personas_mod NUMERIC(4,1) DEFAULT 1.0",
+        "ALTER TABLE config_negocio ADD COLUMN IF NOT EXISTS mod_activo_mod BOOLEAN DEFAULT TRUE",
         "ALTER TABLE movimientos_contables ADD COLUMN IF NOT EXISTS movimiento_inventario_id INTEGER",
         "CREATE INDEX IF NOT EXISTS idx_mov_contables_mov_inv_id ON movimientos_contables(movimiento_inventario_id)",
     ]
@@ -12491,37 +12492,43 @@ def api_configuracion_mod(negocio_id):
                 personas = max(1.0, float(data.get('personas_mod', 1.0)))
             except (ValueError, TypeError):
                 personas = 1.0
+            mod_activo = data.get('mod_activo_mod', True)
+            mod_activo = False if mod_activo in (False, 0, '0', 'false', 'False') else True
 
             conn.execute("""
-                INSERT INTO config_negocio (tercero_id, costo_hora_mod, horas_semana_mod, dias_semana_mod, personas_mod, updated_at)
-                VALUES (%s, %s, %s, %s, %s, NOW())
+                INSERT INTO config_negocio (tercero_id, costo_hora_mod, horas_semana_mod, dias_semana_mod, personas_mod, mod_activo_mod, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, NOW())
                 ON CONFLICT (tercero_id) DO UPDATE
                 SET costo_hora_mod = EXCLUDED.costo_hora_mod,
                     horas_semana_mod = EXCLUDED.horas_semana_mod,
                     dias_semana_mod = EXCLUDED.dias_semana_mod,
                     personas_mod = EXCLUDED.personas_mod,
+                    mod_activo_mod = EXCLUDED.mod_activo_mod,
                     updated_at = NOW()
-            """, (negocio_id, costo_hora, horas_semana, dias_semana, personas))
+            """, (negocio_id, costo_hora, horas_semana, dias_semana, personas, mod_activo))
             conn.commit()
             return jsonify({
                 'ok': True,
                 'costo_hora_mod': costo_hora,
                 'horas_semana_mod': horas_semana,
                 'dias_semana_mod': dias_semana,
-                'personas_mod': personas
+                'personas_mod': personas,
+                'mod_activo_mod': mod_activo
             })
         else:
-            row = conn.execute("SELECT costo_hora_mod, horas_semana_mod, dias_semana_mod, personas_mod FROM config_negocio WHERE tercero_id = %s", (negocio_id,)).fetchone()
+            row = conn.execute("SELECT costo_hora_mod, horas_semana_mod, dias_semana_mod, personas_mod, mod_activo_mod FROM config_negocio WHERE tercero_id = %s", (negocio_id,)).fetchone()
             costo_hora = float(row['costo_hora_mod']) if row and row['costo_hora_mod'] is not None else 0.0
             horas_semana = float(row['horas_semana_mod']) if row and row.get('horas_semana_mod') is not None else 42.0
             dias_semana = float(row['dias_semana_mod']) if row and row.get('dias_semana_mod') is not None else 6.0
             personas = float(row['personas_mod']) if row and row.get('personas_mod') is not None else 1.0
+            mod_activo = bool(row['mod_activo_mod']) if row and row.get('mod_activo_mod') is not None else True
             return jsonify({
                 'ok': True,
                 'costo_hora_mod': costo_hora,
                 'horas_semana_mod': horas_semana,
                 'dias_semana_mod': dias_semana,
-                'personas_mod': personas
+                'personas_mod': personas,
+                'mod_activo_mod': mod_activo
             })
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -12576,13 +12583,15 @@ def api_reporte_ventas_costos(negocio_id):
         
     conn = get_db_connection()
     try:
-        cfg_row = conn.execute("SELECT costo_hora_mod, horas_semana_mod, dias_semana_mod, personas_mod FROM config_negocio WHERE tercero_id = %s", (negocio_id,)).fetchone()
+        cfg_row = conn.execute("SELECT costo_hora_mod, horas_semana_mod, dias_semana_mod, personas_mod, mod_activo_mod FROM config_negocio WHERE tercero_id = %s", (negocio_id,)).fetchone()
         costo_hora_mod = float(cfg_row['costo_hora_mod']) if cfg_row and cfg_row['costo_hora_mod'] is not None else 0.0
         horas_semana_mod = float(cfg_row['horas_semana_mod']) if cfg_row and cfg_row.get('horas_semana_mod') is not None else 42.0
         dias_semana_mod = float(cfg_row['dias_semana_mod']) if cfg_row and cfg_row.get('dias_semana_mod') is not None else 6.0
         personas_mod = float(cfg_row['personas_mod']) if cfg_row and cfg_row.get('personas_mod') is not None else 1.0
+        mod_activo_mod = bool(cfg_row['mod_activo_mod']) if cfg_row and cfg_row.get('mod_activo_mod') is not None else True
+        costo_hora_ef = costo_hora_mod if mod_activo_mod else 0.0
 
-        datos = _query_reporte_ventas_costos(conn, negocio_id, desde, hasta, centro_utilidad_id=centro_utilidad_id, costo_hora_mod=costo_hora_mod)
+        datos = _query_reporte_ventas_costos(conn, negocio_id, desde, hasta, centro_utilidad_id=centro_utilidad_id, costo_hora_mod=costo_hora_ef)
 
         # Resumen de alertas de auditoría
         alertas = {
@@ -12600,6 +12609,7 @@ def api_reporte_ventas_costos(negocio_id):
             'horas_semana_mod': horas_semana_mod,
             'dias_semana_mod': dias_semana_mod,
             'personas_mod': personas_mod,
+            'mod_activo_mod': mod_activo_mod,
             'alertas': alertas
         })
     except Exception as e:
@@ -13183,8 +13193,10 @@ def api_reporte_ventas_costos_pdf(negocio_id):
         contexto = _contexto_negocio(conn, negocio_id)
         nombre_negocio = (contexto.get('negocio_nombre') or 'Negocio') if contexto else 'Negocio'
 
-        cfg_row = conn.execute("SELECT costo_hora_mod FROM config_negocio WHERE tercero_id = %s", (negocio_id,)).fetchone()
+        cfg_row = conn.execute("SELECT costo_hora_mod, mod_activo_mod FROM config_negocio WHERE tercero_id = %s", (negocio_id,)).fetchone()
         costo_hora_mod = float(cfg_row['costo_hora_mod']) if cfg_row and cfg_row['costo_hora_mod'] is not None else 0.0
+        mod_activo_pdf = bool(cfg_row['mod_activo_mod']) if cfg_row and cfg_row.get('mod_activo_mod') is not None else True
+        costo_hora_mod = costo_hora_mod if mod_activo_pdf else 0.0
 
         datos = _query_reporte_ventas_costos(conn, negocio_id, desde, hasta, centro_utilidad_id=centro_utilidad_id, costo_hora_mod=costo_hora_mod)
         

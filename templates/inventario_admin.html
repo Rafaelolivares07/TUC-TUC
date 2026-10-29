@@ -4706,6 +4706,11 @@
 
         </button>
 
+        <button id="btn-toggle-mod" onclick="toggleModVC()" type="button" title="Incluir o excluir la mano de obra (supuesto) en el reporte"
+                class="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs rounded-xl shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer">
+          <span>⏱️</span> <span id="btn-toggle-mod-txt">MOD: ON</span>
+        </button>
+
         <button id="btn-toggle-tiempos" onclick="toggleDesgloseVC()" type="button"
                 class="px-3.5 py-1.5 bg-white hover:bg-amber-100/70 text-gray-700 hover:text-amber-900 font-bold text-xs rounded-xl border border-gray-200 hover:border-amber-300 shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer">
           <span>⏱️</span> <span id="btn-toggle-tiempos-txt">Ver Desglose MOD / Insumos</span>
@@ -4788,9 +4793,9 @@
               <div>MOD</div>
               <div>Unit. <span id="sort-vc-cumod" class="text-gray-400 text-[9px]">↕</span></div>
             </th>
-            <th class="vc-col-desglose hidden px-2 py-2 text-center transition-all bg-amber-50/60 text-amber-900 border-x border-amber-200 whitespace-nowrap align-bottom">
-              <div title="Tiempos estimados: 🍳 Prep previa / 📦 Ensamble y despacho">Tiempos</div>
-              <div class="text-[9px] text-amber-700">(Prep / Ens)</div>
+            <th class="vc-col-desglose hidden px-2 py-2 text-center transition-all border-x border-gray-100 whitespace-nowrap align-bottom">
+              <div title="Tiempos estimados en minutos: Preparaciones / Ensambles">Tiempos</div>
+              <div class="text-[9px]">Preparaciones / Ensambles</div>
             </th>
 
             <th onclick="ordenarVC('costo_unitario')" class="px-2 py-2 text-right num cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap align-bottom text-rose-900 bg-rose-50/30">
@@ -4850,7 +4855,7 @@
     </div>
 
     <!-- BLOQUE MOD UNIFICADO: parámetros + resultados -->
-    <div class="mt-5 bg-gradient-to-br from-amber-50/90 via-orange-50/40 to-white border border-amber-200 rounded-2xl p-4 shadow-sm">
+    <div id="vc-bloque-mod" class="mt-5 bg-gradient-to-br from-amber-50/90 via-orange-50/40 to-white border border-amber-200 rounded-2xl p-4 shadow-sm">
       <!-- Parámetros MOD (antes banner superior) -->
       <div class="flex items-center gap-3 flex-wrap pb-3 mb-3 border-b border-amber-200/70">
         <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-500/15 text-amber-900 border border-amber-300 text-[11px] font-extrabold rounded-xl uppercase tracking-wider">
@@ -20013,6 +20018,7 @@ let datosVC = [];
 let sortColVC = 'total_venta';
 let sortAscVC = false;
 let costoHoraModVC = 0;
+let modActivoVC = true;
 let desgloseVisibleVC = false;
 let alertasVC = {};
 let filtroSoloAlertasVC = false;
@@ -20066,6 +20072,33 @@ function toggleDesgloseVC() {
   }
 }
 function toggleTiemposVC() { toggleDesgloseVC(); }
+
+function aplicarVisibilidadMOD() {
+  const btnModTxt = document.getElementById('btn-toggle-mod-txt');
+  if (btnModTxt) btnModTxt.textContent = modActivoVC ? 'MOD: ON' : 'MOD: OFF';
+  const btnMod = document.getElementById('btn-toggle-mod');
+  if (btnMod) {
+    btnMod.className = modActivoVC
+      ? 'px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs rounded-xl shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer'
+      : 'px-3.5 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-500 font-bold text-xs rounded-xl shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer';
+  }
+  const btnDesg = document.getElementById('btn-toggle-tiempos');
+  if (btnDesg) btnDesg.classList.toggle('hidden', !modActivoVC);
+  const bloque = document.getElementById('vc-bloque-mod');
+  if (bloque) bloque.classList.toggle('hidden', !modActivoVC);
+  if (!modActivoVC && desgloseVisibleVC) {
+    desgloseVisibleVC = false;
+    document.querySelectorAll('.vc-col-desglose').forEach(el => el.classList.add('hidden'));
+    const btnTxt = document.getElementById('btn-toggle-tiempos-txt');
+    if (btnTxt) btnTxt.textContent = 'Ver Desglose MOD / Insumos';
+  }
+}
+
+function toggleModVC() {
+  modActivoVC = !modActivoVC;
+  aplicarVisibilidadMOD();
+  guardarParametrosMOD();
+}
 
 let horasSemanaModVC = 42.0;
 let diasSemanaModVC = 6.0;
@@ -20139,7 +20172,8 @@ async function guardarParametrosMOD() {
         costo_hora_mod: costoHoraModVC,
         horas_semana_mod: horasSemanaModVC,
         dias_semana_mod: diasSemanaModVC,
-        personas_mod: personasModVC
+        personas_mod: personasModVC,
+        mod_activo_mod: modActivoVC
       })
     });
     const d = await r.json();
@@ -20154,7 +20188,8 @@ async function guardarCostoHoraMOD(val) {
 }
 
 function recalcularFilaMOD(prod) {
-  const costoMinuto = costoHoraModVC > 0 ? (costoHoraModVC / 60.0) : 0;
+  const horaEf = modActivoVC ? costoHoraModVC : 0;
+  const costoMinuto = horaEf > 0 ? (horaEf / 60.0) : 0;
   const minutosTotales = (prod.tiempo_preparacion_min || 0) + (prod.tiempo_ensamble_min || 0);
   prod.mod_unitario = minutosTotales * costoMinuto;
   prod.total_mod = prod.mod_unitario * prod.cantidad;
@@ -20302,6 +20337,9 @@ async function consultarVentasCostos() {
       horasSemanaModVC = d.horas_semana_mod || 42.0;
       diasSemanaModVC = d.dias_semana_mod || 6.0;
       personasModVC = d.personas_mod || 1.0;
+      if (d.mod_activo_mod === false || d.mod_activo_mod === 0) modActivoVC = false;
+      else if (d.mod_activo_mod === true || d.mod_activo_mod === 1) modActivoVC = true;
+      aplicarVisibilidadMOD();
 
       const inpMod = document.getElementById('vc-costo-hora-mod');
       if (inpMod && document.activeElement !== inpMod) {
@@ -20456,17 +20494,15 @@ function renderTablaVC() {
         <!-- Desglose unitario colapsado por defecto -->
         <td class="vc-col-desglose ${desgHiddenCls} px-2 py-2 text-right num font-mono text-slate-700 bg-slate-50/60 whitespace-nowrap">${fmtMon(r.costo_insumos_unitario || 0)}</td>
         <td class="vc-col-desglose ${desgHiddenCls} px-2 py-2 text-right num font-mono text-amber-900 bg-amber-50/30 whitespace-nowrap">${fmtMon(r.mod_unitario || 0)}</td>
-        <td class="vc-col-desglose ${desgHiddenCls} px-1.5 py-1 text-center whitespace-nowrap bg-amber-50/40 border-x border-amber-200" onclick="event.stopPropagation()">
+        <td class="vc-col-desglose ${desgHiddenCls} px-1.5 py-1 text-center whitespace-nowrap border-x border-gray-100" onclick="event.stopPropagation()">
           <div class="inline-flex items-center gap-1">
-            <span class="text-[11px] text-gray-500 font-bold" title="Minutos Preparación Previa">🍳</span>
             <input type="number" min="0" max="999" step="0.5" value="${r.tiempo_preparacion_min || 0}"
-                   title="Preparación previa: ${minPrepUnit} min/und — Total período: ${fmt(minPrepTotal)} min (${fmt(minPrepTotal/60)} hrs)"
+                   title="Preparaciones: ${minPrepUnit} min/und — Total período: ${fmt(minPrepTotal)} min (${fmt(minPrepTotal/60)} hrs)"
                    onfocus="this.select()"
                    onchange="actualizarTiempoProdVC(${r.producto_id}, this.value, null)"
                    class="w-11 text-center font-mono text-xs font-bold border border-gray-300 rounded-lg py-0.5 px-1 bg-white text-gray-800 focus:outline-none focus:ring-1.5 focus:ring-amber-500 shadow-2xs no-spinners">
-            <span class="text-[11px] text-gray-500 font-bold" title="Minutos Ensamble y Entrega">📦</span>
             <input type="number" min="0" max="999" step="0.5" value="${r.tiempo_ensamble_min || 0}"
-                   title="Ensamble y entrega: ${minEnsUnit} min/und — Total período: ${fmt(minEnsTotal)} min (${fmt(minEnsTotal/60)} hrs)"
+                   title="Ensambles: ${minEnsUnit} min/und — Total período: ${fmt(minEnsTotal)} min (${fmt(minEnsTotal/60)} hrs)"
                    onfocus="this.select()"
                    onchange="actualizarTiempoProdVC(${r.producto_id}, null, this.value)"
                    class="w-11 text-center font-mono text-xs font-bold border border-gray-300 rounded-lg py-0.5 px-1 bg-white text-gray-800 focus:outline-none focus:ring-1.5 focus:ring-amber-500 shadow-2xs no-spinners">
@@ -20629,9 +20665,9 @@ function renderTablaVC() {
       <!-- Desglose unitario footer -->
       <td class="vc-col-desglose ${desgHiddenCls} px-2 py-2.5 text-right num font-mono font-extrabold text-slate-700 bg-slate-100/80 whitespace-nowrap">${fmtMon(promInsumosPonderado)}</td>
       <td class="vc-col-desglose ${desgHiddenCls} px-2 py-2.5 text-right num font-mono font-extrabold text-amber-900 bg-amber-100/60 whitespace-nowrap">${fmtMon(promModPonderado)}</td>
-      <td class="vc-col-desglose ${desgHiddenCls} px-1.5 py-2 text-center font-mono whitespace-nowrap bg-amber-50/70 border-x border-amber-200" title="Mano de obra total: ${fmt(totalHorasGlobal)} horas = ~${fmt(diasEquipo)} días con tu equipo de ${fmt(numPersonas)} personas (~${fmt(dias1Persona)} días si fuera 1 persona). Ver tarjeta explicativa abajo">
-        <div class="text-xs font-black text-amber-950">⏱️ ${fmt(totalHorasGlobal)}h</div>
-        <div class="text-[9px] text-amber-700 font-semibold">(~${fmt(diasEquipo)} d equipo)</div>
+      <td class="vc-col-desglose ${desgHiddenCls} px-1.5 py-2 text-center font-mono whitespace-nowrap border-x border-gray-100" title="Mano de obra total: ${fmt(totalHorasGlobal)} horas = ~${fmt(diasEquipo)} días con tu equipo de ${fmt(numPersonas)} personas (~${fmt(dias1Persona)} días si fuera 1 persona). Ver tarjeta explicativa abajo">
+        <div class="text-xs font-black text-gray-800">${fmt(totalHorasGlobal)}h</div>
+        <div class="text-[9px] text-gray-500 font-semibold">(~${fmt(diasEquipo)} d equipo)</div>
       </td>
 
       <!-- Costo Unitario y Margen Unitario footer -->

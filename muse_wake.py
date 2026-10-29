@@ -118,8 +118,15 @@ def _cycle_tabs_to(title, wshell):
         return False
 
 
+def _is_muse(exe):
+    base = exe.rsplit('\\', 1)[-1].rsplit('/', 1)[-1]
+    return base in ('muse.exe', 'muse-code.exe') or \
+        (base.startswith('muse-bin-') and base.endswith('.exe'))
+
+
 def _ancestry_muse_pid():
-    """Sube por mis ancestros hasta el proceso muse/muse-code (mi CLI). None si no esta."""
+    """PID de mi CLI: ancestro muse si existe (cadena viva), si no el unico muse vivo.
+    El listener es huerfano (su shell murio), por eso el ancestro falla ahi."""
     import ctypes
     from ctypes import wintypes
 
@@ -143,15 +150,18 @@ def _ancestry_muse_pid():
             if not k.Process32NextW(snap, ctypes.byref(pe)):
                 break
     k.CloseHandle(snap)
-    pid = os.getpid()
-    seen = set()
-    while pid and pid not in seen:
-        seen.add(pid)
-        ppid, exe = procs.get(pid, (0, ''))
-        base = exe.rsplit('\\', 1)[-1].rsplit('/', 1)[-1]
-        if base.startswith('muse') and base.endswith('.exe'):
+    muses = [pid for pid, (ppid, exe) in procs.items() if _is_muse(exe)]
+    mine = set()
+    p = os.getpid()
+    while p and p not in mine:
+        mine.add(p)
+        p = procs.get(p, (0, ''))[0]
+    for pid in muses:
+        if pid in mine:
             return pid
-        pid = ppid
+    if len(muses) == 1:
+        return muses[0]
+    _l('wake: %d muses vivos, sin ancestro claro' % len(muses))
     return None
 
 

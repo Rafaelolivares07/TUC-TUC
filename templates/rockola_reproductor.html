@@ -34,8 +34,8 @@
   --surface2: #132440;
   --border: rgba(0,212,255,0.15);
   --text: #e2eeff;
-  --muted: #4a6480;
-  --muted2: #2a3d55;
+  --muted: #94a3b8;
+  --muted2: #475569;
 }
 
 body {
@@ -359,6 +359,207 @@ audio { width: 100%; filter: invert(1) hue-rotate(180deg); opacity: .75; }
 .library-name { flex:1; min-width:0; font-size:13px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .library-origin { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.7px; }
 .library-btn { border:1px solid var(--border); background:var(--ac1-bg); color:var(--ac1); border-radius:9px; padding:7px 10px; font-weight:900; cursor:pointer; }
+
+/* Botón icónico de reproducción neón [ ▶ ] bien bacano */
+.btn-play-action {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(0, 212, 255, 0.22), rgba(0, 150, 255, 0.12));
+  border: 1.5px solid rgba(0, 212, 255, 0.45);
+  color: var(--ac1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 0 10px rgba(0, 212, 255, 0.15);
+  flex-shrink: 0;
+}
+.btn-play-action:hover {
+  transform: scale(1.1);
+  border-color: #00d4ff;
+  background: rgba(0, 212, 255, 0.35);
+  box-shadow: 0 0 15px rgba(0, 212, 255, 0.45);
+  color: #fff;
+}
+.btn-play-action:active {
+  transform: scale(0.92);
+}
+.btn-play-action svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+  margin-left: 2px;
+}
+
+/* Buscador Global Unificado */
+.global-search-card {
+  width: 100%;
+  position: relative;
+  margin-bottom: 14px;
+}
+.global-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #0b1528;
+  border: 1.5px solid rgba(0, 212, 255, 0.35);
+  border-radius: 14px;
+  padding: 10px 14px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.global-search-bar:focus-within {
+  border-color: var(--ac1);
+  box-shadow: 0 0 18px rgba(0, 212, 255, 0.28);
+}
+.global-search-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #fff;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+}
+.global-search-input::placeholder {
+  color: var(--muted);
+  font-size: 13px;
+}
+.global-results-box {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  max-height: 380px;
+  overflow-y: auto;
+  background: #091222;
+  border: 1px solid rgba(0, 212, 255, 0.4);
+  border-radius: 14px;
+  z-index: 150;
+  box-shadow: 0 14px 35px rgba(0, 0, 0, 0.8);
+  padding: 8px 0;
+}
+.global-group-header {
+  font-size: 10.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  padding: 8px 14px 4px;
+  color: var(--ac1);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0, 212, 255, 0.05);
+}
+.global-result-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  gap: 10px;
+  transition: background 0.15s;
+}
+.global-result-row:last-child {
+  border-bottom: none;
+}
+.global-result-row:hover {
+  background: rgba(0, 212, 255, 0.1);
+}
+.global-result-info {
+  flex: 1;
+  min-width: 0;
+}
+.global-result-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.global-result-meta {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.global-empty-msg {
+  padding: 20px 14px;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+/* Acordeón Auto-Retráctil General */
+.accordion-card {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  margin-bottom: 12px;
+  overflow: hidden;
+  transition: border-color 0.25s, box-shadow 0.25s;
+}
+.accordion-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 16px;
+  cursor: pointer;
+  user-select: none;
+  background: rgba(13, 26, 46, 0.7);
+  transition: background 0.2s;
+}
+.accordion-header:hover {
+  background: rgba(19, 36, 64, 0.9);
+}
+.accordion-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+.accordion-title {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.accordion-badge {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--ac1);
+  background: rgba(0, 212, 255, 0.12);
+  border: 1px solid rgba(0, 212, 255, 0.25);
+  padding: 2px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+.accordion-arrow {
+  font-size: 12px;
+  color: var(--muted);
+  margin-left: 8px;
+  transition: transform 0.25s ease;
+}
+.accordion-arrow.rotated {
+  transform: rotate(180deg);
+}
+.accordion-body {
+  padding: 12px 16px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  animation: fadeUp 0.2s ease;
+}
 .library-empty { text-align:center; color:var(--muted2); font-size:13px; padding:12px 0; }
 .local-actions { display:grid; grid-template-columns:repeat(auto-fit, minmax(120px, 1fr)); gap:8px; margin-bottom:10px; }
 .hidden-input { position:absolute; left:-9999px; width:1px; height:1px; opacity:0; }
@@ -1315,86 +1516,95 @@ input:checked + .slider:before {
           </button>
         </div>
 
-        <!-- Opciones de Reproducción (Fundido, Desordenar, Repetir) -->
-        <div class="playback-options-group" style="border-top:1px solid rgba(255,255,255,0.06); padding-top:4px; margin-top:8px; width:100%;">
-          
-          <!-- Fundido cruzado: textos alineados a la izquierda sin caracteres basura, chevron y switch a la derecha -->
-          <div onclick="toggleFundidoPanel()" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer; padding:6px 0;">
-            <span id="fundido-label" style="font-size:12px; font-weight:700; color:var(--muted); transition:color 0.25s, text-shadow 0.25s;">Fundido cruzado</span>
-            <div style="display:flex; align-items:center; justify-content:flex-end; gap:6px;">
-              <span id="fundido-status" style="font-size:10px; font-weight:700; color:var(--ac1); letter-spacing:0.2px;">12s → 5s</span>
-              <span id="fundido-arrow" style="font-size:10px; color:var(--muted); transition:transform .2s; margin-right:4px;">▾</span>
-              <label class="switch" style="margin:0;" onclick="event.stopPropagation()">
-                <input type="checkbox" id="fundido-toggle" checked onchange="guardarFundidoSettings()">
-                <span class="slider"></span>
-              </label>
+        <!-- Opciones de Reproducción (Modos) en Acordeón Colapsable -->
+        <div class="accordion-card" id="acc-card-modos" style="border:none; border-top:1px solid rgba(255,255,255,0.08); border-radius:0; margin-top:10px; width:100%; background:transparent;">
+          <div class="accordion-header" onclick="toggleSeccionAcordeon('modos', event)" style="padding:10px 4px; background:transparent;">
+            <div class="accordion-title-wrap">
+              <span style="font-size:14px;">⚙️</span>
+              <span class="accordion-title" style="font-size:12.5px;">Modos de reproducción</span>
+              <span class="accordion-badge" id="acc-modos-resumen">⚡ 12s → 5s</span>
             </div>
+            <span class="accordion-arrow" id="acc-arrow-modos">▾</span>
           </div>
-          <div id="fundido-panel" style="display:none; flex-direction:column; gap:10px; padding:8px 0 4px;">
-            <div style="display:flex; flex-direction:column; gap:4px; width:100%;">
-              <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px;">
-                <span style="color:var(--muted);">Empezar cuando falten:</span>
-                <span style="color:var(--ac1); font-weight:800;" id="fundido-sec-label">12s</span>
+
+          <div id="acc-body-modos" class="accordion-body" style="display:none; padding:4px 0 8px; border-top:none;">
+            <!-- Fundido cruzado -->
+            <div onclick="toggleFundidoPanel()" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer; padding:6px 0;">
+              <span id="fundido-label" style="font-size:12px; font-weight:700; color:var(--text); transition:color 0.25s, text-shadow 0.25s;">Fundido cruzado</span>
+              <div style="display:flex; align-items:center; justify-content:flex-end; gap:6px;">
+                <span id="fundido-status" style="font-size:10px; font-weight:700; color:var(--ac1); letter-spacing:0.2px;">12s → 5s</span>
+                <span id="fundido-arrow" style="font-size:10px; color:var(--muted); transition:transform .2s; margin-right:4px;">▾</span>
+                <label class="switch" style="margin:0;" onclick="event.stopPropagation()">
+                  <input type="checkbox" id="fundido-toggle" checked onchange="guardarFundidoSettings()">
+                  <span class="slider"></span>
+                </label>
               </div>
-              <input type="range" id="fundido-segundos" min="2" max="60" value="12" style="width:100%; accent-color:var(--ac1);" oninput="onAnticipacionChange(this.value)">
             </div>
-            <div style="display:flex; flex-direction:column; gap:4px; width:100%;">
-              <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px;">
-                <span style="color:var(--muted);">Duración del cruce:</span>
-                <span style="color:var(--ac1); font-weight:800;" id="fundido-dur-label">5s</span>
+            <div id="fundido-panel" style="display:none; flex-direction:column; gap:10px; padding:8px 0 4px;">
+              <div style="display:flex; flex-direction:column; gap:4px; width:100%;">
+                <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px;">
+                  <span style="color:var(--muted);">Empezar cuando falten:</span>
+                  <span style="color:var(--ac1); font-weight:800;" id="fundido-sec-label">12s</span>
+                </div>
+                <input type="range" id="fundido-segundos" min="2" max="60" value="12" style="width:100%; accent-color:var(--ac1);" oninput="onAnticipacionChange(this.value)">
               </div>
-              <input type="range" id="fundido-duracion" min="1" max="12" value="5" style="width:100%; accent-color:var(--ac1);" oninput="onDuracionChange(this.value)">
-              <div id="fundido-hint" style="font-size:9px; color:var(--muted); text-align:right; min-height:12px;"></div>
+              <div style="display:flex; flex-direction:column; gap:4px; width:100%;">
+                <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px;">
+                  <span style="color:var(--muted);">Duración del cruce:</span>
+                  <span style="color:var(--ac1); font-weight:800;" id="fundido-dur-label">5s</span>
+                </div>
+                <input type="range" id="fundido-duracion" min="1" max="12" value="5" style="width:100%; accent-color:var(--ac1);" oninput="onDuracionChange(this.value)">
+                <div id="fundido-hint" style="font-size:9px; color:var(--muted); text-align:right; min-height:12px;"></div>
+              </div>
+            </div>
+
+            <!-- Desordenar lista (Shuffle) -->
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-top:1px solid rgba(255,255,255,0.04);">
+              <span id="shuffle-label" style="font-size:12px; font-weight:700; color:var(--text); transition:color 0.25s, text-shadow 0.25s;">Desordenar lista</span>
+              <div style="display:flex; align-items:center; justify-content:flex-end; gap:8px;">
+                <button type="button" class="btn-control" onclick="desordenarColaAleatorio()" style="padding:2px 8px; font-size:10px; border-radius:6px; line-height:1.2; background:rgba(0,212,255,0.08); border:1px solid rgba(0,212,255,0.25); color:var(--ac1);" title="Mezclar el orden de las canciones en cola">Mezclar ya</button>
+                <label class="switch" style="margin:0;" title="Activar modo aleatorio">
+                  <input type="checkbox" id="shuffle-toggle" onchange="toggleModoAleatorio(this.checked)">
+                  <span class="slider"></span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Repetir canción (1 vez) -->
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-top:1px solid rgba(255,255,255,0.04);">
+              <span id="repetir-cancion-label" style="font-size:12px; font-weight:700; color:var(--text); transition:color 0.25s, text-shadow 0.25s;">Repetir canción (1 vez)</span>
+              <div style="display:flex; align-items:center; justify-content:flex-end; gap:8px;">
+                <span id="repetir-cancion-status" style="font-size:10px; font-weight:700; color:var(--ac1);"></span>
+                <label class="switch" style="margin:0;" title="Repetir esta canción 1 sola vez y continuar con la siguiente">
+                  <input type="checkbox" id="repetir-cancion-toggle" onchange="toggleModoRepetirCancion(this.checked)">
+                  <span class="slider"></span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Repetir lista (1 vez) -->
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-top:1px solid rgba(255,255,255,0.04);">
+              <span id="repetir-lista-label" style="font-size:12px; font-weight:700; color:var(--text); transition:color 0.25s, text-shadow 0.25s;">Repetir lista (1 vez)</span>
+              <div style="display:flex; align-items:center; justify-content:flex-end; gap:8px;">
+                <span id="repetir-lista-status" style="font-size:10px; font-weight:700; color:var(--ac1);"></span>
+                <label class="switch" style="margin:0;" title="Repetir la lista 1 sola vez al finalizar">
+                  <input type="checkbox" id="repetir-lista-toggle" onchange="toggleModoRepetirLista(this.checked)">
+                  <span class="slider"></span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Autoreproducir al entrar -->
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-top:1px solid rgba(255,255,255,0.04);">
+              <span id="autoplay-reproductor-label" style="font-size:12px; font-weight:700; color:var(--text); transition:color 0.25s, text-shadow 0.25s;">Autoreproducir al entrar</span>
+              <div style="display:flex; align-items:center; justify-content:flex-end; gap:8px;">
+                <label class="switch" style="margin:0;" title="Iniciar reproducción automáticamente al entrar a la sala">
+                  <input type="checkbox" id="autoplay-reproductor-toggle" onchange="toggleAutoplayDesdeReproductor(this.checked)">
+                  <span class="slider"></span>
+                </label>
+              </div>
             </div>
           </div>
-
-          <!-- Desordenar lista (Shuffle): alineado a la izquierda -->
-          <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-top:1px solid rgba(255,255,255,0.04);">
-            <span id="shuffle-label" style="font-size:12px; font-weight:700; color:var(--muted); transition:color 0.25s, text-shadow 0.25s;">Desordenar lista</span>
-            <div style="display:flex; align-items:center; justify-content:flex-end; gap:8px;">
-              <button type="button" class="btn-control" onclick="desordenarColaAleatorio()" style="padding:2px 8px; font-size:10px; border-radius:6px; line-height:1.2; background:rgba(0,212,255,0.08); border:1px solid rgba(0,212,255,0.25); color:var(--ac1);" title="Mezclar el orden de las canciones en cola">Mezclar ya</button>
-              <label class="switch" style="margin:0;" title="Activar modo aleatorio">
-                <input type="checkbox" id="shuffle-toggle" onchange="toggleModoAleatorio(this.checked)">
-                <span class="slider"></span>
-              </label>
-            </div>
-          </div>
-
-          <!-- Repetir canción (1 vez): toggle independiente alineado a la derecha -->
-          <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-top:1px solid rgba(255,255,255,0.04);">
-            <span id="repetir-cancion-label" style="font-size:12px; font-weight:700; color:var(--muted); transition:color 0.25s, text-shadow 0.25s;">Repetir canción (1 vez)</span>
-            <div style="display:flex; align-items:center; justify-content:flex-end; gap:8px;">
-              <span id="repetir-cancion-status" style="font-size:10px; font-weight:700; color:var(--ac1);"></span>
-              <label class="switch" style="margin:0;" title="Repetir esta canción 1 sola vez y continuar con la siguiente">
-                <input type="checkbox" id="repetir-cancion-toggle" onchange="toggleModoRepetirCancion(this.checked)">
-                <span class="slider"></span>
-              </label>
-            </div>
-          </div>
-
-          <!-- Repetir lista (1 vez): toggle independiente alineado a la derecha -->
-          <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-top:1px solid rgba(255,255,255,0.04);">
-            <span id="repetir-lista-label" style="font-size:12px; font-weight:700; color:var(--muted); transition:color 0.25s, text-shadow 0.25s;">Repetir lista (1 vez)</span>
-            <div style="display:flex; align-items:center; justify-content:flex-end; gap:8px;">
-              <span id="repetir-lista-status" style="font-size:10px; font-weight:700; color:var(--ac1);"></span>
-              <label class="switch" style="margin:0;" title="Repetir la lista 1 sola vez al finalizar">
-                <input type="checkbox" id="repetir-lista-toggle" onchange="toggleModoRepetirLista(this.checked)">
-                <span class="slider"></span>
-              </label>
-            </div>
-          </div>
-
-          <!-- Autoreproducir al entrar: toggle independiente alineado a la derecha -->
-          <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-top:1px solid rgba(255,255,255,0.04);">
-            <span id="autoplay-reproductor-label" style="font-size:12px; font-weight:700; color:var(--muted); transition:color 0.25s, text-shadow 0.25s;">Autoreproducir al entrar</span>
-            <div style="display:flex; align-items:center; justify-content:flex-end; gap:8px;">
-              <label class="switch" style="margin:0;" title="Iniciar reproducción automáticamente al entrar a la sala">
-                <input type="checkbox" id="autoplay-reproductor-toggle" onchange="toggleAutoplayDesdeReproductor(this.checked)">
-                <span class="slider"></span>
-              </label>
-            </div>
-          </div>
-
         </div>
 
         <!-- Dos elementos audio invisibles alternantes -->
@@ -1403,53 +1613,68 @@ input:checked + .slider:before {
       </div>
     </div>
 
-    <div class="queue-box" id="queue-box-container">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; cursor:pointer;" onclick="toggleQueueBox()">
-        <div class="queue-label" id="queue-label">
-          <span>Próximas canciones</span>
-          <span id="queue-count-badge" style="background:rgba(0,212,255,0.15); color:var(--ac1); padding:2px 8px; border-radius:10px; font-size:10px; font-weight:800;">0</span>
+    <!-- BUSCADOR GLOBAL UNIFICADO (Dispositivo, Servidor, Usuarios y YouTube en vivo) -->
+    <div class="global-search-card" id="global-search-container">
+      <div class="global-search-bar">
+        <span style="font-size:15px; color:var(--ac1);">🔍</span>
+        <input type="text" id="global-search-input" class="global-search-input" placeholder="Buscar canción en este equipo, servidor o YouTube..." autocomplete="off" oninput="onInputBusquedaGlobal(this.value)">
+        <button type="button" id="btn-clear-global" onclick="limpiarBusquedaGlobal()" style="display:none; background:none; border:none; color:var(--muted); font-size:14px; cursor:pointer; padding:2px 6px;">✕</button>
+      </div>
+      <!-- Desplegable con resultados -->
+      <div id="global-search-results" class="global-results-box" style="display:none;"></div>
+    </div>
+
+    <!-- SECCIÓN 2: PRÓXIMAS CANCIONES (COLA) EN ACORDEÓN -->
+    <div class="accordion-card" id="acc-card-queue">
+      <div class="accordion-header" onclick="toggleSeccionAcordeon('queue', event)">
+        <div class="accordion-title-wrap">
+          <span style="font-size:14px;">🎵</span>
+          <span class="accordion-title">Próximas canciones</span>
+          <span class="accordion-badge" id="queue-count-badge">0</span>
         </div>
         <div style="display:flex; gap:6px; align-items:center;">
-          <button type="button" class="btn-control" id="btn-vaciar-queue" style="padding:4px 10px; font-size:11px; border-radius:8px; line-height:1.2; color:#ff4d6d; border-color:rgba(255,77,109,0.35); background:rgba(255,77,109,0.06);" onclick="event.stopPropagation(); vaciarColaCompleta();" title="Vaciar toda la lista en reproducción">Vaciar</button>
-          <button type="button" class="btn-control" id="btn-toggle-queue" style="padding:4px 10px; font-size:11px; border-radius:8px; line-height:1.2;" onclick="event.stopPropagation(); toggleQueueBox();" title="Colapsar o ver canciones en cola">Colapsar ▾</button>
+          <button type="button" class="btn-control" id="btn-vaciar-queue" style="padding:3px 8px; font-size:10px; border-radius:6px; line-height:1.2; color:#ff4d6d; border-color:rgba(255,77,109,0.35); background:rgba(255,77,109,0.06);" onclick="event.stopPropagation(); vaciarColaCompleta();" title="Vaciar toda la lista en reproducción">Vaciar</button>
+          <span class="accordion-arrow" id="acc-arrow-queue">▾</span>
         </div>
       </div>
-      <div id="queue-collapse-wrap">
+      <div id="acc-body-queue" class="accordion-body" style="display:none;">
         <ul class="queue-list" id="lista-cola">
           <li class="queue-empty">Cola vacía</li>
         </ul>
       </div>
     </div>
 
-    <!-- Panel de Peticiones en Vivo de Oyentes Remotos -->
-    <div class="panel-box" id="panel-peticiones-remotas" style="border:1px solid rgba(0, 212, 255, 0.45); background:rgba(12, 22, 38, 0.95); margin-bottom:14px; box-shadow:0 0 20px rgba(0, 212, 255, 0.12);">
-      <div style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="togglePeticionesPanel()">
-        <div class="panel-title" style="margin:0; display:flex; align-items:center; gap:8px;">
-          <span>🎧 Peticiones de Oyentes Remotos</span>
-          <span id="badge-peticiones-count" style="background:#ff3366; color:#fff; font-size:11px; font-weight:900; padding:2px 8px; border-radius:12px; display:none;">0</span>
+    <!-- SECCIÓN 3: PETICIONES DE OYENTES EN ACORDEÓN -->
+    <div class="accordion-card" id="acc-card-peticiones" style="border-color: rgba(0, 212, 255, 0.35);">
+      <div class="accordion-header" onclick="toggleSeccionAcordeon('peticiones', event)">
+        <div class="accordion-title-wrap">
+          <span style="font-size:14px;">🎧</span>
+          <span class="accordion-title">Peticiones de Oyentes Remotos</span>
+          <span id="badge-peticiones-count" style="background:#ff3366; color:#fff; font-size:10.5px; font-weight:900; padding:2px 8px; border-radius:12px; display:none;">0</span>
         </div>
-        <button type="button" class="btn-control" id="btn-toggle-peticiones" style="padding:4px 10px; font-size:11px; border-radius:8px; line-height:1.2;">Colapsar ▾</button>
+        <span class="accordion-arrow" id="acc-arrow-peticiones">▾</span>
       </div>
-
-      <div id="peticiones-collapse-wrap" style="margin-top:12px;">
+      <div id="acc-body-peticiones" class="accordion-body" style="display:none;">
         <div id="lista-peticiones-remotas">
           <div style="color:var(--muted); font-size:12px; text-align:center; padding:10px;">Esperando peticiones de oyentes en vivo...</div>
         </div>
       </div>
     </div>
 
-    <div class="panel-box" id="panel-youtube">
-      <div style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="toggleYouTubePanel()">
-        <div class="panel-title" style="margin:0;">📺 Agregar desde YouTube</div>
-        <button type="button" class="btn-control" id="btn-toggle-yt" style="padding:4px 10px; font-size:11px; border-radius:8px; line-height:1.2;" onclick="event.stopPropagation(); toggleYouTubePanel();">Desplegar ▸</button>
+    <!-- SECCIÓN 4: YOUTUBE EN ACORDEÓN -->
+    <div class="accordion-card" id="acc-card-youtube">
+      <div class="accordion-header" onclick="toggleSeccionAcordeon('youtube', event)">
+        <div class="accordion-title-wrap">
+          <span style="font-size:14px;">📺</span>
+          <span class="accordion-title">Agregar enlace directo de YouTube</span>
+        </div>
+        <span class="accordion-arrow" id="acc-arrow-youtube">▾</span>
       </div>
-
-      <div id="youtube-collapse-wrap" style="display:none; margin-top:12px;">
+      <div id="acc-body-youtube" class="accordion-body" style="display:none;">
         <div class="sec visible" id="sec-youtube">
           <div class="yt-box">
             <input class="yt-input" id="yt-url" type="text" inputmode="url" placeholder="Pega el enlace de YouTube aquí..." oninput="ytInputChange()" onpaste="setTimeout(ytInputChange,50); setTimeout(ytInputChange,250);" onchange="ytInputChange()" onkeyup="ytInputChange()">
             <div class="yt-preview" id="yt-preview">
-              <!-- Selector para Ver Video o Solo Audio -->
               <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 13px; font-weight: bold; cursor: pointer; color: var(--ac1);">
                 <input type="checkbox" id="yt-ver-video" onchange="ytInputChange()" style="cursor:pointer;"> 📺 Ver Video (Streaming)
               </label>
@@ -1459,85 +1684,104 @@ input:checked + .slider:before {
             </div>
           </div>
         </div>
-
         <div class="progress" id="prog-wrap" style="display:none;">
           <div class="progress-track"><div class="progress-fill" id="prog-fill"></div></div>
         </div>
-
         <button class="action-btn" id="btn-poner" onclick="abrirModalPonerYoutube()" disabled style="width: 100%; margin-top:8px;">Pega un link de YouTube</button>
         <div class="status-msg" id="upload-msg"></div>
       </div>
     </div>
 
-    <div class="panel-box" id="sec-listas-reproductor">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px;">
-        <div class="panel-title" style="margin:0;">📂 Listas de reproducción / Carpetas (<span id="count-playlists-reproductor">0</span>)</div>
-        <div style="display:flex; gap:6px;">
+    <!-- SECCIÓN 5: LISTAS DE REPRODUCCIÓN / CARPETAS EN ACORDEÓN -->
+    <div class="accordion-card" id="acc-card-listas">
+      <div class="accordion-header" onclick="toggleSeccionAcordeon('listas', event)">
+        <div class="accordion-title-wrap">
+          <span style="font-size:14px;">📂</span>
+          <span class="accordion-title">Listas de reproducción / Carpetas</span>
+          <span class="accordion-badge" id="count-playlists-reproductor">0</span>
+        </div>
+        <span class="accordion-arrow" id="acc-arrow-listas">▾</span>
+      </div>
+      <div id="acc-body-listas" class="accordion-body" style="display:none;">
+        <div style="display:flex; justify-content:flex-end; gap:6px; margin-bottom:10px;">
           <button class="btn-control" style="font-size:11px; padding:4px 8px; font-weight:800;" onclick="abrirSelectorCarpeta()" title="Seleccionar carpeta principal de música">📁 Agregar carpeta</button>
           <label for="local-files-input" class="btn-control" style="cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:4px; font-size:11px; padding:4px 8px; margin:0;" title="Agregar canción suelta">🎵 Agregar canción</label>
         </div>
-      </div>
-      <p style="font-size:12px; color:var(--muted); margin:0 0 10px;">Tus subcarpetas de música (ej. Salsa, Rock, Vallenato) se organizan aquí automáticamente como listas.</p>
-      
-      <div class="playlist-create">
-        <input class="playlist-input" id="playlist-name" type="text" placeholder="Nombre de lista nueva...">
-        <button class="btn-control" onclick="crearLista()">Crear lista</button>
-      </div>
-
-      <ul class="library-list" id="lista-playlists">
-        <li class="library-empty">Cargando listas...</li>
-      </ul>
-    </div>
-
-<div class="panel-box">
-      <div class="panel-title">Biblioteca de este dispositivo</div>
-      <div class="local-actions">
-        <button class="btn-control" onclick="abrirSelectorCarpeta()" title="Importar carpeta y auto-organizar listas por género">📁 Agregar carpeta</button>
-        <label for="local-files-input" class="btn-control" style="cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:4px; margin:0;" title="Agregar canción individual">🎵 Agregar canción</label>
-        <button class="btn-control" onclick="compartirMiBiblioteca()">Compartir</button>
-      </div>
-      <!-- Carpeta parametrizable para descargas y archivos locales -->
-      <div id="info-carpeta-destino" style="margin: 8px 0 10px; padding: 7px 12px; background: rgba(0, 212, 255, 0.05); border: 1px solid rgba(0, 212, 255, 0.18); border-radius: 8px; font-size: 11px; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
-        <span style="color: var(--muted); display:flex; align-items:center; gap:5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
-          <span>📁</span> Carpeta de descargas:
-          <strong id="label-carpeta-descarga" style="color: var(--ac1); font-weight:800;">Descargas del navegador</strong>
-        </span>
-        <button type="button" class="btn-control" style="font-size: 10px; padding: 2px 8px; margin: 0; white-space:nowrap;" onclick="seleccionarCarpetaDescargasPersonalizada()">Cambiar</button>
-      </div>
-      <div class="share-panel" id="share-panel">
-        <div class="library-origin">Enlace temporal para que otro dispositivo guarde canciones de esta biblioteca</div>
-        <div class="share-link" id="share-link"></div>
-        <div class="share-qr" id="share-qr"></div>
-      </div>
-      <input class="hidden-input" id="folder-input" type="file" accept="audio/*,audio/mpeg,audio/mp4,audio/x-m4a,audio/wav,audio/flac,audio/ogg,.mp3,.m4a,.aac,.wav,.ogg,.flac" webkitdirectory directory multiple onchange="indexarArchivosLocales(this.files)">
-      <input class="hidden-input" id="local-files-input" type="file" accept="audio/*,audio/mpeg,audio/mp4,audio/x-m4a,audio/wav,audio/flac,audio/ogg,.mp3,.m4a,.aac,.wav,.ogg,.flac" multiple onchange="indexarArchivosLocales(this.files)">
-      <!-- Barra de control: contador, quitar duplicados y vaciar lista -->
-      <div style="display:flex; justify-content:space-between; align-items:center; margin:10px 0 6px; flex-wrap:wrap; gap:6px;">
-        <span style="font-size:11.5px; color:var(--muted); font-weight:700;">
-          Canciones guardadas: <strong id="count-canciones-locales" style="color:var(--text);">0</strong>
-        </span>
-        <div style="display:flex; gap:6px;">
-          <button type="button" class="btn-control" style="font-size:10.5px; padding:3px 8px; margin:0;" onclick="limpiarCancionesDuplicadas()" title="Deja solo 1 copia de cada canción y elimina las repetidas">🧹 Quitar duplicados</button>
-          <button type="button" class="btn-control" style="font-size:10.5px; padding:3px 8px; margin:0; color:#ff4d6d; border-color:rgba(255,77,109,0.35);" onclick="vaciarCancionesLocales()" title="Vacía toda la lista de canciones guardadas en este dispositivo">🗑️ Vaciar lista</button>
+        <p style="font-size:12px; color:var(--muted); margin:0 0 10px;">Tus subcarpetas de música se organizan aquí automáticamente como listas.</p>
+        <div class="playlist-create">
+          <input class="playlist-input" id="playlist-name" type="text" placeholder="Nombre de lista nueva...">
+          <button class="btn-control" onclick="crearLista()">Crear lista</button>
         </div>
+        <ul class="library-list" id="lista-playlists">
+          <li class="library-empty">Cargando listas...</li>
+        </ul>
       </div>
-      <input class="local-search" id="local-search" type="search" placeholder="Buscar en este dispositivo..." oninput="renderBibliotecaLocal()">
-      <div id="banner-permiso-directorio" style="display:none; background: rgba(255, 193, 7, 0.15); border: 1px solid #ffc107; border-radius: 6px; padding: 10px; margin-bottom: 12px; font-size: 0.9rem; color: #ffc107; display: flex; justify-content: space-between; align-items: center; box-sizing: border-box;">
-        <span>⚠️ TucTuc necesita permiso para acceder a tu carpeta vinculada.</span>
-        <button class="btn-control" style="margin: 0; padding: 4px 8px; font-size: 0.8rem;" onclick="restablecerPermisoDirectorio()">Dar permiso</button>
-      </div>
-      <ul class="library-list" id="lista-local">
-        <li class="library-empty">Agrega una carpeta o canciones para no volver al explorador.</li>
-      </ul>
     </div>
 
-    
+    <!-- SECCIÓN 6: BIBLIOTECA DE ESTE DISPOSITIVO EN ACORDEÓN -->
+    <div class="accordion-card" id="acc-card-local">
+      <div class="accordion-header" onclick="toggleSeccionAcordeon('local', event)">
+        <div class="accordion-title-wrap">
+          <span style="font-size:14px;">📱</span>
+          <span class="accordion-title">Biblioteca de este dispositivo</span>
+          <span class="accordion-badge" id="count-canciones-locales">0</span>
+        </div>
+        <span class="accordion-arrow" id="acc-arrow-local">▾</span>
+      </div>
+      <div id="acc-body-local" class="accordion-body" style="display:none;">
+        <div class="local-actions">
+          <button class="btn-control" onclick="abrirSelectorCarpeta()" title="Importar carpeta y auto-organizar listas por género">📁 Agregar carpeta</button>
+          <label for="local-files-input" class="btn-control" style="cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:4px; margin:0;" title="Agregar canción individual">🎵 Agregar canción</label>
+          <button class="btn-control" onclick="compartirMiBiblioteca()">Compartir</button>
+        </div>
+        <!-- Carpeta parametrizable para descargas y archivos locales -->
+        <div id="info-carpeta-destino" style="margin: 8px 0 10px; padding: 7px 12px; background: rgba(0, 212, 255, 0.05); border: 1px solid rgba(0, 212, 255, 0.18); border-radius: 8px; font-size: 11px; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+          <span style="color: var(--muted); display:flex; align-items:center; gap:5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+            <span>📁</span> Carpeta de descargas:
+            <strong id="label-carpeta-descarga" style="color: var(--ac1); font-weight:800;">Descargas del navegador</strong>
+          </span>
+          <button type="button" class="btn-control" style="font-size: 10px; padding: 2px 8px; margin: 0; white-space:nowrap;" onclick="seleccionarCarpetaDescargasPersonalizada()">Cambiar</button>
+        </div>
+        <div class="share-panel" id="share-panel">
+          <div class="library-origin">Enlace temporal para que otro dispositivo guarde canciones de esta biblioteca</div>
+          <div class="share-link" id="share-link"></div>
+          <div class="share-qr" id="share-qr"></div>
+        </div>
+        <input class="hidden-input" id="folder-input" type="file" accept="audio/*,audio/mpeg,audio/mp4,audio/x-m4a,audio/wav,audio/flac,audio/ogg,.mp3,.m4a,.aac,.wav,.ogg,.flac" webkitdirectory directory multiple onchange="indexarArchivosLocales(this.files)">
+        <input class="hidden-input" id="local-files-input" type="file" accept="audio/*,audio/mpeg,audio/mp4,audio/x-m4a,audio/wav,audio/flac,audio/ogg,.mp3,.m4a,.aac,.wav,.ogg,.flac" multiple onchange="indexarArchivosLocales(this.files)">
+        <!-- Barra de control: contador, quitar duplicados y vaciar lista -->
+        <div style="display:flex; justify-content:space-between; align-items:center; margin:10px 0 6px; flex-wrap:wrap; gap:6px;">
+          <span style="font-size:11.5px; color:var(--muted); font-weight:700;">Gestión de almacenamiento local:</span>
+          <div style="display:flex; gap:6px;">
+            <button type="button" class="btn-control" style="font-size:10.5px; padding:3px 8px; margin:0;" onclick="limpiarCancionesDuplicadas()" title="Deja solo 1 copia de cada canción y elimina las repetidas">🧹 Quitar duplicados</button>
+            <button type="button" class="btn-control" style="font-size:10.5px; padding:3px 8px; margin:0; color:#ff4d6d; border-color:rgba(255,77,109,0.35);" onclick="vaciarCancionesLocales()" title="Vacía toda la lista de canciones guardadas en este dispositivo">🗑️ Vaciar lista</button>
+          </div>
+        </div>
+        <input class="local-search" id="local-search" type="search" placeholder="Buscar en este dispositivo..." oninput="renderBibliotecaLocal()">
+        <div id="banner-permiso-directorio" style="display:none; background: rgba(255, 193, 7, 0.15); border: 1px solid #ffc107; border-radius: 6px; padding: 10px; margin-bottom: 12px; font-size: 0.9rem; color: #ffc107; display: flex; justify-content: space-between; align-items: center; box-sizing: border-box;">
+          <span>⚠️ TucTuc necesita permiso para acceder a tu carpeta vinculada.</span>
+          <button class="btn-control" style="margin: 0; padding: 4px 8px; font-size: 0.8rem;" onclick="restablecerPermisoDirectorio()">Dar permiso</button>
+        </div>
+        <ul class="library-list" id="lista-local">
+          <li class="library-empty">Agrega una carpeta o canciones para no volver al explorador.</li>
+        </ul>
+      </div>
+    </div>
 
-    <div class="panel-box" style="border-color: rgba(255,77,109,.25); background: rgba(255,77,109,.04);">
-      <div class="panel-title" style="color: #ff4d6d;">Mantenimiento</div>
-      <p style="font-size:12px; color:var(--muted); margin-bottom:10px; line-height:1.5;">Borra todas las canciones, listas y configuraciones guardadas en este navegador. Las canciones no se borran del disco del celular, solo de la rockola.</p>
-      <button class="q-remove" style="width:100%; padding:12px; font-size:13px;" onclick="limpiarLibreriaCompleta()">🗑️ Limpiar toda la librería de este navegador</button>
-      <div id="limpiar-msg" class="status-msg" style="margin-top:8px;"></div>
+    <!-- SECCIÓN 7: MANTENIMIENTO EN ACORDEÓN -->
+    <div class="accordion-card" id="acc-card-mantenimiento" style="border-color: rgba(255,77,109,.25);">
+      <div class="accordion-header" onclick="toggleSeccionAcordeon('mantenimiento', event)">
+        <div class="accordion-title-wrap">
+          <span style="font-size:14px;">🛠️</span>
+          <span class="accordion-title" style="color: #ff4d6d;">Mantenimiento y reset</span>
+        </div>
+        <span class="accordion-arrow" id="acc-arrow-mantenimiento">▾</span>
+      </div>
+      <div id="acc-body-mantenimiento" class="accordion-body" style="display:none; background: rgba(255,77,109,.04);">
+        <p style="font-size:12px; color:var(--muted); margin-bottom:10px; line-height:1.5;">Borra todas las canciones, listas y configuraciones guardadas en este navegador. Las canciones no se borran del disco del celular, solo de la rockola.</p>
+        <button class="q-remove" style="width:100%; padding:12px; font-size:13px;" onclick="limpiarLibreriaCompleta()">🗑️ Limpiar toda la librería de este navegador</button>
+        <div id="limpiar-msg" class="status-msg" style="margin-top:8px;"></div>
+      </div>
     </div>
 
 
@@ -3218,20 +3462,24 @@ function poner(modo = 'final') {
   subirYoutube(modo);
 }
 
-function subirYoutube(modo = 'final') {
-  const url = document.getElementById('yt-url').value.trim();
+function subirYoutube(modo = 'final', urlOverride = null) {
+  const ytInput = document.getElementById('yt-url');
+  const url = (urlOverride || (ytInput ? ytInput.value : '')).trim();
   if (!url) return;
   // Para modos 'siguiente' y 'final', marcar para no confundir con salto remoto
   if (modo !== 'ya') {
     skipRemoteSkip = true;
     ultimaCancionAgregadaTs = Date.now();
   }
-  btnPoner.disabled = true;
-  progWrap.style.display = 'block';
+  const btnPonerEl = document.getElementById('btn-poner');
+  const progWrapEl = document.getElementById('prog-wrap');
+  const progFillEl = document.getElementById('prog-fill');
+  if (btnPonerEl) btnPonerEl.disabled = true;
+  if (progWrapEl) progWrapEl.style.display = 'block';
   let avance = 0;
   const timer = setInterval(() => {
     avance = Math.min(avance + Math.random() * 10, 85);
-    progFill.style.width = avance + '%';
+    if (progFillEl) progFillEl.style.width = avance + '%';
   }, 200);
   fetch(`/rockola/${SALA}/youtube`, {
     method:'POST',
@@ -3241,22 +3489,27 @@ function subirYoutube(modo = 'final') {
   .then(r => r.json())
   .then(res => {
     clearInterval(timer);
-    progFill.style.width = '100%';
-    setTimeout(() => { progWrap.style.display = 'none'; progFill.style.width = '0%'; }, 250);
+    if (progFillEl) progFillEl.style.width = '100%';
+    setTimeout(() => { 
+      if (progWrapEl) progWrapEl.style.display = 'none'; 
+      if (progFillEl) progFillEl.style.width = '0%'; 
+    }, 250);
     if (res.ok) {
-      document.getElementById('yt-url').value = '';
-      document.getElementById('yt-preview').className = 'yt-preview';
+      if (ytInput) ytInput.value = '';
+      const preview = document.getElementById('yt-preview');
+      if (preview) preview.className = 'yt-preview';
       onAgregarOk(1);
     } else {
       mostrarMensaje(res.error || 'No se pudo agregar', 'error');
-      btnPoner.disabled = false;
+      if (btnPonerEl) btnPonerEl.disabled = false;
     }
   })
   .catch(() => {
     clearInterval(timer);
-    progWrap.style.display = 'none';
-    mostrarMensaje('Error de conexion', 'error');
-    btnPoner.disabled = false;
+    if (progWrapEl) progWrapEl.style.display = 'none';
+    if (progFillEl) progFillEl.style.width = '0%';
+    mostrarMensaje('Error de conexión', 'error');
+    if (btnPonerEl) btnPonerEl.disabled = false;
   });
 }
 
@@ -3996,7 +4249,7 @@ function renderBibliotecaLocal() {
         <div class="local-meta">${tamano} · ${fechaHora || 'este dispositivo'}</div>
       </div>
       <button class="playlist-mini" onclick="agregarCancionALista('${c.id}')">Lista</button>
-      <button class="library-btn" onclick="abrirModalPoner('${c.id}', '${escapeJs(limpiarNombre(c.nombre))}')">Poner</button>
+      <button class="btn-play-action" onclick="abrirModalPoner('${c.id}', '${escapeJs(limpiarNombre(c.nombre))}')" title="Reproducir canción"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
       <button class="library-del-btn" onclick="abrirModalCompartirLocalItem('${c.id}', '${escapeJs(limpiarNombre(c.nombre))}')" title="Compartir canción por WhatsApp" style="color:#25d366;">📲</button>
       <button class="library-del-btn" onclick="eliminarCancionLocal('${c.id}', '${escapeJs(limpiarNombre(c.nombre))}')" title="Eliminar solo esta copia">🗑️</button>
     </li>
@@ -4553,61 +4806,350 @@ window.addEventListener('click', () => {
   });
 });
 
-let modalPonerCancionId = null;
-let modalPonerEsYt = false;
-function abrirModalPoner(cancionId, nombre, esYt = false) {
-  modalPonerCancionId = cancionId;
-  modalPonerEsYt = !!esYt;
+/* ═══════════════════════════════════════════════════════════════
+   MODAL ÚNICO CENTRALIZADO DE REPRODUCCIÓN (Ahora / Después / Final)
+   ═══════════════════════════════════════════════════════════════ */
+let modalPonerTarget = null;
 
-  // Si la cola está vacía, reproducir inmediatamente sin mostrar el modal
+function abrirModalPoner(idOUrl, nombre, tipo = 'local') {
+  // Retrocompatibilidad con booleanos esYt: true -> 'youtube', false -> 'local'
+  if (tipo === true) tipo = 'youtube';
+  if (tipo === false) tipo = 'local';
+  
+  modalPonerTarget = { id: idOUrl, nombre: nombre, tipo: tipo };
+
+  // Si la cola está vacía, reproducir de inmediato sin modal
   if (Array.isArray(currentCola) && currentCola.length === 0) {
-    console.log('[Rockola] Cola vacía, reproduciendo inmediatamente');
-    if (modalPonerEsYt) {
-      subirYoutube(MODO.REEMPLAZAR);
-    } else {
-      ponerLocal(cancionId, MODO.REEMPLAZAR);
-    }
+    console.log('[Rockola] Cola vacía, reproduciendo de inmediato');
+    ejecutarPoner(MODO.REEMPLAZAR);
     return;
   }
-  document.getElementById('modal-poner-titulo').textContent = nombre;
-  document.getElementById('modal-poner').style.display = 'flex';
+  const tituloEl = document.getElementById('modal-poner-titulo');
+  if (tituloEl) tituloEl.textContent = nombre;
+  const modalEl = document.getElementById('modal-poner');
+  if (modalEl) modalEl.style.display = 'flex';
 }
+
 function cerrarModalPoner() {
-  document.getElementById('modal-poner').style.display = 'none';
-  modalPonerCancionId = null;
-  modalPonerEsYt = false;
+  const modalEl = document.getElementById('modal-poner');
+  if (modalEl) modalEl.style.display = 'none';
+  modalPonerTarget = null;
 }
+
 function ejecutarPoner(modo) {
-  console.log('[Rockola] ejecutarPoner called:', modalPonerCancionId, modo, 'esYt:', modalPonerEsYt);
-  if (!modalPonerCancionId) return;
-  const id = modalPonerCancionId;
-  const esYt = modalPonerEsYt;
+  if (!modalPonerTarget) return;
+  const target = modalPonerTarget;
   cerrarModalPoner();
-  if (esYt) {
-    console.log('[Rockola] calling subirYoutube with modo:', modo);
-    subirYoutube(modo);
+
+  if (target.tipo === 'youtube') {
+    subirYoutube(modo, target.id);
+  } else if (target.tipo === 'server') {
+    ponerServer(target.id, modo);
   } else {
-    console.log('[Rockola] calling ponerLocal with id:', id, modo);
-    ponerLocal(id, modo);
+    ponerLocal(target.id, modo);
+  }
+}
+
+async function ponerServer(archivoId, modo = 'final') {
+  try {
+    const res = await fetch(`/rockola/${SALA}/biblioteca/${encodeURIComponent(archivoId)}/poner`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ modo: modo })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      mostrarMensaje('Canción agregada desde el servidor ✓', 'ok');
+      verificarCola();
+    } else {
+      mostrarMensaje(data.error || 'No se pudo agregar', 'error');
+    }
+  } catch (e) {
+    mostrarMensaje('Error de conexión con el servidor', 'error');
   }
 }
 
 let isDraggingQueue = false;
 
-let peticionesCollapsed = false;
+/* ═══════════════════════════════════════════════════════════════
+   SISTEMA DE ACORDEÓN AUTO-RETRÁCTIL (Foco Único y Clic Fuera)
+   ═══════════════════════════════════════════════════════════════ */
+let seccionAcordeonActiva = null;
 
-function togglePeticionesPanel() {
-  peticionesCollapsed = !peticionesCollapsed;
-  const wrap = document.getElementById('peticiones-collapse-wrap');
-  const btn = document.getElementById('btn-toggle-peticiones');
-  if (!wrap || !btn) return;
-  if (peticionesCollapsed) {
-    wrap.style.display = 'none';
-    btn.textContent = 'Desplegar ▸';
-  } else {
-    wrap.style.display = 'block';
-    btn.textContent = 'Colapsar ▾';
+function toggleSeccionAcordeon(seccionId, event) {
+  if (event && typeof event.stopPropagation === 'function') {
+    event.stopPropagation();
   }
+  const yaAbierta = (seccionAcordeonActiva === seccionId);
+
+  // Colapsar cualquier otra sección abierta para mantener foco único
+  cerrarTodasSeccionesAcordeon();
+
+  if (!yaAbierta) {
+    const card = document.getElementById('acc-card-' + seccionId);
+    const body = document.getElementById('acc-body-' + seccionId);
+    const arrow = document.getElementById('acc-arrow-' + seccionId);
+
+    if (body) body.style.display = 'block';
+    if (arrow) {
+      arrow.textContent = '▴';
+      arrow.classList.add('open');
+    }
+    if (card) card.classList.add('is-open');
+    seccionAcordeonActiva = seccionId;
+
+    // Inicializaciones bajo demanda para fluidez
+    if (seccionId === 'local') {
+      renderBibliotecaLocal();
+    } else if (seccionId === 'peticiones') {
+      cargarPeticionesRemotas();
+    } else if (seccionId === 'listas') {
+      cargarPlaylists();
+    }
+  }
+}
+
+function cerrarTodasSeccionesAcordeon() {
+  const secciones = ['modos', 'queue', 'peticiones', 'youtube', 'listas', 'local', 'mantenimiento'];
+  secciones.forEach(id => {
+    const card = document.getElementById('acc-card-' + id);
+    const body = document.getElementById('acc-body-' + id);
+    const arrow = document.getElementById('acc-arrow-' + id);
+    if (body) body.style.display = 'none';
+    if (arrow) {
+      arrow.textContent = '▾';
+      arrow.classList.remove('open');
+    }
+    if (card) card.classList.remove('is-open');
+  });
+  seccionAcordeonActiva = null;
+}
+
+// Clic fuera en cualquier lugar para auto-colapsar la sección activa
+document.addEventListener('click', function(e) {
+  if (!seccionAcordeonActiva) return;
+  // Si el clic ocurrió dentro de un modal o menú desplegable, no colapsar
+  if (e.target.closest && (e.target.closest('.modal-overlay') || e.target.closest('#modal-poner') || e.target.closest('.modal') || e.target.closest('.dropdown'))) {
+    return;
+  }
+  // Si el clic fue dentro de la tarjeta activa, no colapsar
+  const cardActiva = document.getElementById('acc-card-' + seccionAcordeonActiva);
+  if (cardActiva && cardActiva.contains(e.target)) return;
+
+  cerrarTodasSeccionesAcordeon();
+});
+
+// Sincronización de funciones puente heredadas
+function toggleQueueBox() { toggleSeccionAcordeon('queue'); }
+function togglePeticionesPanel() { toggleSeccionAcordeon('peticiones'); }
+function toggleYouTubePanel() { toggleSeccionAcordeon('youtube'); }
+
+/* ═══════════════════════════════════════════════════════════════
+   BUSCADOR GLOBAL UNIFICADO (Dispositivo, Servidor, Usuarios, YouTube)
+   ═══════════════════════════════════════════════════════════════ */
+let busquedaGlobalTimeout = null;
+
+function onInputBusquedaGlobal(val) {
+  const q = (val || '').trim();
+  const clearBtn = document.getElementById('btn-clear-global');
+  if (clearBtn) clearBtn.style.display = q ? 'inline-block' : 'none';
+
+  if (q.length < 2) {
+    const box = document.getElementById('global-search-results');
+    if (box) {
+      box.innerHTML = '';
+      box.style.display = 'none';
+    }
+    return;
+  }
+
+  clearTimeout(busquedaGlobalTimeout);
+  busquedaGlobalTimeout = setTimeout(() => {
+    ejecutarBusquedaGlobal(q);
+  }, 280);
+}
+
+function limpiarBusquedaGlobal() {
+  const inp = document.getElementById('global-search-input');
+  if (inp) {
+    inp.value = '';
+    inp.focus();
+  }
+  onInputBusquedaGlobal('');
+}
+
+async function ejecutarBusquedaGlobal(query) {
+  const box = document.getElementById('global-search-results');
+  if (!box) return;
+
+  const q = query.trim();
+  if (q.length < 2) {
+    box.style.display = 'none';
+    box.innerHTML = '';
+    return;
+  }
+
+  // 1. Inmediato: Búsqueda local en este dispositivo (latencia 0 ms)
+  const qLower = q.toLowerCase();
+  const cancionesLoc = (cancionesLocales || []).filter(c => {
+    const n = limpiarNombre(c.nombre || '').toLowerCase();
+    return n.includes(qLower);
+  }).slice(0, 6);
+
+  let htmlLocal = '';
+  if (cancionesLoc.length > 0) {
+    htmlLocal = `
+      <div class="global-group-header">📱 En este dispositivo (${cancionesLoc.length})</div>
+      ${cancionesLoc.map(c => `
+        <div class="global-result-row">
+          <div class="global-result-info">
+            <div class="global-result-title" title="${escapeHtml(c.nombre)}">${escapeHtml(limpiarNombre(c.nombre))}</div>
+            <div class="global-result-meta">💾 Guardado en este equipo · ${(c.size ? Math.max(1, Math.round(c.size/1024/1024)) : 1)} MB</div>
+          </div>
+          <button class="btn-play-action" onclick="seleccionarResultadoGlobal('local', '${escapeJs(c.id)}', '${escapeJs(limpiarNombre(c.nombre))}')" title="Reproducir">
+            <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+          </button>
+        </div>
+      `).join('')}
+    `;
+  }
+
+  box.style.display = 'block';
+  box.innerHTML = htmlLocal + `<div class="global-empty-msg" id="global-search-spinner" style="padding:10px 14px; font-size:11.5px; opacity:0.8;">Buscando en servidor y YouTube en vivo...</div>`;
+
+  // 2. Servidor + Catálogo + YouTube en vivo
+  try {
+    const res = await fetch(`/rockola/${SALA}/buscar-global?q=${encodeURIComponent(q)}`);
+    const data = await res.json();
+
+    const actual = (document.getElementById('global-search-input')?.value || '').trim();
+    if (actual !== q) return; // Si la búsqueda cambió mientras esperábamos
+
+    const servidor = data.servidor || [];
+    const usuarios = data.usuarios || [];
+    const youtube = data.youtube || [];
+
+    let htmlServidor = '';
+    if (servidor.length > 0) {
+      htmlServidor = `
+        <div class="global-group-header">⚡ En el servidor (${servidor.length})</div>
+        ${servidor.map(s => {
+          const esYt = !s.archivo_id && !!s.youtube_url;
+          const targetId = s.archivo_id || s.youtube_url;
+          const tipo = esYt ? 'youtube' : 'server';
+          return `
+          <div class="global-result-row">
+            <div class="global-result-info">
+              <div class="global-result-title" title="${escapeHtml(s.nombre)}">${escapeHtml(limpiarNombre(s.nombre))}</div>
+              <div class="global-result-meta">${esYt ? '🔗 Enlace de YouTube en servidor' : '📁 Archivo de audio listo en servidor'}</div>
+            </div>
+            <button class="btn-play-action" onclick="seleccionarResultadoGlobal('${tipo}', '${escapeJs(targetId)}', '${escapeJs(limpiarNombre(s.nombre))}')" title="Reproducir">
+              <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+            </button>
+          </div>
+        `;}).join('')}
+      `;
+    }
+
+    let htmlUsuarios = '';
+    if (usuarios.length > 0) {
+      htmlUsuarios = `
+        <div class="global-group-header">👥 Catálogo de usuarios (${usuarios.length})</div>
+        ${usuarios.map(u => `
+          <div class="global-result-row">
+            <div class="global-result-info">
+              <div class="global-result-title" title="${escapeHtml(u.nombre)}">${escapeHtml(limpiarNombre(u.nombre))}</div>
+              <div class="global-result-meta">🏷️ Compartida en catálogo comunitario</div>
+            </div>
+            <button class="btn-play-action" onclick="buscarEnYoutubeDirecto('${escapeJs(limpiarNombre(u.nombre))}')" title="Buscar y reproducir">
+              <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+            </button>
+          </div>
+        `).join('')}
+      `;
+    }
+
+    let htmlYoutube = '';
+    if (youtube.length > 0) {
+      htmlYoutube = `
+        <div class="global-group-header">📺 YouTube en vivo (${youtube.length})</div>
+        ${youtube.map(y => `
+          <div class="global-result-row">
+            <div class="global-result-info">
+              <div class="global-result-title" title="${escapeHtml(y.nombre)}">${escapeHtml(limpiarNombre(y.nombre))}</div>
+              <div class="global-result-meta">🎬 ${escapeHtml(y.canal || 'YouTube')}${y.duracion ? ' · ' + escapeHtml(y.duracion) : ''}</div>
+            </div>
+            <button class="btn-play-action" onclick="seleccionarResultadoGlobal('youtube', '${escapeJs(y.youtube_url)}', '${escapeJs(limpiarNombre(y.nombre))}')" title="Reproducir">
+              <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+            </button>
+          </div>
+        `).join('')}
+      `;
+    }
+
+    const contenido = htmlLocal + htmlServidor + htmlUsuarios + htmlYoutube;
+    if (!contenido) {
+      box.innerHTML = `<div class="global-empty-msg">No se encontraron resultados para "${escapeHtml(q)}".</div>`;
+    } else {
+      box.innerHTML = contenido;
+    }
+  } catch (err) {
+    console.error("Error en búsqueda global:", err);
+    if (!htmlLocal) {
+      box.innerHTML = `<div class="global-empty-msg">Error al consultar el servidor.</div>`;
+    } else {
+      box.innerHTML = htmlLocal;
+    }
+  }
+}
+
+function seleccionarResultadoGlobal(tipo, idOUrl, nombre) {
+  const box = document.getElementById('global-search-results');
+  if (box) box.style.display = 'none';
+  abrirModalPoner(idOUrl, nombre, tipo);
+}
+
+function buscarEnYoutubeDirecto(titulo) {
+  const inp = document.getElementById('global-search-input');
+  if (inp) {
+    inp.value = titulo;
+    onInputBusquedaGlobal(titulo);
+  }
+}
+
+// Clic fuera para cerrar los resultados del buscador global
+document.addEventListener('click', function(e) {
+  const searchContainer = document.getElementById('global-search-container');
+  const resultsBox = document.getElementById('global-search-results');
+  if (searchContainer && resultsBox && !searchContainer.contains(e.target)) {
+    resultsBox.style.display = 'none';
+  }
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   RESUMEN VISUAL DE MODOS DE REPRODUCCIÓN (TARJETA COLAPSADA)
+   ═══════════════════════════════════════════════════════════════ */
+function actualizarResumenModos() {
+  const badge = document.getElementById('acc-modos-resumen');
+  if (!badge) return;
+  const toggle = document.getElementById('fundido-toggle');
+  const isCruzado = toggle ? toggle.checked : true;
+  const secEl = document.getElementById('fundido-segundos');
+  const durEl = document.getElementById('fundido-duracion');
+  const sec = secEl ? secEl.value : '12';
+  const dur = durEl ? durEl.value : '5';
+
+  const partes = [];
+  if (isCruzado) {
+    partes.push(`⚡ ${sec}s → ${dur}s`);
+  } else {
+    partes.push('⚡ Off');
+  }
+  if (typeof modoAleatorio !== 'undefined' && modoAleatorio) partes.push('🔀');
+  if (typeof modoRepetirCancion !== 'undefined' && modoRepetirCancion) partes.push('🔂 1x');
+  if (typeof modoRepetirLista !== 'undefined' && modoRepetirLista) partes.push('🔁 Lista');
+
+  badge.textContent = partes.join(' · ');
 }
 
 function escapeJs(str) {
@@ -4809,20 +5351,7 @@ async function descartarPeticionDJ(peticionId) {
   }
 }
 
-let youtubeCollapsed = true;
-function toggleYouTubePanel() {
-  youtubeCollapsed = !youtubeCollapsed;
-  const wrap = document.getElementById('youtube-collapse-wrap');
-  const btn = document.getElementById('btn-toggle-yt');
-  if (!wrap || !btn) return;
-  if (youtubeCollapsed) {
-    wrap.style.display = 'none';
-    btn.textContent = 'Desplegar ▸';
-  } else {
-    wrap.style.display = 'block';
-    btn.textContent = 'Colapsar ▾';
-  }
-}
+// toggleYouTubePanel heredado enlazado a toggleSeccionAcordeon('youtube')
 
 async function vaciarColaCompleta() {
   if (!currentCola || currentCola.length === 0) {
@@ -4865,20 +5394,7 @@ async function vaciarColaCompleta() {
   }
 }
 
-let queueBoxCollapsed = false;
-function toggleQueueBox() {
-  queueBoxCollapsed = !queueBoxCollapsed;
-  const wrap = document.getElementById('queue-collapse-wrap');
-  const btn = document.getElementById('btn-toggle-queue');
-  if (!wrap || !btn) return;
-  if (queueBoxCollapsed) {
-    wrap.style.display = 'none';
-    btn.textContent = 'Desplegar ▸';
-  } else {
-    wrap.style.display = 'block';
-    btn.textContent = 'Colapsar ▾';
-  }
-}
+// toggleQueueBox heredado enlazado a toggleSeccionAcordeon('queue')
 
 function estaCancionGuardadaLocal(c) {
   if (!c || !cancionesLocales || !cancionesLocales.length) return false;
@@ -5924,6 +6440,7 @@ function actualizarFundidoStatus() {
       labelEl.style.textShadow = 'none';
     }
   }
+  try { actualizarResumenModos(); } catch(e) {}
 }
 
 async function guardarFundidoSettings() {
@@ -5965,6 +6482,7 @@ function actualizarShuffleStatus() {
       labelEl.style.textShadow = 'none';
     }
   }
+  try { actualizarResumenModos(); } catch(e) {}
 }
 
 function actualizarRepetirCancionStatus() {

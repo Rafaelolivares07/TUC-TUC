@@ -1229,6 +1229,105 @@ def sugerencias_canciones_compartidas(token):
         conn.close()
 
 
+def _buscar_youtube_en_vivo(query, max_results=5):
+    try:
+        import yt_dlp
+        ydl_opts = {
+            'quiet': True,
+            'extract_flat': True,
+            'skip_download': True,
+            'noplaylist': True,
+            'no_warnings': True,
+        }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            res = ydl.extract_info(f"ytsearch{max_results}:{query}", download=False)
+            items = []
+            for e in (res.get('entries') or []):
+                if not e:
+                    continue
+                dur = e.get('duration')
+                dur_str = f"{int(dur // 60)}:{int(dur % 60):02d}" if dur else ""
+                vid_id = e.get('id')
+                if not vid_id:
+                    continue
+                items.append({
+                    'id': vid_id,
+                    'nombre': e.get('title') or 'Video de YouTube',
+                    'canal': e.get('uploader') or '',
+                    'duracion': dur_str,
+                    'youtube_url': f"https://www.youtube.com/watch?v={vid_id}",
+                    'origen': 'youtube'
+                })
+            return items
+    except Exception as e:
+        print(f"[buscar_youtube_en_vivo] Warning buscando YouTube: {e}")
+        return []
+
+
+@bp.route('/<sala_id>/buscar-global')
+def buscar_global(sala_id):
+    """Buscador global multifuente: Servidor, Catálogo de usuarios y YouTube en vivo."""
+    q = (request.args.get('q') or '').strip()
+    if len(q) < 2:
+        return jsonify(ok=True, servidor=[], usuarios=[], youtube=[])
+
+    conn = _connect()
+    try:
+        q_like = f"%{q}%"
+
+        # 1. Servidor (Canciones listas con audio o youtube)
+        rows_servidor = conn.execute("""
+            SELECT DISTINCT ON (LOWER(TRIM(nombre))) nombre, origen, archivo_id, youtube_url FROM (
+                SELECT nombre, origen, archivo_id, youtube_url FROM rockola_compartidos
+                WHERE (archivo_id IS NOT NULL AND archivo_id != '') OR (youtube_url IS NOT NULL AND youtube_url != '')
+                UNION
+                SELECT nombre, origen, archivo_id, youtube_url FROM rockola_biblioteca
+                WHERE (archivo_id IS NOT NULL AND archivo_id != '') OR (youtube_url IS NOT NULL AND youtube_url != '')
+            ) s
+            WHERE nombre ILIKE %s
+            LIMIT 6
+        """, (q_like,)).fetchall()
+
+        servidor_items = []
+        for r in rows_servidor:
+            servidor_items.append({
+                'nombre': r['nombre'],
+                'origen': r['origen'],
+                'archivo_id': r['archivo_id'] or '',
+                'youtube_url': r['youtube_url'] or ''
+            })
+
+        # 2. Catálogo de otros usuarios indexados
+        rows_usuarios = conn.execute("""
+            SELECT cancion_id, titulo as nombre FROM rockola_canciones
+            WHERE titulo ILIKE %s OR archivo_nombre ILIKE %s
+            ORDER BY titulo ASC
+            LIMIT 6
+        """, (q_like, q_like)).fetchall()
+
+        usuarios_items = []
+        for r in rows_usuarios:
+            nom_norm = r['nombre'].lower().strip()
+            if not any(s['nombre'].lower().strip() == nom_norm for s in servidor_items):
+                usuarios_items.append({
+                    'id': r['cancion_id'],
+                    'nombre': r['nombre'],
+                    'origen': 'usuarios'
+                })
+
+        # 3. YouTube en vivo nativo
+        youtube_items = _buscar_youtube_en_vivo(q, max_results=5)
+
+        return jsonify(
+            ok=True,
+            servidor=servidor_items,
+            usuarios=usuarios_items,
+            youtube=youtube_items
+        )
+    finally:
+        conn.close()
+
+
 @bp.route('/c/<token>/pedir', methods=['POST'])
 def peticion_cancion_compartida(token):
     """El oyente remoto pide una cancion al DJ en vivo desde el vinilo web con auto-despacho inteligente."""

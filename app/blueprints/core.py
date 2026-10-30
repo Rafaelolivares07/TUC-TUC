@@ -1824,6 +1824,24 @@ def api_buscador_omni():
     q = request.args.get('q', '').strip()
     negocio_id = request.args.get('negocio_id') or session.get('active_negocio_id')
     slug = session.get('negocio_slug')
-    
+    if not slug and negocio_id:
+        from ..db import get_db_connection
+        try:
+            _conn = get_db_connection()
+            _r = _conn.execute(
+                "SELECT slug FROM restaurantes WHERE tercero_id = %s LIMIT 1",
+                (negocio_id,)).fetchone()
+            if _r:
+                slug = _r['slug']
+            else:
+                _t = _conn.execute(
+                    "SELECT slug FROM tiendas WHERE tercero_id = %s LIMIT 1",
+                    (negocio_id,)).fetchone()
+                if _t:
+                    slug = _t['slug']
+            _conn.close()
+        except Exception:
+            pass
+
     res = buscar_omni(q, negocio_id=negocio_id, slug=slug)
     return jsonify(res)

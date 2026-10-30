@@ -107,6 +107,13 @@ def _obtener_catalogo_base(negocio_id=None, slug=None):
             'keywords': ['desk', 'portal', 'portada', 'buscar', 'buscador', 'lanzador']
         },
         {
+            'titulo': 'Kardex',
+            'modulo': 'Inventario',
+            'icono': '\U0001F4E6',
+            'url': f'https://{s_slug}.tuc-tuc.co/kardex' if slug else f'/inventario/{nid}/kardex',
+            'keywords': ['kardex', 'movimientos', 'existencias', 'saldos', 'entradas', 'salidas']
+        },
+        {
             'titulo': 'Contabilidad — General',
             'modulo': 'Contabilidad',
             'icono': '📒',

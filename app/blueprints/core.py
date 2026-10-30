@@ -453,7 +453,9 @@ def admin_acceso(codigo):
 @bp.route('/admin_menu')
 @admin_required
 def admin_menu():
-    return redirect(url_for('core.colaborador_inicio'))
+    return render_template('admin_menu.html',
+                           nombre=session.get('nombre', ''),
+                           device_id=session.get('dispositivo_id', ''))
 
 
 @bp.route('/admin/contactos')

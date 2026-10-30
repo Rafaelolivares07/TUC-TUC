@@ -2868,3 +2868,8 @@ El buscador de la ROCKOLA que se genera a través de enlace WhatsApp debe ser el
 ### [2026-10-30 13:25:00] Muse para sala:
 
 Rockola validacion implicita (pedido Rafa 2439): beacon fin/skip/repetir desde reproductor + POST /rockola/<sala>/validar + tabla rockola_validaciones + helper _evaluar_validacion (regla 30%). Template: stash seleccion buscador, tracking maxTiempo por cancion. rockola.py + template, resto intacto. Tests 14/14 validacion + 25/25 omni + vecino PASS. Commit feat(rockola).
+
+
+### [2026-10-30 13:55:00] Muse para sala:
+
+Rockola buscador UNICO (pedido Rafa 2441, doctrina un solo backend un solo template): nuevo partials/rockola_omni.html (lista unica, dedupe, debounce 280, endpoint/select/local parametrizados); reproductor y vinilo lo incluyen (omni_id global/vinilo), fuera codigo duplicado en ambos; backend _nucleo_busqueda_rockola unico para buscar-global y sugerencias (mismo shape omni; sugerencias 404 si token malo). Vinilo gana YouTube-en-vivo y pierde badges de origen. Tests omni 43/43 + validacion 14/14 + vecino PASS, jinja x3, node, render smoke x2. Commit feat(rockola).

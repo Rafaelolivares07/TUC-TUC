@@ -1187,65 +1187,23 @@ def _enviar_mensaje_chat_peticion(conn, dj_id, oyente_id, oyente_nombre, cancion
 
 @bp.route('/c/<token>/sugerencias')
 def sugerencias_canciones_compartidas(token):
-    """Buscador en tiempo real para autocompletar peticiones desde el vinilo."""
+    """Buscador del vinilo WhatsApp: MISMO núcleo y shape que buscar-global (un solo buscador)."""
     q = (request.args.get('q') or '').strip()
     if len(q) < 2:
-        return jsonify(ok=True, sugerencias=[])
+        return jsonify(ok=True, servidor=[], usuarios=[], youtube=[])
 
     conn = _connect()
     try:
         row_comp = conn.execute("SELECT sala_id FROM rockola_compartidos WHERE token = %s", (token,)).fetchone()
-        sala_id = row_comp['sala_id'] if row_comp else 'default'
-
-        q_like = f"%{q}%"
-        sugerencias = []
-        nombres_vistos = set()
-
-        # 1. Canciones YA en el servidor (listas para sonar de una)
-        rows_servidor = conn.execute("""
-            SELECT nombre, origen, archivo_id, youtube_url FROM (
-                SELECT nombre, origen, archivo_id, youtube_url FROM rockola_compartidos
-                WHERE (archivo_id IS NOT NULL AND archivo_id != '') OR (youtube_url IS NOT NULL AND youtube_url != '')
-                UNION
-                SELECT nombre, origen, archivo_id, youtube_url FROM rockola_biblioteca
-                WHERE (archivo_id IS NOT NULL AND archivo_id != '') OR (youtube_url IS NOT NULL AND youtube_url != '')
-            ) s
-            WHERE nombre ILIKE %s
-            ORDER BY nombre ASC
-            LIMIT 10
-        """, (q_like,)).fetchall()
-
-        for r in rows_servidor:
-            nom_norm = r['nombre'].strip().lower()
-            if nom_norm not in nombres_vistos:
-                nombres_vistos.add(nom_norm)
-                sugerencias.append({
-                    'nombre': r['nombre'],
-                    'origen': r['origen'],
-                    'en_servidor': True,
-                    'etiqueta': '⚡ Suena al instante'
-                })
-
-        # 2. Canciones del repertorio general indexado (dispositivos)
-        rows_canciones = conn.execute("""
-            SELECT titulo as nombre FROM rockola_canciones
-            WHERE titulo ILIKE %s OR archivo_nombre ILIKE %s
-            ORDER BY titulo ASC
-            LIMIT 15
-        """, (q_like, q_like)).fetchall()
-
-        for r in rows_canciones:
-            nom_norm = r['nombre'].strip().lower()
-            if nom_norm not in nombres_vistos:
-                nombres_vistos.add(nom_norm)
-                sugerencias.append({
-                    'nombre': r['nombre'],
-                    'origen': 'local',
-                    'en_servidor': False,
-                    'etiqueta': '🎧 Repertorio del DJ'
-                })
-
-        return jsonify(ok=True, sugerencias=sugerencias[:18])
+        if not row_comp:
+            return jsonify(ok=False, error='Token no válido'), 404
+        servidor_items, usuarios_items, youtube_items = _nucleo_busqueda_rockola(conn, q)
+        return jsonify(
+            ok=True,
+            servidor=servidor_items,
+            usuarios=usuarios_items,
+            youtube=youtube_items
+        )
     finally:
         conn.close()
 
@@ -1314,6 +1272,60 @@ def _evaluar_validacion(sonados_seg, duracion_seg, evento):
     return ratio, ratio >= 0.30
 
 
+def _nucleo_busqueda_rockola(conn, q):
+    """Núcleo ÚNICO del buscador rockola: Servidor + Catálogo + YouTube con dedupe.
+
+    Lo usan buscar-global (reproductor) y sugerencias (vinilo WhatsApp).
+    Retorna (servidor_items, usuarios_items, youtube_items)."""
+    q_like = f"%{q}%"
+
+    # 1. Servidor (Canciones listas con audio o youtube)
+    rows_servidor = conn.execute("""
+        SELECT DISTINCT ON (LOWER(TRIM(nombre))) nombre, origen, archivo_id, youtube_url FROM (
+            SELECT nombre, origen, archivo_id, youtube_url FROM rockola_compartidos
+            WHERE (archivo_id IS NOT NULL AND archivo_id != '') OR (youtube_url IS NOT NULL AND youtube_url != '')
+            UNION
+            SELECT nombre, origen, archivo_id, youtube_url FROM rockola_biblioteca
+            WHERE (archivo_id IS NOT NULL AND archivo_id != '') OR (youtube_url IS NOT NULL AND youtube_url != '')
+        ) s
+        WHERE nombre ILIKE %s
+        LIMIT 6
+    """, (q_like,)).fetchall()
+
+    servidor_items = []
+    for r in rows_servidor:
+        servidor_items.append({
+            'nombre': r['nombre'],
+            'origen': r['origen'],
+            'archivo_id': r['archivo_id'] or '',
+            'youtube_url': r['youtube_url'] or ''
+        })
+
+    # 2. Catálogo de otros usuarios indexados (sin repetir servidor)
+    rows_usuarios = conn.execute("""
+        SELECT cancion_id, titulo as nombre FROM rockola_canciones
+        WHERE titulo ILIKE %s OR archivo_nombre ILIKE %s
+        ORDER BY titulo ASC
+        LIMIT 6
+    """, (q_like, q_like)).fetchall()
+
+    usuarios_items = []
+    for r in rows_usuarios:
+        nom_norm = r['nombre'].lower().strip()
+        if not any(s['nombre'].lower().strip() == nom_norm for s in servidor_items):
+            usuarios_items.append({
+                'id': r['cancion_id'],
+                'nombre': r['nombre'],
+                'origen': 'usuarios'
+            })
+
+    # 3. YouTube en vivo nativo (sin repetir enlaces ya guardados en biblioteca)
+    youtube_items = _buscar_youtube_en_vivo(q, max_results=5)
+    youtube_items = _filtrar_youtube_guardados(youtube_items, servidor_items)
+
+    return servidor_items, usuarios_items, youtube_items
+
+
 @bp.route('/<sala_id>/buscar-global')
 def buscar_global(sala_id):
     """Buscador global multifuente: Servidor, Catálogo de usuarios y YouTube en vivo."""
@@ -1323,51 +1335,7 @@ def buscar_global(sala_id):
 
     conn = _connect()
     try:
-        q_like = f"%{q}%"
-
-        # 1. Servidor (Canciones listas con audio o youtube)
-        rows_servidor = conn.execute("""
-            SELECT DISTINCT ON (LOWER(TRIM(nombre))) nombre, origen, archivo_id, youtube_url FROM (
-                SELECT nombre, origen, archivo_id, youtube_url FROM rockola_compartidos
-                WHERE (archivo_id IS NOT NULL AND archivo_id != '') OR (youtube_url IS NOT NULL AND youtube_url != '')
-                UNION
-                SELECT nombre, origen, archivo_id, youtube_url FROM rockola_biblioteca
-                WHERE (archivo_id IS NOT NULL AND archivo_id != '') OR (youtube_url IS NOT NULL AND youtube_url != '')
-            ) s
-            WHERE nombre ILIKE %s
-            LIMIT 6
-        """, (q_like,)).fetchall()
-
-        servidor_items = []
-        for r in rows_servidor:
-            servidor_items.append({
-                'nombre': r['nombre'],
-                'origen': r['origen'],
-                'archivo_id': r['archivo_id'] or '',
-                'youtube_url': r['youtube_url'] or ''
-            })
-
-        # 2. Catálogo de otros usuarios indexados
-        rows_usuarios = conn.execute("""
-            SELECT cancion_id, titulo as nombre FROM rockola_canciones
-            WHERE titulo ILIKE %s OR archivo_nombre ILIKE %s
-            ORDER BY titulo ASC
-            LIMIT 6
-        """, (q_like, q_like)).fetchall()
-
-        usuarios_items = []
-        for r in rows_usuarios:
-            nom_norm = r['nombre'].lower().strip()
-            if not any(s['nombre'].lower().strip() == nom_norm for s in servidor_items):
-                usuarios_items.append({
-                    'id': r['cancion_id'],
-                    'nombre': r['nombre'],
-                    'origen': 'usuarios'
-                })
-
-        # 3. YouTube en vivo nativo (sin repetir enlaces ya guardados en biblioteca)
-        youtube_items = _buscar_youtube_en_vivo(q, max_results=5)
-        youtube_items = _filtrar_youtube_guardados(youtube_items, servidor_items)
+        servidor_items, usuarios_items, youtube_items = _nucleo_busqueda_rockola(conn, q)
 
         return jsonify(
             ok=True,

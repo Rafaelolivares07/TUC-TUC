@@ -1981,7 +1981,7 @@
       <button class="tab-btn" onclick="mostrarTab('compras_sugerencias')">🛒 Compras</button>
       <button class="tab-btn" onclick="mostrarTab('cotizaciones')">📋 Cotizaciones</button>
 
-      <button class="tab-btn" onclick="mostrarTab('kardex')">Kardex</button>
+      <a href="https://{{ negocio_slug }}.tuc-tuc.co/kardex" class="tab-btn">Kardex</a>
 
       <button class="tab-btn" onclick="mostrarTab('traslados')">🔄 Traslados</button>
 
@@ -3948,402 +3948,6 @@
     </div>
   </div>
 
-  <!-- ── TAB KARDEX ────────────────────────────────────────────────── -->
-
-  <div id="tab-kardex" class="hidden bg-white rounded-2xl shadow p-5">
-
-    <!-- Fila 1: Buscador de Producto (Izquierda) + Resumen de Existencias (Derecha) -->
-    <div class="flex items-center justify-between mb-3 flex-wrap gap-4 pb-3 border-b border-gray-100">
-
-      <div class="relative w-full sm:max-w-[480px] md:max-w-[520px]">
-        <label class="text-xs font-extrabold text-gray-600 uppercase tracking-wider block mb-1 leading-tight pl-1">Consultar Producto</label>
-        <input id="kardex-ac-input" type="text" placeholder="Buscar producto…" autocomplete="off"
-               class="w-full px-4 py-2 font-medium text-gray-800 bg-white border border-gray-200 rounded-xl shadow-2xs focus:border-rose-500 focus:ring-1 focus:ring-rose-500 transition-all text-sm"
-               oninput="filtrarACKardex()"
-               onfocus="filtrarACKardex()"
-               onkeydown="onKeydownACKardex(event)"
-               onblur="setTimeout(() => document.getElementById('kardex-ac-list')?.classList.add('hidden'), 250)">
-        <div id="kardex-ac-list" class="ac-list hidden"></div>
-        <input type="hidden" id="kardex-ac-id">
-      </div>
-
-      <!-- Resumen de Stock Disponible, Costo y Valor del Producto -->
-      <div id="kardex-resumen-producto" class="hidden flex items-center gap-4 bg-slate-50 border border-slate-200/90 p-2.5 rounded-xl shadow-2xs ml-auto">
-        <div class="border-r border-slate-200 pr-3.5">
-          <span class="block text-slate-400 font-bold uppercase tracking-wider text-[10px] mb-0.5">Stock Disponible</span>
-          <span id="kp-stock" class="text-base font-extrabold text-slate-800 font-mono">0</span>
-        </div>
-        <div class="border-r border-slate-200 pr-3.5">
-          <span class="block text-slate-400 font-bold uppercase tracking-wider text-[10px] mb-0.5">Costo Prom. Actual</span>
-          <span id="kp-costo-prom" class="text-base font-extrabold text-indigo-600 font-mono">0</span>
-        </div>
-        <div class="border-r border-slate-200 pr-3.5">
-          <span class="block text-slate-400 font-bold uppercase tracking-wider text-[10px] mb-0.5">Valor Inventario</span>
-          <span id="kp-valor-existencia" class="text-base font-extrabold text-emerald-600 font-mono">0</span>
-        </div>
-        <div class="pr-1">
-          <span class="block text-slate-400 font-bold uppercase tracking-wider text-[10px] mb-0.5">Tolerancia Costo</span>
-          <span id="kp-tolerancia" class="text-base font-extrabold text-amber-600 font-mono">—</span>
-        </div>
-      </div>
-
-    </div>
-
-    <!-- Fila 2 Unificada: Controles (Solo Cantidades, Decimales, PDF) + Tarjeta Compacta de Auditoría de Registros -->
-    <div class="flex items-center justify-between gap-3 mb-3.5 flex-wrap">
-
-      <!-- Controles de Visualización -->
-      <div class="flex items-center gap-2.5 flex-wrap">
-        <!-- Botón Conmutador de Ocultar/Mostrar Valores y Costos en Kardex -->
-        <button type="button" id="btn-toggle-valores-kardex" onclick="toggleValoresKardex()"
-                class="px-3.5 py-2 rounded-xl font-bold border transition flex items-center gap-1.5 bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200 hover:text-slate-900 cursor-pointer select-none text-xs shadow-2xs"
-                title="Colapsar u ocultar columnas de costos y valores monetarios para enfocarse únicamente en cantidades físicas">
-          <span id="icon-toggle-valores-kardex" class="text-slate-500">💵</span>
-          <span id="text-toggle-valores-kardex">Solo Cantidades</span>
-        </button>
-
-        <!-- Selector interactivo de decimales para Kardex -->
-        <div class="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-xl shadow-2xs shrink-0">
-          <label for="kardex-decimales-input" class="text-xs font-extrabold text-slate-600 uppercase tracking-wide select-none flex items-center gap-1" title="Número de decimales visibles en el Kardex (0 a 6)">
-            <span>🔢 Decimales:</span>
-          </label>
-          <input id="kardex-decimales-input" type="number" min="0" max="6" step="1" value="2"
-                 oninput="cambiarDecimalesKardex(this.value)"
-                 onchange="cambiarDecimalesKardex(this.value)"
-                 onblur="validarDecimalesKardexInput(this)"
-                 onfocus="setTimeout(() => this.select(), 50)"
-                 class="no-spinners w-12 text-center font-mono font-black text-xs bg-white border border-slate-300 rounded-lg px-1.5 py-0.5 outline-none text-slate-800 focus:bg-blue-50 focus:text-blue-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-400 selection:bg-blue-600 selection:text-white transition-all shadow-2xs"
-                 style="-moz-appearance: textfield; appearance: textfield;"
-                 title="Número de decimales visibles para cantidades, costos y valores en Kardex (0 a 6)">
-        </div>
-
-        <button id="kardex-btn-pdf" onclick="generarPdfKardex()" class="hidden px-3.5 py-2 bg-gray-800 hover:bg-gray-900 text-white text-xs font-bold rounded-xl transition-colors shadow-2xs items-center gap-1.5">
-          <span>📄</span> <span>PDF</span>
-        </button>
-      </div>
-
-      <!-- Tarjeta Unificada y Compacta de Auditoría: 100% Coinciden Arriba de los 3 Elementos -->
-      <div id="kardex-conteo-cotejo" class="hidden flex flex-col items-center bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl shadow-2xs ml-auto gap-1" title="Cotejo en tiempo real de registros contados en Base de Datos vs renderizados en tabla">
-        <!-- Badge Superior: Porcentaje de coincidencia -->
-        <div class="w-full flex items-center justify-center">
-          <span id="kardex-badge-cotejo" class="text-[11px] font-bold px-2.5 py-0.5 rounded-md bg-blue-100 text-blue-800 text-center w-full shadow-2xs">⏳ Contando BD...</span>
-        </div>
-        <!-- 3 Elementos en una sola fila compacta -->
-        <div class="flex items-center gap-3 text-center px-0.5">
-          <div class="border-r border-slate-200 pr-2.5">
-            <span class="block text-slate-400 font-bold uppercase tracking-wider text-[9px] mb-0.5 leading-none">Total BD Global</span>
-            <span id="kardex-conteo-global" class="text-xs font-extrabold text-blue-700 font-mono">...</span>
-          </div>
-          <div class="border-r border-slate-200 pr-2.5">
-            <span id="kardex-label-centro" class="block text-slate-400 font-bold uppercase tracking-wider text-[9px] mb-0.5 leading-none">Sede Activa</span>
-            <span id="kardex-conteo-centro" class="text-xs font-extrabold text-indigo-700 font-mono">...</span>
-            <span id="kardex-conteo-bd" class="hidden">...</span>
-          </div>
-          <div>
-            <span class="block text-slate-400 font-bold uppercase tracking-wider text-[9px] mb-0.5 leading-none">Renderizados</span>
-            <span id="kardex-conteo-render" class="text-xs font-extrabold text-slate-800 font-mono">...</span>
-          </div>
-        </div>
-      </div>
-
-    </div>
-
-    <!-- ── BARRA DE SELECCIÓN DE BODEGA / CENTRO DE UTILIDAD Y TOTAL CONSOLIDADO ── -->
-    <div id="kardex-bodegas-bar" class="mb-3.5 bg-slate-50/80 border border-slate-200 rounded-2xl p-3 shadow-2xs">
-      <div class="flex items-center justify-between flex-wrap gap-3">
-        <!-- Selector interactivo de bodegas -->
-        <div class="flex items-center flex-wrap gap-2">
-          <div class="flex items-center gap-1.5 pr-2.5 border-r border-slate-200">
-            <span class="text-xs font-extrabold text-slate-700 uppercase tracking-wider flex items-center gap-1">
-              <span>🏬</span> Bodega / Centro:
-            </span>
-          </div>
-          <!-- Contenedor dinámico de píldoras de bodegas -->
-          <div id="kardex-bodegas-pills" class="flex items-center flex-wrap gap-1.5">
-            <span class="text-xs text-slate-400 font-medium">Seleccione o consulte un producto para ver sus bodegas...</span>
-          </div>
-        </div>
-
-        <!-- Tarjeta de Total Consolidado Empresa (Solo Informativo) -->
-        <div id="kardex-total-empresa-box" class="flex items-center gap-3 bg-white border border-indigo-150 px-3 py-1.5 rounded-xl shadow-2xs ml-auto" title="Sumatoria consolidada de existencias en todas las sedes de la empresa (Informativo, no se mezclan movimientos)">
-          <div class="flex items-center gap-1.5 text-indigo-900 font-bold text-xs">
-            <span>🏢</span>
-            <span>Total Empresa:</span>
-          </div>
-          <div class="text-xs font-extrabold text-slate-800 font-mono">
-            <span id="kte-stock">0</span> <span class="text-[10px] text-slate-400 font-normal">unid</span>
-          </div>
-          <div class="text-xs font-extrabold text-emerald-700 font-mono pl-2 border-l border-indigo-100">
-            <span id="kte-valor">$0</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Aclaración explícita sobre Centros de Utilidad = Bodegas -->
-      <div class="mt-2.5 pt-2 border-t border-slate-200/70 flex items-start gap-2 text-[11px] text-slate-600 leading-normal">
-        <span class="text-blue-500 text-xs shrink-0 mt-0.5">ℹ️</span>
-        <span>
-          <strong class="text-slate-800">Regla de Inventario:</strong> En el sistema, cada <strong>Centro de Utilidad representa una bodega física independiente (relación 1:1)</strong>. Los registros no se mezclan en la tabla cronológica para garantizar la exactitud matemática de saldos y costos promedio. Actualmente no es posible crear más de una bodega por centro de utilidad.
-        </span>
-      </div>
-    </div>
-
-    <div id="kardex-auditoria" class="hidden mb-3 rounded-xl border p-3 text-xs"></div>
-
-
-
-    <div id="kardex-table-container" ondragover="handleKardexAutoScroll(event)" class="overflow-x-auto overflow-y-auto max-h-[700px] border border-gray-150 rounded-xl custom-scrollbar scroll-smooth bg-white w-full">
-
-      <table class="w-full text-[11px] min-w-[1110px]">
-
-        <thead class="bg-gray-50 border-b border-gray-200 sticky top-0 z-10 select-none">
-
-          <tr class="text-gray-500 uppercase text-[9.5px]">
-
-            <th rowspan="2" class="px-2 py-1 text-left align-middle bg-gray-50 whitespace-nowrap min-w-[110px]">Fecha</th>
-
-            <th rowspan="2" class="px-2 py-1 text-left align-middle bg-gray-50 min-w-[95px]">Documento</th>
-
-            <th rowspan="2" class="px-2.5 py-1 text-left align-middle bg-gray-50 min-w-[130px]">Proveedor</th>
-
-            <th rowspan="2" class="px-2 py-1 text-left align-middle bg-gray-50 min-w-[170px]">Origen / Empaque</th>
-
-            <th colspan="3" class="px-1 py-0.5 text-center border-b border-gray-200/60 font-bold bg-gray-100 text-[9.5px]">CANTIDADES</th>
-
-            <th colspan="2" class="px-1 py-0.5 text-center border-b border-gray-200/60 font-bold bg-gray-100 text-[9.5px] kardex-col-valores">COSTOS UNITARIOS</th>
-
-            <th rowspan="2" class="px-2 py-1 text-right num align-middle bg-gray-50 whitespace-nowrap min-w-[100px] kardex-col-valores">Total Línea</th>
-
-            <th rowspan="2" class="px-2 py-1 text-right num align-middle bg-gray-50 whitespace-nowrap text-emerald-800 font-bold min-w-[110px] kardex-col-valores" title="Valor monetario del stock en existencia (Saldo x Promedio)">Total Stock $</th>
-
-          </tr>
-
-          <tr class="text-gray-500 uppercase text-[9.5px]">
-
-            <th class="px-2 py-1 text-right num font-semibold bg-gray-50 text-emerald-800 border-r border-gray-100 min-w-[85px]">
-
-              Entradas
-
-              <span id="kardex-sum-entradas" class="block text-[11px] font-mono font-bold text-emerald-600 mt-0.5" title="Total entradas en consulta">0</span>
-
-            </th>
-
-            <th class="px-2 py-1 text-right num font-semibold bg-gray-50 text-rose-800 border-r border-gray-100 min-w-[85px]">
-
-              Salidas
-
-              <span id="kardex-sum-salidas" class="block text-[11px] font-mono font-bold text-rose-600 mt-0.5" title="Total salidas en consulta">0</span>
-
-            </th>
-
-            <th class="px-2 py-1 text-right num font-semibold bg-gray-50 text-gray-800 min-w-[90px]">Saldo</th>
-
-            <th class="px-1.5 py-1 text-right num font-semibold bg-gray-50 text-blue-800 border-r border-gray-100 min-w-[92px] kardex-col-valores" title="Costo unitario de la transacción">Transacción</th>
-
-            <th class="px-1.5 py-1 text-right num font-semibold bg-gray-50 text-purple-800 min-w-[92px] kardex-col-valores" title="Costo promedio ponderado resultante">Promedio</th>
-
-          </tr>
-
-        </thead>
-
-        <tbody id="tabla-kardex" class="divide-y divide-gray-100">
-
-          <tr><td colspan="11" class="text-center text-gray-400 py-8">Selecciona un producto</td></tr>
-
-        </tbody>
-
-      </table>
-
-    </div>
-
-    <!-- Barra de Paginación de Kardex -->
-    <div id="kardex-paginacion-bar" class="hidden flex flex-wrap items-center justify-between gap-3 mt-3 pt-3 border-t border-gray-150 text-xs">
-      <div class="flex items-center gap-2 text-gray-500 font-medium">
-        <span id="kardex-info-conteo">Mostrando 0 - 0 de 0 movimientos</span>
-      </div>
-
-      <div class="flex items-center gap-3">
-        <!-- Selector de registros por página -->
-        <div class="flex items-center gap-1.5 text-gray-500">
-          <label for="kardex-por-pagina" class="text-[11px] font-bold text-gray-400 uppercase">Filas:</label>
-          <select id="kardex-por-pagina" onchange="cambiarKardexPorPagina(this.value)" class="text-xs bg-gray-50 border border-gray-300 rounded-lg px-2 py-1 font-bold text-gray-700 outline-none focus:border-rose-500 cursor-pointer">
-            <option value="todos" selected>Todos los registros (Sin excepción)</option>
-            <option value="500">500 filas</option>
-            <option value="200">200 filas</option>
-            <option value="100">100 filas</option>
-            <option value="50">50 filas</option>
-          </select>
-        </div>
-
-        <!-- Controles de Navegación -->
-        <div class="flex items-center gap-1">
-          <button id="btn-kardex-primero" type="button" onclick="irPaginaKardex(1)"
-                  class="px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 font-bold hover:bg-gray-100 disabled:opacity-30 disabled:pointer-events-none transition cursor-pointer select-none text-xs"
-                  title="Primera página">
-            ⏮
-          </button>
-          <button id="btn-kardex-prev" type="button" onclick="irPaginaKardex(_kardexPaginaActual - 1)"
-                  class="px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 font-bold hover:bg-gray-100 disabled:opacity-30 disabled:pointer-events-none transition cursor-pointer select-none text-xs">
-            ◀ Anterior
-          </button>
-          
-          <span id="kardex-texto-pagina" class="px-3 py-1 text-xs font-bold text-gray-700 bg-gray-50 rounded-lg border border-gray-200 min-w-[110px] text-center select-none">
-            Página 1 de 1
-          </span>
-
-          <button id="btn-kardex-next" type="button" onclick="irPaginaKardex(_kardexPaginaActual + 1)"
-                  class="px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 font-bold hover:bg-gray-100 disabled:opacity-30 disabled:pointer-events-none transition cursor-pointer select-none text-xs">
-            Siguiente ▶
-          </button>
-          <button id="btn-kardex-ultimo" type="button" onclick="irPaginaKardex(_kardexTotalPaginas)"
-                  class="px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 font-bold hover:bg-gray-100 disabled:opacity-30 disabled:pointer-events-none transition cursor-pointer select-none text-xs"
-                  title="Última página">
-            ⏭
-          </button>
-        </div>
-      </div>
-    </div>
-
-  </div>
-
-
-
-  <!-- MODAL DE RECLASIFICACIÓN DE BODEGA / CENTRO DE UTILIDAD -->
-  <div id="modal-reclasificar-kardex" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-xs items-center justify-center p-4">
-    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-150 border border-slate-100">
-      <div class="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 px-5 py-4 text-white flex items-center justify-between">
-        <div class="flex items-center gap-2">
-          <span class="text-xl">🏢</span>
-          <h3 class="font-bold text-sm tracking-wide">Reclasificar Bodega / Sede</h3>
-        </div>
-        <button type="button" onclick="cerrarModalReclasificarKardex()" class="text-white/70 hover:text-white text-xl font-bold leading-none cursor-pointer">&times;</button>
-      </div>
-
-      <div class="p-5 space-y-4 text-xs text-slate-700">
-        <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-1">
-          <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Documento / Transacción:</div>
-          <div id="mrk-doc-nombre" class="font-extrabold text-sm text-slate-800">...</div>
-          <div id="mrk-prod-detalle" class="text-slate-600 font-medium text-[11px]">...</div>
-        </div>
-
-        <div class="grid grid-cols-2 gap-3 items-center">
-          <div>
-            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Sede Actual:</label>
-            <div id="mrk-sede-actual-badge" class="px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-800 font-bold border border-slate-300 flex items-center gap-1.5 truncate">
-              <span>🏪</span> <span id="mrk-sede-actual-nombre" class="truncate">...</span>
-            </div>
-          </div>
-          <div>
-            <label class="block text-[10px] font-bold text-indigo-700 uppercase tracking-wider mb-1">Mover a Sede:</label>
-            <select id="mrk-select-nueva-sede" class="w-full bg-white border border-indigo-300 rounded-lg px-2 py-1.5 text-xs font-bold text-indigo-900 focus:outline-none focus:ring-2 focus:ring-indigo-400 cursor-pointer">
-              <!-- Opciones dinámicas de CENTROS_UTILIDAD -->
-            </select>
-          </div>
-        </div>
-
-        <!-- Opción para mover todo el documento si aplica -->
-        <div id="mrk-box-todo-doc" class="flex items-start gap-2 pt-1 hidden">
-          <input type="checkbox" id="mrk-check-todo-doc" checked class="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer">
-          <label for="mrk-check-todo-doc" class="text-[11px] text-slate-700 font-semibold cursor-pointer select-none">
-            Mover todos los ítems asociados a este documento (<span id="mrk-doc-num-label" class="font-mono font-bold">#</span>)
-          </label>
-        </div>
-
-        <!-- Explicación de impacto contable y físico -->
-        <div class="rounded-xl bg-blue-50/70 border border-blue-200/80 p-3 space-y-1 text-[11px] text-blue-900">
-          <div class="font-bold flex items-center gap-1 text-blue-950">
-            <span>🛡️</span> <span>Garantía de Integridad Automática:</span>
-          </div>
-          <ul class="list-disc list-inside space-y-0.5 text-blue-800 text-[10.5px]">
-            <li>Actualiza el Kardex físico de la transacción a la nueva sede.</li>
-            <li>Reclasifica los asientos en <code>movimientos_contables</code> al nuevo Centro de Utilidad.</li>
-            <li>Recostea automáticamente la <strong>Sede Origen</strong> y la <strong>Sede Destino</strong>.</li>
-          </ul>
-        </div>
-      </div>
-
-      <div class="bg-slate-50 px-5 py-3 border-t border-slate-150 flex items-center justify-end gap-2">
-        <button type="button" onclick="cerrarModalReclasificarKardex()" class="px-3.5 py-1.5 rounded-xl text-slate-600 hover:bg-slate-200 text-xs font-bold transition cursor-pointer">
-          Cancelar
-        </button>
-        <button type="button" id="mrk-btn-confirmar" onclick="confirmarReclasificarSede()" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-extrabold shadow-sm transition flex items-center gap-1.5 cursor-pointer">
-          <span>⚡</span> <span>Reclasificar y Recostear</span>
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Modal Enriquecido de Verificación y Cambio de Fecha/Hora de Documento (Kardex Drag & Drop) -->
-  <div id="modal-fecha-documento" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-xs items-center justify-center p-4">
-    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-gray-100 animate-in fade-in zoom-in-95 duration-150">
-      
-      <!-- CABECERA -->
-      <div class="bg-slate-900 text-white p-5 flex items-start justify-between">
-        <div>
-          <span class="px-2 py-0.5 bg-indigo-500/30 text-indigo-300 rounded text-[10px] font-bold uppercase tracking-wider">Reordenamiento Cronológico / Kardex</span>
-          <h3 class="text-base font-extrabold text-white mt-1 flex items-center gap-2">
-            <span>🕒</span> Reordenar Fecha y Hora de Documento
-          </h3>
-          <p id="fecha-doc-identidad" class="text-xs text-slate-300 font-semibold mt-0.5"></p>
-        </div>
-        <button type="button" onclick="cerrarModalFechaDocumento()" class="text-slate-400 hover:text-white text-xl font-bold p-1">✕</button>
-      </div>
-
-      <div class="p-5 space-y-4 max-h-[75vh] overflow-y-auto custom-scrollbar">
-        
-        <!-- COMPARATIVA DE FECHA Y HORA -->
-        <div class="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-3">
-          <div class="flex items-center justify-between text-xs border-b border-slate-200/60 pb-2">
-            <span class="text-gray-500 font-bold uppercase text-[10px]">Registro Actual:</span>
-            <span id="fecha-doc-actual-display" class="font-mono font-bold text-gray-700">—</span>
-          </div>
-
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label class="block text-[10px] font-bold text-slate-600 uppercase mb-1">Nueva Fecha</label>
-              <input id="fecha-doc-nueva" type="date" class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-gray-800 focus:outline-none focus:border-indigo-500">
-            </div>
-            <div>
-              <label class="block text-[10px] font-bold text-slate-600 uppercase mb-1">Nueva Hora</label>
-              <input id="hora-doc-nueva" type="time" step="60" class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-gray-800 focus:outline-none focus:border-indigo-500">
-            </div>
-          </div>
-        </div>
-
-        <!-- ITEMS / PRODUCTOS CONTENIDOS EN ESTE DOCUMENTO -->
-        <div>
-          <div class="flex items-center justify-between mb-1.5">
-            <span class="text-[11px] font-bold text-gray-700 uppercase">Ítems contenidos en este documento:</span>
-            <span id="fecha-doc-items-count" class="text-[10px] bg-slate-100 text-slate-600 font-bold px-2 py-0.5 rounded-full">0 ítems</span>
-          </div>
-          <div id="fecha-doc-items-list" class="space-y-1.5 max-h-44 overflow-y-auto border border-gray-150 rounded-xl p-2 bg-gray-50/50 text-xs">
-            <div class="text-center text-gray-400 py-3 text-xs">Consultando ítems...</div>
-          </div>
-        </div>
-
-        <!-- ALERTA INFORMATIVA DE RECOSTEO -->
-        <div class="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-start gap-2">
-          <span class="text-base">⚡</span>
-          <div class="text-[11px] leading-relaxed">
-            <b>Recosteo automático en cascada:</b> Al confirmar, se actualizará la fecha y hora de este documento en <b>Kardex</b>, <b>Contabilidad</b> y <b>Saldos</b>. Todos los movimientos posteriores de los productos listados arriba serán recalculados cronológicamente, impactando el costo de los insumos y el margen de los productos terminados donde participan.
-          </div>
-        </div>
-
-      </div>
-
-      <!-- FOOTER / BOTONES -->
-      <div class="bg-gray-50 px-5 py-3.5 border-t border-gray-150 flex items-center justify-between">
-        <button type="button" onclick="cerrarModalFechaDocumento()" class="px-4 py-2 bg-white border border-gray-200 hover:bg-gray-100 text-gray-700 font-bold rounded-xl text-xs transition">
-          Cancelar
-        </button>
-        <button id="btn-guardar-fecha-doc" type="button" onclick="guardarFechaDocumento()" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-xl text-xs shadow-sm transition flex items-center gap-1.5">
-          <span>✅ Confirmar y Recostear</span>
-        </button>
-      </div>
-
-    </div>
-  </div>
-
   <!-- ── TAB TRASLADOS ENTRE CENTROS DE UTILIDAD ───────────────────── -->
   <div id="tab-traslados" class="hidden bg-white rounded-2xl shadow p-5">
     <div class="border-b border-gray-150 pb-4 mb-5 flex items-center justify-between flex-wrap gap-4">
@@ -5206,6 +4810,7 @@
 <script>
 
 const NEGOCIO_ID = {{ negocio_id }};
+const NEGOCIO_SLUG = "{{ negocio_slug }}";
 const TAB_INICIAL_SERVER = {{ (tab_inicial or '') | tojson }};
 
 let CENTROS_UTILIDAD = {{ centros_utilidad | tojson if centros_utilidad else '[]' }};
@@ -5645,11 +5250,9 @@ function seleccionarTodosRecosteo(marcado) {
 function irKardexDesdeAuditoria(evento, productoId, movimientoId) {
   evento.preventDefault();
   evento.stopPropagation();
-  const url = new URL(window.location.origin + window.location.pathname);
-  url.searchParams.set('tab', 'kardex');
-  url.searchParams.set('producto_id', productoId);
-  if (movimientoId) url.searchParams.set('movimiento_id', movimientoId);
-  window.open(url.toString(), '_blank');
+  let url = 'https://' + NEGOCIO_SLUG + '.tuc-tuc.co/kardex?producto_id=' + encodeURIComponent(productoId);
+  if (movimientoId) url += '&movimiento_id=' + encodeURIComponent(movimientoId);
+  window.open(url, '_blank');
 }
 
 
@@ -12273,28 +11876,9 @@ function seleccionarProductoKardex(id) {
 }
 
 function verKardex(id, nombre, movimientoId = null) {
-  mostrarTab('kardex');
-  const producto = productos.find(p => Number(p.id) === Number(id));
-  document.getElementById('kardex-ac-input').value = nombre || producto?.nombre || '';
-  document.getElementById('kardex-ac-id').value = id;
-
-  cargarKardex(id).then(() => {
-    if (!movimientoId) return;
-    const fila = document.getElementById(`kardex-mov-${movimientoId}`);
-    if (fila) {
-      fila.classList.add('ring-2', 'ring-amber-400');
-      fila.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    } else {
-      cambiarKardexPorPagina('todos');
-      setTimeout(() => {
-        const filaAll = document.getElementById(`kardex-mov-${movimientoId}`);
-        if (filaAll) {
-          filaAll.classList.add('ring-2', 'ring-amber-400');
-          filaAll.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-      }, 400);
-    }
-  });
+  let url = 'https://' + NEGOCIO_SLUG + '.tuc-tuc.co/kardex?producto_id=' + encodeURIComponent(id);
+  if (movimientoId) url += '&movimiento_id=' + encodeURIComponent(movimientoId);
+  window.open(url, '_blank');
 }
 
 let kardexProductoActual = null;
@@ -18582,6 +18166,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   let activeTab = TAB_INICIAL_SERVER || initUrlParams.get('tab');
   if (activeTab === 'gastos') activeTab = 'desembolsos';
+  if (activeTab === 'kardex') {
+    window.location.replace('https://' + NEGOCIO_SLUG + '.tuc-tuc.co/kardex' + window.location.search);
+    return;
+  }
 
   if (activeTab && TABS.includes(activeTab)) {
 

@@ -10237,10 +10237,24 @@ def api_anular_documento(negocio_id):
 @bp.route('/inventario/<int:negocio_id>')
 @bp.route('/inventario/<int:negocio_id>/<tab_name>')
 def admin_inventario(negocio_id, tab_name=None):
-    if 'usuario_id' not in session:
-        return redirect(url_for('auth.admin_login'))
     conn = get_db_connection()
     try:
+        _rslug = conn.execute(
+            "SELECT slug FROM restaurantes WHERE tercero_id = %s LIMIT 1",
+            (negocio_id,)).fetchone()
+        _slug = _rslug['slug'] if _rslug else None
+        if not _slug:
+            _tslug = conn.execute(
+                "SELECT slug FROM tiendas WHERE tercero_id = %s LIMIT 1",
+                (negocio_id,)).fetchone()
+            _slug = _tslug['slug'] if _tslug else None
+        if (tab_name or '').lower() == 'kardex':
+            if not _slug:
+                return "Negocio no encontrado", 404
+            _qs = ('?' + request.query_string.decode('utf-8')) if request.query_string else ''
+            return redirect(f'https://{_slug}.tuc-tuc.co/kardex{_qs}')
+        if 'usuario_id' not in session:
+            return redirect(url_for('auth.admin_login'))
         _crear_tablas(conn)
         contexto = _contexto_negocio(conn, negocio_id)
         if not contexto:
@@ -10296,6 +10310,7 @@ def admin_inventario(negocio_id, tab_name=None):
                                centro_activo=centro_activo,
                                max_centros_utilidad=max_centros_utilidad,
                                tab_inicial=tab_name,
+                               negocio_slug=_slug,
                                es_desarrollo=es_desarrollo)
     except Exception as e:
         return f"Error: {e}", 500

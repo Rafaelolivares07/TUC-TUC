@@ -4882,7 +4882,6 @@ async function ejecutarBusquedaGlobal(query) {
   let htmlLocal = '';
   if (cancionesLoc.length > 0) {
     htmlLocal = `
-      <div class="global-group-header">📱 En este dispositivo (${cancionesLoc.length})</div>
       ${cancionesLoc.map(c => `
         <div class="global-result-row">
           <div class="global-result-info">
@@ -4927,7 +4926,6 @@ async function ejecutarBusquedaGlobal(query) {
     let htmlServidor = '';
     if (servidor.length > 0) {
       htmlServidor = `
-        <div class="global-group-header">⚡ En el servidor (${servidor.length})</div>
         ${servidor.map(s => {
           const esYt = !s.archivo_id && !!s.youtube_url;
           const targetId = s.archivo_id || s.youtube_url;
@@ -4948,7 +4946,6 @@ async function ejecutarBusquedaGlobal(query) {
     let htmlUsuarios = '';
     if (usuariosUnicos.length > 0) {
       htmlUsuarios = `
-        <div class="global-group-header">👥 Catálogo de usuarios (${usuariosUnicos.length})</div>
         ${usuariosUnicos.map(u => `
           <div class="global-result-row">
             <div class="global-result-info">
@@ -4965,7 +4962,6 @@ async function ejecutarBusquedaGlobal(query) {
     let htmlYoutube = '';
     if (youtube.length > 0) {
       htmlYoutube = `
-        <div class="global-group-header">📺 YouTube en vivo (${youtube.length})</div>
         ${youtube.map(y => `
           <div class="global-result-row">
             <div class="global-result-info">

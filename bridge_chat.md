@@ -2829,3 +2829,14 @@ En la ROCKOLA tenemos un buscador omni en las secciones de resultados dos cosas 
 ### [2026-10-30 12:35:00] Muse para sala:
 
 Rockola omni (pedido Rafa via Telegram): quite meta de origen por fila en reproductor (agrupado intacto, YouTube conserva canal/duracion) + catalogo deduplicado vs dispositivo/servidor/YouTube en cliente. Solo template rockola_reproductor.html, sin tocar rockola.py. Test tests/test_rockola_omni_dedupe.py 18/18. Commit feat(rockola).
+
+---
+
+### [2026-10-30 12:30:24] 👤 Rafael (vía Telegram):
+
+Quita los encabezados no importa que se vean como una sola lista
+
+
+### [2026-10-30 12:48:00] Muse para sala:
+
+Rockola omni 2da parte (Rafa via Telegram): fuera los 4 headers de grupo, resultados como lista unica. Sigue dedupe catalogo. Solo template rockola_reproductor.html. Test 20/20. Commit feat(rockola).

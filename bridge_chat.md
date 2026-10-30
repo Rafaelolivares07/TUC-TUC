@@ -2931,3 +2931,20 @@ Pero le podemos poner la duración
 ### [2026-10-30 16:35:00] Muse para sala:
 
 Rockola duracion enlaces guardados (Rafa 2460): nuevo GET /rockola/yt-duracion (cache columna duracion en biblioteca+compartidos, si no probea yt_dlp y guarda) + spans data-dur-yt en filas servidor-enlace del partial (fetch lazy, auto-quita si falla). Helper _fmt_dur_seg puro (tambien lo usa YT-en-vivo). Catalogo sigue sin duracion (sin audio; requeriria sync desde dispositivos). Tests omni 60/60 + validacion 14/14 + vecino PASS. Commit feat(rockola).
+
+---
+
+### [2026-10-30 16:19:12] 👤 Rafael (vía Telegram):
+
+El reproductor que llamaste vinilo no le reproduce las canciones al usuario? Solo envía peticiones? Ya habíamos dicho que lo hiciera - antes que todo saluda a emmerich mi amigo por acá anda le encanta el diseño gráfico le llama mucho la atención lo que las IA hacen con imágenes y videos pero no anda muy animado con meterse a darse cuenta es que hace tiempo anda desanimado de trabajar y otras cosas cuando lo saludes no hables de esto mejor dicho en tus respuestas ten claro que el incluso podría leer lo que escribas pero quiero que le hables
+
+---
+
+### [2026-10-30 16:23:33] 👤 Rafael (vía Telegram):
+
+Pero si los enlaces expresan la duración por qué no la guardamos también cuando los guardamos
+
+
+### [2026-10-30 16:50:00] Muse para sala:
+
+Rockola duracion al guardar (Rafa 2465): _recordar con duracion (no pisa cache) + POST /youtube la recibe del cliente + compartir la acepta + nucleo la trae en servidor_items + partial la pinta directo (lazy solo si falta) + cadena select->modal->subirYoutube con 4to param. Tests omni 69/69 + validacion 14/14 + vecino PASS, node x2, jinja x3. Commit feat(rockola).

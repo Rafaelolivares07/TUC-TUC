@@ -3250,7 +3250,7 @@ function poner(modo = 'final') {
   subirYoutube(modo);
 }
 
-function subirYoutube(modo = 'final', urlOverride = null) {
+function subirYoutube(modo = 'final', urlOverride = null, duracion = '') {
   const ytInput = document.getElementById('yt-url');
   const url = (urlOverride || (ytInput ? ytInput.value : '')).trim();
   if (!url) return;
@@ -3272,7 +3272,7 @@ function subirYoutube(modo = 'final', urlOverride = null) {
   fetch(`/rockola/${SALA}/youtube`, {
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ url, owner:OWNER, modo: modo })
+    body: JSON.stringify({ url, owner:OWNER, modo: modo, duracion: duracion || '' })
   })
   .then(r => r.json())
   .then(res => {
@@ -4599,12 +4599,12 @@ window.addEventListener('click', () => {
    ═══════════════════════════════════════════════════════════════ */
 let modalPonerTarget = null;
 
-function abrirModalPoner(idOUrl, nombre, tipo = 'local') {
+function abrirModalPoner(idOUrl, nombre, tipo = 'local', duracion = '') {
   // Retrocompatibilidad con booleanos esYt: true -> 'youtube', false -> 'local'
   if (tipo === true) tipo = 'youtube';
   if (tipo === false) tipo = 'local';
   
-  modalPonerTarget = { id: idOUrl, nombre: nombre, tipo: tipo };
+  modalPonerTarget = { id: idOUrl, nombre: nombre, tipo: tipo, duracion: duracion || '' };
 
   // Si la cola está vacía, reproducir de inmediato sin modal
   if (Array.isArray(currentCola) && currentCola.length === 0) {
@@ -4630,7 +4630,7 @@ function ejecutarPoner(modo) {
   cerrarModalPoner();
 
   if (target.tipo === 'youtube') {
-    subirYoutube(modo, target.id);
+    subirYoutube(modo, target.id, target.duracion || '');
   } else if (target.tipo === 'server') {
     ponerServer(target.id, modo);
   } else {
@@ -4734,12 +4734,12 @@ function toggleYouTubePanel() { toggleSeccionAcordeon('youtube'); }
 
 /* Buscador omni: JS en partials/rockola_omni.html (único reproductor + vinilo) */
 
-function seleccionarResultadoGlobal(tipo, idOUrl, nombre) {
+function seleccionarResultadoGlobal(tipo, idOUrl, nombre, duracion) {
   const box = document.getElementById('global-search-results');
   if (box) box.style.display = 'none';
   const qv = (document.getElementById('global-search-input')?.value || '').trim();
   ultimaSeleccionBuscador = { q: qv, id: idOUrl, nombre: nombre, tipo: tipo };
-  abrirModalPoner(idOUrl, nombre, tipo);
+  abrirModalPoner(idOUrl, nombre, tipo, duracion);
 }
 
 function reportarValidacion(evento, sonandoId) {

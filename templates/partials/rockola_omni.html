@@ -195,9 +195,9 @@ function limpiarBusquedaOmni() {
   onInputRockolaOmni('');
 }
 
-function omniElegir(tipo, idOUrl, nombre) {
+function omniElegir(tipo, idOUrl, nombre, duracion) {
   const fn = window[OMNI_SELECT];
-  if (typeof fn === 'function') fn(tipo, idOUrl, nombre);
+  if (typeof fn === 'function') fn(tipo, idOUrl, nombre, duracion || '');
 }
 
 function omniElegirCatalogo(nombre) {
@@ -354,16 +354,18 @@ async function ejecutarBusquedaOmni(query) {
           const esYt = !s.archivo_id && !!s.youtube_url;
           const targetId = s.archivo_id || s.youtube_url;
           const tipo = esYt ? 'youtube' : 'server';
-          const durHtml = esYt
-            ? `<div class="global-result-meta" data-dur-yt="${escapeHtml(s.youtube_url)}"></div>`
-            : `<div class="global-result-meta" data-dur-archivo="${escapeHtml(s.archivo_id)}"></div>`;
+          const durHtml = s.duracion
+            ? `<div class="global-result-meta">${escapeHtml(s.duracion)}</div>`
+            : (esYt
+              ? `<div class="global-result-meta" data-dur-yt="${escapeHtml(s.youtube_url)}"></div>`
+              : `<div class="global-result-meta" data-dur-archivo="${escapeHtml(s.archivo_id)}"></div>`);
           return `
-          <div class="global-result-row" onclick="omniElegir('${tipo}', '${escapeJs(targetId)}', '${escapeJs(limpiarNombre(s.nombre))}')">
+          <div class="global-result-row" onclick="omniElegir('${tipo}', '${escapeJs(targetId)}', '${escapeJs(limpiarNombre(s.nombre))}', '${escapeJs(s.duracion || '')}')">
             <div class="global-result-info">
               <div class="global-result-title" title="${escapeHtml(s.nombre)}">${escapeHtml(limpiarNombre(s.nombre))}</div>
               ${durHtml}
             </div>
-            <button class="btn-play-action" onclick="event.stopPropagation(); omniElegir('${tipo}', '${escapeJs(targetId)}', '${escapeJs(limpiarNombre(s.nombre))}')" title="${OMNI_BTN_TITLE}">
+            <button class="btn-play-action" onclick="event.stopPropagation(); omniElegir('${tipo}', '${escapeJs(targetId)}', '${escapeJs(limpiarNombre(s.nombre))}', '${escapeJs(s.duracion || '')}')" title="${OMNI_BTN_TITLE}">
               <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
             </button>
           </div>
@@ -391,12 +393,12 @@ async function ejecutarBusquedaOmni(query) {
     if (youtube.length > 0) {
       htmlYoutube = `
         ${youtube.map(y => `
-          <div class="global-result-row" onclick="omniElegir('youtube', '${escapeJs(y.youtube_url)}', '${escapeJs(limpiarNombre(y.nombre))}')">
+          <div class="global-result-row" onclick="omniElegir('youtube', '${escapeJs(y.youtube_url)}', '${escapeJs(limpiarNombre(y.nombre))}', '${escapeJs(y.duracion)}')">
             <div class="global-result-info">
               <div class="global-result-title" title="${escapeHtml(y.nombre)}">${escapeHtml(limpiarNombre(y.nombre))}</div>
               <div class="global-result-meta">${escapeHtml(y.canal || 'YouTube')}${y.duracion ? ' · ' + escapeHtml(y.duracion) : ''}</div>
             </div>
-            <button class="btn-play-action" onclick="event.stopPropagation(); omniElegir('youtube', '${escapeJs(y.youtube_url)}', '${escapeJs(limpiarNombre(y.nombre))}')" title="${OMNI_BTN_TITLE}">
+            <button class="btn-play-action" onclick="event.stopPropagation(); omniElegir('youtube', '${escapeJs(y.youtube_url)}', '${escapeJs(limpiarNombre(y.nombre))}', '${escapeJs(y.duracion)}')" title="${OMNI_BTN_TITLE}">
               <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
             </button>
           </div>

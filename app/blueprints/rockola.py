@@ -276,19 +276,20 @@ def _validar_tercero_id(conn, tercero_id):
         return None
 
 
-def _recordar_cancion(conn, sala_id, archivo_id, nombre, tercero_id, origen, youtube_url=None):
+def _recordar_cancion(conn, sala_id, archivo_id, nombre, tercero_id, origen, youtube_url=None, duracion=''):
     tid = _validar_tercero_id(conn, tercero_id)
     conn.execute(
         """
-        INSERT INTO rockola_biblioteca (archivo_id, sala_id, nombre, tercero_id, origen, youtube_url)
-        VALUES (%s, %s, %s, %s, %s, %s)
+        INSERT INTO rockola_biblioteca (archivo_id, sala_id, nombre, tercero_id, origen, youtube_url, duracion)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (archivo_id) DO UPDATE
         SET nombre = EXCLUDED.nombre,
             tercero_id = EXCLUDED.tercero_id,
             origen = EXCLUDED.origen,
-            youtube_url = EXCLUDED.youtube_url
+            youtube_url = EXCLUDED.youtube_url,
+            duracion = CASE WHEN EXCLUDED.duracion <> '' THEN EXCLUDED.duracion ELSE rockola_biblioteca.duracion END
         """,
-        (archivo_id, sala_id, nombre, tid, origen, youtube_url),
+        (archivo_id, sala_id, nombre, tid, origen, youtube_url, duracion or ''),
     )
 
 
@@ -880,6 +881,7 @@ def compartir_cancion_generar():
     archivo_id = (data.get('archivo_id') or '').strip()
     amigo_nombre = (data.get('amigo_nombre') or '').strip()
     amigo_telefono = (data.get('amigo_telefono') or '').strip()
+    duracion = (data.get('duracion') or '').strip()[:16]
 
     conn = _connect()
     try:
@@ -975,9 +977,9 @@ def compartir_cancion_generar():
 
         token = uuid.uuid4().hex[:10]
         conn.execute("""
-            INSERT INTO rockola_compartidos (token, sala_id, nombre, origen, youtube_url, archivo_id, tercero_id, creado_por)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        """, (token, sala_id, nombre, origen, youtube_url, archivo_id, tercero_id, creado_por))
+            INSERT INTO rockola_compartidos (token, sala_id, nombre, origen, youtube_url, archivo_id, tercero_id, creado_por, duracion)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (token, sala_id, nombre, origen, youtube_url, archivo_id, tercero_id, creado_por, duracion))
         conn.commit()
 
         base_url = request.host_url.rstrip('/')
@@ -1343,11 +1345,11 @@ def _nucleo_busqueda_rockola(conn, q):
 
     # 1. Servidor (Canciones listas con audio o youtube)
     rows_servidor = conn.execute("""
-        SELECT DISTINCT ON (LOWER(TRIM(nombre))) nombre, origen, archivo_id, youtube_url FROM (
-            SELECT nombre, origen, archivo_id, youtube_url FROM rockola_compartidos
+        SELECT DISTINCT ON (LOWER(TRIM(nombre))) nombre, origen, archivo_id, youtube_url, duracion FROM (
+            SELECT nombre, origen, archivo_id, youtube_url, duracion FROM rockola_compartidos
             WHERE (archivo_id IS NOT NULL AND archivo_id != '') OR (youtube_url IS NOT NULL AND youtube_url != '')
             UNION
-            SELECT nombre, origen, archivo_id, youtube_url FROM rockola_biblioteca
+            SELECT nombre, origen, archivo_id, youtube_url, duracion FROM rockola_biblioteca
             WHERE (archivo_id IS NOT NULL AND archivo_id != '') OR (youtube_url IS NOT NULL AND youtube_url != '')
         ) s
         WHERE nombre ILIKE %s
@@ -1360,7 +1362,8 @@ def _nucleo_busqueda_rockola(conn, q):
             'nombre': r['nombre'],
             'origen': r['origen'],
             'archivo_id': r['archivo_id'] or '',
-            'youtube_url': r['youtube_url'] or ''
+            'youtube_url': r['youtube_url'] or '',
+            'duracion': r['duracion'] or ''
         })
 
     # 2. Catálogo de otros usuarios indexados (sin repetir servidor)
@@ -2322,13 +2325,14 @@ def youtube(sala_id):
         return jsonify(ok=False, error='URL de YouTube invalida'), 400
 
     modo = (data.get('modo') or 'final').strip().lower()
+    duracion = (data.get('duracion') or '').strip()[:16]
     nombre_display = _titulo_youtube(url)
     item_id = 'yt-' + uuid.uuid4().hex[:12]
     conn = _connect()
     try:
         with _lock:
             _agregar_a_cola(conn, sala_id, item_id, nombre_display, tercero_id, youtube_url=url, modo=modo)
-            _recordar_cancion(conn, sala_id, item_id, nombre_display, tercero_id, 'youtube-link', youtube_url=url)
+            _recordar_cancion(conn, sala_id, item_id, nombre_display, tercero_id, 'youtube-link', youtube_url=url, duracion=duracion)
             conn.commit()
     finally:
         conn.close()

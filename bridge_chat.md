@@ -2902,3 +2902,32 @@ El input y el tamaño de la fuente del input crezcamoslo un 18%
 ### [2026-10-30 15:15:00] Muse para sala:
 
 Rockola omni afine (Rafa 2450+2451): fila completa tocable (row onclick + stopPropagation en boton + cursor), duracion lazy en archivos (probe metadata Audio: servidor via omni_media, locales via blob IndexedDB, spans que se auto-quitan si falla), fuera icono video YT (queda canal/duracion), input +18% (fuente 16.5, caja, icono, radius). Solo partial + 1 linea repro. Tests omni 54/54 + validacion 14/14 + vecino PASS. Commit feat(rockola).
+
+---
+
+### [2026-10-30 15:08:08] 👤 Rafael (vía Telegram):
+
+El input y el tamaño de la fuente del input crezcamoslo un 18% me refiero al buscador
+
+---
+
+### [2026-10-30 15:10:35] 👤 Rafael (vía Telegram):
+
+Parece que en la lista de resultados hay unos intermedios sin duración serán los de la bd en servidor?
+
+---
+
+### [2026-10-30 15:45:59] 👤 Rafael (vía Telegram):
+
+[audio 6s] porfa devuelven este mismo mensaje pero en audio que es que no puedo leer en este momento
+
+---
+
+### [2026-10-30 16:13:55] 👤 Rafael (vía Telegram):
+
+Pero le podemos poner la duración
+
+
+### [2026-10-30 16:35:00] Muse para sala:
+
+Rockola duracion enlaces guardados (Rafa 2460): nuevo GET /rockola/yt-duracion (cache columna duracion en biblioteca+compartidos, si no probea yt_dlp y guarda) + spans data-dur-yt en filas servidor-enlace del partial (fetch lazy, auto-quita si falla). Helper _fmt_dur_seg puro (tambien lo usa YT-en-vivo). Catalogo sigue sin duracion (sin audio; requeriria sync desde dispositivos). Tests omni 60/60 + validacion 14/14 + vecino PASS. Commit feat(rockola).

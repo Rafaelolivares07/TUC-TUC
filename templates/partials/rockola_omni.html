@@ -248,6 +248,20 @@ async function omniProbarDuraciones(box) {
       }
       omniProbarDur(el, OMNI_MEDIA + encodeURIComponent(id), null);
     });
+    box.querySelectorAll('[data-dur-yt]').forEach(el => {
+      const url = el.getAttribute('data-dur-yt') || '';
+      if (!url) {
+        if (el.parentNode) el.parentNode.removeChild(el);
+        return;
+      }
+      fetch('/rockola/yt-duracion?url=' + encodeURIComponent(url))
+        .then(r => r.json())
+        .then(d => {
+          if (d && d.ok && d.duracion) { el.textContent = d.duracion; }
+          else if (el.parentNode) { el.parentNode.removeChild(el); }
+        })
+        .catch(() => { if (el.parentNode) el.parentNode.removeChild(el); });
+    });
     const spansLoc = box.querySelectorAll('[data-dur-local]');
     if (typeof obtenerCancionLocal !== 'function') {
       spansLoc.forEach(el => { if (el.parentNode) el.parentNode.removeChild(el); });
@@ -340,7 +354,9 @@ async function ejecutarBusquedaOmni(query) {
           const esYt = !s.archivo_id && !!s.youtube_url;
           const targetId = s.archivo_id || s.youtube_url;
           const tipo = esYt ? 'youtube' : 'server';
-          const durHtml = esYt ? '' : `<div class="global-result-meta" data-dur-archivo="${escapeHtml(s.archivo_id)}"></div>`;
+          const durHtml = esYt
+            ? `<div class="global-result-meta" data-dur-yt="${escapeHtml(s.youtube_url)}"></div>`
+            : `<div class="global-result-meta" data-dur-archivo="${escapeHtml(s.archivo_id)}"></div>`;
           return `
           <div class="global-result-row" onclick="omniElegir('${tipo}', '${escapeJs(targetId)}', '${escapeJs(limpiarNombre(s.nombre))}')">
             <div class="global-result-info">

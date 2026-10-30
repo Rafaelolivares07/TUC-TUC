@@ -115,6 +115,8 @@ ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS actualizado_en TIMESTAMP NOT 
 ALTER TABLE rockola_cola ADD COLUMN IF NOT EXISTS lista_envio_id TEXT;
 ALTER TABLE rockola_cola ADD COLUMN IF NOT EXISTS lista_envio_nombre TEXT;
 ALTER TABLE rockola_cola ADD COLUMN IF NOT EXISTS lista_envio_posicion INTEGER;
+ALTER TABLE rockola_biblioteca ADD COLUMN IF NOT EXISTS duracion TEXT NOT NULL DEFAULT '';
+ALTER TABLE rockola_compartidos ADD COLUMN IF NOT EXISTS duracion TEXT NOT NULL DEFAULT '';
 """
 
 _lock = threading.Lock()
@@ -1208,6 +1210,36 @@ def sugerencias_canciones_compartidas(token):
         conn.close()
 
 
+def _fmt_dur_seg(seg):
+    """Segundos -> 'm:ss' ('' si no hay dato)."""
+    try:
+        total = int(float(seg or 0))
+    except (TypeError, ValueError):
+        return ''
+    if total <= 0:
+        return ''
+    return f"{total // 60}:{total % 60:02d}"
+
+
+def _duracion_video_youtube(url):
+    """Duración 'm:ss' de un video vía yt_dlp ('' si falla)."""
+    try:
+        import yt_dlp
+        ydl_opts = {
+            'quiet': True,
+            'skip_download': True,
+            'noplaylist': True,
+            'no_warnings': True,
+            'socket_timeout': 8,
+        }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+        return _fmt_dur_seg((info or {}).get('duration'))
+    except Exception as e:
+        print(f"[yt_duracion] Warning {url}: {e}")
+        return ''
+
+
 def _buscar_youtube_en_vivo(query, max_results=5):
     try:
         import yt_dlp
@@ -1224,8 +1256,7 @@ def _buscar_youtube_en_vivo(query, max_results=5):
             for e in (res.get('entries') or []):
                 if not e:
                     continue
-                dur = e.get('duration')
-                dur_str = f"{int(dur // 60)}:{int(dur % 60):02d}" if dur else ""
+                dur_str = _fmt_dur_seg(e.get('duration'))
                 vid_id = e.get('id')
                 if not vid_id:
                     continue
@@ -1241,6 +1272,37 @@ def _buscar_youtube_en_vivo(query, max_results=5):
     except Exception as e:
         print(f"[buscar_youtube_en_vivo] Warning buscando YouTube: {e}")
         return []
+
+
+@bp.route('/yt-duracion')
+def duracion_youtube_guardada():
+    """Duración de un enlace YouTube guardado: caché en biblioteca/compartidos, si no probea y guarda."""
+    url = (request.args.get('url') or '').strip()
+    vid = _extraer_youtube_id(url)
+    if not vid:
+        return jsonify(ok=False, error='URL inválida'), 400
+    conn = _connect()
+    try:
+        with _lock:
+            for tabla in ('rockola_biblioteca', 'rockola_compartidos'):
+                rows = conn.execute(
+                    "SELECT youtube_url, duracion FROM %s WHERE youtube_url ILIKE %%s" % tabla,
+                    (f"%{vid}%",),
+                ).fetchall()
+                for r in rows:
+                    if _extraer_youtube_id(r['youtube_url']) == vid and (r['duracion'] or '').strip():
+                        return jsonify(ok=True, duracion=r['duracion'].strip(), cache=True)
+            dur = _duracion_video_youtube(url)
+            if dur:
+                for tabla in ('rockola_biblioteca', 'rockola_compartidos'):
+                    conn.execute(
+                        "UPDATE %s SET duracion = %%s WHERE youtube_url ILIKE %%s AND (duracion IS NULL OR duracion = '')" % tabla,
+                        (dur, f"%{vid}%"),
+                    )
+                conn.commit()
+            return jsonify(ok=True, duracion=dur, cache=False)
+    finally:
+        conn.close()
 
 
 def _filtrar_youtube_guardados(youtube_items, servidor_items):

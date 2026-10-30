@@ -1429,7 +1429,6 @@ input:checked + .slider:before {
     {% set omni_media = '/rockola/' ~ sala_id ~ '/archivo/' %}
     {% set omni_local = '1' %}
     {% set omni_select = 'seleccionarResultadoGlobal' %}
-    {% set omni_catalogo = 'buscarEnYoutubeDirecto' %}
     {% set omni_placeholder = 'Buscar canción en este equipo, servidor o YouTube...' %}
     {% include 'partials/rockola_omni.html' %}
 
@@ -4766,14 +4765,6 @@ function reportarValidacion(evento, sonandoId) {
     }).catch(() => {});
     if (evento === 'fin' || evento === 'skip') { ultimaSeleccionBuscador = null; maxTiempoActual = 0; }
   } catch (e) {}
-}
-
-function buscarEnYoutubeDirecto(titulo) {
-  const inp = document.getElementById('global-search-input');
-  if (inp) {
-    inp.value = titulo;
-    onInputRockolaOmni(titulo);
-  }
 }
 
 

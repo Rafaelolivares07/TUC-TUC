@@ -202,10 +202,25 @@ function omniElegir(tipo, idOUrl, nombre, duracion) {
 
 function omniElegirCatalogo(nombre) {
   if (OMNI_CATALOGO && typeof window[OMNI_CATALOGO] === 'function') {
-    window[OMNI_CATALOGO](nombre);
+    window[OMNI_CATALOGO]('catalogo', '', nombre);
     return;
   }
-  omniElegir('catalogo', '', nombre);
+  omniResolverYPlay(nombre);
+}
+
+async function omniResolverYPlay(nombre) {
+  try {
+    const res = await fetch('/rockola/yt-resolver?q=' + encodeURIComponent(nombre || ''));
+    const data = await res.json();
+    if (data && data.ok && data.youtube_url) {
+      omniElegir('youtube', data.youtube_url, data.nombre || nombre, data.duracion || '');
+      return;
+    }
+    throw new Error((data && data.error) || 'sin resultados');
+  } catch (e) {
+    if (typeof mostrarMensaje === 'function') mostrarMensaje('No se pudo resolver en YouTube', 'error');
+    else console.warn('[omni] resolver fallo:', e);
+  }
 }
 
 function omniFmtDur(seg) {

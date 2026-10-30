@@ -2948,3 +2948,14 @@ Pero si los enlaces expresan la duración por qué no la guardamos también cuan
 ### [2026-10-30 16:50:00] Muse para sala:
 
 Rockola duracion al guardar (Rafa 2465): _recordar con duracion (no pisa cache) + POST /youtube la recibe del cliente + compartir la acepta + nucleo la trae en servidor_items + partial la pinta directo (lazy solo si falta) + cadena select->modal->subirYoutube con 4to param. Tests omni 69/69 + validacion 14/14 + vecino PASS, node x2, jinja x3. Commit feat(rockola).
+
+---
+
+### [2026-10-30 16:46:48] 👤 Rafael (vía Telegram):
+
+[audio 46s] Estoy haciendo una prueba en el televisor  entonces abrí con un navegador, no me acuerdo como se llama el navegador  abrí con el navegador del televisor, el televisor es un challenger  abrí con el navegador que ven instalado o que yo lo instalé  abrí la rocola con el navegador y funciona lo gráfico  hago la consulta de las canciones y me sale por ejemplo una que tengo en mi celular  pero vuelvo y te digo estoy en el televisor  selecciono esa canción de Elton John que tengo en mi celular  ahí no dice que está en el dispositivo ni nada por el estilo  le doy play y no funciona
+
+
+### [2026-10-30 17:00:00] Muse para sala:
+
+Rockola catalogo suena directo (bug Rafa 2469 TV): tocar fila catalogo ya no re-busca, resuelve top-1 YT y suena (GET /rockola/yt-resolver + omniResolverYPlay + error visible). Fuera buscarEnYoutubeDirecto legacy. Vinilo: catalogo llena peticion (3 args). Tests omni 75/75 + validacion 14/14 + vecino PASS. Commit fix(rockola).

@@ -1307,6 +1307,20 @@ def duracion_youtube_guardada():
         conn.close()
 
 
+@bp.route('/yt-resolver')
+def resolver_youtube_top():
+    """Top-1 YouTube para una búsqueda: tocar fila de catálogo = suena directo."""
+    q = (request.args.get('q') or '').strip()
+    if len(q) < 2:
+        return jsonify(ok=False, error='Query muy corta'), 400
+    items = _buscar_youtube_en_vivo(q, max_results=1)
+    if not items:
+        return jsonify(ok=False, error='Sin resultados'), 404
+    top = items[0]
+    return jsonify(ok=True, youtube_url=top['youtube_url'], nombre=top['nombre'],
+                   duracion=top.get('duracion') or '')
+
+
 def _filtrar_youtube_guardados(youtube_items, servidor_items):
     """Saca de YouTube-en-vivo los videos cuyo ID ya está guardado en servidor/biblioteca."""
     guardados = set()

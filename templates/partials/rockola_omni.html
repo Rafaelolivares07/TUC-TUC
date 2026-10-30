@@ -18,11 +18,11 @@
 .global-search-bar {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 11.8px;
   background: #0b1528;
   border: 1.5px solid rgba(0, 212, 255, 0.35);
-  border-radius: 14px;
-  padding: 10px 14px;
+  border-radius: 16.5px;
+  padding: 11.8px 16.5px;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
   transition: border-color 0.2s, box-shadow 0.2s;
 }
@@ -37,12 +37,12 @@
   outline: none;
   color: #fff;
   font-family: inherit;
-  font-size: 14px;
+  font-size: 16.5px;
   font-weight: 600;
 }
 .global-search-input::placeholder {
   color: var(--muted);
-  font-size: 13px;
+  font-size: 15.3px;
 }
 .global-results-box {
   position: absolute;
@@ -66,6 +66,7 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   gap: 10px;
   transition: background 0.15s;
+  cursor: pointer;
 }
 .global-result-row:last-child {
   border-bottom: none;
@@ -135,9 +136,9 @@
 </style>
 <div class="global-search-card" id="{{ oid }}-search-container">
   <div class="global-search-bar">
-    <span style="font-size:15px; color:var(--ac1);">🔍</span>
+    <span style="font-size:17.7px; color:var(--ac1);">🔍</span>
     <input type="text" id="{{ oid }}-search-input" class="global-search-input" placeholder="{{ omni_placeholder|default('Buscar canción...') }}" autocomplete="off" oninput="onInputRockolaOmni(this.value)">
-    <button type="button" id="{{ oid }}-btn-clear" onclick="limpiarBusquedaOmni()" style="display:none; background:none; border:none; color:var(--muted); font-size:14px; cursor:pointer; padding:2px 6px;">✕</button>
+    <button type="button" id="{{ oid }}-btn-clear" onclick="limpiarBusquedaOmni()" style="display:none; background:none; border:none; color:var(--muted); font-size:16.5px; cursor:pointer; padding:2px 6px;">✕</button>
   </div>
   <div id="{{ oid }}-search-results" class="global-results-box" style="display:none;"></div>
 </div>
@@ -160,6 +161,7 @@ const OMNI_ENDPOINT = {{ omni_endpoint|tojson }};
 const OMNI_LOCAL = {% if omni_local == '1' %}true{% else %}false{% endif %};
 const OMNI_SELECT = {{ omni_select|default('seleccionarResultadoGlobal')|tojson }};
 const OMNI_CATALOGO = {{ omni_catalogo|default('')|tojson }};
+const OMNI_MEDIA = {{ omni_media|default('')|tojson }};
 const OMNI_EMPTY = {{ omni_empty|default('No se encontraron resultados para "{q}".')|tojson }};
 const OMNI_BTN_TITLE = {{ omni_btn_title|default('Reproducir')|tojson }};
 let busquedaOmniTimeout = null;
@@ -206,6 +208,66 @@ function omniElegirCatalogo(nombre) {
   omniElegir('catalogo', '', nombre);
 }
 
+function omniFmtDur(seg) {
+  if (!seg || !isFinite(seg)) return '';
+  const m = Math.floor(seg / 60);
+  const s = Math.floor(seg % 60);
+  return m + ':' + String(s).padStart(2, '0');
+}
+
+function omniProbarDur(el, src, revocarUrl) {
+  try {
+    const aud = new Audio();
+    aud.preload = 'metadata';
+    let done = false;
+    const fin = (txt) => {
+      if (done) return;
+      done = true;
+      clearTimeout(to);
+      try { aud.removeAttribute('src'); aud.load(); } catch (e2) {}
+      if (txt) { el.textContent = txt; }
+      else if (el.parentNode) { el.parentNode.removeChild(el); }
+      if (revocarUrl) { try { URL.revokeObjectURL(revocarUrl); } catch (e3) {} }
+    };
+    const to = setTimeout(() => fin(''), 8000);
+    aud.onloadedmetadata = () => fin(omniFmtDur(aud.duration));
+    aud.onerror = () => fin('');
+    aud.src = src;
+  } catch (e) {
+    if (el.parentNode) el.parentNode.removeChild(el);
+  }
+}
+
+async function omniProbarDuraciones(box) {
+  try {
+    box.querySelectorAll('[data-dur-archivo]').forEach(el => {
+      const id = el.getAttribute('data-dur-archivo') || '';
+      if (!OMNI_MEDIA || !id) {
+        if (el.parentNode) el.parentNode.removeChild(el);
+        return;
+      }
+      omniProbarDur(el, OMNI_MEDIA + encodeURIComponent(id), null);
+    });
+    const spansLoc = box.querySelectorAll('[data-dur-local]');
+    if (typeof obtenerCancionLocal !== 'function') {
+      spansLoc.forEach(el => { if (el.parentNode) el.parentNode.removeChild(el); });
+      return;
+    }
+    for (const el of spansLoc) {
+      const id = el.getAttribute('data-dur-local') || '';
+      let song = null;
+      try { song = await obtenerCancionLocal(id); } catch (e) {}
+      const blob = song && song.blob;
+      if (!blob) {
+        if (el.parentNode) el.parentNode.removeChild(el);
+        continue;
+      }
+      const objUrl = URL.createObjectURL(blob);
+      omniProbarDur(el, objUrl, objUrl);
+    }
+  } catch (e) {}
+}
+
 async function ejecutarBusquedaOmni(query) {
   const box = document.getElementById(OMNI_ID + '-search-results');
   if (!box) return;
@@ -230,11 +292,12 @@ async function ejecutarBusquedaOmni(query) {
   if (cancionesLoc.length > 0) {
     htmlLocal = `
       ${cancionesLoc.map(c => `
-        <div class="global-result-row">
+        <div class="global-result-row" onclick="omniElegir('local', '${escapeJs(c.id)}', '${escapeJs(limpiarNombre(c.nombre))}')">
           <div class="global-result-info">
             <div class="global-result-title" title="${escapeHtml(c.nombre)}">${escapeHtml(limpiarNombre(c.nombre))}</div>
+            <div class="global-result-meta" data-dur-local="${escapeHtml(c.id)}"></div>
           </div>
-          <button class="btn-play-action" onclick="omniElegir('local', '${escapeJs(c.id)}', '${escapeJs(limpiarNombre(c.nombre))}')" title="${OMNI_BTN_TITLE}">
+          <button class="btn-play-action" onclick="event.stopPropagation(); omniElegir('local', '${escapeJs(c.id)}', '${escapeJs(limpiarNombre(c.nombre))}')" title="${OMNI_BTN_TITLE}">
             <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
           </button>
         </div>
@@ -277,12 +340,14 @@ async function ejecutarBusquedaOmni(query) {
           const esYt = !s.archivo_id && !!s.youtube_url;
           const targetId = s.archivo_id || s.youtube_url;
           const tipo = esYt ? 'youtube' : 'server';
+          const durHtml = esYt ? '' : `<div class="global-result-meta" data-dur-archivo="${escapeHtml(s.archivo_id)}"></div>`;
           return `
-          <div class="global-result-row">
+          <div class="global-result-row" onclick="omniElegir('${tipo}', '${escapeJs(targetId)}', '${escapeJs(limpiarNombre(s.nombre))}')">
             <div class="global-result-info">
               <div class="global-result-title" title="${escapeHtml(s.nombre)}">${escapeHtml(limpiarNombre(s.nombre))}</div>
+              ${durHtml}
             </div>
-            <button class="btn-play-action" onclick="omniElegir('${tipo}', '${escapeJs(targetId)}', '${escapeJs(limpiarNombre(s.nombre))}')" title="${OMNI_BTN_TITLE}">
+            <button class="btn-play-action" onclick="event.stopPropagation(); omniElegir('${tipo}', '${escapeJs(targetId)}', '${escapeJs(limpiarNombre(s.nombre))}')" title="${OMNI_BTN_TITLE}">
               <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
             </button>
           </div>
@@ -294,11 +359,11 @@ async function ejecutarBusquedaOmni(query) {
     if (usuariosUnicos.length > 0) {
       htmlUsuarios = `
         ${usuariosUnicos.map(u => `
-          <div class="global-result-row">
+          <div class="global-result-row" onclick="omniElegirCatalogo('${escapeJs(limpiarNombre(u.nombre))}')">
             <div class="global-result-info">
               <div class="global-result-title" title="${escapeHtml(u.nombre)}">${escapeHtml(limpiarNombre(u.nombre))}</div>
             </div>
-            <button class="btn-play-action" onclick="omniElegirCatalogo('${escapeJs(limpiarNombre(u.nombre))}')" title="${OMNI_BTN_TITLE}">
+            <button class="btn-play-action" onclick="event.stopPropagation(); omniElegirCatalogo('${escapeJs(limpiarNombre(u.nombre))}')" title="${OMNI_BTN_TITLE}">
               <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
             </button>
           </div>
@@ -310,12 +375,12 @@ async function ejecutarBusquedaOmni(query) {
     if (youtube.length > 0) {
       htmlYoutube = `
         ${youtube.map(y => `
-          <div class="global-result-row">
+          <div class="global-result-row" onclick="omniElegir('youtube', '${escapeJs(y.youtube_url)}', '${escapeJs(limpiarNombre(y.nombre))}')">
             <div class="global-result-info">
               <div class="global-result-title" title="${escapeHtml(y.nombre)}">${escapeHtml(limpiarNombre(y.nombre))}</div>
-              <div class="global-result-meta">🎬 ${escapeHtml(y.canal || 'YouTube')}${y.duracion ? ' · ' + escapeHtml(y.duracion) : ''}</div>
+              <div class="global-result-meta">${escapeHtml(y.canal || 'YouTube')}${y.duracion ? ' · ' + escapeHtml(y.duracion) : ''}</div>
             </div>
-            <button class="btn-play-action" onclick="omniElegir('youtube', '${escapeJs(y.youtube_url)}', '${escapeJs(limpiarNombre(y.nombre))}')" title="${OMNI_BTN_TITLE}">
+            <button class="btn-play-action" onclick="event.stopPropagation(); omniElegir('youtube', '${escapeJs(y.youtube_url)}', '${escapeJs(limpiarNombre(y.nombre))}')" title="${OMNI_BTN_TITLE}">
               <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
             </button>
           </div>
@@ -328,6 +393,7 @@ async function ejecutarBusquedaOmni(query) {
       box.innerHTML = `<div class="global-empty-msg">${OMNI_EMPTY.split('{q}').join(escapeHtml(q))}</div>`;
     } else {
       box.innerHTML = contenido;
+      omniProbarDuraciones(box);
     }
   } catch (err) {
     console.error("Error en búsqueda omni:", err);
@@ -335,6 +401,7 @@ async function ejecutarBusquedaOmni(query) {
       box.innerHTML = `<div class="global-empty-msg">Error al consultar el servidor.</div>`;
     } else {
       box.innerHTML = htmlLocal;
+      omniProbarDuraciones(box);
     }
   }
 }

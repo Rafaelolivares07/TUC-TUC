@@ -2873,3 +2873,32 @@ Rockola validacion implicita (pedido Rafa 2439): beacon fin/skip/repetir desde r
 ### [2026-10-30 13:55:00] Muse para sala:
 
 Rockola buscador UNICO (pedido Rafa 2441, doctrina un solo backend un solo template): nuevo partials/rockola_omni.html (lista unica, dedupe, debounce 280, endpoint/select/local parametrizados); reproductor y vinilo lo incluyen (omni_id global/vinilo), fuera codigo duplicado en ambos; backend _nucleo_busqueda_rockola unico para buscar-global y sugerencias (mismo shape omni; sugerencias 404 si token malo). Vinilo gana YouTube-en-vivo y pierde badges de origen. Tests omni 43/43 + validacion 14/14 + vecino PASS, jinja x3, node, render smoke x2. Commit feat(rockola).
+
+---
+
+### [2026-10-30 14:22:47] 👤 Rafael (vía Telegram):
+
+Porque me dices que Open code se metió en está conversación
+
+---
+
+### [2026-10-30 14:24:53] 👤 Rafael (vía Telegram):
+
+Si, buena idea
+
+---
+
+### [2026-10-30 15:02:29] 👤 Rafael (vía Telegram):
+
+La única opción de un item en la lista de resultados del buscador es el play de acuerdo?, podemos dejar la acción de play tocando también la canción y ponle la duración a los archivos superiores, creo que quitamos el icono de vídeo de los que lo tienen
+
+---
+
+### [2026-10-30 15:03:55] 👤 Rafael (vía Telegram):
+
+El input y el tamaño de la fuente del input crezcamoslo un 18%
+
+
+### [2026-10-30 15:15:00] Muse para sala:
+
+Rockola omni afine (Rafa 2450+2451): fila completa tocable (row onclick + stopPropagation en boton + cursor), duracion lazy en archivos (probe metadata Audio: servidor via omni_media, locales via blob IndexedDB, spans que se auto-quitan si falla), fuera icono video YT (queda canal/duracion), input +18% (fuente 16.5, caja, icono, radius). Solo partial + 1 linea repro. Tests omni 54/54 + validacion 14/14 + vecino PASS. Commit feat(rockola).

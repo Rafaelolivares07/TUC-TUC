@@ -114,10 +114,11 @@
 
   // ── MOSTRAR / OCULTAR DROPDOWN ─────────────────────────────────────
   function abrirDropdown() {
-    dropdown.classList.remove('hidden');
-    if (!input.value.trim()) {
-      mostrarEstadoInicial();
+    if (input.value.trim().length < 2) {
+      cerrarDropdown();
+      return;
     }
+    dropdown.classList.remove('hidden');
   }
 
   function cerrarDropdown() {
@@ -206,11 +207,12 @@
   // ── EJECUTAR BÚSQUEDA REACTIVA ─────────────────────────────────────
   async function ejecutarBusqueda(query) {
     const q = query.trim();
-    if (!q) {
-      mostrarEstadoInicial();
+    if (q.length < 2) {
+      cerrarDropdown();
       return;
     }
 
+    abrirDropdown();
     loading.classList.remove('hidden');
     itemsColeccion = [];
     selectedIndex = -1;
@@ -360,14 +362,24 @@
 
   // ── EVENTOS DEL INPUT Y TECLADO ────────────────────────────────────
   input.addEventListener('focus', () => {
-    abrirDropdown();
+    const q = input.value.trim();
+    if (q.length >= 2) {
+      abrirDropdown();
+    } else {
+      cerrarDropdown();
+    }
   });
 
   input.addEventListener('input', () => {
     clearTimeout(debounceTimer);
+    const q = input.value.trim();
+    if (q.length < 2) {
+      cerrarDropdown();
+      return;
+    }
     debounceTimer = setTimeout(() => {
-      ejecutarBusqueda(input.value);
-    }, 280);
+      ejecutarBusqueda(q);
+    }, 220);
   });
 
   input.addEventListener('keydown', (e) => {
@@ -420,11 +432,14 @@
     }
   });
 
-  // Autofocus si estamos en pantalla de inicio
+  // Autofocus si estamos en pantalla de inicio (manteniendo dropdown cerrado)
   if (window.location.pathname === '/inicio' || window.location.pathname === '/' || document.body.dataset.page === 'inicio') {
     setTimeout(() => {
-      if (input) input.focus();
-    }, 150);
+      if (input) {
+        input.focus();
+        cerrarDropdown();
+      }
+    }, 100);
   }
 })();
 </script>

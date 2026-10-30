@@ -4887,7 +4887,6 @@ async function ejecutarBusquedaGlobal(query) {
         <div class="global-result-row">
           <div class="global-result-info">
             <div class="global-result-title" title="${escapeHtml(c.nombre)}">${escapeHtml(limpiarNombre(c.nombre))}</div>
-            <div class="global-result-meta">💾 Guardado en este equipo · ${(c.size ? Math.max(1, Math.round(c.size/1024/1024)) : 1)} MB</div>
           </div>
           <button class="btn-play-action" onclick="seleccionarResultadoGlobal('local', '${escapeJs(c.id)}', '${escapeJs(limpiarNombre(c.nombre))}')" title="Reproducir">
             <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
@@ -4912,6 +4911,19 @@ async function ejecutarBusquedaGlobal(query) {
     const usuarios = data.usuarios || [];
     const youtube = data.youtube || [];
 
+    // Dedupe: el catálogo repite lo que ya está en dispositivo, servidor o YouTube
+    const normTitulo = s => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\.[^.]+$/, '').replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+    const vistos = new Set();
+    cancionesLoc.forEach(c => vistos.add(normTitulo(limpiarNombre(c.nombre))));
+    servidor.forEach(s => vistos.add(normTitulo(limpiarNombre(s.nombre))));
+    youtube.forEach(y => vistos.add(normTitulo(limpiarNombre(y.nombre))));
+    const usuariosUnicos = usuarios.filter(u => {
+      const n = normTitulo(limpiarNombre(u.nombre));
+      if (!n || vistos.has(n)) return false;
+      vistos.add(n);
+      return true;
+    });
+
     let htmlServidor = '';
     if (servidor.length > 0) {
       htmlServidor = `
@@ -4924,7 +4936,6 @@ async function ejecutarBusquedaGlobal(query) {
           <div class="global-result-row">
             <div class="global-result-info">
               <div class="global-result-title" title="${escapeHtml(s.nombre)}">${escapeHtml(limpiarNombre(s.nombre))}</div>
-              <div class="global-result-meta">${esYt ? '🔗 Enlace de YouTube en servidor' : '📁 Archivo de audio listo en servidor'}</div>
             </div>
             <button class="btn-play-action" onclick="seleccionarResultadoGlobal('${tipo}', '${escapeJs(targetId)}', '${escapeJs(limpiarNombre(s.nombre))}')" title="Reproducir">
               <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
@@ -4935,14 +4946,13 @@ async function ejecutarBusquedaGlobal(query) {
     }
 
     let htmlUsuarios = '';
-    if (usuarios.length > 0) {
+    if (usuariosUnicos.length > 0) {
       htmlUsuarios = `
-        <div class="global-group-header">👥 Catálogo de usuarios (${usuarios.length})</div>
-        ${usuarios.map(u => `
+        <div class="global-group-header">👥 Catálogo de usuarios (${usuariosUnicos.length})</div>
+        ${usuariosUnicos.map(u => `
           <div class="global-result-row">
             <div class="global-result-info">
               <div class="global-result-title" title="${escapeHtml(u.nombre)}">${escapeHtml(limpiarNombre(u.nombre))}</div>
-              <div class="global-result-meta">🏷️ Compartida en catálogo comunitario</div>
             </div>
             <button class="btn-play-action" onclick="buscarEnYoutubeDirecto('${escapeJs(limpiarNombre(u.nombre))}')" title="Buscar y reproducir">
               <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>

@@ -57,12 +57,28 @@ def admin_login():
 
 @bp.route('/admin/login', methods=['POST'])
 def admin_login_post():
+    return _procesar_login('/inicio', 'auth.admin_login')
+
+
+@bp.route('/entrar', methods=['GET'])
+def entrar():
+    if session.get('usuario_id') or session.get('rol'):
+        return redirect('/')
+    return render_template('admin_login.html', form_action='/entrar')
+
+
+@bp.route('/entrar', methods=['POST'])
+def entrar_post():
+    return _procesar_login('/', 'auth.entrar')
+
+
+def _procesar_login(ok_url, fail_endpoint):
     usuario = request.form.get('usuario', '').strip()
     password = request.form.get('password', '').strip()
 
     if not usuario or not password:
         flash('Por favor completa todos los campos', 'danger')
-        return redirect(url_for('auth.admin_login'))
+        return redirect(url_for(fail_endpoint))
 
     conn = get_db_connection()
     try:
@@ -95,10 +111,10 @@ def admin_login_post():
             session.modified           = True
             if admin['rol'] == 'ClienteVFP':
                 return redirect(url_for('admin_agent.consultas_page'))
-            return redirect('/inicio')
+            return redirect(ok_url)
         else:
             flash('Usuario o contraseña incorrectos', 'danger')
-            return redirect(url_for('auth.admin_login'))
+            return redirect(url_for(fail_endpoint))
     finally:
         conn.close()
 
@@ -114,9 +130,12 @@ def admin_area():
 def admin_logout():
     session.clear()
     flash('Has cerrado la sesión.', 'info')
+    host = (request.host or '').split(':')[0].strip().lower()
+    if host == 'desk.tuc-tuc.co':
+        return redirect(url_for('auth.entrar'))
     return redirect(url_for('auth.admin_login'))
 
 
 @bp.route('/login')
 def login_redirect():
-    return redirect(url_for('auth.admin_login'))
+    return redirect(url_for('auth.entrar'))

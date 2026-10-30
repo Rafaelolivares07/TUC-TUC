@@ -1758,7 +1758,7 @@ def colaborador_inicio():
 @bp.route('/portal')
 def colaborador_portal():
     if 'usuario_id' not in session and 'rol' not in session:
-        return redirect(url_for('auth.admin_login'))
+        return redirect(url_for('auth.entrar'))
     nombre = session.get('nombre', '')
     return render_template('portal.html', nombre=nombre)
 

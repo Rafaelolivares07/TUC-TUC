@@ -37,7 +37,7 @@
             {% endwith %}
 
             <!-- Formulario -->
-            <form method="POST" action="{{ url_for('auth.admin_login_post') }}">
+            <form method="POST" action="{{ form_action or url_for('auth.admin_login_post') }}">
                 <!-- Usuario -->
                 <div class="mb-5">
                     <label for="usuario" class="block text-sm font-semibold text-gray-700 mb-2">

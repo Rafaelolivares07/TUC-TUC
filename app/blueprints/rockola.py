@@ -129,6 +129,10 @@ def _ensure_db():
             conn.execute("ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS fundido_cruzado BOOLEAN DEFAULT TRUE;")
             conn.execute("ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS fundido_segundos INTEGER DEFAULT 12;")
             conn.execute("ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS fundido_duracion INTEGER DEFAULT 5;")
+            conn.execute("ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS modo_shuffle BOOLEAN DEFAULT FALSE;")
+            conn.execute("ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS modo_repetir_cancion BOOLEAN DEFAULT FALSE;")
+            conn.execute("ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS modo_repetir_lista BOOLEAN DEFAULT FALSE;")
+            conn.execute("ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS modo_autoplay BOOLEAN DEFAULT FALSE;")
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS rockola_compartidos (
                     token         TEXT PRIMARY KEY,
@@ -2478,6 +2482,10 @@ def cola(sala_id):
         fundido_cruzado=bool(sala.get('fundido_cruzado') if sala.get('fundido_cruzado') is not None else True),
         fundido_segundos=int(sala.get('fundido_segundos') if sala.get('fundido_segundos') is not None else 12),
         fundido_duracion=int(sala.get('fundido_duracion') if sala.get('fundido_duracion') is not None else 5),
+        modo_shuffle=bool(sala.get('modo_shuffle') or False),
+        modo_repetir_cancion=bool(sala.get('modo_repetir_cancion') or False),
+        modo_repetir_lista=bool(sala.get('modo_repetir_lista') or False),
+        modo_autoplay=bool(sala.get('modo_autoplay') or False),
     )
 
 
@@ -2552,6 +2560,27 @@ def fundido(sala_id):
                     "UPDATE rockola_salas SET fundido_duracion = %s WHERE sala_id = %s",
                     (duracion, sala_id)
                 )
+            conn.commit()
+    finally:
+        conn.close()
+    return jsonify(ok=True)
+
+
+@bp.route('/<sala_id>/modos', methods=['POST'])
+def modos(sala_id):
+    data = request.get_json(silent=True) or {}
+    conn = _connect()
+    try:
+        with _lock:
+            if not _es_admin_sala(conn, sala_id, data):
+                return jsonify(ok=False, error='No autorizado'), 403
+
+            for campo in ('modo_shuffle', 'modo_repetir_cancion', 'modo_repetir_lista', 'modo_autoplay'):
+                if data.get(campo) is not None:
+                    conn.execute(
+                        "UPDATE rockola_salas SET {} = %s WHERE sala_id = %s".format(campo),
+                        (bool(data.get(campo)), sala_id)
+                    )
             conn.commit()
     finally:
         conn.close()

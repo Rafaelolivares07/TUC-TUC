@@ -51,6 +51,31 @@ input { width:100%; padding:13px; border-radius:11px; border:1px solid var(--bor
 .volume-row { display:flex; align-items:center; gap:12px; margin-top:8px; }
 .volume-row input { flex:1; margin:0; accent-color:var(--ac1); }
 .volume-value { width:46px; text-align:right; font-size:13px; font-weight:800; color:var(--ac1); }
+.coll-head { display:flex; align-items:center; justify-content:space-between; cursor:pointer; user-select:none; }
+.coll-head .label { margin-bottom:0; }
+.coll-head-left { display:flex; align-items:center; gap:8px; }
+.coll-arrow { color:var(--muted); font-size:13px; transition:transform .2s; }
+.card.open .coll-arrow { transform:rotate(180deg); }
+.coll-body { display:none; margin-top:6px; }
+.card.open .coll-body { display:block; }
+.mode-row { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 0; border-top:1px solid rgba(0,212,255,.08); }
+.mode-row:first-child { border-top:none; }
+.mode-name { font-size:13.5px; font-weight:700; }
+.mode-sub { font-size:11px; color:var(--muted); margin-top:2px; }
+.mode-ctl { display:flex; align-items:center; gap:8px; flex-shrink:0; }
+.mode-status { font-size:11px; font-weight:800; color:var(--ac1); white-space:nowrap; }
+.switch { position:relative; display:inline-block; width:42px; height:24px; flex-shrink:0; }
+.switch input { opacity:0; width:0; height:0; }
+.switch .slider { position:absolute; inset:0; background:var(--surface2); border:1px solid var(--border); border-radius:24px; cursor:pointer; transition:.2s; }
+.switch .slider:before { content:''; position:absolute; width:16px; height:16px; left:3px; top:3px; background:var(--muted); border-radius:50%; transition:.2s; }
+.switch input:checked + .slider { background:rgba(0,212,255,.25); border-color:var(--ac1); }
+.switch input:checked + .slider:before { transform:translateX(18px); background:var(--ac1); box-shadow:0 0 8px rgba(0,212,255,.7); }
+.range-stack { display:flex; flex-direction:column; gap:4px; width:100%; padding:6px 0; }
+.range-top { display:flex; justify-content:space-between; align-items:center; font-size:11px; }
+.range-top span:last-child { color:var(--ac1); font-weight:800; }
+input[type=range].slider-range { width:100%; margin:0; padding:0; border:none; background:transparent; accent-color:var(--ac1); }
+.range-hint { font-size:10px; color:var(--muted); text-align:right; min-height:13px; }
+.danger-zone { border-color:rgba(255,77,109,.25); }
 </style>
 </head>
 <body>
@@ -91,6 +116,74 @@ input { width:100%; padding:13px; border-radius:11px; border:1px solid var(--bor
       </div>
     </div>
 
+    <div class="card" id="card-modos">
+      <div class="coll-head" onclick="toggleCard('card-modos')">
+        <div class="coll-head-left">
+          <span style="font-size:14px;">⚙️</span>
+          <div class="label">Modos de reproducción</div>
+        </div>
+        <span class="coll-arrow">▾</span>
+      </div>
+      <div class="coll-body">
+        <div class="mode-row">
+          <div>
+            <div class="mode-name">Fundido cruzado</div>
+            <div class="mode-sub">Cruce audible entre canciones</div>
+          </div>
+          <div class="mode-ctl">
+            <span class="mode-status" id="c-fundido-status">12s → 5s</span>
+            <label class="switch"><input type="checkbox" id="c-fundido-toggle" checked onchange="guardarFundidoControl()"><span class="slider"></span></label>
+          </div>
+        </div>
+        <div class="range-stack">
+          <div class="range-top"><span style="color:var(--muted);">Empezar cuando falten:</span><span id="c-fundido-sec-label">12s</span></div>
+          <input type="range" class="slider-range" id="c-fundido-segundos" min="2" max="60" value="12" oninput="onAnticipacionControl(this.value)" onchange="guardarFundidoControl()">
+        </div>
+        <div class="range-stack">
+          <div class="range-top"><span style="color:var(--muted);">Duración del cruce:</span><span id="c-fundido-dur-label">5s</span></div>
+          <input type="range" class="slider-range" id="c-fundido-duracion" min="1" max="12" value="5" oninput="onDuracionControl(this.value)" onchange="guardarFundidoControl()">
+          <div class="range-hint" id="c-fundido-hint"></div>
+        </div>
+        <div class="mode-row">
+          <div>
+            <div class="mode-name">Desordenar lista</div>
+            <div class="mode-sub">Mezcla la cola en vivo (la que suena no se mueve)</div>
+          </div>
+          <div class="mode-ctl">
+            <button class="mini" onclick="mezclarYaControl()">Mezclar ya</button>
+            <label class="switch"><input type="checkbox" id="c-shuffle-toggle" onchange="guardarModoControl('modo_shuffle', this.checked)"><span class="slider"></span></label>
+          </div>
+        </div>
+        <div class="mode-row">
+          <div>
+            <div class="mode-name">Repetir canción (1 vez)</div>
+            <div class="mode-sub">Repite la que suena y sigue</div>
+          </div>
+          <div class="mode-ctl">
+            <label class="switch"><input type="checkbox" id="c-repetir-cancion-toggle" onchange="guardarModoControl('modo_repetir_cancion', this.checked)"><span class="slider"></span></label>
+          </div>
+        </div>
+        <div class="mode-row">
+          <div>
+            <div class="mode-name">Repetir lista (1 vez)</div>
+            <div class="mode-sub">Repite la cola completa al finalizar</div>
+          </div>
+          <div class="mode-ctl">
+            <label class="switch"><input type="checkbox" id="c-repetir-lista-toggle" onchange="guardarModoControl('modo_repetir_lista', this.checked)"><span class="slider"></span></label>
+          </div>
+        </div>
+        <div class="mode-row">
+          <div>
+            <div class="mode-name">Autoreproducir al entrar</div>
+            <div class="mode-sub">El reproductor arranca solo al abrir la sala</div>
+          </div>
+          <div class="mode-ctl">
+            <label class="switch"><input type="checkbox" id="c-autoplay-toggle" onchange="guardarModoControl('modo_autoplay', this.checked)"><span class="slider"></span></label>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="card">
       <div class="label">Compartir</div>
       <div class="actions">
@@ -104,6 +197,23 @@ input { width:100%; padding:13px; border-radius:11px; border:1px solid var(--bor
       <ul class="queue" id="cola">
         <li class="empty">Sin canciones en cola</li>
       </ul>
+    </div>
+
+    <div class="card danger-zone" id="card-mantenimiento">
+      <div class="coll-head" onclick="toggleCard('card-mantenimiento')">
+        <div class="coll-head-left">
+          <span style="font-size:14px;">🛠️</span>
+          <div class="label" style="color:var(--danger);">Mantenimiento y reset</div>
+        </div>
+        <span class="coll-arrow">▾</span>
+      </div>
+      <div class="coll-body">
+        <div class="muted">Borra todas las canciones, listas y configuraciones guardadas en este navegador. Las canciones no se borran del disco del celular, solo de la rockola.</div>
+        <div class="actions" style="grid-template-columns:1fr;">
+          <button class="btn danger" onclick="limpiarLibreriaControl()">Limpiar toda la librería de este navegador</button>
+        </div>
+        <div class="muted" id="c-limpiar-msg" style="margin-top:8px;"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -156,7 +266,9 @@ async function actualizar() {
   const r = await fetch(`/rockola/${SALA}/cola`);
   const d = await r.json();
   const cola = d.cola || [];
+  colaActual = cola;
   aplicarVolumen(d.volumen);
+  cargarModos(d);
   document.getElementById('sonando').textContent = cola[0] ? limpiarNombre(cola[0].nombre) : 'Esperando canciones...';
   renderCola(cola);
 }
@@ -265,6 +377,133 @@ async function guardarVolumen() {
 
 function copiar(url) {
   navigator.clipboard.writeText(url).then(() => alert('Enlace copiado'));
+}
+
+let colaActual = [];
+
+function toggleCard(id) {
+  document.getElementById(id).classList.toggle('open');
+}
+
+function cargarModos(d) {
+  const tgl = document.getElementById('c-fundido-toggle');
+  if (document.activeElement !== tgl && d.fundido_cruzado !== undefined) tgl.checked = !!d.fundido_cruzado;
+  const sec = document.getElementById('c-fundido-segundos');
+  if (document.activeElement !== sec && d.fundido_segundos !== undefined) {
+    sec.value = d.fundido_segundos;
+    document.getElementById('c-fundido-sec-label').textContent = d.fundido_segundos + 's';
+  }
+  const dur = document.getElementById('c-fundido-duracion');
+  if (document.activeElement !== dur && d.fundido_duracion !== undefined) {
+    dur.max = d.fundido_segundos || 60;
+    dur.value = d.fundido_duracion;
+    document.getElementById('c-fundido-dur-label').textContent = d.fundido_duracion + 's';
+  }
+  actualizarFundidoControlStatus();
+  const mapa = [
+    ['c-shuffle-toggle', d.modo_shuffle],
+    ['c-repetir-cancion-toggle', d.modo_repetir_cancion],
+    ['c-repetir-lista-toggle', d.modo_repetir_lista],
+    ['c-autoplay-toggle', d.modo_autoplay]
+  ];
+  mapa.forEach(([id, val]) => {
+    if (val === undefined) return;
+    const el = document.getElementById(id);
+    if (el && document.activeElement !== el) el.checked = !!val;
+  });
+}
+
+function actualizarFundidoControlStatus() {
+  const on = document.getElementById('c-fundido-toggle').checked;
+  const sec = document.getElementById('c-fundido-segundos').value;
+  const dur = document.getElementById('c-fundido-duracion').value;
+  const st = document.getElementById('c-fundido-status');
+  st.textContent = on ? `${sec}s → ${dur}s` : 'OFF';
+  st.style.color = on ? 'var(--ac1)' : 'var(--muted)';
+}
+
+function onAnticipacionControl(val) {
+  const anticipacion = parseInt(val) || 12;
+  document.getElementById('c-fundido-sec-label').textContent = anticipacion + 's';
+  const durSlider = document.getElementById('c-fundido-duracion');
+  durSlider.max = anticipacion;
+  if (parseInt(durSlider.value) > anticipacion) {
+    durSlider.value = anticipacion;
+    document.getElementById('c-fundido-dur-label').textContent = anticipacion + 's';
+  }
+  document.getElementById('c-fundido-hint').textContent = 'Máximo ' + anticipacion + 's (igual al tiempo de anticipación)';
+  actualizarFundidoControlStatus();
+}
+
+function onDuracionControl(val) {
+  const dur = parseInt(val) || 5;
+  const anticipacion = parseInt(document.getElementById('c-fundido-segundos').value) || 12;
+  const hint = document.getElementById('c-fundido-hint');
+  if (dur >= anticipacion) {
+    hint.textContent = '⚡ Cruce hasta el final de la canción';
+    hint.style.color = 'var(--ac1)';
+  } else {
+    hint.textContent = '';
+    hint.style.color = 'var(--muted)';
+  }
+  document.getElementById('c-fundido-dur-label').textContent = dur + 's';
+  actualizarFundidoControlStatus();
+}
+
+async function guardarFundidoControl() {
+  actualizarFundidoControlStatus();
+  await fetch(`/rockola/${SALA}/fundido`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      modo: 'control',
+      admin_key: adminKey,
+      fundido_cruzado: document.getElementById('c-fundido-toggle').checked,
+      fundido_segundos: parseInt(document.getElementById('c-fundido-segundos').value) || 12,
+      fundido_duracion: parseInt(document.getElementById('c-fundido-duracion').value) || 5
+    })
+  });
+}
+
+async function guardarModoControl(campo, valor) {
+  await fetch(`/rockola/${SALA}/modos`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ modo: 'control', admin_key: adminKey, [campo]: !!valor })
+  });
+}
+
+async function mezclarYaControl() {
+  if (!colaActual || colaActual.length <= 1) {
+    alert('No hay suficientes canciones en cola para mezclar');
+    return;
+  }
+  const primero = colaActual[0].id;
+  const resto = colaActual.slice(1).map(c => c.id);
+  for (let i = resto.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [resto[i], resto[j]] = [resto[j], resto[i]];
+  }
+  await fetch(`/rockola/${SALA}/reordenar`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ orden: [primero, ...resto], modo: 'control', admin_key: adminKey })
+  });
+  actualizar();
+}
+
+async function limpiarLibreriaControl() {
+  const msg = document.getElementById('c-limpiar-msg');
+  if (!confirm('¿Borrar TODAS las canciones, listas y configuraciones de la rockola en este navegador?\n\nLas canciones originales NO se borran del disco del celular.')) return;
+  msg.textContent = 'Borrando IndexedDB...';
+  try {
+    indexedDB.deleteDatabase('rockola_local_library_v1');
+    localStorage.removeItem('rockola_device_id');
+    localStorage.removeItem('rockola_device_name');
+    msg.textContent = '✅ Librería limpiada. Recarga el reproductor para empezar de cero.';
+  } catch(e) {
+    msg.textContent = 'Error: ' + e.message;
+  }
 }
 
 volumenEl.addEventListener('input', programarGuardarVolumen);

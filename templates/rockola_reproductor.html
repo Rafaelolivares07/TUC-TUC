@@ -2098,6 +2098,9 @@ const OWNER = 'reproductor';
 
 let reproduciendo = false;
 let cancionActual = null;
+let ultimaSeleccionBuscador = null;
+let maxTiempoActual = 0;
+let ultimoIdVisto = null;
 let playPendiente = false;
 let fallosPlay = 0;
 let skipRemoteSkip = false;
@@ -2388,6 +2391,7 @@ function handlePlayerEnded(e) {
 
   // Si se termina la ultima cancion y Repetir lista estaba activo
   if (modoRepetirLista && currentCola && currentCola.length <= 1 && memoriaListaCola.length > 0) {
+    reportarValidacion('fin', cancionActual);
     console.log('[Rockola] Repitiendo lista completa 1 vez (+1)');
     desactivarRepetirListaUnaVez();
     const listaARepetir = [...memoriaListaCola];
@@ -2411,6 +2415,7 @@ function handlePlayerEnded(e) {
   }
 
   const idTerminada = cancionActual;
+  reportarValidacion('fin', idTerminada);
   reproduciendo = false;
   playPendiente = false;
   cancionActual = null;
@@ -2428,6 +2433,8 @@ function handlePlayerEnded(e) {
 function handlePlayerTimeUpdate(e) {
   const p = e.target;
   if (p !== player) return;
+  if (cancionActual !== ultimoIdVisto) { ultimoIdVisto = cancionActual; maxTiempoActual = 0; }
+  if (p.currentTime > maxTiempoActual) maxTiempoActual = p.currentTime;
   
   actualizarProgreso();
   
@@ -4995,7 +5002,35 @@ async function ejecutarBusquedaGlobal(query) {
 function seleccionarResultadoGlobal(tipo, idOUrl, nombre) {
   const box = document.getElementById('global-search-results');
   if (box) box.style.display = 'none';
+  const qv = (document.getElementById('global-search-input')?.value || '').trim();
+  ultimaSeleccionBuscador = { q: qv, id: idOUrl, nombre: nombre, tipo: tipo };
   abrirModalPoner(idOUrl, nombre, tipo);
+}
+
+function reportarValidacion(evento, sonandoId) {
+  try {
+    if (!ultimaSeleccionBuscador || typeof SALA === 'undefined') return;
+    const dur = (typeof player !== 'undefined' && player && player.duration) ? player.duration : 0;
+    const cur = (typeof player !== 'undefined' && player && player.currentTime) ? player.currentTime : 0;
+    const son = Math.max(maxTiempoActual || 0, cur || 0);
+    const sel = ultimaSeleccionBuscador;
+    fetch(`/rockola/${SALA}/validar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        modo: 'reproductor',
+        query: sel.q || '',
+        cancion_id: sel.id || '',
+        sonando_id: sonandoId || '',
+        nombre: sel.nombre || '',
+        youtube_url: sel.tipo === 'youtube' ? sel.id : '',
+        evento: evento,
+        duracion_seg: dur,
+        sonados_seg: son
+      })
+    }).catch(() => {});
+    if (evento === 'fin' || evento === 'skip') { ultimaSeleccionBuscador = null; maxTiempoActual = 0; }
+  } catch (e) {}
 }
 
 function buscarEnYoutubeDirecto(titulo) {
@@ -6426,6 +6461,7 @@ function toggleModoRepetirCancion(checked) {
   anotarIntento('modo_repetir_cancion', modoRepetirCancion);
   postModos({modo_repetir_cancion: modoRepetirCancion});
   if (modoRepetirCancion) {
+    reportarValidacion('repetir', cancionActual);
     cancelarCrossfadeActivo();
   }
   actualizarRepetirCancionStatus();
@@ -6871,6 +6907,7 @@ async function saltarActual() {
   }
 
   const idTerminada = cancionActual;
+  reportarValidacion('skip', idTerminada);
   const siguiente = (currentCola && currentCola.length > 1) ? currentCola[1] : null;
 
   // Detener audio anterior de inmediato

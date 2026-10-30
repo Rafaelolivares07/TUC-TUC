@@ -90,6 +90,23 @@ CREATE TABLE IF NOT EXISTS rockola_lista_canciones (
     posicion   INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (lista_id, cancion_id)
 );
+CREATE TABLE IF NOT EXISTS rockola_validaciones (
+    id           BIGSERIAL PRIMARY KEY,
+    sala_id      TEXT NOT NULL,
+    query        TEXT NOT NULL DEFAULT '',
+    cancion_id   TEXT NOT NULL DEFAULT '',
+    sonando_id   TEXT NOT NULL DEFAULT '',
+    nombre       TEXT NOT NULL DEFAULT '',
+    youtube_url  TEXT NOT NULL DEFAULT '',
+    evento       TEXT NOT NULL DEFAULT 'fin',
+    duracion_seg DOUBLE PRECISION NOT NULL DEFAULT 0,
+    sonados_seg  DOUBLE PRECISION NOT NULL DEFAULT 0,
+    ratio        DOUBLE PRECISION NOT NULL DEFAULT 0,
+    validado     BOOLEAN NOT NULL DEFAULT FALSE,
+    creado_en    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_validaciones_query ON rockola_validaciones(query);
+CREATE INDEX IF NOT EXISTS idx_validaciones_sala ON rockola_validaciones(sala_id);
 ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS admin_key TEXT;
 ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS volumen INTEGER NOT NULL DEFAULT 80;
 ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS dispositivo_reproductor_id TEXT;
@@ -1279,6 +1296,22 @@ def _filtrar_youtube_guardados(youtube_items, servidor_items):
         return list(youtube_items or [])
     return [y for y in (youtube_items or [])
             if (_extraer_youtube_id(y.get('youtube_url')) or y.get('id')) not in guardados]
+
+
+def _evaluar_validacion(sonados_seg, duracion_seg, evento):
+    """Regla Rafa: sono >= 30% de la duracion => era lo que queria. Repetir/guardar/compartir validan directo."""
+    try:
+        sonados = float(sonados_seg or 0)
+    except (TypeError, ValueError):
+        sonados = 0.0
+    try:
+        duracion = float(duracion_seg or 0)
+    except (TypeError, ValueError):
+        duracion = 0.0
+    ratio = round(sonados / duracion, 4) if duracion > 0 else 0.0
+    if evento in ('repetir', 'guardar', 'compartir'):
+        return ratio, True
+    return ratio, ratio >= 0.30
 
 
 @bp.route('/<sala_id>/buscar-global')
@@ -2735,6 +2768,43 @@ def saltar(sala_id):
     finally:
         conn.close()
     return jsonify(ok=True)
+
+
+@bp.route('/<sala_id>/validar', methods=['POST'])
+def validar_seleccion(sala_id):
+    """Beacon fire-and-forget: el reproductor reporta cuánto sonó lo elegido del buscador."""
+    data = request.get_json(silent=True) or {}
+    conn = _connect()
+    try:
+        with _lock:
+            if not _es_admin_sala(conn, sala_id, data):
+                return jsonify(ok=False, error='No autorizado'), 403
+            evento = (data.get('evento') or 'fin')[:20]
+            ratio, validado = _evaluar_validacion(
+                data.get('sonados_seg'), data.get('duracion_seg'), evento)
+            conn.execute(
+                """
+                INSERT INTO rockola_validaciones
+                    (sala_id, query, cancion_id, sonando_id, nombre, youtube_url,
+                     evento, duracion_seg, sonados_seg, ratio, validado)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (sala_id,
+                 (data.get('query') or '')[:240],
+                 (data.get('cancion_id') or '')[:260],
+                 (data.get('sonando_id') or '')[:260],
+                 (data.get('nombre') or '')[:240],
+                 (data.get('youtube_url') or '')[:500],
+                 evento,
+                 float(data.get('duracion_seg') or 0),
+                 float(data.get('sonados_seg') or 0),
+                 ratio,
+                 validado),
+            )
+            conn.commit()
+    finally:
+        conn.close()
+    return jsonify(ok=True, validado=validado, ratio=ratio)
 
 
 @bp.route('/<sala_id>/anterior', methods=['POST'])

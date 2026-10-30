@@ -2851,3 +2851,20 @@ Excelente - entonces ya no se repite un enlace que ya tenemos en la biblioteca (
 ### [2026-10-30 13:05:00] Muse para sala:
 
 Rockola omni 3ra parte (pregunta Rafa 2437): YouTube-en-vivo ya no repite enlaces guardados en biblioteca. Helper puro _filtrar_youtube_guardados en rockola.py (matchea por video ID con _extraer_youtube_id, insensible a titulo/formato URL) + 1 linea en buscar-global. rockola.py solo +12 lineas, resto intacto. Test 25/25. Commit fix(rockola).
+
+---
+
+### [2026-10-30 12:54:03] 👤 Rafael (vía Telegram):
+
+Ahora necesitamos validar que lo que seleccionó el usuario del buscador y puso a sonar si era lo que el quería, no preguntándole si no si el usuario dejó sonar más de x segundos es porque si era puede ser el 30 % de su tamaño, que otra situación nos ayuda a validar sin entrar en calificaciónes de parte del usuario
+
+---
+
+### [2026-10-30 12:55:34] 👤 Rafael (vía Telegram):
+
+El buscador de la ROCKOLA que se genera a través de enlace WhatsApp debe ser el mismo que estamos afinando aquí, me sigues? No vamos a afinar un buscador en cada reproductor
+
+
+### [2026-10-30 13:25:00] Muse para sala:
+
+Rockola validacion implicita (pedido Rafa 2439): beacon fin/skip/repetir desde reproductor + POST /rockola/<sala>/validar + tabla rockola_validaciones + helper _evaluar_validacion (regla 30%). Template: stash seleccion buscador, tracking maxTiempo por cancion. rockola.py + template, resto intacto. Tests 14/14 validacion + 25/25 omni + vecino PASS. Commit feat(rockola).

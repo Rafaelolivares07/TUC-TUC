@@ -1,0 +1,1750 @@
+/* Parcial Kardex standalone — copiado verbatim de inventario_admin.html. El monstruo conserva sus originales. */
+
+let kardexProductoActual = null;
+let _kardexPdfInfo = null;
+let _kardexPaginaActual = 1;
+let _kardexTotalPaginas = 1;
+let _kardexPorPagina = 'todos';
+try {
+  localStorage.setItem('kardex_por_pagina', 'todos');
+} catch(e) {}
+let _kardexTotalMovimientos = 0;
+let _kardexTotalGlobalContado = null;
+let _kardexTotalCentroContado = null;
+let _kardexTotalBdContado = null;
+let _kardexCentroNombreContado = '';
+let _kardexEsConsolidado = false;
+
+let _kardexBodegaActual = (typeof CENTRO_ACTIVO !== 'undefined' && CENTRO_ACTIVO && CENTRO_ACTIVO.id && CENTRO_ACTIVO.id !== 'consolidado')
+  ? Number(CENTRO_ACTIVO.id)
+  : 1;
+
+let _kardexDecimales = (() => {
+  const guardado = localStorage.getItem('kardex_decimales');
+  if (guardado !== null) {
+    const p = parseInt(guardado, 10);
+    if (!isNaN(p) && p >= 0 && p <= 6) return p;
+  }
+  return 2;
+})();
+let _kardexOcultarValores = localStorage.getItem('kardex_ocultar_valores') === '1';
+let _kardexDataActual = null;
+
+let _timerACKardex = null;
+
+let productos = [];
+
+let _kardexACIdx = -1;
+let _ultimoFetchProductosTimestamp = 0;
+let _movReclasificarId = null;
+let _movReclasificarProdId = null;
+let _movReclasificarBodegaOrigen = null;
+let _movReclasificarDocNum = null;
+
+const fmt = n => (n == null ? '—' : Number(n).toLocaleString('es-CO', {minimumFractionDigits: 0, maximumFractionDigits: 2}));
+
+const fmtMon = n => (n == null ? '—' : '$' + Number(n).toLocaleString('es-CO', {minimumFractionDigits: 0, maximumFractionDigits: 0}));
+
+const fmtMonExact = n => (n == null ? '—' : '$' + Number(n).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+
+function _fmtKardexMon(n) {
+  if (n == null || isNaN(n)) return '—';
+  const val = Number(n);
+  if (_kardexDecimales === 0) {
+    return '$' + Math.round(val).toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  }
+  return '$' + val.toLocaleString('es-CO', { minimumFractionDigits: _kardexDecimales, maximumFractionDigits: _kardexDecimales });
+}
+
+function _fmtKardexQty(n) {
+  if (n == null || isNaN(n)) return '—';
+  const val = Number(n);
+  if (_kardexDecimales === 0) {
+    return Math.round(val).toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  }
+  return val.toLocaleString('es-CO', { minimumFractionDigits: _kardexDecimales, maximumFractionDigits: _kardexDecimales });
+}
+
+function _fmtKardexUnit(n) {
+  if (n == null || isNaN(n)) return '—';
+  const val = Number(n);
+  if (_kardexDecimales === 0) {
+    return '$' + Math.round(val).toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  }
+  return '$' + val.toLocaleString('es-CO', { minimumFractionDigits: _kardexDecimales, maximumFractionDigits: _kardexDecimales });
+}
+
+function _runKardexAutoScroll() {
+  if (_scrollSpeed !== 0 && _scrollContainer) {
+    _scrollContainer.scrollTop += _scrollSpeed;
+    _dragAutoScrollRaf = requestAnimationFrame(_runKardexAutoScroll);
+  } else {
+    _dragAutoScrollRaf = null;
+  }
+}
+
+async function abrirModalFechaDocumento(tipoDocumentoId, numeroCodificado, fechaActual, horaActual, tipoCodificado, targetFecha = null, targetHora = null) {
+  const modal = document.getElementById('modal-fecha-documento');
+  const tipoDoc = decodeURIComponent(tipoCodificado || '');
+  const docNum = decodeURIComponent(numeroCodificado || '');
+  const fActual = (fechaActual || '').slice(0, 10);
+  const hActual = horaActual || '00:00';
+
+  const fNueva = targetFecha || fActual;
+  const hNueva = targetHora || hActual;
+
+  document.getElementById('fecha-doc-identidad').textContent = `${tipoDoc} ${docNum}`;
+  document.getElementById('fecha-doc-actual-display').textContent = `${fActual} a las ${hActual}`;
+  
+  const fInp = document.getElementById('fecha-doc-nueva');
+  fInp.value = fNueva;
+  fInp.max = getFechaHoyBogota();
+
+  const hInp = document.getElementById('hora-doc-nueva');
+  hInp.value = hNueva;
+
+  modal.dataset.tipoDocumentoId = tipoDocumentoId || '';
+  modal.dataset.tipoDocumento = tipoDoc;
+  modal.dataset.documentoNumero = docNum;
+
+  const itemsList = document.getElementById('fecha-doc-items-list');
+  const itemsCount = document.getElementById('fecha-doc-items-count');
+  itemsList.innerHTML = '<div class="text-center text-indigo-600 py-3 text-xs font-semibold flex items-center justify-center gap-1.5"><div class="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-600"></div> Analizando ítems e impacto en Kardex...</div>';
+  itemsCount.textContent = '...';
+
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/documento/verificar-cambio-fecha`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tipo_documento_id: Number(tipoDocumentoId) || null,
+        tipo_documento: tipoDoc,
+        documento_numero: docNum,
+        nueva_fecha: fNueva,
+        nueva_hora: hNueva
+      })
+    });
+    const d = await r.json();
+    if (!d.ok) {
+      itemsList.innerHTML = `<div class="text-red-500 text-xs py-2">${d.error}</div>`;
+      return;
+    }
+
+    itemsCount.textContent = `${d.total_items} ítem(s) en documento`;
+
+    let html = '';
+    d.items.forEach(it => {
+      const tieneAfectados = it.movimientos_posteriores > 0;
+      html += `
+        <div class="flex items-center justify-between p-2 bg-white rounded-lg border border-gray-150 text-xs gap-2">
+          <div class="truncate max-w-[240px]">
+            <span class="font-bold text-gray-800">${it.producto_nombre}</span>
+            <span class="text-[10px] text-gray-400 block">${it.tipo === 'entrada' ? '📥 Entrada' : '📤 Salida'}: ${fmt(it.cantidad)} und</span>
+          </div>
+          <div class="text-right flex-shrink-0">
+            ${tieneAfectados 
+              ? `<span class="px-2 py-0.5 bg-amber-100 text-amber-900 rounded-full font-extrabold text-[10px] inline-flex items-center gap-1">⚡ Recosteará ${it.movimientos_posteriores} mov(s)</span>`
+              : `<span class="px-2 py-0.5 bg-green-100 text-green-800 rounded-full font-semibold text-[10px]">Sin salidas afectadas</span>`
+            }
+          </div>
+        </div>
+      `;
+    });
+    itemsList.innerHTML = html || '<div class="text-gray-400 text-center py-2 text-xs">Sin ítems</div>';
+  } catch (e) {
+    itemsList.innerHTML = `<div class="text-red-500 text-xs py-2">Error al verificar: ${e.message}</div>`;
+  }
+}
+
+function abrirModalReclasificarKardex(movId, docDisplayEncoded, bodegaActualId, prodId, prodNombreEncoded, cantStr, tipoMov, docNumEncoded) {
+  _movReclasificarId = Number(movId);
+  _movReclasificarProdId = Number(prodId);
+  _movReclasificarBodegaOrigen = Number(bodegaActualId);
+  _movReclasificarDocNum = decodeURIComponent(docNumEncoded || '').trim();
+
+  const docDisplay = decodeURIComponent(docDisplayEncoded || 'Movimiento #' + movId);
+  const prodNombre = decodeURIComponent(prodNombreEncoded || 'Producto');
+  
+  const modal = document.getElementById('modal-reclasificar-kardex');
+  if (!modal) return;
+
+  document.getElementById('mrk-doc-nombre').textContent = docDisplay;
+  document.getElementById('mrk-prod-detalle').textContent = `${prodNombre} · ${tipoMov === 'entrada' ? '📥 Entrada' : '📤 Salida'} de ${cantStr} un`;
+
+  // Sede actual
+  const sedeActual = (typeof CENTROS_UTILIDAD !== 'undefined' && CENTROS_UTILIDAD.find(c => Number(c.id) === Number(bodegaActualId)));
+  const sedeActualNombre = sedeActual ? `${sedeActual.nombre} (${sedeActual.codigo})` : `Sede #${bodegaActualId}`;
+  document.getElementById('mrk-sede-actual-nombre').textContent = sedeActualNombre;
+
+  // Poblar select de nuevas sedes (todas excepto la actual)
+  const sel = document.getElementById('mrk-select-nueva-sede');
+  sel.innerHTML = '';
+  
+  const otrasSedes = (typeof CENTROS_UTILIDAD !== 'undefined' ? CENTROS_UTILIDAD : []).filter(c => Number(c.id) !== Number(bodegaActualId) && c.id !== 'consolidado' && c.activo !== false);
+  
+  const btnConf = document.getElementById('mrk-btn-confirmar');
+  if (!otrasSedes.length) {
+    sel.innerHTML = '<option value="">No hay otras sedes activas</option>';
+    if (btnConf) btnConf.disabled = true;
+  } else {
+    otrasSedes.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.id;
+      opt.textContent = `${(c.tipo === 'movil') ? '🛵' : '🏪'} ${c.nombre} (${c.codigo})`;
+      sel.appendChild(opt);
+    });
+    if (btnConf) btnConf.disabled = false;
+  }
+
+  // Checkbox de documento completo
+  const boxTodoDoc = document.getElementById('mrk-box-todo-doc');
+  const checkTodoDoc = document.getElementById('mrk-check-todo-doc');
+  const lblDocNum = document.getElementById('mrk-doc-num-label');
+  if (_movReclasificarDocNum && _movReclasificarDocNum !== 'None') {
+    lblDocNum.textContent = '#' + _movReclasificarDocNum;
+    checkTodoDoc.checked = true;
+    boxTodoDoc.classList.remove('hidden');
+  } else {
+    checkTodoDoc.checked = false;
+    boxTodoDoc.classList.add('hidden');
+  }
+
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+}
+
+function actualizarBannerAuditoriaVC(alertas) {
+  const banner = document.getElementById('vc-banner-auditoria');
+  const desc = document.getElementById('vc-auditoria-desc');
+  if (!banner || !desc) return;
+
+  const desfases = alertas.total_con_desfase || 0;
+  const costoCero = alertas.total_con_costo_cero || 0;
+  const margenNeg = alertas.total_con_margen_neg || 0;
+
+  if (desfases > 0 || costoCero > 0 || margenNeg > 0) {
+    banner.classList.remove('hidden');
+    let msgs = [];
+    if (desfases > 0) {
+      msgs.push(`<strong>${desfases} producto(s) con desfase vs. Kardex</strong> (Diferencia acumulada: <strong>${fmtMon(alertas.desfase_abs_total || 0)}</strong>)`);
+    }
+    if (costoCero > 0) {
+      msgs.push(`<strong>${costoCero} con costo $0</strong>`);
+    }
+    if (margenNeg > 0) {
+      msgs.push(`<strong>${margenNeg} con margen negativo</strong>`);
+    }
+    desc.innerHTML = `Se detectaron inconsistencias en este período: ${msgs.join(' · ')}.`;
+  } else {
+    banner.classList.add('hidden');
+  }
+}
+
+function actualizarBotonValoresKardex() {
+  const btn = document.getElementById('btn-toggle-valores-kardex');
+  const icon = document.getElementById('icon-toggle-valores-kardex');
+  const text = document.getElementById('text-toggle-valores-kardex');
+  if (!btn) return;
+  if (_kardexOcultarValores) {
+    btn.className = 'px-3 py-2 rounded-xl font-bold border transition flex items-center gap-1.5 bg-indigo-600 text-white border-indigo-700 shadow-xs cursor-pointer select-none text-xs';
+    if (icon) {
+      icon.className = 'text-white font-bold';
+      icon.textContent = '👁️';
+    }
+    if (text) {
+      text.textContent = 'Cantidades (Costos Ocultos)';
+    }
+    btn.title = 'Hacer clic para descolapsar y mostrar nuevamente las columnas de costos y valores ($)';
+  } else {
+    btn.className = 'px-3 py-2 rounded-xl font-bold border transition flex items-center gap-1.5 bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200 hover:text-slate-800 cursor-pointer select-none text-xs shadow-xs';
+    if (icon) {
+      icon.className = 'text-slate-500';
+      icon.textContent = '💵';
+    }
+    if (text) {
+      text.textContent = 'Solo Cantidades';
+    }
+    btn.title = 'Colapsar u ocultar columnas de costos y valores monetarios para enfocarse únicamente en cantidades físicas';
+  }
+}
+
+function actualizarPaginadorKardex() {
+  const bar = document.getElementById('kardex-paginacion-bar');
+  if (!bar) return;
+
+  if (_kardexTotalMovimientos <= 0) {
+    bar.classList.add('hidden');
+    return;
+  }
+  bar.classList.remove('hidden');
+
+  const infoConteo = document.getElementById('kardex-info-conteo');
+  const selPorPagina = document.getElementById('kardex-por-pagina');
+  const txtPagina = document.getElementById('kardex-texto-pagina');
+  const btnPrev = document.getElementById('btn-kardex-prev');
+  const btnNext = document.getElementById('btn-kardex-next');
+  const btnPrimero = document.getElementById('btn-kardex-primero');
+  const btnUltimo = document.getElementById('btn-kardex-ultimo');
+
+  if (selPorPagina) {
+    selPorPagina.value = String(_kardexPorPagina);
+  }
+
+  const navContainer = btnPrev?.parentElement;
+  if (_kardexPorPagina === 'todos' || Number(_kardexPorPagina) >= _kardexTotalMovimientos) {
+    if (infoConteo) infoConteo.innerHTML = `Mostrando <strong class="text-emerald-700 font-extrabold">todos los ${_kardexTotalMovimientos} registros sin excepción</strong> <span class="text-gray-400 font-normal">(Histórico completo)</span>`;
+    if (navContainer) navContainer.classList.add('hidden');
+  } else {
+    if (navContainer) navContainer.classList.remove('hidden');
+    const porPagInt = Number(_kardexPorPagina);
+    const desde = (_kardexPaginaActual - 1) * porPagInt + 1;
+    const hasta = Math.min(_kardexPaginaActual * porPagInt, _kardexTotalMovimientos);
+    if (infoConteo) infoConteo.innerHTML = `Mostrando <b>${desde} - ${hasta}</b> de <b>${_kardexTotalMovimientos}</b> movimientos`;
+    if (txtPagina) txtPagina.textContent = `Página ${_kardexPaginaActual} de ${_kardexTotalPaginas}`;
+    if (btnPrev) btnPrev.disabled = _kardexPaginaActual <= 1;
+    if (btnNext) btnNext.disabled = _kardexPaginaActual >= _kardexTotalPaginas;
+    if (btnPrimero) btnPrimero.disabled = _kardexPaginaActual <= 1;
+    if (btnUltimo) btnUltimo.disabled = _kardexPaginaActual >= _kardexTotalPaginas;
+  }
+}
+
+function cambiarBodegaKardex(bodegaId) {
+  _kardexBodegaActual = Number(bodegaId);
+  if (kardexProductoActual) {
+    cargarKardex(kardexProductoActual, 1);
+  }
+}
+
+function cambiarDecimalesKardex(val) {
+  let d = parseInt(val, 10);
+  if (isNaN(d)) d = 2;
+  d = Math.max(0, Math.min(6, d));
+  _kardexDecimales = d;
+  try { localStorage.setItem('kardex_decimales', d); } catch(e) {}
+
+  const inp = document.getElementById('kardex-decimales-input');
+  if (inp && parseInt(inp.value, 10) !== d) inp.value = d;
+
+  if (_kardexDataActual) {
+    renderizarTablaKardex(_kardexDataActual);
+  }
+}
+
+function cambiarKardexPorPagina(val) {
+  _kardexPorPagina = (val === 'todos' || isNaN(val)) ? 'todos' : Number(val);
+  try {
+    localStorage.setItem('kardex_por_pagina', String(_kardexPorPagina));
+  } catch(e) {}
+  _kardexPaginaActual = 1;
+  if (kardexProductoActual) {
+    cargarKardex(kardexProductoActual, 1);
+  }
+}
+
+async function cargarAuditoriaRecosteo() {
+
+  const lista = document.getElementById('recosteo-lista');
+
+  if (lista) lista.innerHTML = '<p class="text-sm text-gray-400 text-center py-8">Analizando movimientos...</p>';
+
+  try {
+
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/recosteo/auditoria`);
+
+    const d = await r.json();
+
+    if (!r.ok || !d.ok) throw new Error(d.error || 'No fue posible auditar el inventario.');
+
+    auditoriaRecosteo = d.productos || [];
+
+    renderizarResumenRecosteo(d);
+
+    renderizarListaRecosteo(auditoriaRecosteo);
+
+  } catch (error) {
+
+    if (lista) lista.innerHTML = `<p class="text-sm text-red-500 text-center py-8">${error.message}</p>`;
+
+  }
+
+}
+
+async function cargarHistorialRecosteos() {
+  const tbody = document.getElementById('historial-recosteos-body');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="8" class="text-center py-6 text-gray-400 italic">Cargando historial de recosteos...</td></tr>';
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/recosteo/historial?limite=50`);
+    const d = await r.json();
+    if (!d.ok || !d.historial || !d.historial.length) {
+      tbody.innerHTML = '<tr><td colspan="8" class="text-center py-6 text-gray-400 italic">No hay registros de recosteo recientes.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = d.historial.map(h => {
+      const origLabels = {
+        'manual_kardex': '<span class="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full font-bold text-[10px]">Manual Kardex</span>',
+        'recosteo_global': '<span class="bg-purple-50 text-purple-700 px-2 py-0.5 rounded-full font-bold text-[10px]">Recosteo Global</span>',
+        'produccion': '<span class="bg-amber-50 text-amber-800 px-2 py-0.5 rounded-full font-bold text-[10px]">Producción</span>',
+        'compra': '<span class="bg-emerald-50 text-emerald-800 px-2 py-0.5 rounded-full font-bold text-[10px]">Factura Compra</span>',
+        'ajuste': '<span class="bg-rose-50 text-rose-800 px-2 py-0.5 rounded-full font-bold text-[10px]">Ajuste Inv.</span>',
+        'anulacion_produccion': '<span class="bg-red-50 text-red-800 px-2 py-0.5 rounded-full font-bold text-[10px]">Anulación Prod.</span>'
+      };
+      const origBadge = origLabels[h.origen] || `<span class="bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full font-bold text-[10px]">${h.origen || 'Sistema'}</span>`;
+      const docStr = (h.documento_tipo || h.documento_numero) ? `${h.documento_tipo || ''} #${h.documento_numero || ''}`.trim() : '—';
+      const cantAjust = h.movimientos_afectados > 0 ? `<span class="font-bold text-amber-600">${h.movimientos_afectados}</span>` : '<span class="text-gray-400">0</span>';
+      return `
+        <tr class="hover:bg-slate-50 transition">
+          <td class="px-3 py-2 font-mono text-gray-700 whitespace-nowrap">${h.fecha_hora}</td>
+          <td class="px-3 py-2 font-bold text-gray-900">${h.producto_nombre || 'Producto #' + h.producto_id}</td>
+          <td class="px-3 py-2">${origBadge}</td>
+          <td class="px-3 py-2 font-mono text-gray-600">${docStr}</td>
+          <td class="px-3 py-2 text-gray-700">${h.usuario_nombre || 'Sistema'}</td>
+          <td class="px-3 py-2 text-right font-mono text-gray-500">$${(Number(h.costo_anterior) || 0).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 4})}</td>
+          <td class="px-3 py-2 text-right font-mono font-bold text-gray-800">$${(Number(h.costo_nuevo) || 0).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 4})}</td>
+          <td class="px-3 py-2 text-center">${cantAjust}</td>
+        </tr>
+      `;
+    }).join('');
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="8" class="text-center py-4 text-red-500 font-bold">Error cargando historial: ${e.message}</td></tr>`;
+  }
+}
+
+async function cargarKardex(productoId, pagina = 1) {
+  kardexProductoActual = Number(productoId);
+  _kardexPaginaActual = Math.max(1, Number(pagina) || 1);
+
+  // Consulta ultra rápida inicial para contar registros en BD de inmediato
+  consultarConteoRapidoKardex(productoId);
+
+  const tb = document.getElementById('tabla-kardex');
+  tb.innerHTML = '<tr><td colspan="10" class="text-center text-gray-400 py-4">Cargando…</td></tr>';
+
+  _kardexPdfInfo = null;
+  const btnPdfReset = document.getElementById('kardex-btn-pdf');
+  if (btnPdfReset) { btnPdfReset.classList.add('hidden'); btnPdfReset.classList.remove('flex'); }
+
+  // Reset sum elements
+  const sumEntradasEl = document.getElementById('kardex-sum-entradas');
+  const sumSalidasEl = document.getElementById('kardex-sum-salidas');
+  if (sumEntradasEl) sumEntradasEl.textContent = '0';
+  if (sumSalidasEl) sumSalidasEl.textContent = '0';
+
+  // Render product summary bar (initial fallback from cache)
+  const prod = productos.find(p => Number(p.id) === Number(productoId));
+  const summaryPanel = document.getElementById('kardex-resumen-producto');
+  if (prod && summaryPanel) {
+    document.getElementById('kp-stock').textContent = _fmtKardexQty(prod.stock);
+    document.getElementById('kp-costo-prom').textContent = _fmtKardexUnit(prod.costo);
+    document.getElementById('kp-valor-existencia').textContent = _fmtKardexMon(Number(prod.costo || 0) * Number(prod.stock || 0));
+    const tolEl0 = document.getElementById('kp-tolerancia');
+    if (tolEl0) tolEl0.textContent = '\u2014';
+    summaryPanel.classList.remove('hidden');
+  } else if (summaryPanel) {
+    summaryPanel.classList.add('hidden');
+  }
+
+  const bodParam = `&bodega=${encodeURIComponent(_kardexBodegaActual)}`;
+  const porPagParam = encodeURIComponent(_kardexPorPagina);
+  const r = await fetch(`/api/inventario/producto/${productoId}/kardex?pagina=${_kardexPaginaActual}&por_pagina=${porPagParam}${bodParam}`);
+  const d = await r.json();
+  if (!d.ok) { toast(d.error || 'Error al consultar kardex', false); return; }
+
+  _kardexDataActual = d;
+  _kardexTotalMovimientos = d.total_movimientos ?? (d.movimientos ? d.movimientos.length : 0);
+  _kardexTotalPaginas = d.total_paginas ?? 1;
+  _kardexPaginaActual = d.pagina ?? 1;
+
+  if (d.centros_saldos) {
+    renderizarBodegasKardex(d.centros_saldos, d.bodega_activa_id, d.total_empresa);
+  }
+
+  renderizarAuditoriaKardex(d.auditoria, productoId);
+
+  if (summaryPanel && d.stock_actual !== undefined && d.costo_actual !== undefined) {
+    if (prod) {
+      prod.stock = d.stock_actual;
+      prod.costo = d.costo_actual;
+    }
+  }
+
+  const paginacionBar = document.getElementById('kardex-paginacion-bar');
+  if (!d.movimientos || !d.movimientos.length) {
+    tb.innerHTML = '<tr><td colspan="11" class="text-center text-gray-400 py-8">Sin movimientos</td></tr>';
+    _kardexPdfInfo = null;
+    const btnPdf = document.getElementById('kardex-btn-pdf');
+    if (btnPdf) { btnPdf.classList.add('hidden'); btnPdf.classList.remove('flex'); }
+    if (paginacionBar) paginacionBar.classList.add('hidden');
+    compararConteoKardex(0);
+    return;
+  }
+
+  _kardexPdfInfo = {
+    producto_id: Number(productoId),
+    producto_nombre: prod?.nombre || (d.movimientos[0]?.nombre_producto || 'Producto'),
+  };
+  const btnPdf = document.getElementById('kardex-btn-pdf');
+  if (btnPdf) { btnPdf.classList.remove('hidden'); btnPdf.classList.add('flex'); }
+
+  inicializarDecimalesKardex();
+  actualizarBotonValoresKardex();
+  renderizarTablaKardex(d);
+  compararConteoKardex(d.movimientos ? d.movimientos.length : 0);
+  actualizarPaginadorKardex();
+}
+
+async function cargarProductos(silencioso = false) {
+  const bodParam = (CENTRO_ACTIVO && CENTRO_ACTIVO.id) ? `?bodega=${CENTRO_ACTIVO.id}` : '';
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/productos${bodParam}`);
+    const d = await r.json();
+    if (!d.ok) {
+      if (!silencioso) toast(d.error, false);
+      return [];
+    }
+    productos = d.productos || [];
+    _ultimoFetchProductosTimestamp = Date.now();
+    
+    // Solo actualizamos la tabla si el usuario está físicamente viendo la pestaña de productos
+    const tabProd = document.getElementById('tab-productos');
+    if (tabProd && !tabProd.classList.contains('hidden') && typeof filtrarTablaProductos === 'function') {
+      filtrarTablaProductos();
+    }
+    return productos;
+  } catch(e) {
+    if (!silencioso) toast('Error al cargar productos', false);
+    return [];
+  }
+}
+
+function cerrarModalReclasificarKardex() {
+  const modal = document.getElementById('modal-reclasificar-kardex');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
+  _movReclasificarId = null;
+}
+
+function compararConteoKardex(totalRenderizados = null) {
+  const lblRender = document.getElementById('kardex-conteo-render');
+  const badge = document.getElementById('kardex-badge-cotejo');
+  if (!badge) return;
+
+  if (totalRenderizados !== null) {
+    if (lblRender) lblRender.textContent = Number(totalRenderizados).toLocaleString('es-CO');
+  }
+
+  const renderText = lblRender ? lblRender.textContent.replace(/\D/g, '') : '';
+  const renderVal = totalRenderizados !== null ? Number(totalRenderizados) : (renderText !== '' ? parseInt(renderText, 10) : null);
+
+  const targetBd = _kardexEsConsolidado ? _kardexTotalGlobalContado : _kardexTotalCentroContado;
+
+  if (targetBd === null || renderVal === null) {
+    badge.className = 'text-xs font-bold px-2.5 py-1 rounded-lg bg-amber-100 text-amber-800';
+    badge.textContent = '⏳ Cargando tabla...';
+    return;
+  }
+
+  if (renderVal === targetBd) {
+    badge.className = 'text-xs font-bold px-3 py-1 rounded-lg bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs flex items-center gap-1.5';
+    badge.innerHTML = `<span>✅ 100% Coinciden</span> <span class="font-mono font-black">(${renderVal} / ${targetBd})</span>`;
+    badge.title = `Todos los registros del centro (${targetBd}) coinciden exactamente con los registros renderizados en pantalla (${renderVal}). Global BD: ${_kardexTotalGlobalContado}`;
+  } else {
+    badge.className = 'text-xs font-bold px-3 py-1 rounded-lg bg-rose-100 text-rose-800 border border-rose-300 shadow-2xs flex items-center gap-1.5 animate-pulse';
+    badge.innerHTML = `<span>⚠️ Discrepancia</span> <span class="font-mono font-black">Sede:${targetBd} ≠ Render:${renderVal}</span>`;
+    badge.title = `Atención: El número de registros en la sede activa (${targetBd}) no coincide con los registros renderizados (${renderVal}). Total Global BD: ${_kardexTotalGlobalContado}`;
+  }
+}
+
+async function consultarConteoRapidoKardex(productoId) {
+  const panel = document.getElementById('kardex-conteo-cotejo');
+  const lblGlobal = document.getElementById('kardex-conteo-global');
+  const lblCentro = document.getElementById('kardex-conteo-centro');
+  const lblCentroTitulo = document.getElementById('kardex-label-centro');
+  const lblBd = document.getElementById('kardex-conteo-bd');
+  const lblRender = document.getElementById('kardex-conteo-render');
+  const badge = document.getElementById('kardex-badge-cotejo');
+
+  if (!panel || !badge) return;
+
+  panel.classList.remove('hidden');
+  if (lblGlobal) lblGlobal.textContent = '...';
+  if (lblCentro) lblCentro.textContent = '...';
+  if (lblBd) lblBd.textContent = '...';
+  if (lblRender) lblRender.textContent = '...';
+  badge.className = 'text-xs font-bold px-2.5 py-1 rounded-lg bg-blue-100 text-blue-800 animate-pulse';
+  badge.textContent = '⏳ Contando BD...';
+  _kardexTotalGlobalContado = null;
+  _kardexTotalCentroContado = null;
+  _kardexTotalBdContado = null;
+
+  try {
+    const bodParam = `?bodega=${encodeURIComponent(_kardexBodegaActual)}`;
+    const r = await fetch(`/api/inventario/producto/${productoId}/conteo${bodParam}`);
+    const d = await r.json();
+    if (d.ok) {
+      _kardexTotalGlobalContado = Number(d.total_global ?? d.total_bd ?? 0);
+      _kardexTotalCentroContado = Number(d.total_centro ?? d.total_bd ?? 0);
+      _kardexTotalBdContado = _kardexTotalCentroContado;
+      _kardexCentroNombreContado = d.centro_nombre || (CENTRO_ACTIVO ? CENTRO_ACTIVO.nombre : 'Sede Activa');
+      _kardexEsConsolidado = !!d.es_consolidado;
+
+      if (lblGlobal) lblGlobal.textContent = _kardexTotalGlobalContado.toLocaleString('es-CO');
+      if (lblCentro) lblCentro.textContent = _kardexTotalCentroContado.toLocaleString('es-CO');
+      if (lblBd) lblBd.textContent = _kardexTotalCentroContado.toLocaleString('es-CO');
+      if (lblCentroTitulo) {
+        lblCentroTitulo.textContent = _kardexEsConsolidado ? 'Consolidado' : (_kardexCentroNombreContado || 'Sede Activa');
+        lblCentroTitulo.title = `Centro de Utilidad: ${_kardexCentroNombreContado}`;
+      }
+      compararConteoKardex();
+    } else {
+      if (lblGlobal) lblGlobal.textContent = 'Error';
+      if (lblCentro) lblCentro.textContent = 'Error';
+      if (lblBd) lblBd.textContent = 'Error';
+    }
+  } catch (e) {
+    if (lblGlobal) lblGlobal.textContent = 'Error';
+    if (lblCentro) lblCentro.textContent = 'Error';
+    if (lblBd) lblBd.textContent = 'Error';
+  }
+}
+
+async function ejecutarRecosteo(payload, descripcion) {
+  try {
+    toast(`Iniciando recosteo para ${descripcion}...`);
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/recosteo/ejecutar`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
+    });
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error(d.error || 'No fue posible ejecutar el recosteo.');
+    toast(`Recosteo completado para ${descripcion}.`);
+    
+    if (typeof mostrarInformeRecosteo === 'function' && d.resumen) {
+      mostrarInformeRecosteo(d.resumen, d.productos_detalle);
+    }
+    
+    await cargarAuditoriaRecosteo();
+  } catch (error) {
+    toast(error.message, false);
+  }
+}
+
+async function ejecutarRecosteoKardex(productoId) {
+  if (!productoId) return;
+  const btn = document.getElementById('btn-recosteo-kardex');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span>⏳</span> <span>Recosteando...</span>';
+  }
+  try {
+    toast('Ejecutando recosteo y sincronización de saldos...');
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/recosteo/ejecutar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ producto_ids: [Number(productoId)] })
+    });
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error(d.error || 'No fue posible ejecutar el recosteo.');
+    toast('Recosteo completado exitosamente.');
+    if (typeof mostrarInformeRecosteo === 'function' && d.resumen) {
+      mostrarInformeRecosteo(d.resumen, d.productos_detalle);
+    }
+    await cargarKardex(productoId);
+    if (typeof cargarProductos === 'function') {
+      cargarProductos();
+    }
+  } catch (err) {
+    toast(err.message, false);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<span>⚡</span> <span>Ejecutar Recosteo</span>';
+    }
+  }
+}
+
+async function ejecutarRecosteoSeleccionados() {
+
+  const ids = [...document.querySelectorAll('.recosteo-check:checked')].map(input => Number(input.value));
+
+  if (!ids.length) {
+
+    toast('Selecciona al menos un producto para recostear.', false);
+
+    return;
+
+  }
+
+  await ejecutarRecosteo({ producto_ids: ids }, `${ids.length} producto(s)`);
+
+}
+
+async function ejecutarRecosteoTodos() {
+  if (!confirm('¿Deseas recostear todos los productos con movimientos?')) return;
+  await ejecutarRecosteo({ todos: true }, 'todos los productos con movimientos');
+}
+
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function filtrarACKardex() {
+  clearTimeout(_timerACKardex);
+  _timerACKardex = setTimeout(() => {
+    const inp = document.getElementById('kardex-ac-input');
+    const list = document.getElementById('kardex-ac-list');
+    if (!inp || !list) return;
+
+    const rawQ = inp.value;
+    if (!rawQ || !rawQ.trim()) {
+      list.classList.add('hidden');
+      _kardexACIdx = -1;
+      document.getElementById('kardex-resumen-producto')?.classList.add('hidden');
+      document.getElementById('kardex-conteo-cotejo')?.classList.add('hidden');
+      return;
+    }
+
+    if (!productos || !productos.length) {
+      if (typeof cargarProductos === 'function') {
+        cargarProductos().then(() => filtrarACKardex());
+      }
+      return;
+    }
+
+    const normalizeStr = str => {
+      if (!str) return '';
+      try {
+        return str.toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+      } catch (e) {
+        return str.toString().toLowerCase().trim();
+      }
+    };
+
+    const qNorm = normalizeStr(rawQ);
+    const matches = productos.filter(p => {
+      if (!p || !p.nombre) return false;
+      const n = normalizeStr(p.nombre);
+      const c = normalizeStr(p.categoria);
+      return n.includes(qNorm) || c.includes(qNorm);
+    }).slice(0, 35);
+
+    _kardexACIdx = -1;
+
+    if (!matches.length) {
+      list.innerHTML = '<div class="px-3 py-2 text-xs text-gray-400 italic">No se encontraron productos coincidentes.</div>';
+      list.classList.remove('hidden');
+      return;
+    }
+
+    list.innerHTML = matches.map((p, idx) => `
+      <div class="ac-item text-left px-3 py-2 hover:bg-indigo-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+           data-idx="${idx}"
+           data-id="${p.id}"
+           onmousedown="seleccionarProductoKardex(${p.id})">
+        <span class="font-bold text-gray-800">${escapeHtml(p.nombre)}</span>
+        ${p.categoria ? `<span class="text-xs text-gray-400 ml-1">(${escapeHtml(p.categoria)})</span>` : ''}
+      </div>
+    `).join('');
+    list.classList.remove('hidden');
+  }, 90);
+}
+
+function filtrarAuditoriaRecosteo(texto) {
+  const query = texto.toLowerCase().trim();
+  document.querySelectorAll('.recosteo-producto').forEach(el => {
+    el.classList.toggle('hidden', query && !el.dataset.nombre.includes(query));
+  });
+}
+
+async function generarPdfKardex() {
+  if (!_kardexPdfInfo) { toast('Selecciona un producto para generar el PDF', false); return; }
+  toast('Generando PDF…');
+  const pid = _kardexPdfInfo.producto_id;
+  const bodParam = `?bodega=${encodeURIComponent(_kardexBodegaActual)}`;
+  window.open(`/api/inventario/producto/${pid}/kardex/pdf${bodParam}`, '_blank');
+}
+
+function getFechaHoyBogota() {
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Bogota',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).format(new Date());
+  } catch(e) {
+    const d = new Date();
+    const offset = d.getTimezoneOffset() * 60000;
+    return new Date(d.getTime() - offset).toISOString().slice(0, 10);
+  }
+}
+
+function handleKardexAutoScroll(e) {
+  if (!_draggedKardexRow) return;
+  const container = document.getElementById('kardex-table-container') || e.target.closest('.overflow-y-auto');
+  if (!container) return;
+  _scrollContainer = container;
+
+  const rect = container.getBoundingClientRect();
+  const threshold = 80; // Zona de detección en píxeles desde el borde superior e inferior
+  const topDist = e.clientY - rect.top;
+  const bottomDist = rect.bottom - e.clientY;
+
+  let speed = 0;
+  if (topDist < threshold && topDist > -50) {
+    // Cerca del borde superior -> Scroll fluido hacia arriba
+    const intensity = Math.min(1, Math.max(0.15, (threshold - topDist) / threshold));
+    speed = -Math.round(intensity * 18);
+  } else if (bottomDist < threshold && bottomDist > -50) {
+    // Cerca del borde inferior -> Scroll fluido hacia abajo
+    const intensity = Math.min(1, Math.max(0.15, (threshold - bottomDist) / threshold));
+    speed = Math.round(intensity * 18);
+  }
+
+  _scrollSpeed = speed;
+  if (speed !== 0 && !_dragAutoScrollRaf) {
+    _dragAutoScrollRaf = requestAnimationFrame(_runKardexAutoScroll);
+  } else if (speed === 0 && _dragAutoScrollRaf) {
+    cancelAnimationFrame(_dragAutoScrollRaf);
+    _dragAutoScrollRaf = null;
+  }
+}
+
+function inicializarDecimalesKardex() {
+  const inp = document.getElementById('kardex-decimales-input');
+  if (inp) inp.value = _kardexDecimales;
+}
+
+function irKardexDesdeAuditoria(evento, productoId, movimientoId) {
+  evento.preventDefault();
+  evento.stopPropagation();
+  const url = new URL(window.location.origin + window.location.pathname);
+  url.searchParams.set('tab', 'kardex');
+  url.searchParams.set('producto_id', productoId);
+  if (movimientoId) url.searchParams.set('movimiento_id', movimientoId);
+  window.open(url.toString(), '_blank');
+}
+
+function irPaginaKardex(nuevaPagina) {
+  const p = Number(nuevaPagina);
+  if (isNaN(p) || p < 1) return;
+  if (_kardexTotalPaginas > 0 && p > _kardexTotalPaginas) return;
+  if (kardexProductoActual) {
+    cargarKardex(kardexProductoActual, p);
+    const container = document.getElementById('kardex-table-container');
+    if (container) container.scrollTop = 0;
+  }
+}
+
+function kardexDragEnd(e) {
+  stopKardexAutoScroll();
+  document.querySelectorAll('#tabla-kardex tr').forEach(r => {
+    r.classList.remove('opacity-40', 'bg-indigo-50', 'border-t-2', 'border-b-2', 'border-indigo-500');
+  });
+  _draggedKardexRow = null;
+}
+
+function kardexDragLeave(e) {
+  const tr = e.target.closest('#tabla-kardex tr');
+  if (tr) {
+    tr.classList.remove('border-t-2', 'border-b-2', 'border-indigo-500');
+  }
+}
+
+function kardexDragOver(e) {
+  e.preventDefault();
+  handleKardexAutoScroll(e);
+
+  const tr = e.target.closest('#tabla-kardex tr');
+  if (!tr || tr === _draggedKardexRow) return;
+  e.dataTransfer.dropEffect = 'move';
+  
+  document.querySelectorAll('#tabla-kardex tr').forEach(r => {
+    if (r !== tr) r.classList.remove('border-t-2', 'border-b-2', 'border-indigo-500');
+  });
+
+  const rect = tr.getBoundingClientRect();
+  const midY = rect.top + rect.height / 2;
+  if (e.clientY < midY) {
+    tr.classList.add('border-t-2', 'border-indigo-500');
+    tr.classList.remove('border-b-2');
+  } else {
+    tr.classList.add('border-b-2', 'border-indigo-500');
+    tr.classList.remove('border-t-2');
+  }
+}
+
+function kardexDragStart(e) {
+  const tr = e.target.closest('tr[data-doc-num]');
+  if (!tr) return;
+  _draggedKardexRow = tr;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', tr.dataset.docNum || '');
+  tr.classList.add('opacity-40', 'bg-indigo-50');
+}
+
+async function kardexDrop(e) {
+  e.preventDefault();
+  const targetTr = e.target.closest('#tabla-kardex tr');
+  if (!targetTr || !_draggedKardexRow || targetTr === _draggedKardexRow) {
+    kardexDragEnd(e);
+    return;
+  }
+
+  const dragged = _draggedKardexRow;
+  const docTipoId = dragged.dataset.docTipoId || null;
+  const docTipo = dragged.dataset.docTipo || '';
+  const docNum = dragged.dataset.docNum || '';
+  const docFechaActual = dragged.dataset.docFecha || '';
+  const docHoraActual = dragged.dataset.docHora || '';
+
+  const rect = targetTr.getBoundingClientRect();
+  const isAbove = e.clientY < (rect.top + rect.height / 2);
+
+  const allRows = Array.from(document.querySelectorAll('#tabla-kardex tr[data-created-at-iso]'));
+  const targetIndex = allRows.indexOf(targetTr);
+  
+  let targetIso = targetTr.dataset.createdAtIso || '';
+  let targetFecha = targetTr.dataset.docFecha || (targetIso ? targetIso.slice(0, 10) : docFechaActual);
+  let computedHora = '00:00';
+
+  if (targetIso) {
+    const targetDt = new Date(targetIso);
+    let newDt = new Date(targetDt);
+
+    if (isAbove) {
+      const prevRow = targetIndex > 0 ? allRows[targetIndex - 1] : null;
+      if (prevRow && prevRow !== dragged && prevRow.dataset.createdAtIso) {
+        const prevDt = new Date(prevRow.dataset.createdAtIso);
+        newDt = new Date((targetDt.getTime() + prevDt.getTime()) / 2);
+      } else {
+        newDt = new Date(targetDt.getTime() + 60 * 1000);
+      }
+    } else {
+      const nextRow = targetIndex < allRows.length - 1 ? allRows[targetIndex + 1] : null;
+      if (nextRow && nextRow !== dragged && nextRow.dataset.createdAtIso) {
+        const nextDt = new Date(nextRow.dataset.createdAtIso);
+        newDt = new Date((targetDt.getTime() + nextDt.getTime()) / 2);
+      } else {
+        newDt = new Date(targetDt.getTime() - 60 * 1000);
+      }
+    }
+
+    const yyyy = newDt.getFullYear();
+    const mm = String(newDt.getMonth() + 1).padStart(2, '0');
+    const dd = String(newDt.getDate()).padStart(2, '0');
+    targetFecha = `${yyyy}-${mm}-${dd}`;
+    const hh = String(newDt.getHours()).padStart(2, '0');
+    const min = String(newDt.getMinutes()).padStart(2, '0');
+    computedHora = `${hh}:${min}`;
+  } else {
+    computedHora = docHoraActual || '00:00';
+  }
+
+  kardexDragEnd(e);
+
+  abrirModalFechaDocumento(docTipoId, encodeURIComponent(docNum), docFechaActual, docHoraActual, encodeURIComponent(docTipo), targetFecha, computedHora);
+}
+
+function mostrarInformeRecosteo(resumen, productosDetalle) {
+  if (!resumen) return;
+  
+  let modalEl = document.getElementById('modal-informe-recosteo');
+  if (!modalEl) {
+    modalEl = document.createElement('div');
+    modalEl.id = 'modal-informe-recosteo';
+    document.body.appendChild(modalEl);
+  }
+  modalEl.className = 'fixed inset-0 flex items-center justify-center p-4 transition-all duration-300';
+  modalEl.style.cssText = 'position: fixed !important; top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important; width: 100vw !important; height: 100vh !important; background-color: rgba(15, 23, 42, 0.75) !important; backdrop-filter: blur(4px) !important; -webkit-backdrop-filter: blur(4px) !important; z-index: 999999 !important; display: flex !important; align-items: center !important; justify-content: center !important; padding: 16px !important; margin: 0 !important;';
+  modalEl.onclick = function(e) {
+    if (e.target === modalEl) modalEl.remove();
+  };
+
+  const prods = productosDetalle || [];
+  const totalProds = resumen.total_productos || prods.length || 0;
+  const totalMovs = resumen.total_movimientos_procesados || 0;
+  const totalMovsAjustados = resumen.total_movimientos_ajustados || 0;
+  const totalAs14 = resumen.total_asientos_inv_ajustados || 0;
+  const totalAscp = resumen.total_asientos_cp_ajustados || 0;
+  const totalPed = resumen.total_pedidos_ajustados || 0;
+  const prodsConCambios = resumen.productos_con_cambios || 0;
+
+  let filasHtml = '';
+  prods.forEach(p => {
+    const tieneCambios = (p.movimientos_ajustados > 0 || p.asientos_14_ajustados > 0 || p.pedidos_ajustados > 0);
+    const difCosto = (p.costo_final || 0) - (p.costo_anterior || 0);
+    
+    filasHtml += `
+      <div class="border border-slate-200 dark:border-slate-700 rounded-xl p-3.5 bg-slate-50/50 dark:bg-slate-800/40 hover:bg-white dark:hover:bg-slate-800 transition-all shadow-sm">
+        <div class="flex items-center justify-between gap-3 mb-2">
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="font-bold text-slate-800 dark:text-slate-100 text-sm truncate">${p.producto_nombre}</span>
+            <span class="text-xs px-2 py-0.5 rounded-full font-semibold ${tieneCambios ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'}">
+              ${tieneCambios ? '⚡ ' + p.movimientos_ajustados + ' movs ajustados' : '✅ Sin desfases'}
+            </span>
+          </div>
+          <div class="text-right whitespace-nowrap">
+            <span class="text-xs font-medium text-slate-500">Stock Final:</span>
+            <span class="text-xs font-bold text-slate-700 dark:text-slate-200 ml-1">${Number(p.stock_final || 0).toLocaleString('es-CO', {maximumFractionDigits: 2})} unds</span>
+          </div>
+        </div>
+        
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-200/60 dark:border-slate-700/60 text-xs">
+          <div>
+            <span class="text-slate-500 block">Costo Promedio:</span>
+            <span class="font-semibold text-slate-800 dark:text-slate-100">$${Number(p.costo_final || 0).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+            ${Math.abs(difCosto) > 0.01 ? `<span class="text-[10px] ${difCosto > 0 ? 'text-rose-500' : 'text-emerald-500'} block">(${difCosto > 0 ? '+' : ''}$${difCosto.toFixed(2)})</span>` : ''}
+          </div>
+          <div>
+            <span class="text-slate-500 block">Valor Existencias:</span>
+            <span class="font-semibold text-slate-800 dark:text-slate-100">$${Number(p.valor_existencia || 0).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+          </div>
+          <div>
+            <span class="text-slate-500 block">Asientos 14* / 61*:</span>
+            <span class="font-semibold ${p.asientos_14_ajustados > 0 ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-600 dark:text-slate-400'}">
+              ${(p.asientos_14_ajustados || 0) + (p.asientos_cp_ajustados || 0)} sincronizados
+            </span>
+          </div>
+          <div>
+            <span class="text-slate-500 block">Comandas Pedidos:</span>
+            <span class="font-semibold ${p.pedidos_ajustados > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-600 dark:text-slate-400'}">
+              ${p.pedidos_ajustados || 0} actualizados
+            </span>
+          </div>
+        </div>
+      </div>
+    `;
+  });
+
+  modalEl.innerHTML = `
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+      <div class="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-gradient-to-r from-amber-500/10 via-emerald-500/10 to-indigo-500/10">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center text-xl shadow-inner">
+            📊
+          </div>
+          <div>
+            <h3 class="font-bold text-slate-800 dark:text-slate-100 text-lg">Informe Ejecutivo de Recosteo</h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Sincronización integral: Kardex ↔ Contabilidad ↔ Pedidos</p>
+          </div>
+        </div>
+        <button onclick="document.getElementById('modal-informe-recosteo').remove()" class="w-8 h-8 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+          ✕
+        </button>
+      </div>
+
+      <div class="p-5 overflow-y-auto flex-1 space-y-4">
+        <!-- KPI CARDS -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div class="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200/60 dark:border-slate-700/60 text-center">
+            <span class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">Productos</span>
+            <span class="text-xl font-black text-slate-800 dark:text-slate-100">${totalProds}</span>
+            <span class="text-[10px] text-emerald-600 dark:text-emerald-400 block font-medium mt-0.5">Recosteados</span>
+          </div>
+          <div class="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200/60 dark:border-slate-700/60 text-center">
+            <span class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">Kardex Movs</span>
+            <span class="text-xl font-black text-slate-800 dark:text-slate-100">${totalMovsAjustados}</span>
+            <span class="text-[10px] text-slate-500 block font-medium mt-0.5">de ${totalMovs} proc.</span>
+          </div>
+          <div class="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200/60 dark:border-slate-700/60 text-center">
+            <span class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">Contabilidad</span>
+            <span class="text-xl font-black text-indigo-600 dark:text-indigo-400">${totalAs14 + totalAscp}</span>
+            <span class="text-[10px] text-indigo-500 block font-medium mt-0.5">Asientos 14* y 61*</span>
+          </div>
+          <div class="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200/60 dark:border-slate-700/60 text-center">
+            <span class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">Comandas</span>
+            <span class="text-xl font-black text-amber-600 dark:text-amber-400">${totalPed}</span>
+            <span class="text-[10px] text-amber-500 block font-medium mt-0.5">Pedidos POS</span>
+          </div>
+        </div>
+
+        <!-- LISTA DE PRODUCTOS -->
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">Detalle por Producto</span>
+            <span class="text-xs text-slate-500 font-medium">${prodsConCambios} con ajustes aplicados</span>
+          </div>
+          <div class="space-y-2 max-h-64 overflow-y-auto pr-1">
+            ${filasHtml}
+          </div>
+        </div>
+
+        <div class="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 flex items-center gap-3">
+          <div class="text-xl">✅</div>
+          <p class="text-xs text-emerald-800 dark:text-emerald-300 font-medium">
+            Todos los saldos de inventario, asientos contables del Libro Diario y costos en comandas quedaron <strong>100% sincronizados y cuadrados</strong>.
+          </p>
+        </div>
+      </div>
+
+      <div class="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 flex justify-end">
+        <button onclick="document.getElementById('modal-informe-recosteo').remove()" class="px-5 py-2 bg-slate-800 hover:bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white font-bold text-sm rounded-xl transition-all shadow-md active:scale-95">
+          Entendido / Cerrar
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function onKeydownACKardex(e) {
+  const list = document.getElementById('kardex-ac-list');
+  if (!list || list.classList.contains('hidden')) return;
+  const items = list.querySelectorAll('.ac-item');
+  if (!items.length) return;
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    _kardexACIdx = Math.min(_kardexACIdx + 1, items.length - 1);
+    items.forEach((it, i) => it.classList.toggle('bg-indigo-100', i === _kardexACIdx));
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    _kardexACIdx = Math.max(_kardexACIdx - 1, 0);
+    items.forEach((it, i) => it.classList.toggle('bg-indigo-100', i === _kardexACIdx));
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (_kardexACIdx >= 0 && items[_kardexACIdx]) {
+      items[_kardexACIdx].dispatchEvent(new Event('mousedown'));
+    }
+  } else if (e.key === 'Escape') {
+    list.classList.add('hidden');
+  }
+}
+
+function renderizarAuditoriaKardex(auditoria, productoId) {
+  const el = document.getElementById('kardex-auditoria');
+  if (!el || !auditoria) return;
+
+  const alertas = [];
+  if (auditoria.negativo_final) alertas.push('<span class="rounded bg-red-100 px-1.5 py-0.5 text-red-700 font-bold text-[10px]">Saldo final negativo</span>');
+  if (auditoria.negativos_intermedios?.length) alertas.push(`<span class="rounded bg-amber-100 px-1.5 py-0.5 text-amber-700 font-bold text-[10px]">${auditoria.negativos_intermedios.length} negativos</span>`);
+  if (auditoria.inconsistencias_movimientos?.length) alertas.push(`<span class="rounded bg-purple-100 px-1.5 py-0.5 text-purple-700 font-bold text-[10px]">${auditoria.inconsistencias_movimientos.length} cadenas dif.</span>`);
+  if (auditoria.stock_inconsistente) alertas.push('<span class="rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 font-bold text-[10px]">Dif. stock</span>');
+  if (auditoria.costo_inconsistente) alertas.push('<span class="rounded bg-indigo-100 px-1.5 py-0.5 text-indigo-700 font-bold text-[10px]">Dif. costo</span>');
+  if (auditoria.valor_inconsistente) alertas.push('<span class="rounded bg-cyan-100 px-1.5 py-0.5 text-cyan-700 font-bold text-[10px]">Dif. valor</span>');
+
+  const difVal = Math.abs(auditoria.diferencia_valor || 0);
+  const difClass = difVal > 0.01 ? 'text-red-600 font-bold' : 'text-emerald-600 font-bold';
+  const requiereRecosteo = alertas.length > 0 || difVal > 0.01 || auditoria.stock_inconsistente || auditoria.costo_inconsistente;
+  const tieneAlertasCompras = auditoria.alertas_compras && auditoria.alertas_compras.length > 0;
+
+  const detalle = [
+    ...(auditoria.negativos_intermedios || []).map(x => `Mov #${x.movimiento_id}: stock negativo (${_fmtKardexQty(x.stock)})`),
+    ...(auditoria.inconsistencias_movimientos || []).map(x => `Mov #${x.movimiento_id}: stock guardado ${_fmtKardexQty(x.guardado_nuevo)} / calc ${_fmtKardexQty(x.calculado_nuevo)}`),
+    ...(auditoria.stock_inconsistente ? ['Stock final no coincide con reconstrucción'] : []),
+    ...(auditoria.costo_inconsistente ? ['Costo no coincide con reconstrucción'] : []),
+    ...(auditoria.valor_inconsistente ? ['Valor no coincide con reconstrucción'] : [])
+  ];
+
+  el.className = `mb-3 rounded-xl border p-3 text-xs flex flex-col gap-2.5 shadow-2xs ${requiereRecosteo ? 'border-amber-300 bg-amber-50/50' : 'border-emerald-200 bg-emerald-50/40'}`;
+
+  el.innerHTML = `
+    <!-- FILA SUPERIOR: RESUMEN DE AUDITORÍA Y TOTALES DE EXISTENCIA -->
+    <div class="flex items-center justify-between flex-wrap gap-2 pb-1 border-b border-gray-200/50">
+      <div class="flex items-center gap-2 flex-wrap shrink-0">
+        <span class="text-[11px] font-extrabold text-gray-700">Auditoría:</span>
+        ${alertas.length ? alertas.join('') : '<span class="rounded bg-emerald-100 px-1.5 py-0.5 text-emerald-700 font-bold text-[10px]">✓ Sin inconsistencias</span>'}
+      </div>
+
+      <div class="flex items-center gap-3 text-[11px] font-mono text-gray-600 shrink-0">
+        <span>Alm: <strong class="text-gray-800">${_fmtKardexMon(auditoria.valor_almacenado)}</strong></span>
+        <span>Rec: <strong class="text-gray-800">${_fmtKardexMon(auditoria.valor_reconstruido)}</strong></span>
+        <span>Dif: <span class="${difClass}">${_fmtKardexMon(auditoria.diferencia_valor)}</span></span>
+        ${detalle.length ? `
+          <details class="inline-block relative">
+            <summary class="cursor-pointer text-[10px] font-bold text-indigo-600 hover:text-indigo-800 underline ml-1">Detalle</summary>
+            <div class="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg p-2.5 shadow-lg z-20 w-64 text-[10px] space-y-1 font-sans text-gray-700">
+              ${detalle.map(x => `<div>• ${x}</div>`).join('')}
+            </div>
+          </details>
+        ` : ''}
+      </div>
+    </div>
+
+    <!-- 1. ALERTAS CRÍTICAS DE COMPRAS (PRIMERO EN LA JERARQUÍA VISUAL) -->
+    ${tieneAlertasCompras ? `
+      <details class="w-full bg-rose-50/90 border border-rose-300 rounded-xl p-2.5 text-rose-950 text-xs shadow-2xs group mb-2.5">
+        <summary class="font-bold flex items-center justify-between cursor-pointer select-none text-rose-950 hover:text-rose-900 list-none">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="text-sm shrink-0">⚠️</span>
+            <span class="font-extrabold uppercase tracking-wide text-xs">Advertencias de Compras (${auditoria.alertas_compras.length})</span>
+            <span class="text-[11px] font-normal text-rose-800">· Revisar antes de recostear</span>
+          </div>
+          <span class="text-[11px] font-bold text-rose-700 hover:text-rose-900 underline ml-2">Ver detalle ▼</span>
+        </summary>
+        <div class="mt-2.5 pt-2 border-t border-rose-200/80">
+          <ul class="list-disc pl-4 space-y-1.5 text-[11px] text-rose-900 font-medium">
+            ${auditoria.alertas_compras.map(al => {
+              let lbl = 'Variación atípica de costo';
+              let icon = '🔺';
+              if (al.tipo === 'posible_duplicado') { lbl = 'Posible compra duplicada'; icon = '🚨'; }
+              else if (al.tipo === 'registro_retroactivo') { lbl = 'Entrada retroactiva'; icon = '⏱️'; }
+              return `<li><strong>${icon} ${lbl}:</strong> ${al.mensaje}</li>`;
+            }).join('')}
+          </ul>
+        </div>
+      </details>
+    ` : ''}
+
+    <!-- EXPLICACIÓN CLARA DE FILAS AMARILLAS SI HAY INCONSISTENCIAS -->
+    ${(auditoria.inconsistencias_movimientos && auditoria.inconsistencias_movimientos.length > 0) ? `
+      <div class="w-full bg-amber-50/80 border border-amber-300 rounded-xl px-3 py-1.5 text-[11px] text-amber-950 flex items-center gap-2 shadow-2xs mb-2.5">
+        <span class="text-sm shrink-0">🟡</span>
+        <div class="flex-1 leading-snug">
+          <strong>Filas en amarillo en la tabla:</strong> Indican movimientos donde el saldo guardado en su momento difiere de la historia cronológica recalculada (habitual cuando se digitan compras con fecha del pasado). Se sincronizan automáticamente al hacer clic en <strong>Recostear</strong>.
+        </div>
+      </div>
+    ` : ''}
+
+    <!-- 2. ALERTA DE EFECTO CASCADA EN RECETAS / ENSAMBLES -->
+    ${auditoria.cascada_ensambles && auditoria.cascada_ensambles.es_insumo && requiereRecosteo ? `
+      <div class="w-full bg-amber-50/90 border-2 border-amber-300 rounded-xl p-3 text-amber-950 text-xs shadow-xs">
+        <div class="flex items-start gap-2.5">
+          <span class="text-xl shrink-0">⚠️</span>
+          <div class="flex-1">
+            <span class="font-black text-amber-950 block text-xs uppercase tracking-wide">
+              ⚠️ Efecto Cascada en Costo de Ventas y Márgenes de Ganancia:
+            </span>
+            <p class="mt-1 text-[11px] text-amber-900 leading-relaxed font-medium">
+              Este ítem es insumo en la Tarjeta Estándar de <strong>${auditoria.cascada_ensambles.total_productos_padre} productos terminados</strong>
+              (<em>${auditoria.cascada_ensambles.productos_padre.slice(0, 4).map(p => p.nombre).join(', ')}${auditoria.cascada_ensambles.total_productos_padre > 4 ? '...' : ''}</em>).
+              Cualquier alteración de costos o recosteo afecta los asientos contables de Costo de Ventas (Cuenta 6135 / Salidas 1405) y la rentabilidad calculada en el Reporte de Ventas y Costos (Margen de Ganancia Bruto) de dichos productos.
+            </p>
+            <div class="mt-2.5 flex items-center gap-2 flex-wrap">
+              <button type="button" 
+                      onclick="irAAuditoriaEnsambles('${auditoria.cascada_ensambles.fecha_desde}', '${auditoria.cascada_ensambles.fecha_hasta}')" 
+                      class="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] rounded-lg shadow-xs transition flex items-center gap-1.5 cursor-pointer">
+                <span>🔍</span> <span>Auditar Ensambles Históricos (${auditoria.cascada_ensambles.fecha_desde} al ${auditoria.cascada_ensambles.fecha_hasta}) ↗</span>
+              </button>
+              <span class="text-[10px] text-amber-800 font-semibold">Podrá auditar cada documento individualmente y sincronizar tanto su asiento contable como el costo y margen de la venta.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    ` : ''}
+
+    <!-- 3. ACCIÓN DE RECOSTEO (UBICADO ABAJO DE LAS ADVERTENCIAS) -->
+    <div class="flex items-center justify-between gap-3 pt-1 border-t border-gray-200/50 flex-wrap">
+      ${requiereRecosteo ? `
+        <div class="flex items-center gap-2 text-[11px] font-medium">
+          ${tieneAlertasCompras ? `
+            <span class="text-rose-800 font-semibold flex items-center gap-1.5">
+              <span>⚠️</span>
+              <span>Si ya verificó las alertas de compras anteriores y desea continuar:</span>
+            </span>
+          ` : `
+            <span class="text-amber-900 font-semibold flex items-center gap-1.5">
+              <span>⚠️</span>
+              <span>Recomendación: ejecutar recosteo para sincronizar saldos</span>
+            </span>
+          `}
+        </div>
+        <button type="button" onclick="ejecutarRecosteoKardex(${productoId})" id="btn-recosteo-kardex"
+                class="px-3 py-1.5 ${tieneAlertasCompras ? 'bg-rose-600 hover:bg-rose-700' : 'bg-amber-600 hover:bg-amber-700'} text-white font-bold text-[11px] rounded-lg shadow-xs transition flex items-center gap-1.5 cursor-pointer ml-auto shrink-0"
+                title="Recalcular cronológicamente los saldos y el costo promedio de este producto">
+          <span>⚡</span> <span>${tieneAlertasCompras ? 'Recostear y Sincronizar' : 'Ejecutar Recosteo'}</span>
+        </button>
+      ` : `
+        <span class="text-[11px] text-emerald-700 font-medium flex items-center gap-1">
+          <span>✓</span> <span>Saldos y costos sincronizados con la historia</span>
+        </span>
+      `}
+    </div>
+  `;
+}
+
+function renderizarBodegasKardex(centros, bodegaActivaId, totalEmpresa) {
+  const container = document.getElementById('kardex-bodegas-pills');
+  if (!container) return;
+  if (!centros || !centros.length) {
+    container.innerHTML = '<span class="text-xs text-slate-400">Sin sedes configuradas</span>';
+    return;
+  }
+
+  container.innerHTML = centros.map(c => {
+    const esActivo = Number(c.id) === Number(bodegaActivaId);
+    const icono = (c.tipo === 'movil') ? '🛵' : '🏪';
+    const activeClasses = esActivo
+      ? 'bg-indigo-600 text-white font-extrabold shadow-sm ring-2 ring-indigo-300 ring-offset-1 scale-[1.02]'
+      : 'bg-white hover:bg-slate-100 text-slate-700 font-semibold border border-slate-200';
+
+    return `
+      <button type="button" onclick="cambiarBodegaKardex(${c.id})"
+              class="px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer ${activeClasses}"
+              title="Ver kardex exclusivo de ${c.nombre} (Código: ${c.codigo})">
+        <span>${icono}</span>
+        <span>${c.nombre}</span>
+        <span class="font-mono text-[11px] px-1.5 py-0.2 rounded-md ${esActivo ? 'bg-indigo-700 text-white' : 'bg-slate-100 text-slate-700 font-bold'}">
+          ${_fmtKardexQty(c.stock)} un
+        </span>
+      </button>
+    `;
+  }).join('');
+
+  const kteStock = document.getElementById('kte-stock');
+  const kteValor = document.getElementById('kte-valor');
+  if (totalEmpresa && kteStock && kteValor) {
+    kteStock.textContent = _fmtKardexQty(totalEmpresa.stock);
+    kteValor.textContent = _fmtKardexMon(totalEmpresa.valor_existencia);
+  }
+}
+
+function renderizarListaRecosteo(productos) {
+
+  const el = document.getElementById('recosteo-lista');
+
+  if (!el) return;
+
+  if (!productos.length) {
+    el.innerHTML = '<p class="text-sm text-emerald-600 text-center py-8 font-semibold">No hay productos con movimientos para auditar.</p>';
+    return;
+  }
+
+  el.innerHTML = productos.map(p => {
+    const alertas = [];
+    if (p.negativo_final) alertas.push('Saldo final negativo');
+    if ((p.negativos_intermedios && p.negativos_intermedios.length)) alertas.push(`${p.negativos_intermedios.length} negativo(s) histórico(s)`);
+    if (p.inconsistencias_movimientos?.length) alertas.push('Cadena inconsistente');
+    if (p.stock_inconsistente) alertas.push('Stock no coincide');
+    if (p.costo_inconsistente) alertas.push('Costo no coincide');
+    if (p.valor_inconsistente) alertas.push('Valor no coincide');
+
+    const alertasHtml = alertas.length
+      ? alertas.map(alerta => `<span class="recosteo-alerta inline-flex rounded-md bg-red-50 px-2 py-1 text-red-600">${alerta}</span>`).join('')
+      : '<span class="recosteo-alerta inline-flex rounded-md bg-emerald-50 px-2 py-1 text-emerald-600">Sin alertas</span>';
+
+    const movimientoAlerta = p.negativos_intermedios?.[0]?.movimiento_id || p.inconsistencias_movimientos?.[0]?.movimiento_id || '';
+
+    const recomendacion = p.negativo_final
+      ? 'Requiere entrada o ajuste físico'
+      : (p.negativos_intermedios && p.negativos_intermedios.length)
+        ? 'Revisar fecha o cantidad'
+        : p.inconsistencias_movimientos?.length
+          ? 'Recosteo recomendado'
+          : 'Revisar valoración';
+
+    return `<label class="recosteo-producto flex gap-3 p-3 hover:bg-gray-50 cursor-pointer" data-nombre="${(p.producto_nombre || '').toLowerCase()}">
+      <input type="checkbox" class="recosteo-check mt-1 flex-shrink-0" value="${p.producto_id}">
+      <span class="recosteo-detalle">
+        <span class="block text-sm font-bold text-gray-700 break-words">${p.producto_nombre}</span>
+        <span class="block text-[11px] text-gray-500 mt-1">Stock: ${fmt(p.stock_almacenado)} / ${fmt(p.stock_final)} · Costo: ${fmtUnitCost(p.costo_almacenado)} / ${fmtUnitCost(p.costo_reconstruido)}</span>
+        <span class="block text-[11px] text-gray-500">Valor: ${fmtMonExact(p.valor_almacenado)} / ${fmtMonExact(p.valor_reconstruido)} · Diferencia: ${fmtMonExact(p.diferencia_valor)} · Movimientos: ${p.movimientos}</span>
+      </span>
+      <span class="recosteo-alertas text-right text-[10px] font-bold">${alertasHtml}<span class="recosteo-alerta text-gray-500 font-medium">${recomendacion}</span>${alertas.length ? `<button type="button" onclick="irKardexDesdeAuditoria(event, ${p.producto_id}, ${movimientoAlerta || 'null'})" class="recosteo-alerta rounded-md bg-gray-800 px-2.5 py-1 text-white hover:bg-gray-700 inline-flex items-center gap-1 shadow-xs" title="Abrir Kardex en pestaña nueva para auditar o reordenar movimientos">Ver Kardex ↗</button>` : ''}</span>
+    </label>`;
+  }).join('');
+}
+
+function renderizarResumenRecosteo(data) {
+
+  const r = data.resumen || {};
+
+  const tarjetas = [
+
+    ['Revisados', data.productos_revisados || 0, 'bg-gray-50 text-gray-700'],
+
+    ['Negativos finales', r.negativos_finales || 0, 'bg-red-50 text-red-700'],
+
+    ['Negativos históricos', r.negativos_intermedios || 0, 'bg-amber-50 text-amber-700'],
+
+    ['Cadena inconsistente', r.cadenas_inconsistentes || 0, 'bg-purple-50 text-purple-700'],
+
+    ['Stock no coincide', r.stocks_inconsistentes || 0, 'bg-blue-50 text-blue-700'],
+
+    ['Costo no coincide', r.costos_inconsistentes || 0, 'bg-indigo-50 text-indigo-700'],
+
+    ['Valor no coincide', r.valores_inconsistentes || 0, 'bg-cyan-50 text-cyan-700']
+
+  ];
+
+  const el = document.getElementById('recosteo-resumen');
+
+  if (el) el.innerHTML = tarjetas.map(([label, value, clase]) => `
+
+    <div class="rounded-xl border border-gray-100 p-3 ${clase}">
+
+      <div class="text-[10px] font-bold uppercase">${label}</div>
+
+      <div class="text-xl font-extrabold mt-1">${value}</div>
+
+    </div>`).join('');
+
+}
+
+function renderizarTablaKardex(d) {
+  const tb = document.getElementById('tabla-kardex');
+  if (!tb || !d) return;
+
+  const prod = (typeof productos !== 'undefined' && Array.isArray(productos))
+    ? productos.find(p => Number(p.id) === Number(kardexProductoActual))
+    : null;
+
+  const container = document.getElementById('kardex-table-container');
+  if (container) {
+    container.classList.toggle('kardex-ocultar-valores', _kardexOcultarValores);
+  }
+  actualizarBotonValoresKardex();
+
+  const sumEntradasEl = document.getElementById('kardex-sum-entradas');
+  const sumSalidasEl = document.getElementById('kardex-sum-salidas');
+
+  // Actualizar tarjeta resumen del producto
+  const summaryPanel = document.getElementById('kardex-resumen-producto');
+  if (summaryPanel && d.stock_actual !== undefined && d.costo_actual !== undefined) {
+    document.getElementById('kp-stock').textContent = _fmtKardexQty(d.stock_actual);
+    document.getElementById('kp-costo-prom').textContent = _fmtKardexUnit(d.costo_actual);
+    document.getElementById('kp-valor-existencia').textContent = _fmtKardexMon(d.valor_existencia ?? (Number(d.costo_actual || 0) * Number(d.stock_actual || 0)));
+    const tolEl = document.getElementById('kp-tolerancia');
+    if (tolEl) {
+      const tPct = (d.tolerancia && d.tolerancia.pct !== undefined && d.tolerancia.pct !== null) ? d.tolerancia.pct : null;
+      const tVigRaw = (d.tolerancia && d.tolerancia.vigente_desde) ? String(d.tolerancia.vigente_desde).slice(0, 10) : null;
+      const tVig = tVigRaw ? tVigRaw.split('-').reverse().join('/') : null;
+      tolEl.textContent = (tPct !== null) ? ('\u00b1' + tPct + '%' + (tVig ? (' desde ' + tVig) : '')) : '\u2014';
+    }
+  }
+
+  if (!d.movimientos || !d.movimientos.length) {
+    tb.innerHTML = '<tr><td colspan="11" class="text-center text-gray-400 py-8">Sin movimientos</td></tr>';
+    return;
+  }
+
+  const totalEntradas = Number(d.totales?.entradas || 0);
+  const totalSalidas = Number(d.totales?.salidas || 0);
+  if (sumEntradasEl) sumEntradasEl.textContent = _fmtKardexQty(totalEntradas);
+  if (sumSalidasEl) sumSalidasEl.textContent = _fmtKardexQty(totalSalidas);
+
+  const movimientosNegativos = new Set((d.auditoria?.negativos_intermedios || []).map(x => Number(x.movimiento_id)));
+  const movimientosInconsistentes = new Set((d.auditoria?.inconsistencias_movimientos || []).map(x => Number(x.movimiento_id)));
+
+  tb.innerHTML = d.movimientos.map(m => {
+    const transCostVal = m.valor_unitario;
+    const avgCostVal = m.costo_und;
+    const unitCostVal = avgCostVal ?? transCostVal;
+    const lineTotal = (m.valor_total != null && Number(m.valor_total) > 0) 
+      ? Number(m.valor_total) 
+      : (Number(m.cantidad || 0) * Number(unitCostVal || 0));
+
+    const entradaQty = m.tipo === 'entrada' ? _fmtKardexQty(m.cantidad) : '—';
+    const salidaQty = m.tipo === 'salida' ? _fmtKardexQty(m.cantidad) : '—';
+    const entradaClass = m.tipo === 'entrada' ? 'font-bold text-emerald-600 bg-emerald-50/10' : 'text-gray-400';
+    const salidaClass = m.tipo === 'salida' ? 'font-bold text-rose-600 bg-rose-50/10' : 'text-gray-400';
+
+    const notaTexto = (m.notes || m.notas || '').trim();
+    const tieneNota = notaTexto.length > 0;
+    const btnNota = tieneNota
+      ? `<button type="button" onclick="toggleKardexNota(${m.id})" class="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition cursor-pointer select-none" title="Clic para ver/ocultar nota">📝 Nota</button>`
+      : '';
+
+    // Formatear nombre puro del documento sin slugs ni concatenaciones redundantes
+    const docTypeRaw = (m.tipo_documento || '').trim();
+    const docNumRaw = String(m.documento_numero || '').trim();
+
+    let cleanNum = docNumRaw;
+    const matchNum = docNumRaw.match(/^[A-Za-z0-9_]+[-_](\d+)$/);
+    if (matchNum) {
+      cleanNum = matchNum[1];
+    }
+
+    let cleanType = docTypeRaw.replace(/[_-]+/g, ' ').trim();
+    if (!cleanType && /^[A-Za-z_]+[-_]/.test(docNumRaw)) {
+      cleanType = docNumRaw.replace(/[-_]\d+$/, '').replace(/[_-]+/g, ' ').trim();
+    }
+
+    let docDisplay = '';
+    if (cleanType && cleanNum) {
+      if (cleanType.toLowerCase().endsWith(cleanNum.toLowerCase())) {
+        docDisplay = cleanType.toLowerCase();
+      } else {
+        docDisplay = `${cleanType.toLowerCase()} ${cleanNum}`;
+      }
+    } else if (cleanType) {
+      docDisplay = cleanType.toLowerCase();
+    } else if (cleanNum) {
+      docDisplay = cleanNum;
+    } else if (m.motivo === 'ajuste') {
+      docDisplay = 'ajuste de inventario';
+    }
+
+    const btnReclasificar = `
+      <button type="button" onclick="abrirModalReclasificarKardex(${m.id}, '${encodeURIComponent(String(docDisplay || 'Movimiento #' + m.id))}', ${m.bodega || 1}, ${m.producto_id || kardexProductoActual || 0}, '${encodeURIComponent(String(m.nombre_producto || (prod ? prod.nombre : '') || 'Producto'))}', '${_fmtKardexQty(m.cantidad || 0)}', '${m.tipo || ''}', '${encodeURIComponent(String(cleanNum || ''))}')"
+              class="inline-flex items-center gap-0.5 text-[10px] font-semibold text-slate-500 hover:text-indigo-700 hover:underline transition cursor-pointer select-none"
+              title="Mover este movimiento a otra bodega o centro de utilidad">
+        <span>🏢</span> <span>Sede</span>
+      </button>
+    `;
+
+    const linkDocUrl = (docDisplay && docNumRaw) ? `/admin/mantenimiento/${NEGOCIO_ID}?tool=auditor-documentos&tipo_documento=${encodeURIComponent(docTypeRaw)}&documento_numero=${encodeURIComponent(docNumRaw)}&tercero_id=${encodeURIComponent(m.proveedor_id || '')}` : '';
+
+    let docColTipo = '', docColNum = '';
+    if (cleanType && cleanNum) {
+      if (cleanType.toLowerCase().endsWith(cleanNum.toLowerCase())) { docColTipo = cleanType.toLowerCase(); }
+      else { docColTipo = cleanType.toLowerCase(); docColNum = cleanNum; }
+    } else if (cleanType) { docColTipo = cleanType.toLowerCase(); }
+    else if (cleanNum) { docColNum = cleanNum; }
+    else if (docDisplay) { docColTipo = docDisplay; }
+    const docLinkIcono = docNumRaw ? `<a href="${linkDocUrl}" target="_blank" rel="noopener noreferrer" title="Auditar documento en pestaña nueva" class="text-blue-500 hover:text-blue-700 transition font-bold text-xs inline-flex items-center">🔗</a>` : '';
+    const docColumna = (docColTipo || docColNum)
+      ? `<div class="leading-snug"><div class="font-semibold text-gray-800 text-[11px]">${docColTipo}${(!docColNum && docLinkIcono) ? ' ' + docLinkIcono : ''}</div>${docColNum ? `<div class="text-gray-700 text-[11px] flex items-center gap-1 mt-0.5"><span>${docColNum}</span>${docLinkIcono}</div>` : ''}</div>`
+      : `<div class="text-slate-400 font-mono text-[10px]">#${m.id}</div>`;
+
+    let docOrProveedorInfo = '';
+    if (m.proveedor_nombre) {
+      docOrProveedorInfo += `<div class="text-gray-600 font-medium leading-snug truncate max-w-[195px] text-[11px]" title="${m.proveedor_nombre}">${m.proveedor_nombre}</div>`;
+    }
+    docOrProveedorInfo += `
+      <div class="flex items-center gap-1.5 flex-wrap leading-snug mt-0.5">
+        ${btnNota}
+        ${btnReclasificar}
+      </div>
+    `;
+
+    let origenInfo = '';
+    if (m.producto_padre_nombre) {
+      origenInfo += `
+        <div class="flex items-center gap-1">
+          <span class="inline-block px-2 py-0.5 rounded-lg bg-indigo-50 text-xs font-bold text-indigo-700 border border-indigo-100 whitespace-normal break-words leading-snug" title="Preparación / Ensamble: ${m.producto_padre_nombre}">
+            🍳 ${m.producto_padre_nombre}
+          </span>
+        </div>
+      `;
+    } else if (m.motivo === 'ajuste' || m.tipo === 'ajuste' || m.motivo === 'conteo_conforme') {
+      const isAjusteEnVenta = (docTypeRaw && docTypeRaw.toLowerCase().includes('factura')) ||
+                              (docNumRaw && docNumRaw.toLowerCase().includes('factura')) ||
+                              (m.notas && m.notas.toLowerCase().includes('caja')) ||
+                              (m.referencia_tipo && m.referencia_tipo.includes('pedido'));
+      const textoAjuste = m.motivo === 'conteo_conforme' ? 'Conteo Conforme' : (isAjusteEnVenta ? 'Ajuste en venta' : 'Ajuste de inventario');
+      
+      let badgeActa = '';
+      if (m.acta_id || (m.acta_cantidad_contada !== undefined && m.acta_cantidad_contada !== null)) {
+        const cantContada = parseFloat(m.acta_cantidad_contada || 0);
+        const stockSys = parseFloat(m.acta_stock_sistema || 0);
+        const difActa = parseFloat(m.acta_diferencia || 0);
+        const signDiff = difActa > 0 ? `+${difActa}` : `${difActa}`;
+        const notaStr = m.acta_notas ? `<div class="text-[11px] text-slate-600 italic mt-0.5 max-w-xs break-words">💬 "${m.acta_notas}"</div>` : '';
+        const moduloBadge = m.acta_metodologia || m.acta_modulo_origen || 'físico';
+        
+        badgeActa = `
+          <div class="mt-1.5 p-2 rounded-xl bg-amber-50/90 border border-amber-200/90 text-left text-xs space-y-1 shadow-2xs">
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <span class="font-extrabold text-amber-950">📋 Conteo Real:</span>
+              <span class="font-mono font-black text-amber-900 bg-amber-100/80 px-1.5 py-0.5 rounded">${cantContada}</span>
+              <span class="text-[11px] text-gray-500 font-medium">(Sis: ${stockSys} → Dif: <b class="${difActa < 0 ? 'text-red-600' : (difActa > 0 ? 'text-emerald-700' : 'text-blue-700')}">${signDiff}</b>)</span>
+            </div>
+            <div class="text-[11px] text-gray-600 flex items-center gap-1 flex-wrap">
+              <span>👤 ${m.acta_usuario_nombre || 'Operario'}</span>
+              <span class="text-gray-400">•</span>
+              <span class="px-1.5 py-0.2 bg-white rounded border border-gray-200 text-[10px] uppercase font-bold text-gray-700">${moduloBadge}</span>
+            </div>
+            ${notaStr}
+          </div>
+        `;
+      }
+
+      origenInfo += `
+        <div class="flex flex-col items-start gap-1">
+          <span class="inline-block px-2 py-0.5 rounded-lg bg-amber-100 text-xs font-bold text-amber-900 border border-amber-300 whitespace-normal break-words leading-snug" title="Ajuste de inventarios">
+            ⚖️ ${textoAjuste}
+          </span>
+          ${badgeActa}
+        </div>
+      `;
+    }
+
+    if (m.presentacion_nombre && m.presentacion_nombre.toLowerCase() !== 'unidad') {
+      const equiv = Number(m.presentacion_equivalencia || 1);
+      const cantEmpaques = (equiv > 0 && m.cantidad) ? (Number(m.cantidad) / equiv) : null;
+      const cantEmpaquesStr = cantEmpaques ? `${_fmtKardexQty(cantEmpaques)} ` : '';
+      
+      origenInfo += `
+        <div class="flex items-center gap-1 ${(m.producto_padre_nombre || m.motivo === 'ajuste') ? 'mt-1' : ''}">
+          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-50 text-xs font-bold text-amber-800 border border-amber-200/80 whitespace-normal break-words leading-snug" title="Empaque de compra: ${cantEmpaquesStr}${m.presentacion_nombre} (Equiv: ${equiv})">
+            <span class="shrink-0">📦</span> <span>${cantEmpaquesStr}${m.presentacion_nombre}</span>
+          </span>
+        </div>
+      `;
+    }
+
+    const alertaMovimiento = movimientosNegativos.has(Number(m.id)) || movimientosInconsistentes.has(Number(m.id));
+    const fechaKardex = m.documento_fecha || '';
+    const esDocValido = (m.tipo_documento_id || m.tipo_documento) && m.documento_numero;
+    const createdAtIso = m.created_at_iso || (m.created_at ? new Date(m.created_at).toISOString() : '');
+    const horaDoc = m.hora_documento || (createdAtIso ? createdAtIso.slice(11, 16) : '00:00');
+
+    const dragHandle = esDocValido
+      ? `<span class="inline-block text-gray-300 hover:text-indigo-600 cursor-grab active:cursor-grabbing mr-1.5 select-none font-bold text-base" title="Arrastra para reordenar la hora de este documento en el Kardex">⠿</span>`
+      : '';
+
+    const desfaseBadge = (m.desfase_dias && m.desfase_dias >= 2)
+      ? `<span class="inline-flex items-center gap-0.5 px-1 py-0.2 rounded text-[9px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300" title="Registro retroactivo: fecha documento ${fechaKardex}, pero digitado en servidor ${m.desfase_dias} días después (${m.created_at_fmt || ''})">⏱️ +${m.desfase_dias}d reg</span>`
+      : '';
+
+    const horaSubtext = m.created_at_hora
+      ? `<div class="text-[10px] text-gray-400 font-mono leading-none mt-0.5 flex items-center gap-1"><span>${m.created_at_hora}</span>${desfaseBadge}</div>`
+      : (desfaseBadge ? `<div class="mt-0.5">${desfaseBadge}</div>` : '');
+
+    const fechaSoloKardex = String(m.fecha || '').split(' ')[0];
+    const fechaCelda = esDocValido
+      ? `<div><button type="button" onclick="abrirModalFechaDocumento(${m.tipo_documento_id || 'null'}, '${encodeURIComponent(String(m.documento_numero))}', '${fechaKardex}', '${horaDoc}', '${encodeURIComponent(String(m.tipo_documento || ''))}')" class="text-left text-blue-600 hover:text-blue-800 hover:underline font-semibold text-[11px] leading-tight block" title="Clic para cambiar fecha/hora o arrastra la fila">${fechaSoloKardex}</button>${horaSubtext}</div>`
+      : `<div><span class="text-[11px] font-medium text-gray-600 leading-tight block">${fechaSoloKardex}</span>${horaSubtext}</div>`;
+
+    const dragAttrs = esDocValido
+      ? `draggable="true" ondragstart="kardexDragStart(event)" ondragover="kardexDragOver(event)" ondragleave="kardexDragLeave(event)" ondrop="kardexDrop(event)" ondragend="kardexDragEnd(event)"`
+      : '';
+
+    const filaPrincipal = `
+      <tr id="kardex-mov-${m.id}" ${dragAttrs}
+          data-mov-id="${m.id}"
+          data-doc-tipo="${m.tipo_documento || ''}"
+          data-doc-tipo-id="${m.tipo_documento_id || ''}"
+          data-doc-num="${m.documento_numero || ''}"
+          data-doc-fecha="${fechaKardex}"
+          data-doc-hora="${horaDoc}"
+          data-created-at-iso="${createdAtIso}"
+          class="hover:bg-gray-50/70 transition-colors ${alertaMovimiento ? 'bg-amber-50/60' : ''} ${esDocValido ? 'cursor-default' : ''}" 
+          title="${movimientosNegativos.has(Number(m.id)) ? 'Stock negativo en este punto. ' : ''}${movimientosInconsistentes.has(Number(m.id)) ? 'Stock guardado diferente al stock reconstruido.' : ''}">
+        <td class="px-2 py-1 text-[11px] text-gray-600 align-middle">
+          <div class="flex items-center">${dragHandle}${fechaCelda}</div>
+        </td>
+        <td class="px-2 py-1 text-[11px] align-middle">${docColumna}</td>
+        <td class="px-2.5 py-1 text-[11px] text-gray-700 align-middle">${docOrProveedorInfo}</td>
+        <td class="px-2 py-1 text-[11px] text-gray-700 align-middle">${origenInfo}</td>
+        <td class="px-2 py-1 text-right num font-mono text-[11px] border-r border-gray-100/50 ${entradaClass}">${entradaQty}</td>
+        <td class="px-2 py-1 text-right num font-mono text-[11px] border-r border-gray-100/50 ${salidaClass}">${salidaQty}</td>
+        <td class="px-2 py-1 text-right num font-mono text-[11px] font-semibold text-gray-900 bg-gray-100/5">${_fmtKardexQty(m.saldo_calculado ?? m.stock_nuevo)}</td>
+        <td class="px-1.5 py-1 text-right num font-mono text-[11px] text-gray-600 border-r border-gray-100/50 kardex-col-valores">
+          <div>${_fmtKardexUnit(transCostVal)}</div>
+          ${m.alerta_variacion_costo ? `
+            <div class="mt-0.5">
+              <span class="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-black ${m.alerta_variacion_costo.diff_pct > 0 ? 'bg-rose-100 text-rose-800 border border-rose-300' : 'bg-blue-100 text-blue-800 border border-blue-300'}" 
+                    title="Variación de ${m.alerta_variacion_costo.diff_pct > 0 ? '+' : ''}${m.alerta_variacion_costo.diff_pct}% frente al costo promedio ponderado ($${m.alerta_variacion_costo.costo_promedio_anterior}). Tolerancia: ${m.alerta_variacion_costo.tolerancia_pct}%">
+                ${m.alerta_variacion_costo.diff_pct > 0 ? '🔺' : '🔻'} ${m.alerta_variacion_costo.diff_pct > 0 ? '+' : ''}${m.alerta_variacion_costo.diff_pct}%
+              </span>
+              ${m.alerta_variacion_costo.es_multiplo_empaque ? '<span class="block text-[8px] text-amber-700 font-bold" title="El costo unitario es múltiplo exacto de una presentación">⚠️ Posible empaque</span>' : ''}
+            </div>
+          ` : ''}
+        </td>
+        <td class="px-1.5 py-1 text-right num font-mono text-[11px] text-gray-600 kardex-col-valores">${_fmtKardexUnit(avgCostVal)}</td>
+        <td class="px-2 py-1 text-right num font-mono text-[11px] font-semibold text-gray-900 kardex-col-valores">${_fmtKardexMon(lineTotal)}</td>
+        <td class="px-2 py-1 text-right num font-mono text-[11px] font-bold text-emerald-700 bg-emerald-50/20 kardex-col-valores">${_fmtKardexMon(Number((m.saldo_calculado ?? m.stock_nuevo) || 0) * Number(avgCostVal || 0))}</td>
+      </tr>
+    `;
+
+    const filaNota = tieneNota
+      ? `
+      <tr id="kardex-nota-${m.id}" class="hidden bg-amber-50/40 text-gray-700 text-xs border-b border-amber-100/60">
+        <td colspan="11" class="px-6 py-2 italic">
+          <span class="font-bold not-italic text-amber-800">📝 Nota:</span> ${notaTexto}
+        </td>
+      </tr>
+      `
+      : '';
+
+    return filaPrincipal + filaNota;
+  }).join('');
+}
+
+function seleccionarProductoKardex(id) {
+  const p = (productos || []).find(x => Number(x.id) === Number(id));
+  const nombre = p ? p.nombre : '';
+  const inp = document.getElementById('kardex-ac-input');
+  const hid = document.getElementById('kardex-ac-id');
+  const list = document.getElementById('kardex-ac-list');
+  if (inp) inp.value = nombre;
+  if (hid) hid.value = id;
+  if (list) list.classList.add('hidden');
+  _kardexACIdx = -1;
+  cargarKardex(id);
+}
+
+function seleccionarTodosRecosteo(marcado) {
+  document.querySelectorAll('.recosteo-producto:not(.hidden) .recosteo-check').forEach(input => {
+    input.checked = marcado;
+  });
+}
+
+function stopKardexAutoScroll() {
+  _scrollSpeed = 0;
+  if (_dragAutoScrollRaf) {
+    cancelAnimationFrame(_dragAutoScrollRaf);
+    _dragAutoScrollRaf = null;
+  }
+}
+
+function toast(msg, ok = true, duracion = 3200) {
+
+  const el = document.getElementById('toast');
+  if (!el) return;
+
+  el.textContent = msg;
+
+  let cls = 'toast-ok';
+  if (ok === false || ok === 'error') cls = 'toast-err';
+  else if (ok === 'warning' || ok === 'warn' || ok === 'info') cls = 'toast-warn';
+
+  el.className = `toast show ${cls}`;
+
+  clearTimeout(el._t);
+
+  el._t = setTimeout(() => el.classList.remove('show'), duracion);
+
+}
+
+function toggleKardexNota(movId) {
+  const row = document.getElementById(`kardex-nota-${movId}`);
+  if (row) {
+    row.classList.toggle('hidden');
+  }
+}
+
+function toggleValoresKardex() {
+  _kardexOcultarValores = !_kardexOcultarValores;
+  try { localStorage.setItem('kardex_ocultar_valores', _kardexOcultarValores ? '1' : '0'); } catch(e) {}
+  actualizarBotonValoresKardex();
+  const container = document.getElementById('kardex-table-container');
+  if (container) {
+    container.classList.toggle('kardex-ocultar-valores', _kardexOcultarValores);
+  }
+}
+
+function validarDecimalesKardexInput(inputEl) {
+  let d = parseInt(inputEl.value, 10);
+  if (isNaN(d) || d < 0) d = 2;
+  if (d > 6) d = 6;
+  inputEl.value = d;
+  cambiarDecimalesKardex(d);
+}
+
+function verKardex(id, nombre, movimientoId = null) {
+  mostrarTab('kardex');
+  const producto = productos.find(p => Number(p.id) === Number(id));
+  document.getElementById('kardex-ac-input').value = nombre || producto?.nombre || '';
+  document.getElementById('kardex-ac-id').value = id;
+
+  cargarKardex(id).then(() => {
+    if (!movimientoId) return;
+    const fila = document.getElementById(`kardex-mov-${movimientoId}`);
+    if (fila) {
+      fila.classList.add('ring-2', 'ring-amber-400');
+      fila.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } else {
+      cambiarKardexPorPagina('todos');
+      setTimeout(() => {
+        const filaAll = document.getElementById(`kardex-mov-${movimientoId}`);
+        if (filaAll) {
+          filaAll.classList.add('ring-2', 'ring-amber-400');
+          filaAll.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 400);
+    }
+  });
+}

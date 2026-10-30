@@ -131,7 +131,8 @@ def admin_logout():
     session.clear()
     flash('Has cerrado la sesión.', 'info')
     host = (request.host or '').split(':')[0].strip().lower()
-    if host == 'desk.tuc-tuc.co':
+    from ..dominios_negocio import slug_subdominio_publico
+    if host == 'desk.tuc-tuc.co' or slug_subdominio_publico(host):
         return redirect(url_for('auth.entrar'))
     return redirect(url_for('auth.admin_login'))
 

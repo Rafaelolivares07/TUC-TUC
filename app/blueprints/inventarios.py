@@ -10303,6 +10303,63 @@ def admin_inventario(negocio_id, tab_name=None):
         conn.close()
 
 
+@bp.route('/kardex')
+def kardex_standalone():
+    if 'usuario_id' not in session:
+        return redirect('/entrar')
+    from ..dominios_negocio import resolver_negocio_por_host
+    neg = resolver_negocio_por_host(request.host)
+    if not neg or not neg.get('slug'):
+        return "Abre el Kardex desde el subdominio del negocio", 404
+    slug = neg['slug']
+    conn = get_db_connection()
+    try:
+        row = conn.execute(
+            "SELECT tercero_id FROM tiendas WHERE slug = %s AND activo = TRUE LIMIT 1",
+            (slug,)).fetchone()
+        if not row:
+            row = conn.execute(
+                "SELECT tercero_id FROM restaurantes WHERE slug = %s AND activo = TRUE LIMIT 1",
+                (slug,)).fetchone()
+        if not row:
+            return "Negocio no encontrado", 404
+        negocio_id = row['tercero_id']
+        _crear_tablas(conn)
+        contexto = _contexto_negocio(conn, negocio_id)
+        if not contexto:
+            return "Negocio no encontrado", 404
+        if not _puede_gestionar_negocio(contexto):
+            return "No autorizado para este negocio", 403
+        centros_rows = conn.execute("""
+            SELECT id, codigo, nombre, tipo, color_badge, imagen_url, telefono, direccion
+            FROM centros_utilidad
+            WHERE negocio_id = %s AND activo = TRUE
+            ORDER BY id ASC
+        """, (negocio_id,)).fetchall()
+        centros = [dict(c) for c in centros_rows]
+        centro_activo_id = session.get('centro_utilidad_id')
+        centro_activo = None
+        if centro_activo_id:
+            for c in centros:
+                if str(c['id']) == str(centro_activo_id):
+                    centro_activo = c
+                    break
+        if not centro_activo and centros:
+            centro_activo = centros[0]
+            session['centro_utilidad_id'] = centro_activo['id']
+            session['centro_utilidad_nombre'] = centro_activo['nombre']
+            session['centro_utilidad_codigo'] = centro_activo['codigo']
+            session['centro_utilidad_color'] = centro_activo.get('color_badge', '#10b981')
+        return render_template('kardex.html',
+                               negocio_id=negocio_id,
+                               negocio_nombre=contexto['negocio_nombre'],
+                               nombre=session.get('nombre', ''),
+                               centros_utilidad=centros,
+                               centro_activo=centro_activo)
+    finally:
+        conn.close()
+
+
 @bp.route('/admin/mantenimiento/<int:negocio_id>')
 def admin_negocio_mantenimiento(negocio_id):
     if 'usuario_id' not in session:

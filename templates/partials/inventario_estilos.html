@@ -1,0 +1,456 @@
+  <style>
+
+    body { font-family: 'Inter', sans-serif; background: #f3f4f6; }
+
+    .kardex-ocultar-valores .kardex-col-valores { display: none !important; }
+    .kardex-ocultar-valores table { width: auto !important; min-width: 0 !important; }
+    #kardex-table-container table { zoom: 0.79; }
+    .no-spinners::-webkit-inner-spin-button,
+    .no-spinners::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    .no-spinners {
+      -moz-appearance: textfield;
+      appearance: textfield;
+    }
+
+    #nav-tabs { scrollbar-width: thin; scrollbar-color: #cbd5e1 #f1f5f9; }
+
+    #nav-tabs::-webkit-scrollbar { height: 7px; }
+
+    #nav-tabs::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
+
+    #nav-tabs::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+
+    .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
+
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
+
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+    .custom-scrollbar { scrollbar-width: thin; scrollbar-color: #cbd5e1 #f1f5f9; }
+
+    .tab-btn {
+
+      flex-shrink: 0; min-width: 90px; padding: 10px 16px;
+
+      font-size: 0.82rem; font-weight: 600; border-radius: 999px;
+
+      transition: background .2s, color .2s; white-space: nowrap;
+
+      color: #6b7280; background: transparent;
+
+    }
+
+    .tab-btn.tab-active { background: #e11d48; color: #fff; }
+
+    .tab-btn:not(.tab-active):hover { background: #f3f4f6; color: #374151; }
+
+    .recosteo-producto { min-height: 64px; align-items: flex-start; }
+
+    .recosteo-detalle { flex: 1 1 300px; min-width: 220px; }
+
+    .recosteo-alertas {
+
+      flex: 0 1 280px;
+
+      min-width: 180px;
+
+      display: flex;
+
+      flex-wrap: wrap;
+
+      justify-content: flex-end;
+
+      align-items: center;
+
+      gap: 4px;
+
+    }
+
+    .recosteo-alerta { white-space: normal; line-height: 1.2; }
+
+    #tab-recosteo .recosteo-check,
+
+    #tab-recosteo #recosteo-seleccionar-todos { width: auto; flex: 0 0 auto; }
+
+    @media (max-width: 640px) {
+
+      .recosteo-producto { flex-wrap: wrap; }
+
+      .recosteo-detalle { min-width: 0; }
+
+      .recosteo-alertas { min-width: 0; width: 100%; justify-content: flex-start; padding-left: 28px; }
+
+    }
+
+    .toast {
+
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+
+      padding: 12px 24px; border-radius: 8px; color: white; font-weight: 600;
+
+      z-index: 9999; opacity: 0; transition: opacity .3s; pointer-events: none;
+
+    }
+
+    .toast.show { opacity: 1; }
+
+    .toast-ok { background: #059669; }
+
+    .toast-err { background: #dc2626; }
+    .toast-warn { background: #d97706; }
+
+    .ac-list {
+
+      position: absolute; background: white; border: 1px solid #e5e7eb;
+
+      border-radius: 8px; box-shadow: 0 4px 12px #0001;
+
+      max-height: 220px; overflow-y: auto; z-index: 100; width: 100%;
+
+    }
+
+    .ac-item { padding: 8px 12px; cursor: pointer; font-size: .85rem; }
+
+    .ac-item:hover, .ac-item.ac-focus { background: #fef2f2; color: #e11d48; }
+
+    .overlay {
+
+      position: fixed; inset: 0; background: #000a;
+
+      z-index: 50; display: flex; align-items: flex-start; justify-content: center;
+
+      padding: 40px 16px; overflow-y: auto;
+
+    }
+
+    .modal {
+
+      background: white; border-radius: 16px; padding: 24px;
+
+      width: 100%; max-width: 520px; position: relative;
+
+    }
+
+    input, select, textarea {
+
+      border: 1px solid #d1d5db; border-radius: 8px;
+
+      padding: 8px 12px; width: 100%; font-size: .875rem;
+
+      outline: none; transition: border-color .15s;
+
+    }
+
+    input:focus, select:focus, textarea:focus { border-color: #e11d48; }
+
+    #tab-entradas input:not([type="hidden"]),
+    #tab-entradas select,
+    #tab-entradas textarea {
+      font-size: 1rem;
+      padding: 10px 12px;
+      border-radius: 10px;
+      font-weight: 600;
+      min-height: 44px;
+    }
+
+    #tab-entradas label {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: #374151;
+      margin-bottom: 4px;
+      display: block;
+    }
+
+    #tab-entradas #entrada-tipo-doc,
+    #tab-entradas #entrada-num-doc,
+    #tab-entradas #entrada-fecha-doc {
+      width: 100%;
+    }
+
+    #tab-entradas input[id^="ent-ac-"],
+    #tab-entradas textarea[id^="ent-ac-"],
+    #tab-entradas input[id^="ent-pres-"] {
+      text-align: left;
+      padding-left: 12px;
+    }
+
+    #tab-entradas textarea[id^="ent-ac-"] {
+      resize: none;
+      overflow: hidden;
+    }
+
+    #tab-entradas input[id^="ent-cant-emp-"] {
+      max-width: 100%;
+    }
+
+    #tab-entradas select[id^="ent-iva-pct-"] {
+      width: 70px;
+      flex: none;
+      font-size: 0.95rem;
+      padding-left: 6px;
+      padding-right: 2px;
+      text-align: left;
+    }
+
+    #tab-entradas .grid-cols-12 > div:last-child { white-space: nowrap; }
+
+    #tab-entradas input[id^="ent-cant-"],
+
+    #tab-entradas input[id^="ent-costo-"],
+
+    #tab-entradas input[id^="ent-total-"],
+
+    #tab-entradas input[id^="ent-vu-"] {
+
+      text-align: right;
+
+      padding-right: 5px;
+
+    }
+
+    /* Modal Tarjeta Estándar */
+    #overlay-tarjeta input:not([type="hidden"]),
+    #overlay-tarjeta select {
+      font-size: 0.95rem;
+      padding: 8px 12px;
+      border-radius: 8px;
+    }
+    #overlay-tarjeta label {
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: #374151;
+      margin-bottom: 3px;
+    }
+
+    /* Pestaña Producción y Vista Previa (+175% legible) */
+    #tab-produccion input:not([type="hidden"]),
+    #tab-produccion select {
+      font-size: 1.15rem;
+      padding: 10px 14px;
+      border-radius: 12px;
+      min-height: 48px;
+    }
+    #tab-produccion label {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #1f2937;
+      margin-bottom: 5px;
+      display: block;
+    }
+    #tab-produccion #prod-preview-tabla td {
+      font-size: 1.1rem;
+      padding: 12px 14px;
+    }
+    #tab-produccion #prod-preview-tabla input {
+      font-size: 1.15rem;
+      min-height: 44px;
+      padding: 6px 12px;
+    }
+    #tab-produccion th {
+      font-size: 0.95rem;
+      padding: 12px 14px;
+    }
+
+    /* Estilos 150% ancho completo para Kardex */
+    #tab-kardex {
+      width: 100% !important;
+      max-width: 100% !important;
+    }
+    #tab-kardex table {
+      width: 100% !important;
+    }
+    #tab-kardex input:not([type="hidden"]), #tab-kardex select, #tab-kardex button {
+      font-size: 1.15rem !important;
+      min-height: 44px;
+    }
+    #tab-kardex input[type="hidden"] {
+      display: none !important;
+      min-height: 0 !important;
+      height: 0 !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      border: none !important;
+    }
+    #tab-kardex label {
+      font-size: 1.05rem !important;
+      font-weight: 600;
+    }
+    #tab-kardex th {
+      font-size: 0.95rem !important;
+      padding: 10px 12px !important;
+      line-height: 1.35 !important;
+    }
+    #tab-kardex td {
+      font-size: 1.15rem !important;
+      padding: 11px 12px !important;
+      line-height: 1.45 !important;
+    }
+    #tab-kardex td .text-xs,
+    #tab-kardex td .text-\[10px\],
+    #tab-kardex td .text-\[11px\],
+    #tab-kardex td .text-\[9px\] {
+      font-size: 1.0rem !important;
+    }
+    #tab-kardex .badge {
+      font-size: 0.95rem !important;
+      padding: 4px 10px !important;
+    }
+    #tab-kardex .ac-list {
+      font-size: 1.1rem !important;
+    }
+
+    label { font-size: .75rem; font-weight: 600; color: #6b7280; margin-bottom: 2px; display: block; }
+
+    table { width: 100%; border-collapse: collapse; }
+
+    th { text-align: left; font-size: .72rem; font-weight: 700; color: #9ca3af;
+
+         text-transform: uppercase; padding: 8px 10px; border-bottom: 2px solid #f3f4f6; }
+
+    td { padding: 9px 10px; font-size: .83rem; border-bottom: 1px solid #f3f4f6; }
+
+    tr:last-child td { border-bottom: none; }
+
+    tr:hover td { background: #fef9fa; }
+
+    .badge-entrada { background: #d1fae5; color: #065f46; }
+
+    .badge-salida  { background: #fee2e2; color: #991b1b; }
+
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: .72rem; font-weight: 700; }
+
+    .pill-chip {
+
+      display: inline-flex; align-items: center; gap: 4px;
+
+      background: #f3f4f6; border-radius: 999px;
+
+      padding: 4px 10px; font-size: .78rem; font-weight: 600; color: #374151;
+
+    }
+
+    .num { text-align: right; }
+
+    /* Ventas/Costos: encabezados centrados */
+    #tab-ventas_costos thead th { text-align: center; }
+
+    .sticky-table-header th {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background-color: #f9fafb !important;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    }
+    body.dark .sticky-table-header th {
+      background-color: #1f2937 !important;
+      color: #9ca3af !important;
+      border-bottom: 2px solid #374151 !important;
+    }
+
+    /* Fallback crítico para ocultar elementos si Tailwind falla */
+    .hidden { display: none !important; }
+
+
+
+    /* Soporte para Modo Oscuro en navegadores del cliente (Manual y Autodetectado) */
+
+    body.dark { background: #111827 !important; color: #f9fafb !important; }
+
+    body.dark .bg-white { background-color: #1f2937 !important; }
+
+    body.dark .bg-gray-50 { background-color: #111827 !important; }
+
+    
+
+    body.dark .text-gray-900 { color: #f9fafb !important; }
+
+    body.dark .text-gray-800 { color: #f3f4f6 !important; }
+
+    body.dark .text-gray-700 { color: #e5e7eb !important; }
+
+    body.dark .text-gray-600 { color: #d1d5db !important; }
+
+    body.dark .text-gray-500 { color: #9ca3af !important; }
+
+    body.dark .text-gray-400 { color: #9ca3af !important; }
+
+    
+
+    body.dark .tab-btn:not(.tab-active) { color: #9ca3af !important; }
+
+    body.dark .tab-btn:not(.tab-active):hover { background: #374151 !important; color: #f3f4f6 !important; }
+
+
+
+    body.dark .modal { background: #1f2937 !important; color: #f9fafb !important; border: 1px solid #374151 !important; }
+
+    body.dark .ac-list { background: #1f2937 !important; border-color: #374151 !important; }
+
+    body.dark .ac-item { color: #d1d5db !important; }
+
+    body.dark .ac-item:hover, body.dark .ac-item.ac-focus { background: #374151 !important; color: #f43f5e !important; }
+
+    
+
+    body.dark input, body.dark select, body.dark textarea {
+
+        background-color: #111827 !important;
+
+        color: #f3f4f6 !important;
+
+        border-color: #374151 !important;
+
+    }
+
+    body.dark input:focus, body.dark select:focus, body.dark textarea:focus { border-color: #f43f5e !important; }
+
+    body.dark label { color: #9ca3af !important; }
+
+
+
+    body.dark th { color: #9ca3af !important; border-bottom: 2px solid #374151 !important; }
+
+    body.dark td { border-bottom: 1px solid #374151 !important; color: #d1d5db !important; }
+
+    body.dark tr:hover td { background: #374151 !important; }
+
+
+
+    body.dark .pill-chip { background: #374151 !important; color: #f3f4f6 !important; }
+
+    
+
+    body.dark .bg-indigo-50\/50 { background-color: rgba(99, 102, 241, 0.1) !important; }
+
+    body.dark .border-indigo-100 { border-color: rgba(99, 102, 241, 0.2) !important; }
+
+    body.dark .text-indigo-900 { color: #c7d2fe !important; }
+
+    body.dark .text-indigo-800 { color: #a5b4fc !important; }
+
+
+
+    body.dark .bg-blue-50\/70 { background-color: rgba(59, 130, 246, 0.1) !important; }
+
+    body.dark .border-blue-100 { border-color: rgba(59, 130, 246, 0.2) !important; }
+
+    body.dark .text-blue-800 { color: #93c5fd !important; }
+
+    
+
+    body.dark .border-gray-200 { border-color: #374151 !important; }
+
+    body.dark .border-gray-100 { border-color: #374151 !important; }
+
+
+
+    body.dark #theme-toggle { border-color: #374151 !important; color: #f3f4f6 !important; }
+
+    body.dark #theme-toggle:hover { background-color: #374151 !important; }
+
+  </style>

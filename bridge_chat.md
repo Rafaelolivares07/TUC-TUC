@@ -2959,3 +2959,39 @@ Rockola duracion al guardar (Rafa 2465): _recordar con duracion (no pisa cache) 
 ### [2026-10-30 17:00:00] Muse para sala:
 
 Rockola catalogo suena directo (bug Rafa 2469 TV): tocar fila catalogo ya no re-busca, resuelve top-1 YT y suena (GET /rockola/yt-resolver + omniResolverYPlay + error visible). Fuera buscarEnYoutubeDirecto legacy. Vinilo: catalogo llena peticion (3 args). Tests omni 75/75 + validacion 14/14 + vecino PASS. Commit fix(rockola).
+
+---
+
+### [2026-10-30 16:54:18] 👤 Rafael (vía Telegram):
+
+Sonar ahora no funciona
+
+---
+
+### [2026-10-30 16:55:47] 👤 Rafael (vía Telegram):
+
+Yo creo que el problema es que el que le puse sonar ahora está en mi celular es una canción que está en mi celular Y pues para poder que llegue al televisor tendría que tendría que ir a bueno tendría que crearse la petición y estoy ese no estoy haciéndolo por medio del reproductor vinilo sino que lo estoy haciendo como el reproductor de la sala Yo creo que tú te puedes dar cuenta en los datos que estoy manejando la sala que se llama mi casa claro entonces ahí estoy haciendo ahí estoy queriendo poner un archivo que está en otro dispositivo tenemos que solucionarlo igual de todas formas esta situación le puede pasar a cualquier persona en cualquier otro dispositivo en el en el reproductor tipo vinilo funciona mira a ver y cómo hago para cómo haría yo para poner ese reproductor tipo vinilo en el en el televisor porque me gusta esa interfaces es más minimalista es menos cargada de cosas
+
+---
+
+### [2026-10-30 17:17:42] 👤 Rafael (vía Telegram):
+
+pero en el celular no tengo WhatsApp y como puedo abrir esa interfaz sin enlace, mmm o con enlace pero en el televisor
+
+---
+
+### [2026-10-30 17:32:08] 👤 Rafael (vía Telegram):
+
+Pero las canciones necesitan que sean enviadas?
+
+---
+
+### [2026-10-30 17:52:27] 👤 Rafael (vía Telegram):
+
+Apaga el computador mañana miramos las mejores opciones
+
+---
+
+### [2026-10-30 17:52:33] 👤 Rafael (vía Telegram):
+
+Y gracias

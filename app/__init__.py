@@ -233,7 +233,10 @@ def create_app():
         # No interceptar llamadas API ni estáticos ni chat — dejar que Flask las enrute normal
         if (request.path.startswith('/api/') or request.path.startswith('/static/') or
                 request.path.startswith('/chat') or request.path.startswith('/pagar/') or
-                request.path.startswith('/proyecto/') or request.path.startswith('/solar/proyecto/')):
+                request.path.startswith('/proyecto/') or request.path.startswith('/solar/proyecto/') or
+                request.path.startswith('/kardex') or request.path.startswith('/entrar') or
+                request.path.startswith('/login') or request.path.startswith('/logout') or
+                request.path.startswith('/admin/login')):
             return
 
         if es_tienda:

@@ -1268,6 +1268,19 @@ def _buscar_youtube_en_vivo(query, max_results=5):
         return []
 
 
+def _filtrar_youtube_guardados(youtube_items, servidor_items):
+    """Saca de YouTube-en-vivo los videos cuyo ID ya está guardado en servidor/biblioteca."""
+    guardados = set()
+    for s in (servidor_items or []):
+        yt = _extraer_youtube_id(s.get('youtube_url'))
+        if yt:
+            guardados.add(yt)
+    if not guardados:
+        return list(youtube_items or [])
+    return [y for y in (youtube_items or [])
+            if (_extraer_youtube_id(y.get('youtube_url')) or y.get('id')) not in guardados]
+
+
 @bp.route('/<sala_id>/buscar-global')
 def buscar_global(sala_id):
     """Buscador global multifuente: Servidor, Catálogo de usuarios y YouTube en vivo."""
@@ -1319,8 +1332,9 @@ def buscar_global(sala_id):
                     'origen': 'usuarios'
                 })
 
-        # 3. YouTube en vivo nativo
+        # 3. YouTube en vivo nativo (sin repetir enlaces ya guardados en biblioteca)
         youtube_items = _buscar_youtube_en_vivo(q, max_results=5)
+        youtube_items = _filtrar_youtube_guardados(youtube_items, servidor_items)
 
         return jsonify(
             ok=True,

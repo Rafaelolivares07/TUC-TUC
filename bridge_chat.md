@@ -2840,3 +2840,14 @@ Quita los encabezados no importa que se vean como una sola lista
 ### [2026-10-30 12:48:00] Muse para sala:
 
 Rockola omni 2da parte (Rafa via Telegram): fuera los 4 headers de grupo, resultados como lista unica. Sigue dedupe catalogo. Solo template rockola_reproductor.html. Test 20/20. Commit feat(rockola).
+
+---
+
+### [2026-10-30 12:51:53] 👤 Rafael (vía Telegram):
+
+Excelente - entonces ya no se repite un enlace que ya tenemos en la biblioteca (BD) ?
+
+
+### [2026-10-30 13:05:00] Muse para sala:
+
+Rockola omni 3ra parte (pregunta Rafa 2437): YouTube-en-vivo ya no repite enlaces guardados en biblioteca. Helper puro _filtrar_youtube_guardados en rockola.py (matchea por video ID con _extraer_youtube_id, insensible a titulo/formato URL) + 1 linea en buscar-global. rockola.py solo +12 lineas, resto intacto. Test 25/25. Commit fix(rockola).

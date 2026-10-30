@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TUC TUC — Portal</title>
+  <script src="/static/js/tailwind.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <style>
+    * {
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    html, body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      text-rendering: optimizeLegibility;
+      font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    }
+  </style>
+</head>
+<body data-page="portal" class="bg-white min-h-screen flex flex-col justify-between text-slate-800 selection:bg-indigo-500 selection:text-white">
+
+  <!-- CABECERA CORPORATIVA MINIMALISTA -->
+  <header class="w-full bg-white border-b border-slate-100 px-4 sm:px-8 py-3.5 flex items-center justify-between z-30">
+    <div class="flex items-center gap-3">
+      <!-- Marca TUC TUC (Tipografía afinada, sin iconos artificiales) -->
+      <a href="/portal" class="no-underline group flex items-center">
+        <span class="font-bold text-slate-900 tracking-tight text-sm hover:text-indigo-600 transition">TUC TUC</span>
+      </a>
+
+      <!-- Separador vertical fino -->
+      <div class="h-4 w-px bg-slate-200"></div>
+
+      <!-- Empresa Activa (con dropdown si tiene múltiples) -->
+      <div class="relative">
+        <button type="button" 
+                onclick="toggleMenuNegocios()" 
+                class="flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-slate-800 hover:text-indigo-600 transition bg-transparent border-0 p-0 cursor-pointer">
+          <span>{{ negocio_activo.nombre if negocio_activo else 'Sin Empresa' }}</span>
+          {% if session_negocios | length > 1 %}
+            <i class="bi bi-chevron-down text-[10px] text-slate-400"></i>
+          {% endif %}
+        </button>
+
+        {% if session_negocios | length > 1 %}
+        <!-- Desplegable Selección de Empresa -->
+        <div id="dropdown-negocios" class="hidden absolute left-0 top-full mt-2 w-64 bg-white border border-slate-200 rounded-xl shadow-lg p-2 z-50 divide-y divide-slate-100">
+          <div class="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Cambiar Empresa</div>
+          <div class="py-1 max-h-60 overflow-y-auto">
+            {% for neg in session_negocios %}
+              <div onclick="cambiarNegocioActivo({{ neg.id }})" 
+                   class="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs cursor-pointer hover:bg-slate-50 transition {% if negocio_activo and neg.id == negocio_activo.id %}bg-indigo-50 text-indigo-700 font-semibold{% else %}text-slate-700{% endif %}">
+                <span class="truncate">{{ neg.nombre }}</span>
+                {% if negocio_activo and neg.id == negocio_activo.id %}
+                  <i class="bi bi-check2 text-indigo-600 text-sm"></i>
+                {% endif %}
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+      </div>
+
+      <!-- Centro de Utilidad Activo (con dropdown si tiene múltiples) -->
+      {% if centro_activo %}
+      <div class="relative">
+        <button type="button" 
+                onclick="toggleMenuCentros()" 
+                class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/60 hover:bg-emerald-100/70 transition cursor-pointer">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+          <span>{{ centro_activo.nombre }}</span>
+          {% if centros_utilidad | length > 1 %}
+            <i class="bi bi-chevron-down text-[9px] text-emerald-600"></i>
+          {% endif %}
+        </button>
+
+        {% if centros_utilidad | length > 1 %}
+        <!-- Desplegable Selección de Centro de Utilidad -->
+        <div id="dropdown-centros" class="hidden absolute left-0 top-full mt-2 w-60 bg-white border border-slate-200 rounded-xl shadow-lg p-2 z-50 divide-y divide-slate-100">
+          <div class="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Centro de Utilidad</div>
+          <div class="py-1 max-h-60 overflow-y-auto">
+            {% for c in centros_utilidad %}
+              <div onclick="cambiarCentroActivo({{ c.id }})" 
+                   class="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs cursor-pointer hover:bg-slate-50 transition {% if c.id == centro_activo.id %}bg-emerald-50 text-emerald-800 font-semibold{% else %}text-slate-700{% endif %}">
+                <span class="truncate">{{ c.nombre }}</span>
+                {% if c.id == centro_activo.id %}
+                  <i class="bi bi-check2 text-emerald-600 text-sm"></i>
+                {% endif %}
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Usuario y Cerrar Sesión -->
+    <div class="flex items-center gap-3 text-xs text-slate-500">
+      <span class="font-medium text-slate-700 hidden sm:inline">{{ nombre }}</span>
+      <a href="/logout" class="text-slate-400 hover:text-rose-600 font-medium transition no-underline flex items-center gap-1">
+        <i class="bi bi-box-arrow-right"></i>
+        <span>Salir</span>
+      </a>
+    </div>
+  </header>
+
+  <!-- LIENZO BLANCO CENTRAL CON BUSCADOR HERO -->
+  <main class="flex-1 flex flex-col items-center justify-center px-4 -mt-12 sm:-mt-16 w-full">
+    <div class="w-full max-w-2xl flex flex-col items-center">
+      {% include 'partials/buscador_omni.html' %}
+    </div>
+  </main>
+
+  <!-- FOOTER VACÍO PARA BALANCE / ESPACIO -->
+  <footer class="py-3 px-6 text-center"></footer>
+
+  <!-- BOTÓN FLOTANTE DE CHAT -->
+  <a href="/chat" 
+     id="btn-chat-flotante" 
+     title="Abrir Chat Corporativo" 
+     class="fixed bottom-6 right-6 z-40 w-12 h-12 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg hover:shadow-xl flex items-center justify-center transition-all duration-200 transform hover:scale-105 no-underline">
+    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+    </svg>
+    <span class="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 border-2 border-white rounded-full"></span>
+  </a>
+
+  <!-- SCRIPTS DE INTERACCIÓN -->
+  <script>
+    function toggleMenuNegocios() {
+      const el = document.getElementById('dropdown-negocios');
+      if (el) el.classList.toggle('hidden');
+      const c = document.getElementById('dropdown-centros');
+      if (c) c.classList.add('hidden');
+    }
+
+    function toggleMenuCentros() {
+      const el = document.getElementById('dropdown-centros');
+      if (el) el.classList.toggle('hidden');
+      const n = document.getElementById('dropdown-negocios');
+      if (n) n.classList.add('hidden');
+    }
+
+    document.addEventListener('click', function(e) {
+      const btnN = e.target.closest('button[onclick*="toggleMenuNegocios"]');
+      const dropN = document.getElementById('dropdown-negocios');
+      if (!btnN && dropN && !dropN.contains(e.target)) {
+        dropN.classList.add('hidden');
+      }
+
+      const btnC = e.target.closest('button[onclick*="toggleMenuCentros"]');
+      const dropC = document.getElementById('dropdown-centros');
+      if (!btnC && dropC && !dropC.contains(e.target)) {
+        dropC.classList.add('hidden');
+      }
+    });
+
+    function cambiarNegocioActivo(negocioId) {
+      fetch('/api/session/switch-negocio/' + negocioId, {
+        method: 'POST'
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok) {
+          window.location.reload();
+        } else {
+          alert('Error al cambiar de negocio: ' + (data.error || 'Desconocido'));
+        }
+      })
+      .catch(err => console.error(err));
+    }
+
+    function cambiarCentroActivo(centroId) {
+      fetch('/api/session/switch-centro-utilidad/' + centroId, {
+        method: 'POST'
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok) {
+          window.location.reload();
+        } else {
+          alert('Error al cambiar centro de utilidad: ' + (data.error || 'Desconocido'));
+        }
+      })
+      .catch(err => console.error(err));
+    }
+  </script>
+</body>
+</html>

@@ -100,6 +100,13 @@ def _obtener_catalogo_base(negocio_id=None, slug=None):
             'keywords': ['inicio', 'dashboard', 'panel', 'home', 'herramientas', 'menu principal', 'accesos']
         },
         {
+            'titulo': 'Portal Corporativo',
+            'modulo': 'General',
+            'icono': '🏢',
+            'url': '/portal',
+            'keywords': ['portal', 'portada', 'buscar', 'buscador', 'lanzador']
+        },
+        {
             'titulo': 'Contabilidad — General',
             'modulo': 'Contabilidad',
             'icono': '📒',

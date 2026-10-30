@@ -343,11 +343,11 @@
       }
     } catch(err) {}
 
-    // Si estamos en el menú principal (/inicio), abrir en una nueva pestaña
+    // Si estamos en el menú principal (/portal), abrir en una nueva pestaña
     // para dejar la pestaña del menú principal abierta
-    const esMenuPrincipal = window.location.pathname === '/inicio' || 
+    const esMenuPrincipal = window.location.pathname === '/portal' || 
                             window.location.pathname === '/' || 
-                            document.body.dataset.page === 'inicio';
+                            document.body.dataset.page === 'portal';
 
     if (esMenuPrincipal) {
       input.value = '';
@@ -450,7 +450,7 @@
   });
 
   // Autofocus si estamos en pantalla de inicio (manteniendo dropdown cerrado)
-  if (window.location.pathname === '/inicio' || window.location.pathname === '/' || document.body.dataset.page === 'inicio') {
+  if (window.location.pathname === '/portal' || window.location.pathname === '/' || document.body.dataset.page === 'portal') {
     setTimeout(() => {
       if (input) {
         input.focus();

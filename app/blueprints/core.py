@@ -1755,6 +1755,14 @@ def colaborador_inicio():
                            pantallas_autorizadas=pantallas_autorizadas)
 
 
+@bp.route('/portal')
+def colaborador_portal():
+    if 'usuario_id' not in session and 'rol' not in session:
+        return redirect(url_for('auth.admin_login'))
+    nombre = session.get('nombre', '')
+    return render_template('portal.html', nombre=nombre)
+
+
 @bp.route('/admin/pantallas-catalogo')
 def core_pantallas_catalogo():
     if 'rol' not in session or session['rol'] not in ('Administrador', 'ClienteVFP'):

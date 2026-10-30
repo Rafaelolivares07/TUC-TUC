@@ -5,114 +5,156 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TUC TUC — Inicio</title>
   <script src="/static/js/tailwind.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <style>
     body {
-      font-family: 'Inter', sans-serif;
-      background-color: #f3f4f6;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     }
   </style>
 </head>
-<body class="p-4 sm:p-8 min-h-screen">
+<body data-page="inicio" class="bg-white min-h-screen flex flex-col justify-between text-gray-800 antialiased selection:bg-indigo-500 selection:text-white">
 
-  <div class="max-w-3xl mx-auto">
-    <!-- Cabecera / Negocio Activo & Carrusel Trigger -->
-    <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-150 mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-      <div class="flex items-center gap-3">
-        <!-- Logo con Selector (Si tiene múltiples negocios, abre el selector) -->
-        <div class="relative group" style="cursor: pointer;" onclick="toggleSelectorNegocios()">
-          {% if negocio_activo %}
-            {% if negocio_activo.logo_url %}
-              <img src="{{ negocio_activo.logo_url }}" class="rounded-2xl border border-gray-200 shadow-sm" style="height: 52px; width: 52px; object-fit: cover;">
-            {% else %}
-              <div class="rounded-2xl border border-gray-200 bg-indigo-600 text-white text-center d-flex items-center justify-content-center fw-bold shadow-sm" style="height: 52px; width: 52px; font-size: 20px; line-height: 52px;">
-                {{ negocio_activo.nombre[:2].upper() }}
-              </div>
-            {% endif %}
-          {% endif %}
+  <!-- CABECERA CORPORATIVA MINIMALISTA -->
+  <header class="w-full bg-white border-b border-gray-150 px-4 sm:px-8 py-3.5 flex items-center justify-between z-30">
+    <div class="flex items-center gap-3">
+      <!-- Marca TUC TUC -->
+      <a href="/inicio" class="flex items-center gap-2 no-underline text-gray-900 group">
+        <div class="w-8 h-8 rounded-lg bg-indigo-600 text-white font-black flex items-center justify-center text-xs tracking-tighter shadow-sm">
+          TT
+        </div>
+        <span class="font-black text-gray-900 tracking-wider text-sm">TUC TUC</span>
+      </a>
+
+      <!-- Separador vertical fino -->
+      <div class="h-4 w-px bg-gray-200"></div>
+
+      <!-- Empresa Activa (con dropdown si tiene múltiples) -->
+      <div class="relative">
+        <button type="button" 
+                onclick="toggleMenuNegocios()" 
+                class="flex items-center gap-1.5 text-xs sm:text-sm font-bold text-gray-800 hover:text-indigo-600 transition bg-transparent border-0 p-0 cursor-pointer">
+          <span>{{ negocio_activo.nombre if negocio_activo else 'Sin Empresa' }}</span>
           {% if session_negocios | length > 1 %}
-            <div class="absolute -bottom-1 -right-1 bg-white border border-gray-150 rounded-full w-5 h-5 flex items-center justify-center text-gray-500 shadow-sm">
-              <i class="bi bi-chevron-down" style="font-size: 9px;"></i>
-            </div>
+            <i class="bi bi-chevron-down text-[10px] text-gray-400"></i>
           {% endif %}
+        </button>
+
+        {% if session_negocios | length > 1 %}
+        <!-- Desplegable Selección de Empresa -->
+        <div id="dropdown-negocios" class="hidden absolute left-0 top-full mt-2 w-64 bg-white border border-gray-150 rounded-xl shadow-lg p-2 z-50 divide-y divide-gray-50">
+          <div class="px-2 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Cambiar Empresa</div>
+          <div class="py-1 max-h-60 overflow-y-auto">
+            {% for neg in session_negocios %}
+              <div onclick="cambiarNegocioActivo({{ neg.id }})" 
+                   class="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs cursor-pointer hover:bg-gray-50 transition {% if negocio_activo and neg.id == negocio_activo.id %}bg-indigo-50 text-indigo-700 font-bold{% else %}text-gray-700{% endif %}">
+                <span class="truncate">{{ neg.nombre }}</span>
+                {% if negocio_activo and neg.id == negocio_activo.id %}
+                  <i class="bi bi-check2 text-indigo-600 text-sm"></i>
+                {% endif %}
+              </div>
+            {% endfor %}
+          </div>
         </div>
-        
-        <div>
-          <h1 class="text-lg font-extrabold text-gray-900 tracking-tight flex items-center gap-1.5">
-            {{ negocio_activo.nombre if negocio_activo else 'TUC TUC' }}
-          </h1>
-          <p class="text-xs text-gray-400 font-medium">¡Hola, {{ nombre }}! Este es tu menú de herramientas autorizadas.</p>
-        </div>
+        {% endif %}
       </div>
 
-      <!-- Cerrar Sesión -->
-      <a href="/logout" class="text-xs bg-red-50 hover:bg-red-100 text-red-600 font-bold px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 no-underline">
-        <i class="bi bi-box-arrow-right"></i> Cerrar Sesión
+      <!-- Centro de Utilidad Activo (con dropdown si tiene múltiples) -->
+      {% if centro_activo %}
+      <div class="relative">
+        <button type="button" 
+                onclick="toggleMenuCentros()" 
+                class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/60 hover:bg-emerald-100/70 transition cursor-pointer">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+          <span>{{ centro_activo.nombre }}</span>
+          {% if centros_utilidad | length > 1 %}
+            <i class="bi bi-chevron-down text-[9px] text-emerald-600"></i>
+          {% endif %}
+        </button>
+
+        {% if centros_utilidad | length > 1 %}
+        <!-- Desplegable Selección de Centro de Utilidad -->
+        <div id="dropdown-centros" class="hidden absolute left-0 top-full mt-2 w-60 bg-white border border-gray-150 rounded-xl shadow-lg p-2 z-50 divide-y divide-gray-50">
+          <div class="px-2 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Centro de Utilidad</div>
+          <div class="py-1 max-h-60 overflow-y-auto">
+            {% for c in centros_utilidad %}
+              <div onclick="cambiarCentroActivo({{ c.id }})" 
+                   class="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs cursor-pointer hover:bg-gray-50 transition {% if c.id == centro_activo.id %}bg-emerald-50 text-emerald-800 font-bold{% else %}text-gray-700{% endif %}">
+                <span class="truncate">{{ c.nombre }}</span>
+                {% if c.id == centro_activo.id %}
+                  <i class="bi bi-check2 text-emerald-600 text-sm"></i>
+                {% endif %}
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Usuario y Cerrar Sesión -->
+    <div class="flex items-center gap-3 text-xs text-gray-500">
+      <span class="font-medium text-gray-700 hidden sm:inline">{{ nombre }}</span>
+      <a href="/logout" class="text-gray-400 hover:text-red-600 font-semibold transition no-underline flex items-center gap-1">
+        <i class="bi bi-box-arrow-right"></i>
+        <span>Salir</span>
       </a>
     </div>
+  </header>
 
-    <!-- Carrusel / Selector Flotante de Negocios (Tailwind In-place) -->
-    {% if session_negocios | length > 1 %}
-    <div id="selector-negocios" class="hidden bg-white rounded-2xl p-4 shadow-md border border-gray-150 mb-6">
-      <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2.5">Cambiar de Negocio</h3>
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        {% for neg in session_negocios %}
-          <div onclick="switchActiveNegocio({{ neg.id }})" 
-               class="flex items-center gap-2.5 p-2 rounded-xl border border-gray-100 hover:bg-gray-50 cursor-pointer transition {% if neg.id == negocio_activo.id %}bg-indigo-50 border-indigo-200 font-bold text-indigo-700{% endif %}">
-            {% if neg.logo_url %}
-              <img src="{{ neg.logo_url }}" class="rounded-lg border border-gray-200" style="height: 32px; width: 32px; object-fit: cover;">
-            {% else %}
-              <div class="rounded-lg bg-gray-200 text-gray-600 text-center font-bold text-xs flex items-center justify-center" style="height: 32px; width: 32px;">
-                {{ neg.nombre[:2].upper() }}
-              </div>
-            {% endif %}
-            <span class="text-xs text-gray-700 truncate">{{ neg.nombre }}</span>
-          </div>
-        {% endfor %}
-      </div>
-    </div>
-    {% endif %}
-
-    <!-- Buscador Corporativo Global Omnibox -->
-    <div class="mb-6">
+  <!-- LIENZO BLANCO CENTRAL CON BUSCADOR HERO -->
+  <main class="flex-1 flex flex-col items-center justify-center px-4 -mt-12 sm:-mt-16 w-full">
+    <div class="w-full max-w-2xl flex flex-col items-center">
       {% include 'partials/buscador_omni.html' %}
     </div>
+  </main>
 
-    <!-- Grilla de Accesos Autorizados -->
-    {% if pantallas_autorizadas %}
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4" id="grilla-herramientas">
-      {% for pant in pantallas_autorizadas %}
-        <div class="card-herramienta bg-white rounded-2xl p-5 shadow-sm border border-gray-150 hover:shadow transition flex items-center gap-4">
-          <div class="bg-indigo-50 text-indigo-600 rounded-xl p-3 w-12 h-12 flex items-center justify-center text-xl shrink-0">
-            {{ pant.icono or '🖥️' }}
-          </div>
-          <div class="flex-grow min-w-0">
-            <h2 class="text-sm font-bold text-gray-800 truncate txt-nombre">{{ pant.nombre }}</h2>
-            <p class="text-[10px] text-gray-400 mt-0.5">Acceso verificado</p>
-          </div>
-          <a href="{{ pant.resolved_url }}" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition no-underline">
-            Entrar
-          </a>
-        </div>
-      {% endfor %}
-    </div>
-    {% else %}
-    <div class="bg-white rounded-2xl p-8 shadow-sm border border-gray-150 text-center">
-      <span class="text-4xl">🔒</span>
-      <h2 class="text-sm font-bold text-gray-800 mt-3">Sin Accesos Configurados</h2>
-      <p class="text-xs text-gray-400 mt-1 max-w-sm mx-auto">No tienes pantallas autorizadas para este negocio. Por favor, solicita a tu administrador que te asigne permisos.</p>
-    </div>
-    {% endif %}
-  </div>
+  <!-- FOOTER VACÍO PARA BALANCE / ESPACIO -->
+  <footer class="py-3 px-6 text-center"></footer>
 
+  <!-- BOTÓN FLOTANTE DE CHAT -->
+  <a href="/chat" 
+     id="btn-chat-flotante" 
+     title="Abrir Chat Corporativo" 
+     class="fixed bottom-6 right-6 z-40 w-12 h-12 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg hover:shadow-xl flex items-center justify-center transition-all duration-200 transform hover:scale-105 no-underline">
+    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+    </svg>
+    <span class="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 border-2 border-white rounded-full"></span>
+  </a>
+
+  <!-- SCRIPTS DE INTERACCIÓN -->
   <script>
-    function toggleSelectorNegocios() {
-      const el = document.getElementById('selector-negocios');
+    function toggleMenuNegocios() {
+      const el = document.getElementById('dropdown-negocios');
       if (el) el.classList.toggle('hidden');
+      const c = document.getElementById('dropdown-centros');
+      if (c) c.classList.add('hidden');
     }
 
-    function switchActiveNegocio(negocioId) {
+    function toggleMenuCentros() {
+      const el = document.getElementById('dropdown-centros');
+      if (el) el.classList.toggle('hidden');
+      const n = document.getElementById('dropdown-negocios');
+      if (n) n.classList.add('hidden');
+    }
+
+    document.addEventListener('click', function(e) {
+      const btnN = e.target.closest('button[onclick*="toggleMenuNegocios"]');
+      const dropN = document.getElementById('dropdown-negocios');
+      if (!btnN && dropN && !dropN.contains(e.target)) {
+        dropN.classList.add('hidden');
+      }
+
+      const btnC = e.target.closest('button[onclick*="toggleMenuCentros"]');
+      const dropC = document.getElementById('dropdown-centros');
+      if (!btnC && dropC && !dropC.contains(e.target)) {
+        dropC.classList.add('hidden');
+      }
+    });
+
+    function cambiarNegocioActivo(negocioId) {
       fetch('/api/session/switch-negocio/' + negocioId, {
         method: 'POST'
       })
@@ -127,18 +169,19 @@
       .catch(err => console.error(err));
     }
 
-    function filtrarHerramientas() {
-      const q = document.getElementById('filtro-menu').value.trim().toLowerCase();
-      const cards = document.querySelectorAll('.card-herramienta');
-      
-      cards.forEach(card => {
-        const nombre = card.querySelector('.txt-nombre').textContent.toLowerCase();
-        if (nombre.includes(q)) {
-          card.classList.remove('hidden');
+    function cambiarCentroActivo(centroId) {
+      fetch('/api/session/switch-centro-utilidad/' + centroId, {
+        method: 'POST'
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok) {
+          window.location.reload();
         } else {
-          card.classList.add('hidden');
+          alert('Error al cambiar centro de utilidad: ' + (data.error || 'Desconocido'));
         }
-      });
+      })
+      .catch(err => console.error(err));
     }
   </script>
 </body>

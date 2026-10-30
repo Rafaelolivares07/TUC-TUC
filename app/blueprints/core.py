@@ -1349,10 +1349,36 @@ def inject_negocios_context():
         if not active_neg and negocios:
             active_neg = negocios[0]
             session['active_negocio_id'] = active_neg['id']
+
+        # Determinar centros de utilidad del negocio activo
+        centros = []
+        centro_activo = None
+        if active_neg:
+            try:
+                c_rows = conn.execute("""
+                    SELECT id, codigo, nombre, tipo, color_badge 
+                    FROM centros_utilidad 
+                    WHERE negocio_id = %s AND activo = TRUE 
+                    ORDER BY id ASC
+                """, (active_neg['id'],)).fetchall()
+                centros = [dict(c) for c in c_rows]
+                
+                c_id = session.get('centro_utilidad_id')
+                if c_id:
+                    centro_activo = next((c for c in centros if str(c['id']) == str(c_id)), None)
+                if not centro_activo and centros:
+                    centro_activo = centros[0]
+                    session['centro_utilidad_id'] = centro_activo['id']
+                    session['centro_utilidad_nombre'] = centro_activo['nombre']
+                    session['centro_utilidad_codigo'] = centro_activo['codigo']
+            except Exception:
+                pass
             
         return {
             'session_negocios': negocios,
-            'negocio_activo': active_neg
+            'negocio_activo': active_neg,
+            'centros_utilidad': centros,
+            'centro_activo': centro_activo
         }
     except Exception:
         return {'session_negocios': [], 'negocio_activo': None}
@@ -1384,6 +1410,28 @@ def api_session_switch_negocio(negocio_id):
             return jsonify({'ok': False, 'error': 'No tienes permisos en este negocio'}), 403
             
     session['active_negocio_id'] = negocio_id
+    session.pop('centro_utilidad_id', None)
+    session.pop('centro_utilidad_nombre', None)
+    session.pop('centro_utilidad_codigo', None)
+    session.modified = True
+    return jsonify({'ok': True})
+
+
+@bp.route('/api/session/switch-centro-utilidad/<int:centro_id>', methods=['POST'])
+def api_session_switch_centro(centro_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    session['centro_utilidad_id'] = centro_id
+    try:
+        from ..db import get_db_connection
+        conn = get_db_connection()
+        row = conn.execute("SELECT nombre, codigo FROM centros_utilidad WHERE id = %s", (centro_id,)).fetchone()
+        conn.close()
+        if row:
+            session['centro_utilidad_nombre'] = row['nombre']
+            session['centro_utilidad_codigo'] = row['codigo']
+    except Exception:
+        pass
     session.modified = True
     return jsonify({'ok': True})
 

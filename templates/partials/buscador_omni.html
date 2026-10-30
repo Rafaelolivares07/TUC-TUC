@@ -419,5 +419,12 @@
       cerrarDropdown();
     }
   });
+
+  // Autofocus si estamos en pantalla de inicio
+  if (window.location.pathname === '/inicio' || window.location.pathname === '/' || document.body.dataset.page === 'inicio') {
+    setTimeout(() => {
+      if (input) input.focus();
+    }, 150);
+  }
 })();
 </script>

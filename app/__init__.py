@@ -190,6 +190,19 @@ def create_app():
 
             return entrada()
 
+        if host_limpio == 'desk.tuc-tuc.co':
+            from flask import redirect, render_template, session
+            if (request.path.startswith('/api/') or request.path.startswith('/static/') or
+                    request.path.startswith('/chat') or request.path.startswith('/login') or
+                    request.path.startswith('/entrar') or request.path.startswith('/admin/login') or
+                    request.path == '/sw.js'):
+                return
+            if request.path in ('/', '/portal'):
+                if 'usuario_id' not in session and 'rol' not in session:
+                    return redirect('/entrar')
+                return render_template('portal.html', nombre=session.get('nombre', ''))
+            return
+
         from .dominios_negocio import resolver_negocio_por_host
 
         negocio_host = resolver_negocio_por_host(request.host)

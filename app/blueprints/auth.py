@@ -9,12 +9,20 @@ bp = Blueprint('auth', __name__)
 def admin_required(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
-        if 'rol' not in session or session['rol'] not in ('Administrador', 'ClienteVFP'):
+        rol = session.get('rol')
+        uid = session.get('usuario_id')
+        if not uid and not rol:
             if (request.is_json or
                     request.headers.get('X-Requested-With') == 'XMLHttpRequest' or
                     'application/json' in request.headers.get('Accept', '')):
                 return jsonify({'ok': False, 'error': 'No autenticado'}), 401
             return redirect(url_for('auth.admin_login'))
+        if rol not in ('Administrador', 'ClienteVFP', 'Restaurante', 'Tienda', 'Vendedor'):
+            if (request.is_json or
+                    request.headers.get('X-Requested-With') == 'XMLHttpRequest' or
+                    'application/json' in request.headers.get('Accept', '')):
+                return jsonify({'ok': False, 'error': 'Acceso denegado'}), 403
+            return redirect('/inicio')
         return f(*args, **kwargs)
     return wrapper
 
@@ -35,15 +43,15 @@ def solo_admin(f):
 
 @bp.route('/admin')
 def admin_redirect():
-    if session.get('rol') == 'Administrador':
-        return redirect(url_for('auth.admin_area'))
+    if session.get('usuario_id') or session.get('rol'):
+        return redirect('/inicio')
     return redirect(url_for('auth.admin_login'))
 
 
 @bp.route('/admin/login', methods=['GET'])
 def admin_login():
-    if session.get('rol') in ('Administrador', 'ClienteVFP'):
-        return redirect(url_for('auth.admin_area'))
+    if session.get('usuario_id') or session.get('rol'):
+        return redirect('/inicio')
     return render_template('admin_login.html')
 
 
@@ -87,7 +95,7 @@ def admin_login_post():
             session.modified           = True
             if admin['rol'] == 'ClienteVFP':
                 return redirect(url_for('admin_agent.consultas_page'))
-            return redirect(url_for('auth.admin_area'))
+            return redirect('/inicio')
         else:
             flash('Usuario o contraseña incorrectos', 'danger')
             return redirect(url_for('auth.admin_login'))
@@ -98,9 +106,7 @@ def admin_login_post():
 @bp.route('/admin/area')
 @admin_required
 def admin_area():
-    return render_template('admin_menu.html',
-                           nombre=session['nombre'],
-                           device_id=session.get('dispositivo_id', ''))
+    return redirect('/inicio')
 
 
 @bp.route('/admin/logout')

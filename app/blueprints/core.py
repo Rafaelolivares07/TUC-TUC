@@ -177,8 +177,8 @@ def ping():
 
 @bp.route('/')
 def index():
-    if session.get('rol') == 'Administrador':
-        return redirect(url_for('auth.admin_area'))
+    if session.get('usuario_id') or session.get('rol'):
+        return redirect(url_for('core.colaborador_inicio'))
     return redirect(url_for('auth.admin_login'))
 
 
@@ -453,7 +453,7 @@ def admin_acceso(codigo):
 @bp.route('/admin_menu')
 @admin_required
 def admin_menu():
-    return render_template('admin_menu.html')
+    return redirect(url_for('core.colaborador_inicio'))
 
 
 @bp.route('/admin/contactos')
@@ -1702,7 +1702,7 @@ def _resolver_url_pantalla(endpoint, negocio_id, slug):
 
 @bp.route('/inicio')
 def colaborador_inicio():
-    if 'usuario_id' not in session:
+    if 'usuario_id' not in session and 'rol' not in session:
         return redirect(url_for('auth.admin_login'))
         
     role = session.get('rol')

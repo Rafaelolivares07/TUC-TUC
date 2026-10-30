@@ -343,6 +343,23 @@
       }
     } catch(err) {}
 
+    // Si estamos en el menú principal (/inicio), abrir en una nueva pestaña
+    // para dejar la pestaña del menú principal abierta
+    const esMenuPrincipal = window.location.pathname === '/inicio' || 
+                            window.location.pathname === '/' || 
+                            document.body.dataset.page === 'inicio';
+
+    if (esMenuPrincipal) {
+      input.value = '';
+      const win = window.open(url, '_blank');
+      if (win) {
+        win.focus();
+      } else {
+        window.location.href = url;
+      }
+      return;
+    }
+
     window.location.href = url;
   };
 

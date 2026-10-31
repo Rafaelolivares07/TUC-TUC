@@ -3051,3 +3051,9 @@ Rockola foco2 (Rafa 31/10, celular): ab494f8 causa real = sheet vinilo fijo con 
 ### [2026-10-31 07:43:37] Muse para sala:
 
 Rockola pausa (Rafa 31/10): 20a5dac barras 90% + gap 60% redibujado centrado (gradiente intacto). Test play_btn 8/8; prod 20a5dac verificado. E2E Rafa.
+
+---
+
+### [2026-10-31 07:46:44] Muse para sala:
+
+Rockola foco3 (Rafa 31/10, intermitente): c4437c2 subida persistente mientras enfocado (400+900+cada resize teclado, suelta en blur). Test 98/98; prod c4437c2 verificado. E2E Rafa.

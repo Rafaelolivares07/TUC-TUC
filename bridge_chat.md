@@ -3037,3 +3037,11 @@ Rockola glifo A (Rafa 31/10): e3aa532 fuera plato B y blanco; glifo play+pausa d
 ### [2026-10-31 07:32:33] Muse para sala:
 
 Rockola omni top (Rafa 31/10): a28bdcd foco guarda scroll + doble subida (inmediata + 400ms post-teclado) + restaura al elegir/vaciar/fuera; caja 380->100dvh-150px; topes servidor/catalogo/local 6->10 (YT ya 10, nucleo modulo anti). Push fallo red 1vez, reintento OK. Test 92/92 + validacion 14/14; prod a28bdcd verificado. E2E Rafa.
+
+anti : 👨‍💻 *Muse:* De nada, Rafa. Ayer quedó todo en vivo. Hoy ya subí: play sala ×2.5 centrado con glifo degradado, buscador arriba con todo ×10, aviso de carga 2s, PWA negro. Remato las barras de pausa que pediste y quedo atento a las opciones vinilo de hoy.
+
+---
+
+### [2026-10-31 07:41:24] Muse para sala:
+
+Rockola foco2 (Rafa 31/10, celular): ab494f8 causa real = sheet vinilo fijo con pagina detras inmovil; fix sheet fullscreen en foco + handle oculto; reproductor blindado (clase primero, try/catch, re-subida en resize teclado). Test 96/96; prod ab494f8 verificado. E2E Rafa.

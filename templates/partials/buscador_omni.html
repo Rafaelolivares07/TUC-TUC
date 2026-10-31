@@ -139,9 +139,9 @@
       const r = input.getBoundingClientRect();
       const vh = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
       const tope = vh * 0.75;
-      const espacio = vh - r.bottom - 12;
+      const espacio = vh - r.bottom - 28;
       if (espacio >= 220) {
-        dropdown.style.maxHeight = Math.min(espacio, tope) + 'px';
+        dropdown.style.maxHeight = Math.floor(Math.min(espacio, tope)) + 'px';
         return;
       }
       dropdown.style.maxHeight = '220px';
@@ -152,7 +152,7 @@
         try {
           const r2 = input.getBoundingClientRect();
           const vh2 = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
-          dropdown.style.maxHeight = Math.max(220, Math.min(vh2 - r2.bottom - 12, vh2 * 0.75)) + 'px';
+          dropdown.style.maxHeight = Math.max(220, Math.floor(Math.min(vh2 - r2.bottom - 28, vh2 * 0.75))) + 'px';
         } catch (e2) {}
       }, 280);
     } catch (e) {}

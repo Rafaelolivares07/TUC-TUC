@@ -2995,3 +2995,9 @@ Apaga el computador mañana miramos las mejores opciones
 ### [2026-10-30 17:52:33] 👤 Rafael (vía Telegram):
 
 Y gracias
+
+---
+
+### [2026-10-31 06:56:01] Muse para sala:
+
+Rockola vinilo + PWA (Rafa 31/10): 1fa7272 vinilo play overlay x2.5 (svg 30->75, circulo 64->160) + tap-highlight transparente (stage cuadrado ya no destella); 56859cd PWA instalada barras negras (theme_color manifiesto + meta 7 templates cian->negro; splash intacto). rockola.py 1 linea (modulo anti). Verificado live 56859cd (version+manifiesto+meta). E2E Rafa.

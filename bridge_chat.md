@@ -3019,3 +3019,9 @@ Rockola play sala (aclarado Rafa): 353d3d0 circulo de vuelta a 92px, glifo inter
 ### [2026-10-31 07:20:18] Muse para sala:
 
 Rockola omni+boton (Rafa 31/10): 4269588 omni 4 puntos (YT 5->10 en nucleo 1 linea modulo anti; foco sube arriba y oculta superior con restaura; input 20.6px peso 400; lupa derecha que se quita con +5) + af54735 triangulo play centrado optico (-6px x3). Test omni 86/86 + validacion 14/14 + node; prod af54735 verificado. Pendiente: diseno integracion glifo (propuesto, sin elegir). E2E Rafa.
+
+---
+
+### [2026-10-31 07:24:18] Muse para sala:
+
+Rockola carga+plato (Rafa 31/10): 700c5f1 aviso diferido 2s (observer sobre #estado, spinner solo si carga lenta; test 6/6 disco) + 187fb50 plato B (radial oscuro 64px tras glifo + glifo blanco). Solo template. Prod 187fb50 verificado. E2E Rafa.

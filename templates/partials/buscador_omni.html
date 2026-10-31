@@ -77,7 +77,7 @@
     return '';
   }
 
-  // ── HISTORIAL DE RECIENTES EN LOCALSTORAGE ─────────────────────────
+  // -- HISTORIAL DE RECIENTES EN LOCALSTORAGE -------------------------
   const STORAGE_KEY_RECIENTES = 'omni_recientes_v1';
 
   function obtenerRecientes() {
@@ -95,7 +95,7 @@
       lista.unshift({
         titulo: item.titulo,
         modulo: item.modulo || 'Reciente',
-        icono: item.icono || '📍',
+        icono: item.icono || '',
         url: item.url
       });
       if (lista.length > 5) lista = lista.slice(0, 5);
@@ -112,7 +112,7 @@
     } catch(e) {}
   };
 
-  // ── MOSTRAR / OCULTAR DROPDOWN ─────────────────────────────────────
+  // -- MOSTRAR / OCULTAR DROPDOWN -------------------------------------
   function abrirDropdown() {
     if (input.value.trim().length < 2) {
       cerrarDropdown();
@@ -126,7 +126,7 @@
     selectedIndex = -1;
   }
 
-  // ── RENDERIZADO DEL ESTADO INICIAL (VACÍO / ENFOQUE) ────────────────
+  // -- RENDERIZADO DEL ESTADO INICIAL (VACÍO / ENFOQUE) ----------------
   async function mostrarEstadoInicial() {
     const recientes = obtenerRecientes();
     itemsColeccion = [];
@@ -138,7 +138,7 @@
       html += `
         <div>
           <div class="px-2 py-1 text-[11px] font-bold text-gray-400 uppercase tracking-wider flex items-center justify-between">
-            <span class="flex items-center gap-1.5">🕒 Últimos Visitados</span>
+            <span>Últimos Visitados</span>
             <span class="text-[10px] font-normal text-gray-300">Automático</span>
           </div>
           <div class="mt-1 space-y-1">
@@ -150,7 +150,6 @@
           <div data-omni-index="${itemIdx}" onclick="omniNavegarA('${rec.url}', '${rec.titulo}', '${rec.modulo}', '${rec.icono}')"
                class="omni-item group flex items-center justify-between px-3 py-2 rounded-xl cursor-pointer hover:bg-indigo-50/70 transition">
             <div class="flex items-center gap-2.5 truncate">
-              <span class="text-base">${rec.icono}</span>
               <div class="truncate">
                 <div class="text-xs font-bold text-gray-800 group-hover:text-indigo-900 truncate">${rec.titulo}</div>
                 <div class="text-[10px] text-gray-400 font-mono truncate">${rec.modulo}</div>
@@ -175,7 +174,7 @@
         html += `
           <div>
             <div class="px-2 py-1 text-[11px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
-              <span>⭐ Accesos Rápidos Frecuentes</span>
+              <span>Accesos Rápidos Frecuentes</span>
             </div>
             <div class="mt-1 grid grid-cols-1 sm:grid-cols-2 gap-1.5">
         `;
@@ -185,7 +184,6 @@
           html += `
             <div data-omni-index="${itemIdx}" onclick="omniNavegarA('${item.url}', '${item.titulo}', '${item.modulo}', '${item.icono}')"
                  class="omni-item flex items-center gap-2.5 px-3 py-2 rounded-xl cursor-pointer border border-gray-100 hover:border-indigo-200 hover:bg-indigo-50/50 transition">
-              <span class="text-base shrink-0">${item.icono}</span>
               <div class="truncate">
                 <div class="text-xs font-bold text-gray-800 truncate">${item.titulo}</div>
                 <div class="text-[10px] text-gray-400 truncate">${item.modulo}</div>
@@ -204,7 +202,7 @@
     `;
   }
 
-  // ── EJECUTAR BÚSQUEDA REACTIVA ─────────────────────────────────────
+  // -- EJECUTAR BÚSQUEDA REACTIVA -------------------------------------
   async function ejecutarBusqueda(query) {
     const q = query.trim();
     if (q.length < 2) {
@@ -234,7 +232,6 @@
       if (rutas.length === 0 && ayuda.length === 0) {
         resultsBody.innerHTML = `
           <div class="py-8 text-center text-gray-400">
-            <span class="text-2xl block mb-1">🔍</span>
             <p class="text-xs font-bold text-gray-600">No encontramos resultados para "${q}"</p>
             <p class="text-[11px] text-gray-400 mt-0.5">Prueba con palabras como "puc", "gasto", "kardex", "receta", "auditor" o "iva".</p>
           </div>
@@ -249,7 +246,7 @@
         html += `
           <div>
             <div class="px-2 py-1 text-[11px] font-bold text-indigo-600 uppercase tracking-wider flex items-center justify-between">
-              <span class="flex items-center gap-1.5">📍 Pantallas y Pestañas (${rutas.length})</span>
+              <span>Pantallas y Pestañas (${rutas.length})</span>
             </div>
             <div class="mt-1 space-y-1">
         `;
@@ -260,7 +257,6 @@
             <div data-omni-index="${itemIdx}" onclick="omniNavegarA('${r.url}', '${r.titulo}', '${r.modulo}', '${r.icono}')"
                  class="omni-item flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer hover:bg-indigo-50/80 transition">
               <div class="flex items-center gap-2.5 truncate">
-                <span class="text-lg shrink-0">${r.icono}</span>
                 <div class="truncate">
                   <div class="text-xs font-bold text-gray-900 truncate">${r.titulo}</div>
                   <div class="text-[10px] text-gray-400 font-medium truncate">${r.modulo}</div>
@@ -278,7 +274,7 @@
         html += `
           <div>
             <div class="px-2 py-1 text-[11px] font-bold text-emerald-600 uppercase tracking-wider flex items-center justify-between">
-              <span class="flex items-center gap-1.5">📖 Manual y Explicaciones (${ayuda.length})</span>
+              <span>Manual y Explicaciones (${ayuda.length})</span>
             </div>
             <div class="mt-1 space-y-1.5">
         `;
@@ -286,7 +282,7 @@
           itemsColeccion.push({ ...a, tipo: 'ayuda' });
           const itemIdx = itemsColeccion.length - 1;
           html += `
-            <div data-omni-index="${itemIdx}" onclick="omniNavegarA('${a.url}', '${a.titulo}', '${a.manual}', '📖')"
+            <div data-omni-index="${itemIdx}" onclick="omniNavegarA('${a.url}', '${a.titulo}', '${a.manual}', '')"
                  class="omni-item p-2.5 rounded-xl cursor-pointer hover:bg-emerald-50/70 border border-gray-100 hover:border-emerald-200 transition">
               <div class="flex items-center justify-between gap-2 mb-1">
                 <span class="text-xs font-bold text-gray-900 truncate">${a.titulo}</span>
@@ -307,7 +303,7 @@
     }
   }
 
-  // ── SELECCIÓN Y NAVEGACIÓN ─────────────────────────────────────────
+  // -- SELECCIÓN Y NAVEGACIÓN -----------------------------------------
   window.omniNavegarA = function(url, titulo, modulo, icono) {
     if (titulo) {
       guardarEnRecientes({ titulo, modulo, icono, url });
@@ -377,7 +373,7 @@
     }
   }
 
-  // ── EVENTOS DEL INPUT Y TECLADO ────────────────────────────────────
+  // -- EVENTOS DEL INPUT Y TECLADO ------------------------------------
   input.addEventListener('focus', () => {
     const q = input.value.trim();
     if (q.length >= 2) {
@@ -421,10 +417,10 @@
       e.preventDefault();
       if (selectedIndex >= 0 && selectedIndex < total) {
         const item = itemsColeccion[selectedIndex];
-        omniNavegarA(item.url, item.titulo, item.modulo || item.manual, item.icono || '📍');
+        omniNavegarA(item.url, item.titulo, item.modulo || item.manual, item.icono || '');
       } else if (total > 0) {
         const item = itemsColeccion[0];
-        omniNavegarA(item.url, item.titulo, item.modulo || item.manual, item.icono || '📍');
+        omniNavegarA(item.url, item.titulo, item.modulo || item.manual, item.icono || '');
       }
     } else if (e.key === 'Escape') {
       cerrarDropdown();

@@ -2118,6 +2118,23 @@ def vincular_reproductor(sala_id):
     return jsonify(ok=True, sala=_sala_para_dispositivo(sala, dispositivo_id))
 
 
+@bp.route('/<sala_id>/control-claim', methods=['POST'])
+def control_claim(sala_id):
+    """Auto-acceso a control: el equipo que SUENA la sala reclama su llave."""
+    data = request.get_json(silent=True) or {}
+    dispositivo_id = (data.get('device_id') or '').strip()
+    if not dispositivo_id:
+        return jsonify(ok=False, error='Dispositivo requerido'), 400
+    conn = _connect()
+    try:
+        sala = _get_sala(conn, sala_id)
+    finally:
+        conn.close()
+    if sala.get('dispositivo_reproductor') and sala['dispositivo_reproductor'] == dispositivo_id:
+        return jsonify(ok=True, admin_key=sala.get('admin_key', ''))
+    return jsonify(ok=False, error='Solo el equipo que suena puede reclamar'), 403
+
+
 @bp.route('/<sala_id>/eliminar', methods=['POST'])
 def eliminar_sala(sala_id):
     data = request.get_json(silent=True) or {}

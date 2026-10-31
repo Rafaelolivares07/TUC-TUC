@@ -92,6 +92,7 @@ input[type=range].slider-range { width:100%; margin:0; padding:0; border:none; b
     <div class="label">Llave de control</div>
     <div class="muted">Pega la llave o abre el enlace privado de control.</div>
     <input id="key-input" type="text" placeholder="Llave de administración">
+    <div id="key-error" class="muted" style="color:#ff9a9a"></div>
     <button class="btn" onclick="guardarKey()">Entrar al control</button>
   </div>
 
@@ -234,6 +235,15 @@ let guardandoVolumen = null;
 
 if (urlKey) localStorage.setItem('rockola_admin_' + SALA, urlKey);
 
+function controlDeviceId() {
+  let id = localStorage.getItem('rockola_device_id');
+  if (!id) {
+    id = 'dev-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    localStorage.setItem('rockola_device_id', id);
+  }
+  return id;
+}
+
 function mostrarLogin(on) {
   document.getElementById('login-box').classList.toggle('visible', on);
   document.getElementById('panel').style.display = on ? 'none' : 'block';
@@ -241,7 +251,10 @@ function mostrarLogin(on) {
 
 function guardarKey() {
   adminKey = document.getElementById('key-input').value.trim();
-  if (!adminKey) return;
+  if (!adminKey) {
+    document.getElementById('key-error').textContent = 'Pega la llave o abre el enlace privado de control.';
+    return;
+  }
   localStorage.setItem('rockola_admin_' + SALA, adminKey);
   controlUrl = `https://rockola.tuc-tuc.co/control/${encodeURIComponent(SALA)}?key=${encodeURIComponent(adminKey)}`;
   mostrarLogin(false);
@@ -249,6 +262,19 @@ function guardarKey() {
 }
 
 async function verificarKey() {
+  if (!adminKey && !SERVER_KEY) {
+    try {
+      const rc = await fetch(`/rockola/${SALA}/control-claim`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ device_id: controlDeviceId() })
+      });
+      const dc = await rc.json();
+      if (dc.ok && dc.admin_key) {
+        adminKey = dc.admin_key;
+        localStorage.setItem('rockola_admin_' + SALA, adminKey);
+      }
+    } catch (e) {}
+  }
   if (!adminKey && SERVER_KEY) {
     adminKey = SERVER_KEY;
     localStorage.setItem('rockola_admin_' + SALA, adminKey);

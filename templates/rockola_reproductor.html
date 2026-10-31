@@ -2938,6 +2938,7 @@ if (_urlAp === '1') {
 }
 
 function debeAutoreproducirAlEntrar() {
+  if (document.body.classList.contains('tv-mode')) return true;
   return localStorage.getItem('rockola_autoreproducir') === '1';
 }
 

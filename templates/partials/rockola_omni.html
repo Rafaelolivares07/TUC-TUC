@@ -390,7 +390,7 @@ async function ejecutarBusquedaOmni(query) {
   }
 
   // Normalizador unico de titulos (local + dedupe catalogo)
-  function omniNormTitulo(s) { return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\.[^.]+$/, '').replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim(); }
+  function omniNormTitulo(s) { return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\.[^.]+$/, '').replace(/[^a-z0-9]/g, ''); }
 
   // 1. Inmediato: Búsqueda local en este dispositivo (latencia 0 ms)
   const qLower = q.toLowerCase();
@@ -441,11 +441,16 @@ async function ejecutarBusquedaOmni(query) {
     const usuarios = data.usuarios || [];
     const youtube = data.youtube || [];
 
+    // Local manda: servidor que repite lo del dispositivo se oculta (solo si hay blob)
+    const vistosLocales = new Set();
+    cancionesLocUnicas.forEach(c => { if (c.blob) vistosLocales.add(omniNormTitulo(limpiarNombre(c.nombre))); });
+    const servidorUnico = servidor.filter(s => !vistosLocales.has(omniNormTitulo(limpiarNombre(s.nombre))));
+
     // Dedupe: el catálogo repite lo que ya está en dispositivo, servidor o YouTube
     const normTitulo = omniNormTitulo;
     const vistos = new Set();
     cancionesLocUnicas.forEach(c => vistos.add(normTitulo(limpiarNombre(c.nombre))));
-    servidor.forEach(s => vistos.add(normTitulo(limpiarNombre(s.nombre))));
+    servidorUnico.forEach(s => vistos.add(normTitulo(limpiarNombre(s.nombre))));
     youtube.forEach(y => vistos.add(normTitulo(limpiarNombre(y.nombre))));
     const usuariosUnicos = usuarios.filter(u => {
       const n = normTitulo(limpiarNombre(u.nombre));
@@ -455,9 +460,9 @@ async function ejecutarBusquedaOmni(query) {
     });
 
     let htmlServidor = '';
-    if (servidor.length > 0) {
+    if (servidorUnico.length > 0) {
       htmlServidor = `
-        ${servidor.map(s => {
+        ${servidorUnico.map(s => {
           const esYt = !s.archivo_id && !!s.youtube_url;
           const targetId = s.archivo_id || s.youtube_url;
           const tipo = esYt ? 'youtube' : 'server';

@@ -295,12 +295,13 @@ async function omniResolverYPlay(nombre) {
     const data = await res.json();
     if (data && data.ok && data.youtube_url) {
       omniElegir('youtube', data.youtube_url, data.nombre || nombre, data.duracion || '');
-      return;
+      return true;
     }
     throw new Error((data && data.error) || 'sin resultados');
   } catch (e) {
     if (typeof mostrarMensaje === 'function') mostrarMensaje('No se pudo resolver en YouTube', 'error');
     else console.warn('[omni] resolver fallo:', e);
+    return false;
   }
 }
 

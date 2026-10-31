@@ -241,6 +241,7 @@ async function encolarLocalCliente(id, nombre) {
   const cancion = cancionesLocales.find(c => c.id === id) || await obtenerCancionLocal(id).catch(() => null);
   if (!cancion || !cancion.blob) {
     quitaEncolando(pend);
+    renderEncolando();
     msgCli('Esa canción ya no está en este dispositivo', 'err');
     return;
   }
@@ -252,6 +253,7 @@ async function encolarLocalCliente(id, nombre) {
     const res = await fetch(`/rockola/${encodeURIComponent(SALA)}/subir`, { method: 'POST', body: form });
     const data = await res.json();
     quitaEncolando(pend);
+    renderEncolando();
     if (data.ok) {
       msgCli('Encolada ✓', 'ok');
       cargarCola();
@@ -260,17 +262,19 @@ async function encolarLocalCliente(id, nombre) {
     }
   } catch (e) {
     quitaEncolando(pend);
+    renderEncolando();
     msgCli('Sin conexión', 'err');
   }
 }
-function encolarCatalogoCliente(tipo, id, nombre) {
+async function encolarCatalogoCliente(tipo, id, nombre) {
   ocultarResultadosCliente();
-  pintaEncolando(nombre);
+  const pend = pintaEncolando(nombre);
   const qn = limpiarNombre(nombre || '').toLowerCase();
   const hit = (cancionesLocales || []).find(c => limpiarNombre(c.nombre || '').toLowerCase() === qn);
   if (hit) { encolarLocalCliente(hit.id, hit.nombre); return; }
   msgCli('Resolviendo...', '');
-  omniResolverYPlay(nombre);
+  const ok = await omniResolverYPlay(nombre);
+  if (!ok) { quitaEncolando(pend); renderEncolando(); }
 }
 function mostrarMensaje(txt, tipo) {
   msgCli(txt, tipo === 'error' ? 'err' : 'ok');
@@ -333,6 +337,7 @@ async function encolarCliente(tipo, idOUrl, nombre, duracion) {
     const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const data = await res.json();
     quitaEncolando(pend);
+    renderEncolando();
     if (data.ok) {
       msgCli('Encolada ✓', 'ok');
       cargarCola();
@@ -341,6 +346,7 @@ async function encolarCliente(tipo, idOUrl, nombre, duracion) {
     }
   } catch (e) {
     quitaEncolando(pend);
+    renderEncolando();
     msgCli('Sin conexión', 'err');
   }
 }

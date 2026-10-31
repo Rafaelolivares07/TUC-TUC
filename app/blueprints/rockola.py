@@ -1367,7 +1367,7 @@ def _nucleo_busqueda_rockola(conn, q):
             WHERE (archivo_id IS NOT NULL AND archivo_id != '') OR (youtube_url IS NOT NULL AND youtube_url != '')
         ) s
         WHERE nombre ILIKE %s
-        LIMIT 6
+        LIMIT 10
     """, (q_like,)).fetchall()
 
     servidor_items = []
@@ -1385,7 +1385,7 @@ def _nucleo_busqueda_rockola(conn, q):
         SELECT cancion_id, titulo as nombre FROM rockola_canciones
         WHERE titulo ILIKE %s OR archivo_nombre ILIKE %s
         ORDER BY titulo ASC
-        LIMIT 6
+        LIMIT 10
     """, (q_like, q_like)).fetchall()
 
     usuarios_items = []

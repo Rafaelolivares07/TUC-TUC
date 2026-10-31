@@ -511,7 +511,6 @@ def _sala_para_dispositivo(sala, dispositivo_id=None):
     disponible = bool(dispositivo_id) and owner_id == dispositivo_id
     return {
         'sala_id': sala.get('sala_id'),
-        'dispositivo_reproductor_id': owner_id,
         'dispositivo_reproductor_nombre': sala.get('dispositivo_reproductor_nombre') or '',
         'disponible_reproductor': disponible,
         'sin_reproductor': sin_reproductor,

@@ -3031,3 +3031,9 @@ Rockola carga+plato (Rafa 31/10): 700c5f1 aviso diferido 2s (observer sobre #est
 ### [2026-10-31 07:28:33] Muse para sala:
 
 Rockola glifo A (Rafa 31/10): e3aa532 fuera plato B y blanco; glifo play+pausa degradado noche->negro + sombra suave (ids unicos x4) + play +5pct derecha (margen -1 x3). Test play_btn 7/7 disco. Prod e3aa532 verificado. E2E Rafa.
+
+---
+
+### [2026-10-31 07:32:33] Muse para sala:
+
+Rockola omni top (Rafa 31/10): a28bdcd foco guarda scroll + doble subida (inmediata + 400ms post-teclado) + restaura al elegir/vaciar/fuera; caja 380->100dvh-150px; topes servidor/catalogo/local 6->10 (YT ya 10, nucleo modulo anti). Push fallo red 1vez, reintento OK. Test 92/92 + validacion 14/14; prod a28bdcd verificado. E2E Rafa.

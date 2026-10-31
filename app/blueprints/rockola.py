@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS rockola_dispositivos (
     dispositivo_id TEXT PRIMARY KEY,
     nombre         TEXT NOT NULL DEFAULT 'Dispositivo',
     user_agent     TEXT,
+    tercero_id     INTEGER REFERENCES terceros(id) ON DELETE SET NULL,
     actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS rockola_canciones (
@@ -152,6 +153,7 @@ def _ensure_db():
             conn.execute("ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS modo_repetir_cancion BOOLEAN DEFAULT FALSE;")
             conn.execute("ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS modo_repetir_lista BOOLEAN DEFAULT FALSE;")
             conn.execute("ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS modo_autoplay BOOLEAN DEFAULT FALSE;")
+            conn.execute("ALTER TABLE rockola_dispositivos ADD COLUMN IF NOT EXISTS tercero_id INTEGER REFERENCES terceros(id) ON DELETE SET NULL;")
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS rockola_compartidos (
                     token         TEXT PRIMARY KEY,
@@ -589,6 +591,62 @@ def identificar():
         session['rol'] = 'Cliente'
 
         return jsonify(ok=True, tercero_id=tercero_id, nombre=nombre_final)
+    finally:
+        conn.close()
+
+
+@bp.route('/apodo', methods=['POST'])
+def apodo():
+    """Identidad minima cliente: apodo = terceros.nombre (sin telefono), amarre dispositivo.
+    Reconoce en orden: sesion valida, dispositivo conocido (universo),
+    pre-identificado por enlace personal (token), o crea tercero nuevo."""
+    data = request.get_json(silent=True) or {}
+    nombre = (data.get('nombre') or '').strip()[:60]
+    device_id = (data.get('device_id') or '').strip()[:64]
+    token = (data.get('token') or '').strip() or None
+    conn = _connect()
+    try:
+        tid = session.get('usuario_id')
+        if tid:
+            row = conn.execute("SELECT id, nombre FROM terceros WHERE id = %s", (tid,)).fetchone()
+            if row:
+                return jsonify(ok=True, known=True, tercero_id=row['id'], nombre=row['nombre'])
+        if device_id:
+            row = conn.execute("SELECT tercero_id FROM rockola_dispositivos WHERE dispositivo_id = %s", (device_id,)).fetchone()
+            if row and row['tercero_id']:
+                t = conn.execute("SELECT id, nombre FROM terceros WHERE id = %s", (row['tercero_id'],)).fetchone()
+                if t:
+                    session['usuario_id'] = t['id']
+                    session['nombre'] = t['nombre']
+                    session['rol'] = 'Cliente'
+                    return jsonify(ok=True, known=True, tercero_id=t['id'], nombre=t['nombre'])
+        if token:
+            rc = conn.execute("SELECT tercero_id FROM rockola_compartidos WHERE token = %s", (token,)).fetchone()
+            if rc and rc['tercero_id']:
+                t = conn.execute("SELECT id, nombre FROM terceros WHERE id = %s", (rc['tercero_id'],)).fetchone()
+                if t:
+                    if device_id:
+                        conn.execute("""INSERT INTO rockola_dispositivos (dispositivo_id, tercero_id) VALUES (%s, %s)
+                                        ON CONFLICT (dispositivo_id) DO UPDATE SET tercero_id = EXCLUDED.tercero_id, actualizado_en = CURRENT_TIMESTAMP""",
+                                     (device_id, t['id']))
+                        conn.commit()
+                    session['usuario_id'] = t['id']
+                    session['nombre'] = t['nombre']
+                    session['rol'] = 'Cliente'
+                    return jsonify(ok=True, known=True, tercero_id=t['id'], nombre=t['nombre'])
+        if not nombre:
+            return jsonify(ok=True, known=False, need_nombre=True)
+        cur = conn.execute("INSERT INTO terceros (nombre, tipo_tercero) VALUES (%s, 'invitado') RETURNING id", (nombre,))
+        tid = cur.fetchone()['id']
+        if device_id:
+            conn.execute("""INSERT INTO rockola_dispositivos (dispositivo_id, tercero_id) VALUES (%s, %s)
+                            ON CONFLICT (dispositivo_id) DO UPDATE SET tercero_id = EXCLUDED.tercero_id, actualizado_en = CURRENT_TIMESTAMP""",
+                         (device_id, tid))
+        conn.commit()
+        session['usuario_id'] = tid
+        session['nombre'] = nombre
+        session['rol'] = 'Cliente'
+        return jsonify(ok=True, known=True, tercero_id=tid, nombre=nombre)
     finally:
         conn.close()
 
@@ -2343,6 +2401,8 @@ def youtube(sala_id):
     nombre_display = _titulo_youtube(url)
     item_id = 'yt-' + uuid.uuid4().hex[:12]
     conn = _connect()
+    if modo != 'final' and not _es_admin_sala(conn, sala_id, data):
+        modo = 'final'
     try:
         with _lock:
             _agregar_a_cola(conn, sala_id, item_id, nombre_display, tercero_id, youtube_url=url, modo=modo)
@@ -2445,6 +2505,8 @@ def agregar_local(sala_id):
     conn = _connect()
     try:
         with _lock:
+            if modo != 'final' and not _es_admin_sala(conn, sala_id, data):
+                modo = 'final'
             _agregar_a_cola(conn, sala_id, local_id, nombre, tercero_id, modo=modo)
             _recordar_cancion(conn, sala_id, local_id, nombre, tercero_id, 'local')
             conn.commit()
@@ -2711,6 +2773,8 @@ def poner_desde_biblioteca(sala_id, archivo_id):
     owner_nombre = session.get('nombre', 'Anónimo')
 
     conn = _connect()
+    if modo != 'final' and not _es_admin_sala(conn, sala_id, data):
+        modo = 'final'
     try:
         with _lock:
             row = conn.execute(

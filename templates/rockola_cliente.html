@@ -2,2109 +2,270 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#000000">
 <link rel="manifest" href="/rockola/pwa/manifest.json?v=8">
-<link rel="icon" type="image/png" sizes="192x192" href="/static/rockola-icon-192.png">
-<link rel="icon" type="image/png" sizes="512x512" href="/static/rockola-icon-512.png">
-<link rel="shortcut icon" href="/static/rockola-icon-192.png">
-<link rel="apple-touch-icon" href="/static/rockola-apple-touch-180.png">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>Tuc Tuc Rockola · {{ sala_id | upper }}</title>
+<title>Mi Rockola - Sala {{ sala_id }}</title>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
-  --ac1: #00d4ff; --ac1-dim: rgba(0,212,255,0.15); --ac1-bg: rgba(0,212,255,0.08);
-  --ac2: #0066ff; --ac-grad: linear-gradient(135deg,#00d4ff,#0066ff);
-  --bg: #060c18; --surface: #0d1a2e; --surface2: #132440;
-  --border: rgba(0,212,255,0.15); --text: #e2eeff; --muted: #4a6480; --muted2: #2a3d55;
+  --bg: #060c18;
+  --surface: #0e192c;
+  --border: rgba(0, 212, 255, 0.18);
+  --text: #e8f4ff;
+  --muted: #8aa0b8;
+  --muted2: #5a6f88;
+  --ac1: #00d4ff;
+  --ok: #3ddc84;
+  --err: #ff6b6b;
 }
-body { font-family:'Space Grotesk',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; display:flex; align-items:flex-start; justify-content:center; padding:24px 16px 48px; }
-@keyframes fadeUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
-@keyframes wave   { 0%,100%{height:5px} 50%{height:20px} }
-@keyframes spin   { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
-
-.card { width:100%; max-width:420px; animation:fadeUp .4s ease; }
-
-/* Logo */
-.logo-wrap { text-align:center; margin-bottom:20px; }
-.logo-text  { font-size:22px; font-weight:800; letter-spacing:-.5px; }
-.logo-text span { color:var(--ac1); }
-.sala-tag { display:inline-block; margin-top:8px; font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--ac1); background:var(--ac1-bg); border:1px solid var(--border); padding:5px 14px; border-radius:8px; }
-.perfil-tag { display:inline-block; margin-top:8px; font-size:11px; font-weight:700; color:#fff; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.15); padding:5px 12px; border-radius:8px; cursor:pointer; transition:background .2s; }
-.perfil-tag:hover { background:rgba(255,255,255,0.12); border-color:var(--ac1); }
-
-.tagline { color:var(--muted); font-size:13px; text-align:center; margin-bottom:20px; line-height:1.6; }
-.share-row { display:flex; gap:8px; margin-bottom:14px; }
-.share-btn { flex:1; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:var(--surface); color:var(--ac1); font-family:'Space Grotesk',sans-serif; font-size:12px; font-weight:800; cursor:pointer; }
-.qr-panel { display:none; background:#fff; border-radius:14px; padding:14px; margin-bottom:14px; justify-content:center; }
-.qr-panel.visible { display:flex; }
-
-/* TABS — archivo vs youtube */
-.source-tabs { display:flex; gap:4px; background:var(--surface); border-radius:12px; padding:4px; margin-bottom:16px; }
-.stab { flex:1; padding:10px 0; border-radius:9px; border:none; background:transparent; color:var(--muted); font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:14px; cursor:pointer; transition:all .2s; }
-.stab.activo { background:var(--ac1-bg); color:var(--ac1); box-shadow:inset 0 0 0 1.5px var(--ac1); }
-
-/* Secciones */
-.sec { display:none; }
-.sec.visible { display:block; }
-
-/* Drop zone — archivo */
-.drop-zone {
-  border:2px dashed var(--border); border-radius:20px; padding:32px 20px;
-  text-align:center; cursor:pointer; transition:all .25s; margin-bottom:14px;
-  position:relative; background:var(--surface);
-}
-.drop-zone input[type=file] { position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%; }
-.drop-zone:hover, .drop-zone.over { border-color:var(--ac1); background:var(--ac1-bg); }
-.drop-zone.selected { border-color:var(--ac1); background:var(--ac1-bg); }
-.drop-zone.success  { border-color:#22c55e; background:rgba(34,197,94,.07); }
-.drop-icon  { font-size:38px; margin-bottom:10px; display:block; }
-.drop-title { font-size:15px; font-weight:700; color:var(--text); margin-bottom:4px; }
-.drop-zone.selected .drop-title { color:var(--ac1); }
-.drop-zone.success  .drop-title { color:#22c55e; }
-.drop-sub   { font-size:12px; color:var(--muted); }
-
-/* YouTube input */
-.yt-box { background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:20px; margin-bottom:14px; }
-.yt-label { font-size:11px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--muted); margin-bottom:10px; }
-.yt-input-wrap { position:relative; margin-bottom:0; }
-.yt-input {
-  width:100%; padding:14px 16px 14px 44px;
-  background:var(--surface2); border:1.5px solid var(--border);
-  border-radius:12px; color:var(--text);
-  font-family:'Space Grotesk',sans-serif; font-size:14px; font-weight:500;
-  outline:none; transition:border-color .2s;
-}
-.yt-input:focus { border-color:var(--ac1); }
-.yt-input::placeholder { color:var(--muted2); }
-.yt-icon { position:absolute; left:14px; top:50%; transform:translateY(-50%); font-size:18px; pointer-events:none; }
-.yt-preview { display:none; margin-top:12px; background:var(--surface2); border-radius:12px; padding:12px; }
-.yt-preview.visible { display:flex; align-items:center; gap:12px; }
-.yt-thumb { width:56px; height:42px; border-radius:8px; object-fit:cover; flex-shrink:0; background:var(--muted2); }
-.yt-info { flex:1; overflow:hidden; }
-.yt-titulo { font-size:13px; font-weight:700; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.yt-dur   { font-size:11px; color:var(--muted); margin-top:2px; }
-
-/* Progress */
-.prog-wrap { margin-bottom:12px; display:none; }
-.prog-bg   { background:var(--surface2); border-radius:6px; height:4px; overflow:hidden; }
-.prog-fill { height:100%; background:var(--ac-grad); border-radius:6px; width:0%; transition:width .15s; }
-.prog-label { font-size:11px; color:var(--muted); text-align:center; margin-top:6px; }
-
-/* Botón */
-.btn { width:100%; padding:15px; border-radius:12px; border:none; background:var(--ac-grad); color:#000; font-family:'Space Grotesk',sans-serif; font-weight:800; font-size:16px; cursor:pointer; transition:all .2s; box-shadow:0 4px 24px var(--ac1-dim); margin-bottom:8px; }
-.btn:disabled { background:var(--surface2); color:var(--muted); box-shadow:none; cursor:default; }
-.upload-msg { text-align:center; font-size:13px; min-height:18px; margin-bottom:18px; font-weight:600; }
-.upload-msg.ok    { color:#22c55e; }
-.upload-msg.error { color:#ef4444; }
-
-/* Library */
-.library-box { background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:16px; margin-bottom:14px; }
-.library-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; }
-.library-label { font-size:11px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--muted); }
-.library-list { list-style:none; max-height:190px; overflow:auto; padding-right:2px; }
-.library-item { display:flex; align-items:center; gap:10px; padding:10px 0; border-top:1px solid rgba(0,212,255,.08); }
-.library-item:first-child { border-top:none; }
-.library-name { flex:1; min-width:0; font-size:13px; font-weight:650; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.library-origin { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.8px; }
-.library-btn { border:1px solid var(--border); background:var(--ac1-bg); color:var(--ac1); border-radius:9px; padding:7px 10px; font-family:'Space Grotesk',sans-serif; font-size:12px; font-weight:800; cursor:pointer; flex-shrink:0; }
-.library-empty { text-align:center; color:var(--muted2); font-size:13px; padding:10px 0 4px; }
-.library-note { color:var(--muted); font-size:11px; line-height:1.45; margin:-4px 0 10px; }
-.library-search {
-  width:100%; padding:10px 12px; margin-bottom:8px;
-  background:var(--surface2); border:1px solid var(--border); border-radius:10px;
-  color:var(--text); font-family:'Space Grotesk',sans-serif; font-size:13px; outline:none;
-}
-.library-search:focus { border-color:var(--ac1); }
-.share-panel { display:none; background:var(--surface2); border:1px solid var(--border); border-radius:14px; padding:12px; margin:10px 0; }
-.share-panel.visible { display:block; }
-.share-link { word-break:break-all; color:var(--ac1); font-size:12px; line-height:1.45; margin:8px 0; }
-.share-qr { display:flex; justify-content:center; background:#fff; border-radius:12px; padding:10px; margin-top:8px; }
-
-/* Queue */
-.queue-box { background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:16px; }
-.queue-label { font-size:11px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--muted); margin-bottom:12px; }
-.queue-list  { list-style:none; }
-.queue-item  { display:flex; align-items:center; gap:12px; padding:11px 14px; background:var(--surface2); border-radius:12px; margin-bottom:6px; border-left:3px solid transparent; transition:all .2s; }
-.queue-item.playing { border-left-color:var(--ac1); background:var(--ac1-bg); }
-.queue-item.mia     { border-left-color:rgba(0,212,255,.35); }
-.handle { cursor:grab; color:var(--muted2); font-size:15px; flex-shrink:0; }
-.handle.locked { opacity:0; pointer-events:none; cursor:default; }
-.q-info  { flex:1; overflow:hidden; }
-.q-nombre { font-size:14px; font-weight:600; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.queue-item.playing .q-nombre { color:var(--ac1); }
-.q-sub  { font-size:11px; color:var(--muted); margin-top:2px; }
-.q-pos  { font-size:11px; color:var(--muted); flex-shrink:0; font-weight:600; }
-.queue-item.playing .q-pos { color:var(--ac1); }
-.q-remove { border:1px solid rgba(255,77,109,.35); background:rgba(255,77,109,.1); color:#ff4d6d; border-radius:8px; padding:7px 9px; font-weight:800; cursor:pointer; }
-.queue-empty { text-align:center; color:var(--muted2); font-size:13px; padding:20px 0; }
-.wave-mini { display:inline-flex; align-items:center; gap:2px; height:14px; vertical-align:middle; }
-.wave-mini span { display:inline-block; width:2px; background:var(--ac1); border-radius:2px; animation:wave .9s ease-in-out infinite; }
-
-.back-btn { display:block; text-align:center; margin-top:20px; background:none; border:none; color:var(--muted); font-family:'Space Grotesk',sans-serif; font-size:13px; cursor:pointer; }
-
-/* Tarjeta Sonando Ahora & Boton Descargar en Celular */
-.now-playing-card {
-  background: linear-gradient(135deg, rgba(0, 212, 255, 0.12), rgba(0, 102, 255, 0.08));
-  border: 1px solid rgba(0, 212, 255, 0.35);
-  border-radius: 16px;
-  padding: 14px 16px;
-  margin-bottom: 16px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
-  backdrop-filter: blur(8px);
-  animation: fadeUp .3s ease;
-}
-.np-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 8px;
-}
-.np-badge-wrap {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.np-badge-text {
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  color: var(--ac1);
-}
-.btn-guardar-cel {
-  background: linear-gradient(135deg, #00d4ff, #0066ff);
-  color: #00101b;
-  font-weight: 800;
-  font-size: 12px;
-  padding: 7px 14px;
-  border-radius: 10px;
-  border: none;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  box-shadow: 0 4px 14px rgba(0,212,255,0.25);
-  transition: transform .15s, opacity .15s;
-}
-.btn-guardar-cel:active { transform: scale(0.96); }
-.btn-guardar-cel:disabled { opacity: 0.6; cursor: not-allowed; }
-.np-titulo {
-  font-size: 15px;
-  font-weight: 700;
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  background: var(--bg);
   color: var(--text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  min-height: 100vh;
+  min-height: 100dvh;
 }
-.np-autor {
-  font-size: 11px;
-  color: var(--muted);
-  margin-top: 3px;
-}
-.q-dl-btn {
-  border: 1px solid rgba(0,212,255,0.35);
-  background: rgba(0,212,255,0.1);
-  color: var(--ac1);
-  border-radius: 8px;
-  padding: 6px 9px;
-  font-size: 13px;
-  font-weight: 800;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: all .2s;
-  flex-shrink: 0;
-}
-.q-dl-btn:hover { background: rgba(0,212,255,0.2); }
-.q-dl-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-/* Toast y Progreso flotante */
-.rockola-toast {
-  position: fixed;
-  bottom: 24px;
-  left: 50%;
-  transform: translate(-50%, 40px);
-  background: rgba(13, 26, 46, 0.95);
-  border: 1px solid var(--border);
-  color: var(--text);
-  padding: 12px 20px;
-  border-radius: 12px;
-  font-size: 14px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  z-index: 10001;
-  opacity: 0;
-  pointer-events: none;
-  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-  backdrop-filter: blur(10px);
-  width: max-content;
-  max-width: 90vw;
-}
-.rockola-toast.visible {
-  opacity: 1;
-  transform: translate(-50%, 0);
-  pointer-events: auto;
-}
-.rockola-toast.ok {
-  border-color: rgba(34, 197, 94, 0.3);
-  background: rgba(6, 12, 24, 0.95);
-  box-shadow: 0 10px 30px rgba(34, 197, 94, 0.1);
-}
-.rockola-toast.error {
-  border-color: rgba(239, 68, 68, 0.3);
-  background: rgba(6, 12, 24, 0.95);
-  box-shadow: 0 10px 30px rgba(239, 68, 68, 0.15);
-  color: #ff4d6d;
-}
-.toast-icon {
-  font-size: 16px;
-  flex-shrink: 0;
-}
-.toast-text {
-  line-height: 1.4;
-}
-
-.prog-wrap.floating {
-  position: fixed;
-  top: 16px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 90%;
-  max-width: 400px;
-  background: rgba(13, 26, 46, 0.95);
-  border: 1px solid var(--border);
-  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-  border-radius: 16px;
-  padding: 16px;
-  z-index: 10000;
-  backdrop-filter: blur(10px);
-}
-
-/* Estilos del Modal de Identificación */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: rgba(4, 8, 16, 0.85);
-  backdrop-filter: blur(15px);
-  z-index: 99999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-}
-.modal-content {
-  background: rgba(14, 23, 41, 0.75);
-  border: 1px solid rgba(0, 212, 255, 0.25);
-  border-radius: 20px;
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
-  width: 100%;
-  max-width: 400px;
-  padding: 30px;
-  text-align: left;
-  color: #fff;
-  animation: fadeIn 0.3s ease-out;
-}
-.modal-content h3 {
-  font-size: 22px;
-  margin-top: 0;
-  margin-bottom: 10px;
-  color: #00d4ff;
-  font-weight: 600;
-  text-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
-}
-.modal-desc {
-  font-size: 13px;
-  color: #a0aec0;
-  line-height: 1.5;
-  margin-bottom: 25px;
-}
-.modal-content label {
-  display: block;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  color: #718096;
-  margin-bottom: 8px;
-  font-weight: 600;
-}
-.modal-content input {
-  width: 100%;
-  padding: 12px 16px;
-  background: rgba(9, 15, 28, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-  color: #fff;
-  font-size: 15px;
-  margin-bottom: 20px;
-  outline: none;
-  transition: border-color 0.2s;
-}
-.modal-content input:focus {
-  border-color: #00d4ff;
-  box-shadow: 0 0 8px rgba(0, 212, 255, 0.2);
-}
-.modal-btn {
-  width: 100%;
-  padding: 12px;
-  background: linear-gradient(135deg, #005f73, #0a9396);
-  color: #fff;
-  border: none;
-  border-radius: 10px;
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: opacity 0.2s, transform 0.1s;
-  margin-bottom: 10px;
-  text-align: center;
-}
-.modal-btn:hover {
-  opacity: 0.95;
-}
-.modal-btn:active {
-  transform: scale(0.98);
-}
-.modal-btn.btn-secondary {
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: #a0aec0;
-}
-.modal-btn.btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: #fff;
-}
-.modal-status {
-  font-size: 13px;
-  color: #4ade80;
-  background: rgba(74, 222, 128, 0.1);
-  padding: 10px;
-  border-radius: 8px;
-  margin-bottom: 20px;
-}
-.modal-error {
-  font-size: 13px;
-  color: #f87171;
-  background: rgba(248, 113, 113, 0.1);
-  padding: 10px;
-  border-radius: 8px;
-  margin-top: 15px;
-  text-align: center;
-}
-@keyframes fadeIn {
-  from { opacity: 0; transform: scale(0.95); }
-  to { opacity: 1; transform: scale(1); }
-}
-/* Splash Cinematografico Rockola */
-#rk-splash {
-  position: fixed;
-  inset: 0;
-  z-index: 99999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: radial-gradient(circle at center, #091325 0%, #03060c 100%);
-  overflow: hidden;
-  transition: opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1), transform 0.5s ease;
-}
-#rk-splash.hide {
-  opacity: 0;
-  transform: scale(1.06);
-  pointer-events: none;
-}
-.rk-splash-wrap {
-  position: relative;
-  width: 100vw;
-  height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.rk-vinyl-disc {
-  width: min(90vw, 90vh);
-  height: min(90vw, 90vh);
-  max-width: 480px;
-  max-height: 480px;
-  border-radius: 50%;
-  box-shadow: 0 0 80px rgba(0, 212, 255, 0.4), 0 25px 60px rgba(0, 0, 0, 0.9);
-  animation: rk-vinyl-enter-and-spin 2.6s cubic-bezier(0.25, 1, 0.3, 1) forwards;
-  transform-origin: center center;
-  position: absolute;
-}
-.rk-vinyl-svg {
-  width: 100%;
-  height: 100%;
-  filter: drop-shadow(0 0 20px rgba(0, 212, 255, 0.3));
-}
-@keyframes rk-vinyl-enter-and-spin {
-  0% {
-    opacity: 0;
-    transform: scale(0.25) rotate(-180deg);
-  }
-  28% {
-    opacity: 1;
-    transform: scale(1) rotate(60deg);
-  }
-  60% {
-    opacity: 1;
-    transform: scale(1.02) rotate(360deg);
-  }
-  78% {
-    opacity: 0.5;
-    transform: scale(1.15) rotate(450deg);
-  }
-  100% {
-    opacity: 0;
-    transform: scale(1.35) rotate(500deg);
-  }
-}
-.rk-logo-reveal {
-  position: absolute;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 95vw;
-  max-width: 680px;
-  opacity: 0;
-  transform: scale(0.35);
-  animation: rk-words-takeover 2.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  pointer-events: none;
-  text-align: center;
-}
-.rk-logo-title {
-  font-size: clamp(40px, 13vw, 72px);
-  font-weight: 900;
-  letter-spacing: -1px;
-  color: #ffffff;
-  text-shadow: 0 0 45px rgba(0, 212, 255, 0.9), 0 0 90px rgba(0, 102, 255, 0.6), 0 4px 20px rgba(0, 0, 0, 0.9);
-  white-space: nowrap;
-  line-height: 1.1;
-}
-.rk-logo-title span {
-  color: var(--ac1, #00d4ff);
-}
-@keyframes rk-words-takeover {
-  0%, 42% {
-    opacity: 0;
-    transform: scale(0.35) rotate(15deg);
-  }
-  58% {
-    opacity: 1;
-    transform: scale(0.85) rotate(0deg);
-  }
-  75% {
-    opacity: 1;
-    transform: scale(1.04) rotate(0deg);
-  }
-  90% {
-    opacity: 1;
-    transform: scale(1.18) rotate(0deg);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1.22) rotate(0deg);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .rk-vinyl-disc, .rk-logo-reveal { animation: none; }
-  #rk-splash { transition: none; }
-}
+.wrap { max-width: 560px; margin: 0 auto; padding: 16px 14px 40px; }
+header.cli-head { display: flex; align-items: baseline; justify-content: space-between; margin: 4px 0 12px; }
+.brand { font-size: 17px; font-weight: 800; color: var(--ac1); letter-spacing: .5px; }
+#sala-nombre { font-size: 13px; color: var(--muted); font-weight: 600; }
+.sonando { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; margin-bottom: 14px; }
+.sonando .lbl { font-size: 10px; letter-spacing: 2px; color: var(--muted2); font-weight: 700; }
+#sonando-nombre { font-size: 16px; font-weight: 600; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cola-head { display: flex; align-items: baseline; justify-content: space-between; margin: 16px 2px 8px; }
+.cola-head h2 { font-size: 14px; font-weight: 800; letter-spacing: 1px; color: var(--ac1); }
+#cola-count { font-size: 12px; color: var(--muted); }
+#lista-cola { list-style: none; }
+#lista-cola li { display: flex; gap: 10px; align-items: baseline; padding: 9px 12px; border: 1px solid var(--border); border-radius: 10px; margin-bottom: 6px; background: rgba(255,255,255,0.02); font-size: 14px; }
+#lista-cola .pos { color: var(--muted2); font-size: 12px; min-width: 20px; text-align: right; }
+#lista-cola .nom { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#lista-cola li.cancion-tuya { border-color: rgba(0, 212, 255, 0.55); background: rgba(0, 212, 255, 0.08); }
+#lista-cola .vacia { color: var(--muted2); font-size: 13px; text-align: center; border-style: dashed; display: block; }
+#cli-msg { min-height: 18px; font-size: 12px; color: var(--muted); text-align: center; margin: 10px 0 0; }
+#cli-msg.err { color: var(--err); }
+#cli-msg.ok { color: var(--ok); }
+.btn-compartir { width: 100%; margin-top: 14px; padding: 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); color: var(--ac1); font-family: inherit; font-size: 13px; font-weight: 800; letter-spacing: 1px; cursor: pointer; }
+#panel-compartir { display: none; margin-top: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
+#panel-compartir.visible { display: block; }
+#enlace-sala { word-break: break-all; color: var(--ac1); font-size: 12px; line-height: 1.5; }
+.btn-copiar { margin-top: 8px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--text); font-family: inherit; font-size: 12px; cursor: pointer; }
+#qr-sala { display: flex; justify-content: center; background: #fff; border-radius: 10px; padding: 10px; margin-top: 10px; }
+#qr-sala img { display: block; }
+#puerta-apodo { position: fixed; inset: 0; z-index: 50; display: none; align-items: center; justify-content: center; background: var(--bg); padding: 20px; }
+#puerta-apodo.visible { display: flex; }
+.puerta-card { width: 100%; max-width: 340px; text-align: center; }
+.puerta-card h1 { font-size: 20px; color: var(--ac1); margin-bottom: 6px; }
+.puerta-card p { font-size: 14px; color: var(--muted); margin-bottom: 14px; }
+#apodo-input { width: 100%; padding: 12px 14px; font-size: 17px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-family: inherit; text-align: center; }
+#apodo-btn { width: 100%; margin-top: 10px; padding: 12px; border-radius: 10px; border: none; background: var(--ac1); color: #00101b; font-family: inherit; font-size: 15px; font-weight: 800; cursor: pointer; }
+#apodo-error { min-height: 18px; font-size: 12px; color: var(--err); margin-top: 8px; }
 </style>
 </head>
 <body>
-
-<!-- Splash Cinematografico Rockola -->
-<div id="rk-splash" aria-hidden="true">
-  <div class="rk-splash-wrap">
-    <!-- Vinilo gigante con pistas y surcos de alta definicion -->
-    <div class="rk-vinyl-disc">
-      <svg class="rk-vinyl-svg" viewBox="0 0 400 400" width="100%" height="100%">
-        <defs>
-          <radialGradient id="rk-vinyl-body" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stop-color="#080c14" />
-            <stop offset="38%" stop-color="#121824" />
-            <stop offset="42%" stop-color="#0a0e17" />
-            <stop offset="68%" stop-color="#151c2b" />
-            <stop offset="72%" stop-color="#090d16" />
-            <stop offset="96%" stop-color="#182030" />
-            <stop offset="100%" stop-color="#05070c" />
-          </radialGradient>
-          <linearGradient id="rk-vinyl-sheen" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="rgba(0,212,255,0.28)" />
-            <stop offset="25%" stop-color="rgba(255,255,255,0.04)" />
-            <stop offset="50%" stop-color="rgba(0,212,255,0.32)" />
-            <stop offset="75%" stop-color="rgba(255,255,255,0.04)" />
-            <stop offset="100%" stop-color="rgba(0,212,255,0.28)" />
-          </linearGradient>
-          <linearGradient id="rk-label-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="#00e5ff" />
-            <stop offset="50%" stop-color="#0066ff" />
-            <stop offset="100%" stop-color="#002266" />
-          </linearGradient>
-        </defs>
-
-        <!-- Base y brillo del vinilo -->
-        <circle cx="200" cy="200" r="196" fill="url(#rk-vinyl-body)" stroke="rgba(0,212,255,0.45)" stroke-width="2" />
-        <circle cx="200" cy="200" r="196" fill="url(#rk-vinyl-sheen)" />
-
-        <!-- Surcos y Linecitas de separacion entre pistas (visibles y nitidas) -->
-        <!-- Pistas exteriores -->
-        <circle cx="200" cy="200" r="186" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="0.8" />
-        <circle cx="200" cy="200" r="176" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="0.5" />
-        <circle cx="200" cy="200" r="168" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="0.8" />
-        <!-- Banda de separacion Pista 1 -->
-        <circle cx="200" cy="200" r="160" fill="none" stroke="rgba(0,212,255,0.6)" stroke-width="1.8" stroke-dasharray="8 3" />
-        
-        <!-- Pistas medias -->
-        <circle cx="200" cy="200" r="150" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="0.5" />
-        <circle cx="200" cy="200" r="142" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="0.8" />
-        <circle cx="200" cy="200" r="134" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="0.5" />
-        <!-- Banda de separacion Pista 2 -->
-        <circle cx="200" cy="200" r="126" fill="none" stroke="rgba(0,212,255,0.6)" stroke-width="1.8" stroke-dasharray="10 4" />
-
-        <!-- Pistas interiores -->
-        <circle cx="200" cy="200" r="118" fill="none" stroke="rgba(255,255,255,0.14)" stroke-width="0.5" />
-        <circle cx="200" cy="200" r="110" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="0.8" />
-        <circle cx="200" cy="200" r="102" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="0.5" />
-        <!-- Banda de separacion Pista 3 -->
-        <circle cx="200" cy="200" r="94" fill="none" stroke="rgba(0,212,255,0.6)" stroke-width="1.8" stroke-dasharray="6 3" />
-
-        <!-- Galleta / Etiqueta central amplia -->
-        <circle cx="200" cy="200" r="84" fill="url(#rk-label-grad)" stroke="#00d4ff" stroke-width="2.5" />
-        <circle cx="200" cy="200" r="76" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="1" />
-
-        <!-- Texto grande centrado 'Mi Rockola' en el vinilo -->
-        <text x="200" y="211" font-family="'Space Grotesk', sans-serif" font-weight="900" font-size="29" text-anchor="middle" fill="#ffffff" letter-spacing="-0.5" filter="drop-shadow(0 2px 8px rgba(0,0,0,0.95))">
-          Mi <tspan fill="#00d4ff">Rockola</tspan>
-        </text>
-
-        <!-- Orificio central sutil del eje -->
-        <circle cx="200" cy="200" r="10" fill="#060c18" stroke="#00d4ff" stroke-width="1.5" opacity="0.8" />
-        <circle cx="200" cy="200" r="4" fill="#ffffff" opacity="0.9" />
-      </svg>
-    </div>
-
-    <!-- Las dos palabras que emergen, dejan de girar y se apoderan del ancho de la pantalla -->
-    <div class="rk-logo-reveal">
-      <div class="rk-logo-title">Mi <span>Rockola</span></div>
-    </div>
+<div id="puerta-apodo">
+  <div class="puerta-card">
+    <h1>Mi Rockola</h1>
+    <p>¿Cómo te llamamos?</p>
+    <input id="apodo-input" type="text" maxlength="60" placeholder="Tu apodo" autocomplete="off">
+    <button id="apodo-btn" onclick="enviarApodo()">Entrar</button>
+    <div id="apodo-error"></div>
   </div>
 </div>
-
-<!-- Modal de Identificación Dinámico -->
-<div id="ident-modal" class="modal-overlay" style="display: none;">
-  <div class="modal-content">
-    <h3>Identifícate en Tuc Tuc</h3>
-    <p class="modal-desc">Ingresa tu número de celular para poder agregar tus canciones favoritas en el local.</p>
-    
-    <div id="ident-step-1">
-      <label for="ident-telefono">Número de Celular</label>
-      <input type="tel" id="ident-telefono" placeholder="Ej: 3001234567" maxlength="15">
-      <button class="modal-btn" onclick="verificarTelefono()">Continuar</button>
-    </div>
-
-    <div id="ident-step-registrado" style="display: none;">
-      <p class="modal-status" id="ident-status-registrado">✓ Hola <strong id="ident-nombre-usuario"></strong>. Tu número ya está registrado en TUC TUC.</p>
-      <label for="ident-pin" id="ident-label-pin">Ingresa tu PIN de 4 dígitos</label>
-      <input type="password" id="ident-pin" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="••••" style="-webkit-text-security: disc; text-align: center; font-size: 24px; letter-spacing: 10px;">
-      <button class="modal-btn" id="ident-btn-ingresar" onclick="iniciarSesionPIN()">Ingresar</button>
-      <button class="modal-btn btn-secondary" onclick="volverPaso1()">← Cambiar número</button>
-    </div>
-
-    <div id="ident-step-nuevo" style="display: none;">
-      <p class="modal-status">✨ Bienvenido. Crea tu cuenta en TUC TUC:</p>
-      <label for="ident-nombre">Tu Nombre</label>
-      <input type="text" id="ident-nombre" placeholder="Ej: Juan Pérez">
-      <label for="ident-pin-nuevo">Crea tu PIN de 4 dígitos (Celular)</label>
-      <input type="password" id="ident-pin-nuevo" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="••••" style="-webkit-text-security: disc; text-align: center; font-size: 24px; letter-spacing: 10px;">
-      <label for="ident-pin-confirmar">Confirma tu PIN</label>
-      <input type="password" id="ident-pin-confirmar" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="••••" style="-webkit-text-security: disc; text-align: center; font-size: 24px; letter-spacing: 10px;">
-      <button class="modal-btn" onclick="registrarTercero()">Registrar e Ingresar</button>
-      <button class="modal-btn btn-secondary" onclick="volverPaso1()">← Cambiar número</button>
-    </div>
-    
-    <div id="ident-error" class="modal-error" style="display: none;"></div>
+<div class="wrap">
+  <header class="cli-head ocultar-en-foco-omni">
+    <span class="brand">Mi Rockola</span>
+    <span id="sala-nombre"></span>
+  </header>
+  <div class="sonando ocultar-en-foco-omni">
+    <div class="lbl">SONANDO</div>
+    <div id="sonando-nombre">—</div>
+  </div>
+  {% set omni_id = 'cliente' %}
+  {% set omni_endpoint = '/rockola/' ~ sala_id ~ '/buscar-global' %}
+  {% set omni_media = '/rockola/' ~ sala_id ~ '/archivo/' %}
+  {% set omni_local = '0' %}
+  {% set omni_select = 'encolarCliente' %}
+  {% set omni_placeholder = 'Buscar canción...' %}
+  {% set omni_btn_title = 'Encolar' %}
+  {% include 'partials/rockola_omni.html' %}
+  <div class="cola-head">
+    <h2>En cola</h2>
+    <span id="cola-count"></span>
+  </div>
+  <ul id="lista-cola"></ul>
+  <div id="cli-msg"></div>
+  <button class="btn-compartir" onclick="toggleCompartir()">COMPARTIR SALA</button>
+  <div id="panel-compartir">
+    <div id="enlace-sala"></div>
+    <button class="btn-copiar" onclick="copiarEnlaceSala()">Copiar enlace</button>
+    <div id="qr-sala"></div>
   </div>
 </div>
-
-<!-- Modal de Perfil/Cambiar PIN -->
-<div id="perfil-modal" class="modal-overlay" style="display: none;">
-  <div class="modal-content">
-    <h3>Mi Perfil</h3>
-    <p class="modal-desc">Consulta tus datos o actualiza tu PIN de seguridad de TUC TUC.</p>
-    
-    <div style="margin-bottom: 15px;">
-      <label>Número de Celular</label>
-      <input type="text" id="perf-telefono" readonly style="opacity: 0.6; cursor: not-allowed; margin-bottom: 0;">
-    </div>
-    
-    <div style="margin-bottom: 15px;">
-      <label for="perf-nombre">Nombre</label>
-      <input type="text" id="perf-nombre" placeholder="Tu nombre" style="margin-bottom: 0;">
-    </div>
-
-    <div style="margin-bottom: 15px;">
-      <label for="perf-pin-actual">PIN Actual (Requerido para guardar)</label>
-      <input type="password" id="perf-pin-actual" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="••••" style="-webkit-text-security: disc; text-align: center; font-size: 18px; letter-spacing: 5px; margin-bottom: 0;">
-    </div>
-
-    <div style="margin-bottom: 15px;">
-      <label for="perf-pin-nuevo">Nuevo PIN (Dejar vacío para no cambiar)</label>
-      <input type="password" id="perf-pin-nuevo" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="••••" style="-webkit-text-security: disc; text-align: center; font-size: 18px; letter-spacing: 5px; margin-bottom: 0;">
-    </div>
-
-    <div style="margin-bottom: 20px;">
-      <label for="perf-pin-confirmar">Confirmar Nuevo PIN</label>
-      <input type="password" id="perf-pin-confirmar" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="••••" style="-webkit-text-security: disc; text-align: center; font-size: 18px; letter-spacing: 5px; margin-bottom: 0;">
-    </div>
-    
-    <button class="modal-btn" onclick="guardarPerfil()">Guardar Cambios</button>
-    <button class="modal-btn btn-secondary" onclick="cerrarPerfil()">Cerrar</button>
-    
-    <div id="perf-error" class="modal-error" style="display: none;"></div>
-  </div>
-</div>
-
-<div class="card">
-
-  <!-- Logo -->
-  <div class="logo-wrap">
-    <svg width="34" height="34" viewBox="0 0 40 40" style="display:block;margin:0 auto 10px">
-      <circle cx="20" cy="20" r="19" fill="#0d1a2e" stroke="#00d4ff" stroke-width="1.5" stroke-opacity=".4"/>
-      <circle cx="20" cy="20" r="13" fill="#090f1c"/>
-      <circle cx="20" cy="20" r="8"  fill="#0d1a2e" stroke="#00d4ff" stroke-width=".8" stroke-opacity=".3"/>
-      <circle cx="20" cy="20" r="3"  fill="#00d4ff"/>
-      <circle cx="20" cy="20" r="1.2" fill="#060c18"/>
-      <circle cx="20" cy="20" r="5"  fill="none" stroke="#00d4ff" stroke-width=".4" stroke-opacity=".2"/>
-      <circle cx="20" cy="20" r="11" fill="none" stroke="#00d4ff" stroke-width=".4" stroke-opacity=".2"/>
-    </svg>
-    <div class="logo-text">Tuc Tuc <span>Rockola</span></div>
-    <div style="display: flex; gap: 8px; justify-content: center; align-items: center; margin-top: 8px; flex-wrap: wrap;">
-      <div class="sala-tag">{{ sala_id | upper }}</div>
-      <button class="perfil-tag" onclick="irAReproductor()" style="background:rgba(0,212,255,0.12); border:1px solid rgba(0,212,255,0.35); color:var(--ac1); cursor:pointer; font-weight:700;" title="Abrir pantalla de reproducción y biblioteca local">
-        📻 Modo Reproductor
-      </button>
-      <button id="btn-perfil" class="perfil-tag" onclick="abrirPerfil()" style="display: none;">👤 <span id="perfil-nombre"></span></button>
-    </div>
-  </div>
-
-  <p class="tagline">Pon tu canción — suena en el local 🔊</p>
-
-  <div class="share-row">
-    <button class="share-btn" onclick="compartirSala()">Compartir enlace</button>
-    <button class="share-btn" onclick="toggleQR()">QR</button>
-  </div>
-  <div class="qr-panel" id="qr-panel"><div id="qr-sala"></div></div>
-
-  <!-- Tarjeta Sonando Ahora (con boton para guardar directo en el celular) -->
-  <div class="now-playing-card" id="card-now-playing" style="display:none;">
-    <div class="np-header">
-      <div class="np-badge-wrap">
-        <span class="wave-mini">
-          <span style="animation-delay:0s"></span>
-          <span style="animation-delay:.15s"></span>
-          <span style="animation-delay:.3s"></span>
-        </span>
-        <span class="np-badge-text">Sonando en el local</span>
-      </div>
-      <div style="display:flex; gap:6px; align-items:center;">
-        <button class="btn-guardar-cel" id="btn-compartir-chat-actual" onclick="compartirCancionActualEnChat()" title="Compartir canción en el Chat" style="border-color:rgba(201,100,66,0.5); background:rgba(201,100,66,0.18); color:#ff9e7d;">
-          💬 Compartir
-        </button>
-        <button class="btn-guardar-cel" id="btn-guardar-actual" onclick="guardarActualEnMiCelular()" title="Guardar este MP3 en mi celular">
-          📥 Bajar a mi celular
-        </button>
-      </div>
-    </div>
-    <div class="np-titulo" id="np-titulo-texto">Cargando...</div>
-    <div class="np-autor" id="np-autor-texto"></div>
-  </div>
-
-  <!-- Tabs -->
-  <div class="source-tabs">
-    <button class="stab activo" onclick="setTab('archivo')">📁 Archivo</button>
-    <button class="stab" onclick="setTab('youtube')">▶ YouTube</button>
-  </div>
-
-  <!-- TAB: Archivo -->
-  <div class="sec visible" id="sec-archivo">
-    <div class="drop-zone" id="drop-zone">
-      <input type="file" id="archivo" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.flac" multiple onchange="archivosSeleccionados()">
-      <span class="drop-icon" id="drop-icon">🎶</span>
-      <div class="drop-title" id="drop-title">Toca para elegir canciones</div>
-      <div class="drop-sub"   id="drop-sub">MP3 · AAC · WAV · FLAC</div>
-    </div>
-  </div>
-
-  <!-- TAB: YouTube -->
-  <div class="sec" id="sec-youtube">
-    <div class="yt-box">
-      <div class="yt-label">Pega el link de YouTube</div>
-      <div class="yt-input-wrap">
-        <span class="yt-icon">🔗</span>
-        <input class="yt-input" id="yt-url" type="url"
-          placeholder="https://youtube.com/watch?v=..."
-          oninput="ytInputChange()" onpaste="setTimeout(ytInputChange,50)">
-      </div>
-      <div class="yt-preview" id="yt-preview">
-        <img class="yt-thumb" id="yt-thumb" src="" alt="">
-        <div class="yt-info">
-          <div class="yt-titulo" id="yt-titulo"></div>
-          <div class="yt-dur"    id="yt-dur"></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Progress -->
-  <div class="prog-wrap" id="prog-wrap">
-    <div class="prog-bg"><div class="prog-fill" id="prog-fill"></div></div>
-    <div class="prog-label" id="prog-label">Procesando...</div>
-  </div>
-
-  <button class="btn" id="btn-poner" onclick="poner()" disabled>Selecciona una canción</button>
-  <div class="upload-msg" id="upload-msg"></div>
-
-  <div class="library-box">
-    <div class="library-head">
-      <div class="library-label">Mi biblioteca en este dispositivo</div>
-      <button class="library-btn" onclick="compartirMiBiblioteca()">Compartir</button>
-    </div>
-    <div class="library-note">Audios que ya usaste desde este celular. No se guardan como archivos en AWS.</div>
-    <div class="share-panel" id="share-panel">
-      <div class="library-note">Crea un enlace temporal para que otra persona escoja que canciones guardar.</div>
-      <div class="share-link" id="share-link"></div>
-      <div class="share-qr" id="share-qr"></div>
-    </div>
-    <input class="library-search" id="mi-biblioteca-search" type="search" placeholder="Buscar en mi biblioteca..." oninput="renderMiBiblioteca()">
-    <ul class="library-list" id="lista-mi-biblioteca">
-      <li class="library-empty">Todavia no has guardado canciones en este dispositivo.</li>
-    </ul>
-  </div>
-
-  <div class="library-box">
-    <div class="library-head">
-      <div class="library-label">Mis listas en este dispositivo</div>
-    </div>
-    <div class="library-note">Listas creadas en este celular. Se envian a la sala con las canciones disponibles aqui.</div>
-    <ul class="library-list" id="lista-mis-listas">
-      <li class="library-empty">Todavia no tienes listas en este dispositivo.</li>
-    </ul>
-  </div>
-
-  <div class="library-box">
-    <div class="library-head">
-      <div class="library-label">Canciones anteriores</div>
-    </div>
-    <ul class="library-list" id="lista-biblioteca">
-      <li class="library-empty">Esta sala todavía no tiene canciones recordadas</li>
-    </ul>
-  </div>
-
-  <!-- Queue -->
-  <div class="queue-box">
-    <div class="queue-label" id="queue-label">Cola del local</div>
-    <ul class="queue-list" id="lista-cola">
-      <li class="queue-empty">Sin canciones en cola</li>
-    </ul>
-  </div>
-
-  <button class="back-btn" onclick="window.location.href='/rockola/'">← Volver</button>
-</div>
-
 <script>
-(function(){
-  var sp = document.getElementById('rk-splash');
-  if (!sp) return;
-  var done = function(){
-    sp.classList.add('hide');
-    setTimeout(function(){ sp.remove(); }, 550);
-  };
-  if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    done();
-    return;
-  }
-  setTimeout(done, 2500);
-})();
-const SALA  = '{{ sala_id }}';
-let CURRENT_TERCERO_ID = {{ session.get('usuario_id') or 'null' }};
-const OWNER = localStorage.getItem('rockola_nombre') || 'Anónimo';
-
-const btnPoner   = document.getElementById('btn-poner');
-const uploadMsg  = document.getElementById('upload-msg');
-const progWrap   = document.getElementById('prog-wrap');
-const progFill   = document.getElementById('prog-fill');
-const progLabel  = document.getElementById('prog-label');
-const listaCola  = document.getElementById('lista-cola');
-const queueLabel = document.getElementById('queue-label');
-const listaBiblioteca = document.getElementById('lista-biblioteca');
-const listaMiBiblioteca = document.getElementById('lista-mi-biblioteca');
-const miBibliotecaSearch = document.getElementById('mi-biblioteca-search');
-const listaMisListas = document.getElementById('lista-mis-listas');
-const sharePanel = document.getElementById('share-panel');
-const shareLink = document.getElementById('share-link');
-const shareQr = document.getElementById('share-qr');
-
-let tabActual       = 'archivo';
-let archivosValidos = [];
-let qrGenerado = false;
-let cancionesLocales = [];
-let playlistsLocales = [];
-let sincronizandoCatalogo = null;
-
+const SALA = {{ sala_id|tojson }};
+let MI_TERCERO = {{ session.get('usuario_id') or 'null' }};
+let MI_NOMBRE = {{ session.get('nombre') or '""' }};
+document.getElementById('sala-nombre').textContent = SALA;
 function getDeviceId() {
-  let id = localStorage.getItem('rockola_device_id');
+  let id = null;
+  try { id = localStorage.getItem('rockola_device_id'); } catch (e) {}
   if (!id) {
     id = 'dev-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
-    localStorage.setItem('rockola_device_id', id);
+    try { localStorage.setItem('rockola_device_id', id); } catch (e2) {}
   }
   return id;
 }
-
-function getDeviceName() {
-  let name = localStorage.getItem('rockola_device_name');
-  if (!name) {
-    const ua = navigator.userAgent || '';
-    name = /iPhone/i.test(ua) ? 'iPhone' : (/Android/i.test(ua) ? 'Android' : (/Windows/i.test(ua) ? 'Windows' : 'Este dispositivo'));
-    localStorage.setItem('rockola_device_name', name);
+function msgCli(txt, cls) {
+  const el = document.getElementById('cli-msg');
+  el.textContent = txt || '';
+  el.className = cls || '';
+}
+async function reconocer() {
+  if (MI_TERCERO !== null) return true;
+  try {
+    const res = await fetch('/rockola/apodo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ device_id: getDeviceId() })
+    });
+    const data = await res.json();
+    if (data.ok && data.known) {
+      MI_TERCERO = data.tercero_id;
+      MI_NOMBRE = data.nombre || '';
+      return true;
+    }
+  } catch (e) {}
+  return false;
+}
+async function enviarApodo() {
+  const inp = document.getElementById('apodo-input');
+  const err = document.getElementById('apodo-error');
+  const nombre = (inp.value || '').trim();
+  if (!nombre) { err.textContent = 'Escribe tu apodo'; return; }
+  err.textContent = '';
+  try {
+    const res = await fetch('/rockola/apodo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nombre: nombre, device_id: getDeviceId() })
+    });
+    const data = await res.json();
+    if (data.ok && data.known) {
+      MI_TERCERO = data.tercero_id;
+      MI_NOMBRE = data.nombre || nombre;
+      document.getElementById('puerta-apodo').classList.remove('visible');
+      cargarCola();
+    } else {
+      err.textContent = (data && data.error) || 'No se pudo entrar';
+    }
+  } catch (e) {
+    err.textContent = 'Sin conexión';
   }
-  return name;
 }
-
-function limpiarNombre(nombre) {
-  return (nombre || '').replace(/\.[^.]+$/, '');
-}
-
-function hashTexto(texto) {
-  let hash = 0;
-  for (let i = 0; i < texto.length; i++) {
-    hash = ((hash << 5) - hash) + texto.charCodeAt(i);
-    hash |= 0;
+async function encolarCliente(tipo, idOUrl, nombre, duracion) {
+  const box = document.getElementById('cliente-search-results');
+  if (box) box.style.display = 'none';
+  const inp = document.getElementById('cliente-search-input');
+  if (inp) inp.value = '';
+  const clr = document.getElementById('cliente-btn-clear');
+  if (clr) clr.style.display = 'none';
+  document.body.classList.remove('omni-foco');
+  try {
+    let url = '', body = {};
+    if (tipo === 'youtube') {
+      url = `/rockola/${encodeURIComponent(SALA)}/youtube`;
+      body = { url: idOUrl, modo:'final', duracion: duracion || '' };
+    } else {
+      url = `/rockola/${encodeURIComponent(SALA)}/biblioteca/${encodeURIComponent(idOUrl)}/poner`;
+      body = { modo:'final' };
+    }
+    const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const data = await res.json();
+    if (data.ok) {
+      msgCli('Encolada ✓', 'ok');
+      cargarCola();
+    } else {
+      msgCli(data.error || 'No se pudo encolar', 'err');
+    }
+  } catch (e) {
+    msgCli('Sin conexión', 'err');
   }
-  return Math.abs(hash).toString(36);
 }
-
-function idLocalArchivo(file) {
-  return `local-${getDeviceId()}-${hashTexto([file.name, file.size, file.lastModified].join('|'))}`;
+async function cargarCola() {
+  try {
+    const res = await fetch(`/rockola/${encodeURIComponent(SALA)}/cola`);
+    const data = await res.json();
+    const items = (data && data.cola) || [];
+    document.getElementById('sonando-nombre').textContent = items.length ? items[0].nombre : '—';
+    const resto = items.slice(1);
+    document.getElementById('cola-count').textContent = resto.length ? resto.length + ' en cola' : '';
+    const ul = document.getElementById('lista-cola');
+    ul.textContent = '';
+    if (!resto.length) {
+      const li = document.createElement('li');
+      li.className = 'vacia';
+      li.textContent = items.length ? 'Nada más encolado' : 'Cola vacía — busca y encola la primera';
+      ul.appendChild(li);
+      return;
+    }
+    resto.forEach((it, i) => {
+      const li = document.createElement('li');
+      if (MI_TERCERO !== null && it.tercero_id === MI_TERCERO) li.className = 'cancion-tuya';
+      const pos = document.createElement('span');
+      pos.className = 'pos';
+      pos.textContent = (i + 1);
+      const nom = document.createElement('span');
+      nom.className = 'nom';
+      nom.textContent = it.nombre || 'Canción';
+      li.appendChild(pos);
+      li.appendChild(nom);
+      ul.appendChild(li);
+    });
+  } catch (e) {}
 }
-
-function huellaCancionLocal(cancion) {
-  return `song-${hashTexto([
-    limpiarNombre(cancion.nombre).toLowerCase(),
-    cancion.size || 0,
-    cancion.tipo || ''
-  ].join('|'))}`;
-}
-
-function metadataCancionLocal(cancion) {
-  return {
-    cancion_id: huellaCancionLocal(cancion),
-    local_id: cancion.id,
-    titulo: limpiarNombre(cancion.nombre),
-    archivo_nombre: cancion.nombre,
-    tamano_bytes: cancion.size || 0,
-    mime: cancion.tipo || '',
-  };
-}
-
-function abrirDbLocal() {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open('rockola_local_library_v1', 3);
-    req.onupgradeneeded = () => {
-      const db = req.result;
-      if (!db.objectStoreNames.contains('songs')) {
-        const store = db.createObjectStore('songs', { keyPath:'id' });
-        store.createIndex('deviceId', 'deviceId', { unique:false });
-        store.createIndex('nombre', 'nombre', { unique:false });
-      }
-      if (!db.objectStoreNames.contains('playlists')) {
-        const store = db.createObjectStore('playlists', { keyPath:'id' });
-        store.createIndex('deviceId', 'deviceId', { unique:false });
-        store.createIndex('nombre', 'nombre', { unique:false });
-      }
-      if (!db.objectStoreNames.contains('config')) {
-        db.createObjectStore('config', { keyPath:'key' });
-      }
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-function irAReproductor() {
-  const base = window.location.host.includes('rockola.tuc-tuc.co') ? '' : '/rockola';
-  window.location.href = `${base}/${encodeURIComponent(SALA)}/reproductor`;
-}
-
 function urlSala() {
   return `https://rockola.tuc-tuc.co/rockola/${encodeURIComponent(SALA)}`;
 }
-
-function compartirSala() {
+let qrGenerado = false;
+function toggleCompartir() {
+  const panel = document.getElementById('panel-compartir');
+  panel.classList.toggle('visible');
+  if (!panel.classList.contains('visible')) return;
+  document.getElementById('enlace-sala').textContent = urlSala();
+  if (!qrGenerado && window.QRCode) {
+    try {
+      new QRCode(document.getElementById('qr-sala'), { text: urlSala(), width: 190, height: 190, correctLevel: QRCode.CorrectLevel.M });
+      qrGenerado = true;
+    } catch (e) {}
+  }
+}
+function copiarEnlaceSala() {
   const url = urlSala();
   if (navigator.share) {
-    navigator.share({ title: 'Mi Rockola', text: `Rockola ${SALA.toUpperCase()}`, url });
+    navigator.share({ title: 'Mi Rockola', text: `Rockola ${SALA}`, url }).catch(() => {});
+  } else if (navigator.clipboard) {
+    navigator.clipboard.writeText(url).then(() => msgCli('Enlace copiado', 'ok')).catch(() => {});
   } else {
-    navigator.clipboard.writeText(url).then(() => {
-      uploadMsg.textContent = 'Enlace copiado';
-      uploadMsg.className = 'upload-msg ok';
-    });
+    msgCli(url, '');
   }
 }
-
-function toggleQR() {
-  const panel = document.getElementById('qr-panel');
-  panel.classList.toggle('visible');
-  if (!qrGenerado && window.QRCode) {
-    new QRCode(document.getElementById('qr-sala'), {
-      text: urlSala(),
-      width: 190,
-      height: 190,
-      correctLevel: QRCode.CorrectLevel.M
-    });
-    qrGenerado = true;
+(async function initCliente() {
+  const conocido = await reconocer();
+  if (!conocido) {
+    document.getElementById('puerta-apodo').classList.add('visible');
   }
-}
-
-/* ── Tabs ── */
-function setTab(tab) {
-  tabActual = tab;
-  document.querySelectorAll('.stab').forEach((b,i) =>
-    b.classList.toggle('activo', (i===0&&tab==='archivo')||(i===1&&tab==='youtube'))
-  );
-  document.getElementById('sec-archivo').classList.toggle('visible', tab==='archivo');
-  document.getElementById('sec-youtube').classList.toggle('visible', tab==='youtube');
-  resetUI();
-  if (tab === 'youtube') {
-    const inp = document.getElementById('yt-url');
-    inp.focus();
-    if (navigator.clipboard && navigator.clipboard.readText) {
-      navigator.clipboard.readText().then(txt => {
-        if (txt && (txt.includes('youtube.com') || txt.includes('youtu.be'))) {
-          inp.value = txt;
-          ytInputChange();
-        }
-      }).catch(() => {});
-    }
-  }
-}
-
-function resetUI() {
-  btnPoner.disabled     = true;
-  btnPoner.textContent  = tabActual==='archivo' ? 'Selecciona una canción' : 'Pega un link de YouTube';
-  uploadMsg.textContent = '';
-  uploadMsg.className   = 'upload-msg';
-  progWrap.style.display = 'none';
-  progFill.style.width   = '0%';
-}
-
-/* ── Archivo ── */
-function archivosSeleccionados() {
-  archivosValidos = [...document.getElementById('archivo').files];
-  if (!archivosValidos.length) return;
-  const dz = document.getElementById('drop-zone');
-  dz.className = 'drop-zone selected';
-  document.getElementById('drop-icon').textContent  = '🎵';
-  document.getElementById('drop-title').textContent = archivosValidos.length === 1
-    ? archivosValidos[0].name.replace(/\.[^.]+$/,'')
-    : `${archivosValidos.length} canciones`;
-  document.getElementById('drop-sub').textContent = 'Listo para poner en cola';
-  btnPoner.textContent = archivosValidos.length === 1 ? '🎵 Poner en cola' : `🎵 Poner ${archivosValidos.length} en cola`;
-  btnPoner.disabled    = false;
-  uploadMsg.textContent = '';
-}
-
-/* ── YouTube ── */
-async function guardarCancionLocal(file) {
-  const db = await abrirDbLocal();
-  const cancion = {
-    id: idLocalArchivo(file),
-    deviceId: getDeviceId(),
-    nombre: file.name,
-    tipo: file.type || 'audio/mpeg',
-    size: file.size,
-    actualizado: Date.now(),
-    blob: file,
-  };
-  await new Promise((resolve, reject) => {
-    const tx = db.transaction('songs', 'readwrite');
-    tx.objectStore('songs').put(cancion);
-    tx.oncomplete = resolve;
-    tx.onerror = () => reject(tx.error);
-  });
-  db.close();
-  return cancion;
-}
-
-async function obtenerCancionLocal(id) {
-  const db = await abrirDbLocal();
-  const cancion = await new Promise((resolve, reject) => {
-    const tx = db.transaction('songs', 'readonly');
-    const req = tx.objectStore('songs').get(id);
-    req.onsuccess = () => resolve(req.result || null);
-    req.onerror = () => reject(req.error);
-  });
-  db.close();
-  return cancion;
-}
-
-async function cargarMiBiblioteca() {
-  try {
-    const db = await abrirDbLocal();
-    cancionesLocales = await new Promise((resolve, reject) => {
-      const tx = db.transaction('songs', 'readonly');
-      const req = tx.objectStore('songs').getAll();
-      req.onsuccess = () => {
-        // En este dispositivo se cargan todas las canciones almacenadas localmente
-        resolve(req.result || []);
-      };
-      req.onerror = () => reject(req.error);
-    });
-    db.close();
-    cancionesLocales.sort((a, b) => (b.actualizado || 0) - (a.actualizado || 0));
-    renderMiBiblioteca();
-    await cargarMisListas();
-    sincronizarCatalogoLocal();
-  } catch(e) {
-    listaMiBiblioteca.innerHTML = '<li class="library-empty">Este navegador no permitio abrir tu biblioteca.</li>';
-  }
-}
-
-async function cargarMisListas() {
-  try {
-    const db = await abrirDbLocal();
-    playlistsLocales = await new Promise((resolve, reject) => {
-      const tx = db.transaction('playlists', 'readonly');
-      const req = tx.objectStore('playlists').getAll();
-      req.onsuccess = () => resolve(req.result || []);
-      req.onerror = () => reject(req.error);
-    });
-    db.close();
-    playlistsLocales.sort((a, b) => (b.actualizado || 0) - (a.actualizado || 0));
-    renderMisListas();
-  } catch(e) {
-    listaMisListas.innerHTML = '<li class="library-empty">No pude abrir tus listas en este dispositivo.</li>';
-  }
-}
-
-async function guardarArchivosEnMiBiblioteca(files) {
-  for (const file of files || []) {
-    await guardarCancionLocal(file);
-  }
-  await cargarMiBiblioteca();
-}
-
-async function sincronizarCatalogoLocal() {
-  if (sincronizandoCatalogo) clearTimeout(sincronizandoCatalogo);
-  sincronizandoCatalogo = setTimeout(async () => {
-    try {
-      await fetch('/rockola/catalogo/local', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({
-          dispositivo: {
-            id: getDeviceId(),
-            nombre: getDeviceName(),
-            user_agent: navigator.userAgent || '',
-          },
-          canciones: cancionesLocales.map(metadataCancionLocal),
-          listas: playlistsLocales.map(p => ({
-            lista_id: p.id,
-            nombre: p.nombre,
-            canciones: p.canciones || [],
-          })),
-        })
-      });
-    } catch(e) {
-      console.warn('No se pudo sincronizar mi biblioteca', e);
-    } finally {
-      sincronizandoCatalogo = null;
-    }
-  }, 500);
-}
-
-function renderMiBiblioteca() {
-  const filtro = (miBibliotecaSearch.value || '').trim().toLowerCase();
-  const canciones = cancionesLocales
-    .filter(c => !filtro || limpiarNombre(c.nombre).toLowerCase().includes(filtro))
-    .slice(0, 80);
-  if (!canciones.length) {
-    listaMiBiblioteca.innerHTML = filtro
-      ? '<li class="library-empty">No encontre canciones con ese texto.</li>'
-      : '<li class="library-empty">Todavia no has guardado canciones en este dispositivo.</li>';
-    return;
-  }
-  listaMiBiblioteca.innerHTML = canciones.map(c => `
-    <li class="library-item">
-      <div class="library-name" title="${c.nombre}">
-        ${limpiarNombre(c.nombre)}
-        <div class="library-origin">este dispositivo</div>
-      </div>
-      <div style="display:flex; gap:6px; align-items:center;">
-        <button class="library-btn" onclick='compartirCancionEnChat(${JSON.stringify(c.nombre)}, "")' title="Compartir en el Chat" style="border-color:rgba(201,100,66,0.35); color:#ff9e7d;">💬</button>
-        <button class="library-btn" onclick="enviarMiCancion('${c.id}')">Enviar</button>
-      </div>
-    </li>
-  `).join('');
-}
-
-function renderMisListas() {
-  if (!playlistsLocales.length) {
-    listaMisListas.innerHTML = '<li class="library-empty">Todavia no tienes listas en este dispositivo.</li>';
-    return;
-  }
-  listaMisListas.innerHTML = playlistsLocales.map(p => {
-    const total = (p.canciones || []).length;
-    const disponibles = (p.canciones || []).filter(id => cancionesLocales.some(c => c.id === id)).length;
-    return `
-      <li class="library-item">
-        <div class="library-name" title="${p.nombre}">
-          ${p.nombre}
-          <div class="library-origin">${disponibles}/${total} disponibles aqui</div>
-        </div>
-        <button class="library-btn" onclick="enviarMiLista('${p.id}')">Enviar</button>
-      </li>
-    `;
-  }).join('');
-}
-
-async function compartirMiBiblioteca() {
-  if (!cancionesLocales.length) {
-    onError('No tienes canciones locales para compartir');
-    return;
-  }
-  const cancionesConArchivo = cancionesLocales.filter(c => c.blob);
-  if (!cancionesConArchivo.length) {
-    onError('No hay archivos locales disponibles para compartir');
-    return;
-  }
-  sharePanel.classList.add('visible');
-  shareLink.textContent = 'Preparando enlace...';
-  shareQr.innerHTML = '';
-  const canciones = cancionesLocales.map(metadataCancionLocal);
-  const metadata = {
-    nombre: `Biblioteca de ${getDeviceName()}`,
-    dispositivo: { id:getDeviceId(), nombre:getDeviceName() },
-    canciones,
-    listas: playlistsLocales.map(p => ({
-      lista_id: p.id,
-      nombre: p.nombre,
-      canciones: p.canciones || [],
-    })),
-  };
-  try {
-    const res = await fetch('/rockola/compartir/biblioteca/iniciar', {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ metadata }),
-    });
-    const data = await res.json();
-    if (!data.ok) throw new Error(data.error || 'No se pudo compartir');
-    for (let i = 0; i < cancionesConArchivo.length; i++) {
-      const cancion = cancionesConArchivo[i];
-      shareLink.textContent = `Subiendo ${i + 1}/${cancionesConArchivo.length}: ${limpiarNombre(cancion.nombre)}`;
-      const form = new FormData();
-      form.append('local_id', cancion.id);
-      form.append('archivo', cancion.blob, cancion.nombre || `${cancion.id}.mp3`);
-      const up = await fetch(`/rockola/compartir/${data.share_id}/archivo`, { method:'POST', body:form });
-      const subida = await up.json().catch(() => ({}));
-      if (!up.ok || !subida.ok) throw new Error(subida.error || `No se pudo subir ${limpiarNombre(cancion.nombre)}`);
-    }
-    shareLink.textContent = data.url;
-    if (window.QRCode) {
-      new QRCode(shareQr, { text:data.url, width:180, height:180, correctLevel:QRCode.CorrectLevel.M });
-    }
-    if (navigator.share) navigator.share({ title:'Biblioteca Rockola', text:'Escoge canciones de mi biblioteca', url:data.url }).catch(() => {});
-  } catch(e) {
-    shareLink.textContent = e.message || 'No se pudo crear el enlace';
-  }
-}
-
-function ytInputChange() {
-  const url = document.getElementById('yt-url').value.trim();
-  const esYt = url.includes('youtube.com') || url.includes('youtu.be');
-  btnPoner.disabled    = !esYt;
-  btnPoner.textContent = esYt ? '▶ Poner en cola' : 'Pega un link de YouTube';
-
-  // Mostrar thumbnail si es YouTube (sin llamar al server)
-  const preview = document.getElementById('yt-preview');
-  if (esYt) {
-    const vidId = url.match(/(?:v=|youtu\.be\/)([^&\?\/]{11})/)?.[1];
-    if (vidId) {
-      document.getElementById('yt-thumb').src  = `https://img.youtube.com/vi/${vidId}/mqdefault.jpg`;
-      document.getElementById('yt-titulo').textContent = 'Cargando...';
-      document.getElementById('yt-dur').textContent    = '';
-      preview.className = 'yt-preview visible';
-    }
-  } else {
-    preview.className = 'yt-preview';
-  }
-}
-
-/* ── Poner en cola (unificado) ── */
-function poner() {
-  if (tabActual === 'archivo') subirArchivo();
-  else subirYoutube();
-}
-
-function subirArchivo() {
-  if (!archivosValidos.length) return;
-  btnPoner.disabled      = true;
-  progWrap.style.display = 'block';
-  progLabel.textContent  = 'Subiendo...';
-
-  const form = new FormData();
-  form.append('owner', OWNER);
-  archivosValidos.forEach(f => form.append('archivo', f));
-
-  const xhr = new XMLHttpRequest();
-  xhr.open('POST', `/rockola/${SALA}/subir`);
-  xhr.upload.onprogress = e => {
-    if (e.lengthComputable) {
-      const pct = Math.round(e.loaded/e.total*100);
-      progFill.style.width  = pct + '%';
-      progLabel.textContent = `Subiendo... ${pct}%`;
-    }
-  };
-  xhr.onload = async () => {
-    progWrap.style.display = 'none';
-    progFill.style.width   = '0%';
-    try {
-      const res = JSON.parse(xhr.responseText);
-      if (res.ok) {
-        await guardarArchivosEnMiBiblioteca(archivosValidos);
-        onSuccess(res.agregadas.length);
-      }
-      else onError(res.error);
-    } catch(e) { onError('Error ' + xhr.status); }
-  };
-  xhr.onerror = () => { progWrap.style.display='none'; onError('Error de conexión'); };
-  xhr.send(form);
-}
-
-function subirCancionLocal(cancion, listaMeta) {
-  const form = new FormData();
-  form.append('owner', OWNER);
-  form.append('archivo', cancion.blob, cancion.nombre);
-  if (listaMeta) {
-    form.append('lista_id', listaMeta.id);
-    form.append('lista_nombre', listaMeta.nombre);
-    form.append('lista_posicion', listaMeta.posicion);
-  }
-  return fetch(`/rockola/${SALA}/subir`, {
-    method: 'POST',
-    body: form,
-  }).then(r => r.json());
-}
-
-async function enviarMiCancion(id) {
-  const cancion = cancionesLocales.find(c => c.id === id) || await obtenerCancionLocal(id);
-  if (!cancion || !cancion.blob) {
-    onError('Esa canción ya no está disponible en este dispositivo');
-    return;
-  }
-  btnPoner.disabled = true;
-  progWrap.classList.add('floating');
-  progWrap.style.display = 'block';
-  progLabel.textContent = 'Enviando desde tu biblioteca...';
-
-  try {
-    const res = await subirCancionLocal(cancion);
-    progWrap.style.display = 'none';
-    progWrap.classList.remove('floating');
-    progFill.style.width = '0%';
-    if (res.ok) {
-      const msg = 'Canción enviada a esta sala';
-      uploadMsg.textContent = msg;
-      uploadMsg.className = 'upload-msg ok';
-      showToast(msg, 'ok');
-      actualizarCola();
-      actualizarBiblioteca();
-      sincronizarCatalogoLocal();
-    } else {
-      onError(res.error);
-    }
-  } catch(e) {
-    progWrap.style.display = 'none';
-    progWrap.classList.remove('floating');
-    onError('Error de conexión');
-  } finally {
-    btnPoner.disabled = tabActual === 'archivo' ? !archivosValidos.length : true;
-  }
-}
-
-async function enviarMiLista(id) {
-  const lista = playlistsLocales.find(p => p.id === id);
-  if (!lista || !(lista.canciones || []).length) {
-    onError('La lista está vacía');
-    return;
-  }
-  btnPoner.disabled = true;
-  progWrap.classList.add('floating');
-  progWrap.style.display = 'block';
-  progFill.style.width = '0%';
-  progLabel.textContent = `Enviando ${lista.nombre}...`;
-
-  let enviadas = 0;
-  let faltantes = 0;
-  const ids = lista.canciones || [];
-  for (let i = 0; i < ids.length; i++) {
-    const cancion = cancionesLocales.find(c => c.id === ids[i]) || await obtenerCancionLocal(ids[i]);
-    if (!cancion || !cancion.blob) {
-      faltantes++;
-      continue;
-    }
-    try {
-      const res = await subirCancionLocal(cancion, {
-        id: lista.id,
-        nombre: lista.nombre,
-        posicion: i,
-      });
-      if (res.ok) enviadas++;
-    } catch(e) {
-      faltantes++;
-    }
-    const pct = Math.round(((i + 1) / ids.length) * 100);
-    progFill.style.width = pct + '%';
-    progLabel.textContent = `Enviando lista... ${pct}% (${i + 1}/${ids.length})`;
-  }
-
-  progWrap.style.display = 'none';
-  progWrap.classList.remove('floating');
-  progFill.style.width = '0%';
-  if (enviadas) {
-    const msg = faltantes
-      ? `${enviadas} canción(es) enviadas; ${faltantes} no estaban en este dispositivo`
-      : `${enviadas} canción(es) de "${lista.nombre}" enviadas`;
-    uploadMsg.textContent = msg;
-    uploadMsg.className = 'upload-msg ok';
-    showToast(msg, 'ok');
-    actualizarCola();
-    actualizarBiblioteca();
-    sincronizarCatalogoLocal();
-  } else {
-    onError('Ninguna canción de esta lista está disponible aquí');
-  }
-  btnPoner.disabled = tabActual === 'archivo' ? !archivosValidos.length : true;
-}
-
-function subirYoutube() {
-  const url = document.getElementById('yt-url').value.trim();
-  if (!url) return;
-  btnPoner.disabled      = true;
-  progWrap.style.display = 'block';
-  progLabel.textContent  = 'Descargando audio...';
-  let pct = 0;
-  const iv = setInterval(() => {
-    pct = Math.min(pct + Math.random() * 3, 85);
-    progFill.style.width = pct + '%';
-  }, 400);
-
-  fetch(`/rockola/${SALA}/youtube`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url, owner: OWNER })
-  })
-  .then(r => r.json())
-  .then(res => {
-    clearInterval(iv);
-    progFill.style.width = '100%';
-    setTimeout(() => { progWrap.style.display='none'; progFill.style.width='0%'; }, 300);
-    if (res.ok) {
-      onSuccess(1);
-      document.getElementById('yt-url').value = '';
-      document.getElementById('yt-preview').className = 'yt-preview';
-    } else {
-      onError(res.error);
-    }
-  })
-  .catch(() => { clearInterval(iv); progWrap.style.display='none'; onError('Error de conexión'); });
-}
-
-function onSuccess(n) {
-  uploadMsg.textContent = n === 1 ? '¡Canción en cola! 🎉' : `¡${n} canciones en cola! 🎉`;
-  uploadMsg.className   = 'upload-msg ok';
-  // Reset drop zone para poder agregar más
-  if (tabActual === 'archivo') {
-    const dz = document.getElementById('drop-zone');
-    dz.className = 'drop-zone';
-    document.getElementById('drop-icon').textContent  = '🎶';
-    document.getElementById('drop-title').textContent = 'Toca para elegir más canciones';
-    document.getElementById('drop-sub').textContent   = 'MP3 · AAC · WAV · FLAC';
-    document.getElementById('archivo').value = '';
-    archivosValidos = [];
-  }
-  btnPoner.disabled    = true;
-  btnPoner.textContent = tabActual === 'archivo' ? 'Selecciona una canción' : 'Pega un link de YouTube';
-  actualizarBiblioteca();
-}
-
-function onError(msg) {
-  const txt = msg || 'Error desconocido';
-  uploadMsg.textContent = txt;
-  uploadMsg.className   = 'upload-msg error';
-  btnPoner.disabled     = false;
-  showToast(txt, 'error');
-}
-
-function showToast(message, type = 'ok') {
-  const old = document.getElementById('rockola-toast');
-  if (old) old.remove();
-
-  const toast = document.createElement('div');
-  toast.id = 'rockola-toast';
-  toast.className = `rockola-toast ${type}`;
-  toast.innerHTML = `
-    <span class="toast-icon">${type === 'ok' ? '✅' : '⚠️'}</span>
-    <span class="toast-text">${message}</span>
-  `;
-  document.body.appendChild(toast);
-
-  // Animación de entrada
-  setTimeout(() => toast.classList.add('visible'), 50);
-
-  // Auto-eliminar después de 4 segundos
-  setTimeout(() => {
-    toast.classList.remove('visible');
-    setTimeout(() => toast.remove(), 400);
-  }, 4000);
-}
-
-/* ── Sortable ── */
-let isDraggingClientQueue = false;
-Sortable.create(listaCola, {
-  animation: 150,
-  handle: '.handle:not(.locked)',
-  filter: '.locked',
-  delay: 50,
-  delayOnTouchOnly: true,
-  touchStartThreshold: 5,
-  onStart: () => {
-    isDraggingClientQueue = true;
-  },
-  onEnd: async () => {
-    const orden = [...listaCola.querySelectorAll('.queue-item')].map(el => el.dataset.id);
-    try {
-      await fetch(`/rockola/${SALA}/reordenar`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orden, modo: 'restaurante' })
-      });
-    } catch(e) {}
-    finally {
-      isDraggingClientQueue = false;
-      actualizarCola();
-    }
-  }
-});
-
-/* ── Render cola y Sonando Ahora ── */
-let cancionActualGlobal = null;
-const guardandoCancionesSet = new Set();
-
-function escChatHtml(s) {
-  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
-
-function compartirCancionActualEnChat() {
-  if (!cancionActualGlobal) { showToast('No hay ninguna canción sonando ahora en la sala', 'error'); return; }
-  const titEl = document.getElementById('np-titulo-texto');
-  const autEl = document.getElementById('np-autor-texto');
-  const titulo = (titEl && titEl.textContent !== 'Cargando...') ? titEl.textContent.trim() : (cancionActualGlobal?.nombre || 'Canción');
-  const autor = autEl ? autEl.textContent.trim() : (cancionActualGlobal?.owner || '');
-  compartirCancionEnChat(cancionActualGlobal.id, titulo, autor, cancionActualGlobal.youtube_url || '');
-}
-
-async function compartirCancionEnChat(itemId, titulo, artista, youtubeUrl) {
-  if (!itemId) return;
-  if (String(itemId).startsWith('local-')) {
-    showToast('Canción local del reproductor: aún no se puede compartir', 'error');
-    return;
-  }
-  let convs = [];
-  try {
-    const r = await fetch('/api/chat/mis-conversaciones').then(r => r.json());
-    if (r && r.ok) convs = r.conversaciones || [];
-  } catch (e) { convs = []; }
-  if (!convs.length) {
-    compartirSalaLegacy(titulo, artista);
-    return;
-  }
-  mostrarPickerConversacion(convs, itemId, titulo);
-}
-
-function compartirSalaLegacy(titulo, artista) {
-  const safeTitulo = (titulo || 'Canción de la Rockola').replace(/\.[^.]+$/, '');
-  const safeArtista = (artista || '').replace(/^Puesta por:\s*/i, '').replace(/^Puesta por ti/i, '').trim();
-  if (typeof window.tuctucCompartirContexto === 'function') {
-    window.tuctucCompartirContexto('cancion', {
-      cancion: safeTitulo,
-      artista: safeArtista,
-      sala: typeof SALA !== 'undefined' ? SALA : ''
-    });
-  } else if (navigator.share) {
-    navigator.share({
-      title: '🎶 ' + safeTitulo,
-      text: `Escucha "${safeTitulo}" en la Rockola TUC TUC`,
-      url: window.location.href
-    }).catch(() => {});
-  } else {
-    prompt('Copia el enlace de esta sala para compartir:', window.location.href);
-  }
-}
-
-function mostrarPickerConversacion(convs, itemId, titulo) {
-  cerrarPickerConversacion();
-  const safeId = String(itemId).replace(/'/g, "\\'");
-  const ov = document.createElement('div');
-  ov.id = 'picker-conv-ov';
-  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
-  ov.innerHTML = `
-    <div style="background:#1c1917;width:100%;max-width:480px;max-height:70vh;overflow-y:auto;border-radius:16px 16px 0 0;padding:16px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-        <div style="font-weight:700;color:#f3e7dd">Compartir canción</div>
-        <button onclick="cerrarPickerConversacion()" style="background:none;border:none;color:#a89a90;font-size:18px;cursor:pointer">✕</button>
-      </div>
-      <div style="font-size:12px;color:#a89a90;margin-bottom:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escChatHtml((titulo || 'Canción').replace(/\.[^.]+$/, ''))}</div>
-      ${convs.map(c => `
-        <button onclick="enviarCancionAChat('${c.token}', '${safeId}', this)"
-          style="display:flex;align-items:center;gap:10px;width:100%;padding:10px;border-radius:10px;border:1px solid rgba(201,100,66,.25);background:#292524;margin-bottom:8px;cursor:pointer;text-align:left">
-          <span style="width:34px;height:34px;border-radius:50%;background:#44403c;display:flex;align-items:center;justify-content:center;color:#f3e7dd;font-weight:700;flex-shrink:0">${escChatHtml((c.nombre_otro || '?').slice(0, 1).toUpperCase())}</span>
-          <span style="min-width:0">
-            <span style="display:block;color:#f3e7dd;font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escChatHtml(c.nombre_otro || 'Chat')}</span>
-            <span style="display:block;color:#a89a90;font-size:11px">${c.no_leidos ? c.no_leidos + ' sin leer' : 'Toca para enviar'}</span>
-          </span>
-        </button>`).join('')}
-    </div>`;
-  ov.addEventListener('click', (e) => { if (e.target === ov) cerrarPickerConversacion(); });
-  document.body.appendChild(ov);
-}
-
-function cerrarPickerConversacion() {
-  const ov = document.getElementById('picker-conv-ov');
-  if (ov) ov.remove();
-}
-
-async function enviarCancionAChat(token, itemId, btn) {
-  if (btn) btn.disabled = true;
-  try {
-    const r = await fetch('/rockola/chat/compartir', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({token, item_id: itemId, sala_id: (typeof SALA !== 'undefined' ? SALA : '')})
-    }).then(r => r.json());
-    if (!r || !r.ok) throw new Error((r && r.error) || 'Error');
-    cerrarPickerConversacion();
-    showToast('Canción compartida en el chat', 'ok');
-  } catch (e) {
-    showToast('No se pudo compartir: ' + (e.message || e), 'error');
-    if (btn) btn.disabled = false;
-  }
-}
-
-function guardarActualEnMiCelular() {
-  if (!cancionActualGlobal) {
-    showToast('No hay ninguna canción sonando ahora en la sala', 'error');
-    return;
-  }
-  const btn = document.getElementById('btn-guardar-actual');
-  guardarEnMiCelular(cancionActualGlobal.id, cancionActualGlobal.nombre, cancionActualGlobal.youtube_url, btn);
-}
-
-async function guardarEnMiCelular(id, nombre, youtubeUrl, btn) {
-  if (guardandoCancionesSet.has(id)) return;
-  guardandoCancionesSet.add(id);
-
-  const originalContent = btn ? btn.innerHTML : '';
-  if (btn) {
-    btn.disabled = true;
-    btn.innerHTML = '⏳';
-  }
-  showToast(`Descargando audio MP3: ${limpiarNombre(nombre)}...`, 'ok');
-
-  try {
-    let downloadUrl = null;
-
-    if (youtubeUrl || (id && id.startsWith('yt-'))) {
-      const resp = await fetch(`/rockola/${SALA}/resolver`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, url: youtubeUrl })
-      });
-      let data;
-      const textResp = await resp.text();
-      try {
-        data = JSON.parse(textResp);
-      } catch (errJson) {
-        throw new Error('El servidor tardó o respondió con un formato no reconocido. Por favor reintenta en unos segundos.');
-      }
-      if (!data.ok || !data.url) {
-        throw new Error(data.error || 'No se pudo extraer el audio de YouTube');
-      }
-      downloadUrl = data.url;
-    } else if (id && !id.startsWith('local-')) {
-      downloadUrl = `/rockola/${SALA}/archivo/${encodeURIComponent(id)}`;
-    } else {
-      throw new Error('Esta canción es un archivo local del reproductor de la sala y no está alojada en el servidor.');
-    }
-
-    const audioResp = await fetch(downloadUrl);
-    if (!audioResp.ok) throw new Error('Error al descargar el archivo de audio');
-    const blob = await audioResp.blob();
-
-    const cleanTitle = limpiarNombre(nombre).trim() || 'Cancion_Rockola';
-    const filename = cleanTitle.toLowerCase().endsWith('.mp3') ? cleanTitle : `${cleanTitle}.mp3`;
-    const localSongId = `local-${getDeviceId()}-saved-${hashTexto([id, cleanTitle, blob.size].join('|'))}`;
-
-    const db = await abrirDbLocal();
-    await new Promise((resolve, reject) => {
-      const tx = db.transaction('songs', 'readwrite');
-      tx.objectStore('songs').put({
-        id: localSongId,
-        deviceId: getDeviceId(),
-        nombre: filename,
-        tipo: blob.type || 'audio/mpeg',
-        size: blob.size,
-        actualizado: Date.now(),
-        blob: blob
-      });
-      tx.oncomplete = resolve;
-      tx.onerror = () => reject(tx.error);
-    });
-    db.close();
-
-    try {
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => {
-        URL.revokeObjectURL(a.href);
-        a.remove();
-      }, 1000);
-    } catch(errA) {
-      console.warn('No se pudo disparar descarga directa:', errA);
-    }
-
-    await cargarMiBiblioteca();
-    sincronizarCatalogoLocal();
-
-    showToast(`✅ ¡Guardada! Añadida a tu biblioteca offline y descargada en tu celular`, 'ok');
-    if (btn) {
-      btn.innerHTML = '✅';
-      setTimeout(() => {
-        if (btn) {
-          btn.innerHTML = originalContent;
-          btn.disabled = false;
-        }
-      }, 3000);
-    }
-  } catch(err) {
-    console.error('Error al guardar en el celular:', err);
-    showToast(`Error al guardar: ${err.message || 'Fallo de red'}`, 'error');
-    if (btn) {
-      btn.innerHTML = originalContent;
-      btn.disabled = false;
-    }
-  } finally {
-    guardandoCancionesSet.delete(id);
-  }
-}
-
-function renderCola(cola) {
-  queueLabel.textContent = `Cola · ${cola.length} canción${cola.length!==1?'es':''}`;
-
-  // Actualizar tarjeta "Sonando ahora"
-  const nowCard = document.getElementById('card-now-playing');
-  if (cola && cola.length > 0) {
-    cancionActualGlobal = cola[0];
-    if (nowCard) {
-      nowCard.style.display = 'block';
-      const titEl = document.getElementById('np-titulo-texto');
-      const autEl = document.getElementById('np-autor-texto');
-      if (titEl) titEl.textContent = cola[0].nombre.replace(/\.[^.]+$/, '');
-      if (autEl) {
-        const esMia = cola[0].tercero_id === CURRENT_TERCERO_ID;
-        autEl.textContent = esMia ? 'Puesta por ti' : (cola[0].owner ? `Puesta por: ${cola[0].owner}` : 'Sonando ahora');
-      }
-    }
-  } else {
-    cancionActualGlobal = null;
-    if (nowCard) nowCard.style.display = 'none';
-  }
-
-  if (isDraggingClientQueue) return;
-  if (!cola.length) {
-    listaCola.innerHTML = '<li class="queue-empty">Sin canciones en cola</li>';
-    return;
-  }
-  listaCola.innerHTML = cola.map((c,i) => {
-    const mia = c.tercero_id === CURRENT_TERCERO_ID, playing = i===0;
-    const safeNombre = JSON.stringify(c.nombre || '');
-    return `<li class="queue-item ${playing?'playing':''} ${mia?'mia':''}" data-id="${c.id}">
-      <span class="handle ${mia?'':'locked'}">⠿</span>
-      <div class="q-info">
-        <div class="q-nombre">${c.nombre.replace(/\.[^.]+$/,'')}${c.youtube_url ? ' <span class="q-link" title="Enlace de YouTube">🔗</span>' : ''}</div>
-        <div class="q-sub">${mia ? 'Tu canción' : (c.owner ? 'Puesta por: ' + c.owner : 'Anónimo')}</div>
-      </div>
-      <div class="q-actions-row" style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
-        <button class="q-dl-btn" onclick='compartirCancionEnChat("${c.id}", ${safeNombre}, "${c.owner || ""}", "${c.youtube_url || ""}")' title="Compartir en el Chat" style="border-color:rgba(201,100,66,0.35); color:#ff9e7d;">💬</button>
-        <button class="q-dl-btn" onclick='guardarEnMiCelular("${c.id}", ${safeNombre}, "${c.youtube_url || ""}", this)' title="Guardar MP3 en este celular">📥</button>
-        <span class="q-pos">${playing
-          ? `<span class="wave-mini"><span style="animation-delay:0s"></span><span style="animation-delay:.15s"></span><span style="animation-delay:.3s"></span></span>`
-          : '#'+(i+1)
-        }</span>
-        ${mia && !playing ? `<button class="q-remove" onclick="quitarMia('${c.id}')">✕</button>` : ''}
-      </div>
-    </li>`;
-  }).join('');
-}
-
-async function quitarMia(id) {
-  try {
-    const res = await fetch(`/rockola/${SALA}/quitar`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, modo: 'cliente' })
-    });
-    const data = await res.json();
-    if (!data.ok) onError(data.error);
-    actualizarCola();
-  } catch(e) {
-    onError('Error de conexión');
-  }
-}
-
-async function actualizarCola() {
-  try {
-    const res  = await fetch(`/rockola/${SALA}/cola`);
-    const data = await res.json();
-    renderCola(data.cola || []);
-  } catch(e) {}
-}
-
-function renderBiblioteca(canciones) {
-  if (!canciones.length) {
-    listaBiblioteca.innerHTML = '<li class="library-empty">Esta sala todavía no tiene canciones recordadas</li>';
-    return;
-  }
-  listaBiblioteca.innerHTML = canciones.map(c => {
-    const safeNombre = JSON.stringify(c.nombre || '');
-    const esDescargable = c.youtube_url || (c.id && c.id.startsWith('yt-')) || (c.origen && c.origen !== 'local' && !c.id.startsWith('local-'));
-    return `
-      <li class="library-item">
-        <div class="library-name" title="${c.nombre}">${c.nombre.replace(/\.[^.]+$/,'')}</div>
-        <div class="library-origin">${c.origen || 'audio'}</div>
-        <div style="display:flex; gap:6px; align-items:center;">
-          <button class="library-btn" onclick='compartirCancionEnChat(${safeNombre}, "")' title="Compartir en el Chat" style="border-color:rgba(201,100,66,0.35); color:#ff9e7d;">💬</button>
-          ${esDescargable ? `<button class="library-btn" onclick='guardarEnMiCelular("${c.id}", ${safeNombre}, ${JSON.stringify(c.youtube_url || "")}, this)' title="Guardar MP3 en este celular" style="border-color:rgba(0,212,255,0.35); color:var(--ac1);">📥 Bajar</button>` : ''}
-          <button class="library-btn" onclick="ponerRecordada('${c.id}')">Poner</button>
-        </div>
-      </li>
-    `;
-  }).join('');
-}
-
-async function actualizarBiblioteca() {
-  try {
-    const res = await fetch(`/rockola/${SALA}/biblioteca`);
-    const data = await res.json();
-    renderBiblioteca(data.canciones || []);
-  } catch(e) {}
-}
-
-async function ponerRecordada(id) {
-  try {
-    const res = await fetch(`/rockola/${SALA}/biblioteca/${encodeURIComponent(id)}/poner`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({})
-    });
-    const data = await res.json();
-    if (data.ok) {
-      uploadMsg.textContent = 'Canción recordada en cola';
-      uploadMsg.className = 'upload-msg ok';
-      actualizarCola();
-      actualizarBiblioteca();
-    } else {
-      onError(data.error);
-    }
-  } catch(e) {
-    onError('Error de conexión');
-  }
-}
-
-// Identificación con PIN
-function mostrarModalIdent() {
-  document.getElementById('ident-modal').style.display = 'flex';
-  document.getElementById('ident-step-1').style.display = 'block';
-  document.getElementById('ident-step-registrado').style.display = 'none';
-  document.getElementById('ident-step-nuevo').style.display = 'none';
-  document.getElementById('ident-error').style.display = 'none';
-}
-
-function volverPaso1() {
-  document.getElementById('ident-step-1').style.display = 'block';
-  document.getElementById('ident-step-registrado').style.display = 'none';
-  document.getElementById('ident-step-nuevo').style.display = 'none';
-  document.getElementById('ident-error').style.display = 'none';
-}
-
-async function verificarTelefono() {
-  const telInput = document.getElementById('ident-telefono');
-  const tel = telInput.value.trim();
-  const errDiv = document.getElementById('ident-error');
-  errDiv.style.display = 'none';
-
-  if (!tel || tel.replace(/[^0-9]/g, '').length < 7) {
-    errDiv.textContent = 'Ingresa un número de celular válido';
-    errDiv.style.display = 'block';
-    return;
-  }
-
-  try {
-    const res = await fetch(`/rockola/verificar-telefono?tel=${encodeURIComponent(tel)}`);
-    const data = await res.json();
-    if (!data.ok) {
-      errDiv.textContent = data.error || 'Error al verificar';
-      errDiv.style.display = 'block';
-      return;
-    }
-
-    document.getElementById('ident-step-1').style.display = 'none';
-    if (data.existe) {
-      const statusEl = document.getElementById('ident-status-registrado');
-      const labelEl = document.getElementById('ident-label-pin');
-      const btnEl = document.getElementById('ident-btn-ingresar');
-      if (!data.tiene_pin) {
-        statusEl.innerHTML = `✨ ¡Hola <strong>${data.nombre || ''}</strong>! Como es tu primera vez en la Rockola, crea tu PIN personal de 4 dígitos.`;
-        if (labelEl) labelEl.textContent = 'Crea tu PIN personal de 4 dígitos';
-        if (btnEl) btnEl.textContent = 'Guardar PIN e Ingresar';
-      } else {
-        statusEl.innerHTML = `✓ Hola <strong>${data.nombre || ''}</strong>. Ingresa tu PIN de 4 dígitos.`;
-        if (labelEl) labelEl.textContent = 'Ingresa tu PIN de 4 dígitos';
-        if (btnEl) btnEl.textContent = 'Ingresar';
-      }
-      document.getElementById('ident-step-registrado').style.display = 'block';
-      setTimeout(() => document.getElementById('ident-pin').focus(), 100);
-    } else {
-      document.getElementById('ident-step-nuevo').style.display = 'block';
-      setTimeout(() => document.getElementById('ident-nombre').focus(), 100);
-    }
-  } catch(e) {
-    errDiv.textContent = 'Error de red. Intenta de nuevo.';
-    errDiv.style.display = 'block';
-  }
-}
-
-async function iniciarSesionPIN() {
-  const tel = document.getElementById('ident-telefono').value.trim();
-  const pinInput = document.getElementById('ident-pin');
-  const pin = pinInput.value.trim();
-  const errDiv = document.getElementById('ident-error');
-  errDiv.style.display = 'none';
-
-  if (pin.length !== 4 || isNaN(pin)) {
-    errDiv.textContent = 'El PIN debe ser de 4 dígitos';
-    errDiv.style.display = 'block';
-    return;
-  }
-
-  try {
-    const res = await fetch('/rockola/identificar', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ telefono: tel, pin: pin })
-    });
-    const data = await res.json();
-    if (!res.ok || !data.ok) {
-      errDiv.textContent = data.error || 'PIN incorrecto';
-      errDiv.style.display = 'block';
-      return;
-    }
-
-    CURRENT_TERCERO_ID = data.tercero_id;
-    localStorage.setItem('rockola_telefono', tel);
-    localStorage.setItem('rockola_nombre', data.nombre);
-    actualizarPillPerfil(data.nombre);
-    document.getElementById('ident-modal').style.display = 'none';
-    actualizarCola();
-  } catch(e) {
-    errDiv.textContent = 'Error de red. Intenta de nuevo.';
-    errDiv.style.display = 'block';
-  }
-}
-
-async function registrarTercero() {
-  const tel = document.getElementById('ident-telefono').value.trim();
-  const nombreInput = document.getElementById('ident-nombre');
-  const nombre = nombreInput.value.trim();
-  const pinInput = document.getElementById('ident-pin-nuevo');
-  const pin = pinInput.value.trim();
-  const pinConfirmarInput = document.getElementById('ident-pin-confirmar');
-  const pinConfirmar = pinConfirmarInput.value.trim();
-  const errDiv = document.getElementById('ident-error');
-  errDiv.style.display = 'none';
-
-  if (!nombre) {
-    errDiv.textContent = 'Ingresa tu nombre';
-    errDiv.style.display = 'block';
-    return;
-  }
-  if (pin.length !== 4 || isNaN(pin)) {
-    errDiv.textContent = 'El PIN debe ser de 4 dígitos';
-    errDiv.style.display = 'block';
-    return;
-  }
-  if (pin !== pinConfirmar) {
-    errDiv.textContent = 'Los PINs no coinciden';
-    errDiv.style.display = 'block';
-    return;
-  }
-
-  try {
-    const res = await fetch('/rockola/identificar', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ telefono: tel, nombre: nombre, pin: pin })
-    });
-    const data = await res.json();
-    if (!res.ok || !data.ok) {
-      errDiv.textContent = data.error || 'Error al registrar';
-      errDiv.style.display = 'block';
-      return;
-    }
-
-    CURRENT_TERCERO_ID = data.tercero_id;
-    localStorage.setItem('rockola_telefono', tel);
-    localStorage.setItem('rockola_nombre', data.nombre);
-    actualizarPillPerfil(data.nombre);
-    document.getElementById('ident-modal').style.display = 'none';
-    actualizarCola();
-  } catch(e) {
-    errDiv.textContent = 'Error de red. Intenta de nuevo.';
-    errDiv.style.display = 'block';
-  }
-}
-
-function actualizarPillPerfil(nombre) {
-  if (nombre && CURRENT_TERCERO_ID !== null) {
-    document.getElementById('perfil-nombre').textContent = nombre;
-    document.getElementById('btn-perfil').style.display = 'inline-block';
-  } else {
-    document.getElementById('btn-perfil').style.display = 'none';
-  }
-}
-
-function abrirPerfil() {
-  document.getElementById('perf-telefono').value = localStorage.getItem('rockola_telefono') || '';
-  document.getElementById('perf-nombre').value = localStorage.getItem('rockola_nombre') || '';
-  document.getElementById('perf-pin-actual').value = '';
-  document.getElementById('perf-pin-nuevo').value = '';
-  document.getElementById('perf-pin-confirmar').value = '';
-  document.getElementById('perf-error').style.display = 'none';
-  document.getElementById('perfil-modal').style.display = 'flex';
-}
-
-function cerrarPerfil() {
-  document.getElementById('perfil-modal').style.display = 'none';
-}
-
-async function guardarPerfil() {
-  const nombre = document.getElementById('perf-nombre').value.trim();
-  const pinActual = document.getElementById('perf-pin-actual').value.trim();
-  const pinNuevo = document.getElementById('perf-pin-nuevo').value.trim();
-  const pinConfirmar = document.getElementById('perf-pin-confirmar').value.trim();
-  const errDiv = document.getElementById('perf-error');
-  errDiv.style.display = 'none';
-
-  if (!nombre) {
-    errDiv.textContent = 'El nombre es requerido';
-    errDiv.style.display = 'block';
-    return;
-  }
-  if (!pinActual) {
-    errDiv.textContent = 'Ingresa tu PIN actual para confirmar';
-    errDiv.style.display = 'block';
-    return;
-  }
-  if (pinNuevo) {
-    if (pinNuevo.length !== 4 || isNaN(pinNuevo)) {
-      errDiv.textContent = 'El nuevo PIN debe tener 4 números';
-      errDiv.style.display = 'block';
-      return;
-    }
-    if (pinNuevo !== pinConfirmar) {
-      errDiv.textContent = 'Los nuevos PINs no coinciden';
-      errDiv.style.display = 'block';
-      return;
-    }
-  }
-
-  try {
-    const res = await fetch('/rockola/actualizar-perfil', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nombre: nombre, pin_actual: pinActual, pin_nuevo: pinNuevo })
-    });
-    const data = await res.json();
-    if (!res.ok || !data.ok) {
-      errDiv.textContent = data.error || 'Error al guardar';
-      errDiv.style.display = 'block';
-      return;
-    }
-
-    localStorage.setItem('rockola_nombre', data.nombre);
-    actualizarPillPerfil(data.nombre);
-    cerrarPerfil();
-    showToast('Perfil actualizado con éxito ✓', 'ok');
-    actualizarCola();
-  } catch(e) {
-    errDiv.textContent = 'Error de red. Intenta de nuevo.';
-    errDiv.style.display = 'block';
-  }
-}
-
-async function checkAutologin() {
-  if (CURRENT_TERCERO_ID !== null) {
-    actualizarPillPerfil(localStorage.getItem('rockola_nombre'));
-    return;
-  }
-  
-  const localTel = localStorage.getItem('rockola_telefono');
-  if (localTel) {
-    document.getElementById('ident-telefono').value = localTel;
-    mostrarModalIdent();
-    verificarTelefono();
-  } else {
-    mostrarModalIdent();
-  }
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-  checkAutologin();
-});
-
-setInterval(actualizarCola, 2500);
-actualizarCola();
-actualizarBiblioteca();
-cargarMiBiblioteca();
+  cargarCola();
+  setInterval(cargarCola, 2500);
+})();
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/rockola/pwa/sw.js?v=3.1.0', { scope: '/' }).catch(() => {});
+  navigator.serviceWorker.register('/rockola/pwa/sw.js', { scope: '/' }).catch(() => {});
 }
+document.getElementById('apodo-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') enviarApodo();
+});
 </script>
 </body>
 </html>

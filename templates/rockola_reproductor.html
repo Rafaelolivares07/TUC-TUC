@@ -3312,7 +3312,7 @@ function subirYoutube(modo = 'final', urlOverride = null, duracion = '') {
   fetch(`/rockola/${SALA}/youtube`, {
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ url, owner:OWNER, modo: modo, duracion: duracion || '' })
+    body: JSON.stringify({ url, owner:OWNER, modo: modo, duracion: duracion || '', admin_key: ADMIN_KEY })
   })
   .then(r => r.json())
   .then(res => {
@@ -4605,7 +4605,7 @@ async function ponerLocal(id, modo = 'final') {
   // Si hay red y estamos en una sala remota, sincronizar en segundo plano
   if (navigator.onLine && SALA !== 'local') {
     try {
-      const body = { local_id: localIdCola, nombre:cancion.nombre, owner:OWNER, device_id:getDeviceId(), modo: modo };
+      const body = { local_id: localIdCola, nombre:cancion.nombre, owner:OWNER, device_id:getDeviceId(), modo: modo, admin_key: ADMIN_KEY };
       fetch(`/rockola/${SALA}/local`, {
         method:'POST',
         headers:{'Content-Type':'application/json'},
@@ -4683,7 +4683,7 @@ async function ponerServer(archivoId, modo = 'final') {
     const res = await fetch(`/rockola/${SALA}/biblioteca/${encodeURIComponent(archivoId)}/poner`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ modo: modo })
+      body: JSON.stringify({ modo: modo, admin_key: ADMIN_KEY })
     });
     const data = await res.json();
     if (data.ok) {

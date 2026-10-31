@@ -680,12 +680,12 @@ def pwa_manifest():
 @bp.route('/pwa/sw.js')
 def pwa_sw():
     js = """
-const CACHE = 'rockola-pwa-v7';
+const CACHE = 'rockola-pwa-v8';
 const CORE = [
   '/rockola',
   '/rockola/',
   '/rockola/pwa/offline',
-  '/rockola/pwa/manifest.json',
+  '/rockola/pwa/manifest.json?v=8',
   '/static/rockola-icon-192.png',
   '/static/rockola-icon-512.png',
   '/static/rockola-icon-maskable-512.png'

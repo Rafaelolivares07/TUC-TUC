@@ -2130,7 +2130,8 @@ def control_claim(sala_id):
         sala = _get_sala(conn, sala_id)
     finally:
         conn.close()
-    if sala.get('dispositivo_reproductor') and sala['dispositivo_reproductor'] == dispositivo_id:
+    owner = sala.get('dispositivo_reproductor_id') or ''
+    if owner and owner == dispositivo_id:
         return jsonify(ok=True, admin_key=sala.get('admin_key', ''))
     return jsonify(ok=False, error='Solo el equipo que suena puede reclamar'), 403
 

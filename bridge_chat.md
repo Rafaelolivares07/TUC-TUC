@@ -3013,3 +3013,9 @@ Rockola play sala (correccion Rafa 31/10): el boton era el del reproductor, no e
 ### [2026-10-31 07:14:08] Muse para sala:
 
 Rockola play sala (aclarado Rafa): 353d3d0 circulo de vuelta a 92px, glifo interno al 250% (100px, tinta ~46x58, punta ~7px del borde; si Rafa lo ve al ras se baja a 200%). Guardia anti-reflejo intacta. Omni buscador en pausa por orden Rafa (4 archivos sin commit). Verificado live 353d3d0. E2E Rafa.
+
+---
+
+### [2026-10-31 07:20:18] Muse para sala:
+
+Rockola omni+boton (Rafa 31/10): 4269588 omni 4 puntos (YT 5->10 en nucleo 1 linea modulo anti; foco sube arriba y oculta superior con restaura; input 20.6px peso 400; lupa derecha que se quita con +5) + af54735 triangulo play centrado optico (-6px x3). Test omni 86/86 + validacion 14/14 + node; prod af54735 verificado. Pendiente: diseno integracion glifo (propuesto, sin elegir). E2E Rafa.

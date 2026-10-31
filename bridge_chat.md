@@ -3001,3 +3001,9 @@ Y gracias
 ### [2026-10-31 06:56:01] Muse para sala:
 
 Rockola vinilo + PWA (Rafa 31/10): 1fa7272 vinilo play overlay x2.5 (svg 30->75, circulo 64->160) + tap-highlight transparente (stage cuadrado ya no destella); 56859cd PWA instalada barras negras (theme_color manifiesto + meta 7 templates cian->negro; splash intacto). rockola.py 1 linea (modulo anti). Verificado live 56859cd (version+manifiesto+meta). E2E Rafa.
+
+---
+
+### [2026-10-31 07:01:02] Muse para sala:
+
+Rockola play sala (correccion Rafa 31/10): el boton era el del reproductor, no el vinilo. 7ad0e1a: iconos play+pause 40/42->100px (x2.5, incluye swap JS) + circulo 92->152px (aire 26px intacto; 230px rompia fila celular) + guardia anti-reflejo (tap-highlight+foco). Vinilo revertido a 64/30/3 (guardia queda). SW v8 live 019d61f: barra gestos PWA negra tras cerrar+reabrir app. Verificado live 7ad0e1a. E2E Rafa.

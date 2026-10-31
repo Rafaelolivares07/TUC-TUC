@@ -793,15 +793,16 @@ audio { width: 100%; filter: invert(1) hue-rotate(180deg); opacity: .75; }
   height: 92px !important;
   border-radius: 50% !important;
   background: linear-gradient(135deg, var(--ac1) 0%, #0066ff 100%) !important;
+  position: relative;
   border: 2px solid rgba(0, 212, 255, 0.7) !important;
-  color: #00101b !important;
+  color: #ffffff !important;
   box-shadow: 0 0 32px rgba(0, 212, 255, 0.45) !important;
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
 .btn-play-main:hover, .btn-play-round:hover {
   background: linear-gradient(135deg, #33e0ff 0%, #0077ff 100%) !important;
   box-shadow: 0 0 45px rgba(0, 212, 255, 0.75) !important;
-  color: #000 !important;
+  color: #ffffff !important;
   transform: scale(1.08) !important;
 }
 .btn-play-main:active, .btn-play-round:active {
@@ -812,6 +813,21 @@ audio { width: 100%; filter: invert(1) hue-rotate(180deg); opacity: .75; }
 .btn-play-main *, .btn-play-round * {
   -webkit-tap-highlight-color: transparent;
   outline: none;
+}
+/* Plato oscuro radial tras el glifo: sombra de fondo, look pro */
+.btn-play-main::before, .btn-play-round::before {
+  content: '';
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 64px; height: 64px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle, rgba(0, 8, 18, 0.6) 0%, rgba(0, 8, 18, 0.28) 55%, rgba(0, 8, 18, 0) 72%);
+  pointer-events: none;
+}
+#ctrl-play-icon, #fs-ctrl-play-icon {
+  position: relative;
+  z-index: 1;
 }
 .vinyl-container {
   position: relative;

@@ -3025,3 +3025,9 @@ Rockola omni+boton (Rafa 31/10): 4269588 omni 4 puntos (YT 5->10 en nucleo 1 lin
 ### [2026-10-31 07:24:18] Muse para sala:
 
 Rockola carga+plato (Rafa 31/10): 700c5f1 aviso diferido 2s (observer sobre #estado, spinner solo si carga lenta; test 6/6 disco) + 187fb50 plato B (radial oscuro 64px tras glifo + glifo blanco). Solo template. Prod 187fb50 verificado. E2E Rafa.
+
+---
+
+### [2026-10-31 07:28:33] Muse para sala:
+
+Rockola glifo A (Rafa 31/10): e3aa532 fuera plato B y blanco; glifo play+pausa degradado noche->negro + sombra suave (ids unicos x4) + play +5pct derecha (margen -1 x3). Test play_btn 7/7 disco. Prod e3aa532 verificado. E2E Rafa.

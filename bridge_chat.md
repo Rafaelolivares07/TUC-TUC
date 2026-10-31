@@ -3063,3 +3063,9 @@ Rockola foco3 (Rafa 31/10, intermitente): c4437c2 subida persistente mientras en
 ### [2026-10-31 07:53:46] Muse para sala:
 
 Rockola query (Rafa 31/10): 651984f compacto sigue texto en resize (ocultar teclado ya no baja input; suprimido tras elegir/descartar) + resultados titulo 16.9/meta 14.3 peso 400. Test 102/102; prod 651984f verificado. E2E Rafa.
+
+---
+
+### [2026-10-31 08:24:44] Muse para sala:
+
+Rockola cliente-min (Rafa 31/10): 118d13b rewrite cliente 2110->290 (5 elementos + tuya + apodo; fuera splash/PIN/tabs/upload/biblios) + POST /rockola/apodo (sesion>dispositivo>token>crear; col nueva dispositivos.tercero_id) + candado modo final salvo admin x3 + admin_key en 3 poner DJ (modulo anti, cambios avisados). Test cliente 20/20 + resto verdes; apodo FUNCIONAL vivo (tercero 153). E2E Rafa. Pendiente: sync.html, /subir, unificacion.

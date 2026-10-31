@@ -667,7 +667,7 @@ def pwa_manifest():
         "scope": scope,
         "display": "standalone",
         "background_color": "#060c18",
-        "theme_color": "#00d4ff",
+        "theme_color": "#000000",
         "icons": [
             {"src": "/static/rockola-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
             {"src": "/static/rockola-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},

@@ -372,6 +372,13 @@
       box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.8);
       animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
     }
+    body.omni-foco .modal-sheet {
+      height: 100vh;
+      height: 100dvh;
+      max-height: 100dvh;
+      border-radius: 0;
+      overflow-y: auto;
+    }
     @keyframes slideUp {
       from { transform: translateY(100%); }
       to { transform: translateY(0); }
@@ -597,7 +604,7 @@
   <!-- Modal Pedir Canción al DJ -->
   <div class="modal-backdrop" id="modal-peticion">
     <div class="modal-sheet">
-      <div class="modal-handle"></div>
+      <div class="modal-handle ocultar-en-foco-omni"></div>
       <div class="modal-title ocultar-en-foco-omni">¿Qué canción quieres escuchar? 🎵</div>
       <div class="modal-sub ocultar-en-foco-omni">
         Escribe la canción o artista que quieras y nuestro DJ te la busca y despacha en vivo.

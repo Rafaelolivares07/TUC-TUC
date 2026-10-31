@@ -222,19 +222,29 @@ function omniRestaurarScroll() {
   omniScrollPrevio = null;
 }
 function omniEnFoco() {
-  omniGuardarScroll();
   document.body.classList.add('omni-foco');
+  try { omniGuardarScroll(); } catch (e0) {}
   const llevarArriba = () => {
     const cont = document.getElementById(OMNI_ID + '-search-container');
     if (cont && cont.scrollIntoView) {
       try { cont.scrollIntoView({block: 'start'}); } catch (e) { cont.scrollIntoView(); }
     }
   };
-  llevarArriba();
+  try { llevarArriba(); } catch (e1) {}
   setTimeout(() => {
     const inp = document.getElementById(OMNI_ID + '-search-input');
-    if (inp && document.activeElement === inp) llevarArriba();
+    if (inp && document.activeElement === inp) { try { llevarArriba(); } catch (e2) {} }
   }, 400);
+  try {
+    if (window.visualViewport) {
+      const rev = () => {
+        const inp2 = document.getElementById(OMNI_ID + '-search-input');
+        if (inp2 && document.activeElement === inp2) { try { llevarArriba(); } catch (e3) {} }
+        try { window.visualViewport.removeEventListener('resize', rev); } catch (e4) {}
+      };
+      window.visualViewport.addEventListener('resize', rev);
+    }
+  } catch (e5) {}
 }
 
 function limpiarBusquedaOmni() {

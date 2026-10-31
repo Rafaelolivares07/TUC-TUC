@@ -793,16 +793,15 @@ audio { width: 100%; filter: invert(1) hue-rotate(180deg); opacity: .75; }
   height: 92px !important;
   border-radius: 50% !important;
   background: linear-gradient(135deg, var(--ac1) 0%, #0066ff 100%) !important;
-  position: relative;
   border: 2px solid rgba(0, 212, 255, 0.7) !important;
-  color: #ffffff !important;
+  color: #00101b !important;
   box-shadow: 0 0 32px rgba(0, 212, 255, 0.45) !important;
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
 .btn-play-main:hover, .btn-play-round:hover {
   background: linear-gradient(135deg, #33e0ff 0%, #0077ff 100%) !important;
   box-shadow: 0 0 45px rgba(0, 212, 255, 0.75) !important;
-  color: #ffffff !important;
+  color: #000 !important;
   transform: scale(1.08) !important;
 }
 .btn-play-main:active, .btn-play-round:active {
@@ -813,21 +812,6 @@ audio { width: 100%; filter: invert(1) hue-rotate(180deg); opacity: .75; }
 .btn-play-main *, .btn-play-round * {
   -webkit-tap-highlight-color: transparent;
   outline: none;
-}
-/* Plato oscuro radial tras el glifo: sombra de fondo, look pro */
-.btn-play-main::before, .btn-play-round::before {
-  content: '';
-  position: absolute;
-  top: 50%; left: 50%;
-  width: 64px; height: 64px;
-  border-radius: 50%;
-  transform: translate(-50%, -50%);
-  background: radial-gradient(circle, rgba(0, 8, 18, 0.6) 0%, rgba(0, 8, 18, 0.28) 55%, rgba(0, 8, 18, 0) 72%);
-  pointer-events: none;
-}
-#ctrl-play-icon, #fs-ctrl-play-icon {
-  position: relative;
-  z-index: 1;
 }
 .vinyl-container {
   position: relative;
@@ -1442,7 +1426,7 @@ input:checked + .slider:before {
           </button>
           <button class="btn-control-round btn-play-main" id="btn-play-pause-ctrl" onclick="togglePlayPause()" title="Reproducir / Pausar">
             <span id="ctrl-play-icon" style="display:flex;align-items:center;justify-content:center;">
-              <svg style="width:100px;height:100px;margin-left:-6px;" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+              <svg style="width:100px;height:100px;margin-left:-1px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.45));" viewBox="0 0 24 24"><defs><linearGradient id="gradPlayCtrl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#16406e"/><stop offset="0.55" stop-color="#060f1c"/><stop offset="1" stop-color="#000000"/></linearGradient></defs><path d="M8 5v14l11-7z" fill="url(#gradPlayCtrl)"/></svg>
             </span>
           </button>
           <button class="btn-control-round btn-skip" onclick="saltarActual()" title="Siguiente (Saltar)">
@@ -1897,7 +1881,7 @@ input:checked + .slider:before {
       </button>
       <button class="btn-control-round btn-play-main" id="fs-btn-play" onclick="togglePlayPause()" title="Reproducir / Pausar">
         <span id="fs-ctrl-play-icon" style="display:flex;align-items:center;justify-content:center;">
-          <svg style="width:100px;height:100px;margin-left:-6px;" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          <svg style="width:100px;height:100px;margin-left:-1px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.45));" viewBox="0 0 24 24"><defs><linearGradient id="gradPlayFs" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#16406e"/><stop offset="0.55" stop-color="#060f1c"/><stop offset="1" stop-color="#000000"/></linearGradient></defs><path d="M8 5v14l11-7z" fill="url(#gradPlayFs)"/></svg>
         </span>
       </button>
       <button class="btn-control-round btn-skip" onclick="saltarActual()" title="Siguiente">
@@ -6644,8 +6628,8 @@ function actualizarPlayPauseBtn(isPlaying) {
   const ctrlIcon = document.getElementById('ctrl-play-icon');
   const fsCtrlIcon = document.getElementById('fs-ctrl-play-icon');
 
-  const pauseSvg = '<svg style="width:100px;height:100px;" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
-  const playSvg = '<svg style="width:100px;height:100px;margin-left:-6px;" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+  const pauseSvg = '<svg style="width:100px;height:100px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.45));" viewBox="0 0 24 24"><defs><linearGradient id="gradPauseJs" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#16406e"/><stop offset="0.55" stop-color="#060f1c"/><stop offset="1" stop-color="#000000"/></linearGradient></defs><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" fill="url(#gradPauseJs)"/></svg>';
+  const playSvg = '<svg style="width:100px;height:100px;margin-left:-1px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.45));" viewBox="0 0 24 24"><defs><linearGradient id="gradPlayJs" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#16406e"/><stop offset="0.55" stop-color="#060f1c"/><stop offset="1" stop-color="#000000"/></linearGradient></defs><path d="M8 5v14l11-7z" fill="url(#gradPlayJs)"/></svg>';
 
   if (ctrlIcon) {
     ctrlIcon.innerHTML = isPlaying ? pauseSvg : playSvg;

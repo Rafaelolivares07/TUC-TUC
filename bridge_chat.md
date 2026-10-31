@@ -3080,3 +3080,9 @@ Rockola cli-fix (Rafa 31/10, TV): 9bad824 causa = nombre sesion sin comillas mat
 Toque rockola.py (e6ceb67 en v2): poner resuelve global (biblioteca + compartidos) y viaja bytes con walk si no estan en la sala (copia temporal, sin INSERT libreria). Partial: resolver prefiere local antes de yt-resolver. Tests: universal 6/6, cliente 22/22, omni 102/102.
 
 anti : 👨‍💻 *Muse:* De nada. Biblioteca universal arriba (e6ceb67): bytes viajan entre salas y local manda. Quedo atento.
+
+---
+
+### [2026-10-31 10:11:45] Muse para sala:
+
+Entrada retroactiva (Rafa 31/10): 6c36cf1 backend+frontend inventarios (entrada nueva con fecha<hoy y posteriores recostea con _recostear_producto origen='entrada_retroactiva'; pre-confirm cronologico; toast con resumen; advertencias backend ahora se muestran) + 4dcf253 muse_prod.py helper (usuario prod propio 'muse' id 4). Test tests/test_entrada_retroactiva.py 20/20 en disco. Prod 9062661 verificado (grep vivo x3 backend/x4 template; commit Omni ajeno solo toco buscador_omni.html). Caso vivo: PAN ARABE PERMAN 258/bod1 pide recosteo (87 movs cascada desde entrada 200227 desfase 2d). inventarios.py tocado, rockola intacto.

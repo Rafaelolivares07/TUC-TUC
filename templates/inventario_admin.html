@@ -11643,6 +11643,14 @@ async function registrarEntrada() {
 
 
 
+  if (!esModificacionDoc && fecha_documento && fecha_documento < getFechaHoyBogota()) {
+    const _hoyB = getFechaHoyBogota();
+    const _diasRetro = Math.round((new Date(_hoyB + 'T12:00:00') - new Date(fecha_documento + 'T12:00:00')) / 86400000);
+    if (!confirm(`⚠️ Entrada retroactiva: la fecha ${fecha_documento} es ${_diasRetro} día(s) anterior a hoy.\n\nEsto altera el orden cronológico del Kardex: las ventas posteriores se costearon sin esta compra. Al registrar se correrá recosteo automático sobre los productos afectados.\n\n¿Registrar de todos modos?`)) {
+      return;
+    }
+  }
+
   const r = await fetch(`/api/inventario/${NEGOCIO_ID}/entrada`, {
 
     method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -11662,7 +11670,13 @@ async function registrarEntrada() {
 
   if (d.ok) {
 
-    toast('Entrada registrada');
+    let _msgEntrada = 'Entrada registrada';
+    if (d.recosteo_automatico && d.recosteo_automatico.length) {
+      const _tMov = d.recosteo_automatico.reduce((a, r) => a + (r.movimientos_ajustados || 0), 0);
+      _msgEntrada += `. Recosteo automático: ${d.recosteo_automatico.length} producto(s), ${_tMov} mov(s) revalorizados`;
+    }
+    toast(_msgEntrada);
+    (d.advertencias || []).forEach(a => toast(a));
 
     avisarMetodosSinCuentaEntrada(metodo_pago);
 

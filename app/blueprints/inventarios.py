@@ -1862,6 +1862,45 @@ def _aplicar_tarjeta(conn, negocio_id, producto_id, cantidad, tipo, motivo,
                      tipo_documento_id=tipo_documento_id, valor_total=valor_total)
 
 
+def _es_entrada_retroactiva(documento_fecha, hoy=None):
+    """True si la fecha contable del documento es anterior a hoy (Bogotá)."""
+    if not documento_fecha:
+        return False
+    try:
+        return documento_fecha < (hoy if hoy is not None else _hoy_bogota())
+    except Exception:
+        return False
+
+
+def _tiene_movimientos_posteriores(conn, negocio_id, producto_id, fecha, bodega=None):
+    """True si hay movimientos con fecha contable posterior a `fecha` (misma bodega).
+
+    Fecha contable = COALESCE(documento_fecha, created_at::date), igual que el
+    orden cronológico del Kardex y del recosteo.
+    """
+    sql = """
+        SELECT COUNT(*) AS total FROM movimientos_inventario
+        WHERE negocio_id = %s AND producto_id = %s
+          AND COALESCE(documento_fecha, created_at::date) > %s
+    """
+    params = [negocio_id, producto_id, fecha]
+    if bodega is not None:
+        try:
+            b = int(bodega)
+        except Exception:
+            b = 1
+        if b == 1:
+            sql += " AND (bodega = 1 OR bodega IS NULL)"
+        else:
+            sql += " AND bodega = %s"
+            params.append(b)
+    try:
+        row = conn.execute(sql, tuple(params)).fetchone()
+        return (row['total'] if row else 0) > 0
+    except Exception:
+        return False
+
+
 def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
     from datetime import datetime
     lineas = data.get('lineas', [])
@@ -2310,19 +2349,43 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
             except Exception:
                 pass
 
-    # Recostear solo si es modificacion de documento existente
-    # (se elimino y re-registro, cambiando los movimientos)
-    # Compra nueva NO necesita recosteo — solo actualiza saldos_inventario
+    # Recosteo con el motor único (_recostear_producto):
+    # - modificación: siempre (el documento se eliminó y re-registró)
+    # - entrada nueva retroactiva (fecha < hoy) con posteriores: también
+    prods_to_recost = set()
     if es_modificacion:
         prods_to_recost = set(data.get('_prod_ids_to_recost', []))
         for ln in lineas_procesadas:
             prods_to_recost.add(ln['producto_id'])
-        for p_id in prods_to_recost:
+    elif _es_entrada_retroactiva(documento_fecha):
+        for ln in lineas_procesadas:
+            try:
+                if _tiene_movimientos_posteriores(conn, negocio_id, ln['producto_id'], documento_fecha, bodega_entrada):
+                    prods_to_recost.add(ln['producto_id'])
+            except Exception:
+                pass
+    recosteo_auto = []
+    for _pid in sorted(prods_to_recost if not es_modificacion else []):
+        res_p = _recostear_producto(conn, negocio_id, _pid, origen='entrada_retroactiva', doc_tipo=tipo_documento, doc_num=documento_numero)
+        recosteo_auto.append({
+            'producto_id': _pid,
+            'producto_nombre': res_p.get('producto_nombre'),
+            'movimientos_procesados': res_p.get('movimientos_procesados', 0),
+            'movimientos_ajustados': res_p.get('movimientos_ajustados', 0),
+        })
+    if recosteo_auto:
+        tot_aj = sum(r['movimientos_ajustados'] for r in recosteo_auto)
+        advertencias.append(
+            f"Entrada retroactiva ({documento_fecha.isoformat()}): recosteo automático en "
+            f"{len(recosteo_auto)} producto(s), {tot_aj} movimiento(s) revalorizado(s)."
+        )
+        for p_id in (prods_to_recost if es_modificacion else []):
             _recostear_producto(conn, negocio_id, p_id)
 
     return {
         'ok': True,
         'advertencias': advertencias,
+        'recosteo_automatico': recosteo_auto,
         'lineas': len(lineas),
         'subtotal_compra': float(subtotal_compra),
         'iva_compra': float(iva_total),

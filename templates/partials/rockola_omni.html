@@ -170,6 +170,7 @@ const OMNI_CATALOGO = {{ omni_catalogo|default('')|tojson }};
 const OMNI_MEDIA = {{ omni_media|default('')|tojson }};
 const OMNI_EMPTY = {{ omni_empty|default('No se encontraron resultados para "{q}".')|tojson }};
 const OMNI_BTN_TITLE = {{ omni_btn_title|default('Reproducir')|tojson }};
+const OMNI_RESOLVER = {{ omni_resolver|default('/rockola/yt-resolver')|tojson }};
 let busquedaOmniTimeout = null;
 
 function onInputRockolaOmni(val) {
@@ -291,7 +292,7 @@ async function omniResolverYPlay(nombre) {
       const hit = (cancionesLocales || []).find(c => limpiarNombre(c.nombre || '').toLowerCase() === qn);
       if (hit) { omniElegir('local', hit.id, limpiarNombre(hit.nombre)); return; }
     }
-    const res = await fetch('/rockola/yt-resolver?q=' + encodeURIComponent(nombre || ''));
+    const res = await fetch(OMNI_RESOLVER + '?q=' + encodeURIComponent(nombre || ''));
     const data = await res.json();
     if (data && data.ok && data.youtube_url) {
       omniElegir('youtube', data.youtube_url, data.nombre || nombre, data.duracion || '');

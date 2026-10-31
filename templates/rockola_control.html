@@ -99,6 +99,18 @@ input[type=range].slider-range { width:100%; margin:0; padding:0; border:none; b
   <div id="panel">
     <div class="muted" id="holder-line" style="margin-bottom:8px"></div>
     <div class="card">
+      <div class="label">Programar música</div>
+      {% set omni_id = 'control' %}
+      {% set omni_endpoint = '/rockola/' ~ sala_id ~ '/buscar-global' %}
+      {% set omni_media = '/rockola/' ~ sala_id ~ '/archivo/' %}
+      {% set omni_resolver = '/rockola/' ~ sala_id ~ '/yt-resolver' %}
+      {% set omni_select = 'encolarDesdeControl' %}
+      {% set omni_placeholder = 'Buscar canción...' %}
+      {% set omni_btn_title = 'Encolar' %}
+      {% include 'partials/rockola_omni.html' %}
+      <div class="muted" id="omni-status"></div>
+    </div>
+    <div class="card">
       <div class="label">Sonando ahora</div>
       <div class="now" id="sonando">Esperando canciones...</div>
       <div class="actions">
@@ -324,6 +336,26 @@ async function verificarKey() {
   document.getElementById('holder-line').textContent = d.control_en ? 'Control: ' + d.control_en : '';
   mostrarLogin(!d.autorizado);
   return d.autorizado;
+}
+
+async function encolarDesdeControl(tipo, idOUrl, nombre, duracion) {
+  const st = document.getElementById('omni-status');
+  try {
+    let url = '', body = {};
+    if (tipo === 'youtube') {
+      url = `/rockola/${SALA}/youtube`;
+      body = { url: idOUrl, modo: 'final', duracion: duracion || '' };
+    } else {
+      url = `/rockola/${SALA}/biblioteca/${encodeURIComponent(idOUrl)}/poner`;
+      body = { modo: 'final' };
+    }
+    const res = await fetch(url, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
+    const data = await res.json();
+    if (st) st.textContent = data.ok ? 'Encolada ✓ ' + (nombre || '') : (data.error || 'No se pudo encolar');
+    if (data.ok) actualizar();
+  } catch (e) {
+    if (st) st.textContent = 'Sin conexión';
+  }
 }
 
 async function actualizar() {

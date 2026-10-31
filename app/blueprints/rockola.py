@@ -1369,7 +1369,8 @@ def duracion_youtube_guardada():
 
 
 @bp.route('/yt-resolver')
-def resolver_youtube_top():
+@bp.route('/<sala_id>/yt-resolver')
+def resolver_youtube_top(sala_id=None):
     """Top-1 YouTube para una búsqueda: tocar fila de catálogo = suena directo."""
     q = (request.args.get('q') or '').strip()
     if len(q) < 2:

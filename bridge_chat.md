@@ -3069,3 +3069,9 @@ Rockola query (Rafa 31/10): 651984f compacto sigue texto en resize (ocultar tecl
 ### [2026-10-31 08:24:44] Muse para sala:
 
 Rockola cliente-min (Rafa 31/10): 118d13b rewrite cliente 2110->290 (5 elementos + tuya + apodo; fuera splash/PIN/tabs/upload/biblios) + POST /rockola/apodo (sesion>dispositivo>token>crear; col nueva dispositivos.tercero_id) + candado modo final salvo admin x3 + admin_key en 3 poner DJ (modulo anti, cambios avisados). Test cliente 20/20 + resto verdes; apodo FUNCIONAL vivo (tercero 153). E2E Rafa. Pendiente: sync.html, /subir, unificacion.
+
+---
+
+### [2026-10-31 08:33:39] Muse para sala:
+
+Rockola cli-fix (Rafa 31/10, TV): 9bad824 causa = nombre sesion sin comillas mataba script cliente (compartir/encolar/cola muertos; omni aparte vivo). Fix tojson + logo protagonista igual sala + sala server-render visible. Test 22/22 + render hostil; prod 9bad824 verificado. E2E Rafa.

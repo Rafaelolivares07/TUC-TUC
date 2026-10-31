@@ -1748,3 +1748,107 @@ function verKardex(id, nombre, movimientoId = null) {
     }
   });
 }
+
+/* Restauradas verbatim de 25e830b^ (faltaban en el parcial standalone) */
+
+async function confirmarReclasificarSede() {
+  if (!_movReclasificarId) return;
+  const sel = document.getElementById('mrk-select-nueva-sede');
+  const nuevaBodegaId = sel ? Number(sel.value) : null;
+  if (!nuevaBodegaId) {
+    toast('Selecciona una sede de destino válida', false);
+    return;
+  }
+
+  const checkTodoDoc = document.getElementById('mrk-check-todo-doc');
+  const moverTodoDoc = checkTodoDoc ? checkTodoDoc.checked : false;
+
+  const btn = document.getElementById('mrk-btn-confirmar');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span>Reclasificando y recosteando…</span>';
+  }
+
+  try {
+    toast('Reclasificando movimiento y sincronizando contabilidad...');
+    const r = await fetch(`/api/inventario/movimiento/${_movReclasificarId}/reclasificar_bodega`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        nueva_bodega_id: nuevaBodegaId,
+        reclasificar_todo_documento: moverTodoDoc
+      })
+    });
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error(d.error || 'No fue posible reclasificar el movimiento');
+
+    toast(d.mensaje || 'Movimiento reclasificado con éxito');
+    cerrarModalReclasificarKardex();
+
+    // Recargar Kardex en la pantalla
+    if (kardexProductoActual) {
+      await cargarKardex(kardexProductoActual);
+    }
+  } catch (err) {
+    toast(err.message, false);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<span>Reclasificar y Recostear</span>';
+    }
+  }
+}
+
+
+
+async function guardarFechaDocumento() {
+  const modal = document.getElementById('modal-fecha-documento');
+  const fecha = document.getElementById('fecha-doc-nueva').value;
+  const hora = document.getElementById('hora-doc-nueva').value;
+  const hoy = getFechaHoyBogota();
+  const btn = document.getElementById('btn-guardar-fecha-doc');
+
+  if (!fecha) { toast('Selecciona una fecha.', false); return; }
+  if (fecha > hoy) { toast('La fecha no puede ser futura.', false); return; }
+
+  btn.disabled = true;
+  const originalHtml = btn.innerHTML;
+  btn.innerHTML = '<span>Aplicando y recosteando…</span>';
+
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/documento/cambiar-fecha`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        tipo_documento_id: Number(modal.dataset.tipoDocumentoId) || null,
+        tipo_documento: modal.dataset.tipoDocumento || null,
+        documento_numero: modal.dataset.documentoNumero,
+        nueva_fecha: fecha,
+        nueva_hora: hora || null
+      })
+    });
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error(d.error || 'No se pudo cambiar la fecha.');
+
+    cerrarModalFechaDocumento();
+    toast(`✓ Documento actualizado. ${d.productos_recosteados} producto(s) recosteados exitosamente.`);
+    if (kardexProductoActual) {
+      await cargarKardex(kardexProductoActual);
+    }
+  } catch (error) {
+    toast(error.message, false);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = originalHtml;
+  }
+}
+
+
+
+function cerrarModalFechaDocumento() {
+  const modal = document.getElementById('modal-fecha-documento');
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+}
+
+

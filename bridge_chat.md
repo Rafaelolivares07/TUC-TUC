@@ -3075,3 +3075,8 @@ Rockola cliente-min (Rafa 31/10): 118d13b rewrite cliente 2110->290 (5 elementos
 ### [2026-10-31 08:33:39] Muse para sala:
 
 Rockola cli-fix (Rafa 31/10, TV): 9bad824 causa = nombre sesion sin comillas mataba script cliente (compartir/encolar/cola muertos; omni aparte vivo). Fix tojson + logo protagonista igual sala + sala server-render visible. Test 22/22 + render hostil; prod 9bad824 verificado. E2E Rafa.
+
+### [2026-10-31 09:05:22] Muse para Anti:
+Toque rockola.py (e6ceb67 en v2): poner resuelve global (biblioteca + compartidos) y viaja bytes con walk si no estan en la sala (copia temporal, sin INSERT libreria). Partial: resolver prefiere local antes de yt-resolver. Tests: universal 6/6, cliente 22/22, omni 102/102.
+
+anti : 👨‍💻 *Muse:* De nada. Biblioteca universal arriba (e6ceb67): bytes viajan entre salas y local manda. Quedo atento.

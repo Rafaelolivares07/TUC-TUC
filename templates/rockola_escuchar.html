@@ -598,13 +598,13 @@
   <div class="modal-backdrop" id="modal-peticion">
     <div class="modal-sheet">
       <div class="modal-handle"></div>
-      <div class="modal-title">¿Qué canción quieres escuchar? 🎵</div>
-      <div class="modal-sub">
+      <div class="modal-title ocultar-en-foco-omni">¿Qué canción quieres escuchar? 🎵</div>
+      <div class="modal-sub ocultar-en-foco-omni">
         Escribe la canción o artista que quieras y nuestro DJ te la busca y despacha en vivo.
       </div>
 
       <div class="input-grp" style="position: relative;">
-        <label class="input-label" for="vinilo-search-input">Canción o Artista</label>
+        <label class="input-label ocultar-en-foco-omni" for="vinilo-search-input">Canción o Artista</label>
         {% set omni_id = 'vinilo' %}
         {% set omni_endpoint = '/rockola/c/' ~ token ~ '/sugerencias' %}
         {% set omni_select = 'seleccionarOmniVinilo' %}

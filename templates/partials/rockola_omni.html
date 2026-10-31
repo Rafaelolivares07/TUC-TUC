@@ -14,6 +14,10 @@
   width: 100%;
   position: relative;
   margin-bottom: 14px;
+  scroll-margin-top: 8px;
+}
+body.omni-foco .ocultar-en-foco-omni {
+  display: none !important;
 }
 .global-search-bar {
   display: flex;
@@ -37,12 +41,12 @@
   outline: none;
   color: #fff;
   font-family: inherit;
-  font-size: 16.5px;
-  font-weight: 600;
+  font-size: 20.6px;
+  font-weight: 400;
 }
 .global-search-input::placeholder {
   color: var(--muted);
-  font-size: 15.3px;
+  font-size: 19.1px;
 }
 .global-results-box {
   position: absolute;
@@ -136,8 +140,8 @@
 </style>
 <div class="global-search-card" id="{{ oid }}-search-container">
   <div class="global-search-bar">
-    <span style="font-size:17.7px; color:var(--ac1);">🔍</span>
-    <input type="text" id="{{ oid }}-search-input" class="global-search-input" placeholder="{{ omni_placeholder|default('Buscar canción...') }}" autocomplete="off" oninput="onInputRockolaOmni(this.value)">
+    <input type="text" id="{{ oid }}-search-input" class="global-search-input" placeholder="{{ omni_placeholder|default('Buscar canción...') }}" autocomplete="off" oninput="onInputRockolaOmni(this.value)" onfocus="omniEnFoco()">
+    <span id="{{ oid }}-search-lupa" style="font-size:17.7px; color:var(--ac1);">🔍</span>
     <button type="button" id="{{ oid }}-btn-clear" onclick="limpiarBusquedaOmni()" style="display:none; background:none; border:none; color:var(--muted); font-size:16.5px; cursor:pointer; padding:2px 6px;">✕</button>
   </div>
   <div id="{{ oid }}-search-results" class="global-results-box" style="display:none;"></div>
@@ -170,6 +174,9 @@ function onInputRockolaOmni(val) {
   const q = (val || '').trim();
   const clearBtn = document.getElementById(OMNI_ID + '-btn-clear');
   if (clearBtn) clearBtn.style.display = q ? 'inline-block' : 'none';
+  const lupa = document.getElementById(OMNI_ID + '-search-lupa');
+  if (lupa) lupa.style.display = q.length > 5 ? 'none' : '';
+  if (!q) document.body.classList.remove('omni-foco');
 
   if (q.length < 2) {
     const box = document.getElementById(OMNI_ID + '-search-results');
@@ -184,6 +191,14 @@ function onInputRockolaOmni(val) {
   busquedaOmniTimeout = setTimeout(() => {
     ejecutarBusquedaOmni(q);
   }, 280);
+}
+
+function omniEnFoco() {
+  document.body.classList.add('omni-foco');
+  const cont = document.getElementById(OMNI_ID + '-search-container');
+  if (cont && cont.scrollIntoView) {
+    try { cont.scrollIntoView({block: 'start'}); } catch (e) { cont.scrollIntoView(); }
+  }
 }
 
 function limpiarBusquedaOmni() {
@@ -445,6 +460,7 @@ document.addEventListener('click', function(e) {
   const resultsBox = document.getElementById(OMNI_ID + '-search-results');
   if (searchContainer && resultsBox && !searchContainer.contains(e.target)) {
     resultsBox.style.display = 'none';
+    document.body.classList.remove('omni-foco');
   }
 });
 </script>

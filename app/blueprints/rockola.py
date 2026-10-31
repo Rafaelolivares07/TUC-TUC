@@ -1399,7 +1399,7 @@ def _nucleo_busqueda_rockola(conn, q):
             })
 
     # 3. YouTube en vivo nativo (sin repetir enlaces ya guardados en biblioteca)
-    youtube_items = _buscar_youtube_en_vivo(q, max_results=5)
+    youtube_items = _buscar_youtube_en_vivo(q, max_results=10)
     youtube_items = _filtrar_youtube_guardados(youtube_items, servidor_items)
 
     return servidor_items, usuarios_items, youtube_items

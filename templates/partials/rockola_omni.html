@@ -389,19 +389,30 @@ async function ejecutarBusquedaOmni(query) {
     return;
   }
 
-  // 1. Inmediato: Búsqueda local en este dispositivo (latencia 0 ms, solo reproductor)
+  // Normalizador unico de titulos (local + dedupe catalogo)
+  function omniNormTitulo(s) { return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\.[^.]+$/, '').replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim(); }
+
+  // 1. Inmediato: Búsqueda local en este dispositivo (latencia 0 ms)
   const qLower = q.toLowerCase();
   const cancionesLoc = (OMNI_LOCAL && typeof cancionesLocales !== 'undefined')
     ? (cancionesLocales || []).filter(c => {
         const n = limpiarNombre(c.nombre || '').toLowerCase();
         return n.includes(qLower);
-      }).slice(0, 10)
+      })
     : [];
+  // Dedupe: la misma cancion guardada 2+ veces se muestra una sola vez
+  const vistosLoc = new Set();
+  const cancionesLocUnicas = cancionesLoc.filter(c => {
+    const n = omniNormTitulo(limpiarNombre(c.nombre));
+    if (!n || vistosLoc.has(n)) return false;
+    vistosLoc.add(n);
+    return true;
+  }).slice(0, 10);
 
   let htmlLocal = '';
-  if (cancionesLoc.length > 0) {
+  if (cancionesLocUnicas.length > 0) {
     htmlLocal = `
-      ${cancionesLoc.map(c => `
+      ${cancionesLocUnicas.map(c => `
         <div class="global-result-row" onclick="omniElegir('local', '${escapeJs(c.id)}', '${escapeJs(limpiarNombre(c.nombre))}')">
           <div class="global-result-info">
             <div class="global-result-title" title="${escapeHtml(c.nombre)}">${escapeHtml(limpiarNombre(c.nombre))}</div>
@@ -431,9 +442,9 @@ async function ejecutarBusquedaOmni(query) {
     const youtube = data.youtube || [];
 
     // Dedupe: el catálogo repite lo que ya está en dispositivo, servidor o YouTube
-    const normTitulo = s => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\.[^.]+$/, '').replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+    const normTitulo = omniNormTitulo;
     const vistos = new Set();
-    cancionesLoc.forEach(c => vistos.add(normTitulo(limpiarNombre(c.nombre))));
+    cancionesLocUnicas.forEach(c => vistos.add(normTitulo(limpiarNombre(c.nombre))));
     servidor.forEach(s => vistos.add(normTitulo(limpiarNombre(s.nombre))));
     youtube.forEach(y => vistos.add(normTitulo(limpiarNombre(y.nombre))));
     const usuariosUnicos = usuarios.filter(u => {

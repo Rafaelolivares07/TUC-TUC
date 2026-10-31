@@ -2175,6 +2175,20 @@ def reproductor_sala(sala_id):
     return resp
 
 
+@bp.route('/<sala_id>/tv')
+def tv_sala(sala_id):
+    conn = _connect()
+    try:
+        sala = _get_sala(conn, sala_id)
+    finally:
+        conn.close()
+    resp = make_response(render_template('rockola_reproductor.html', sala_id=sala_id, admin_key=sala.get('admin_key', ''), tv_mode=True))
+    resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    resp.headers['Pragma'] = 'no-cache'
+    resp.headers['Expires'] = '0'
+    return resp
+
+
 @bp.route('/<sala_id>/control')
 def control_sala(sala_id):
     key = (request.args.get('key') or '').strip()

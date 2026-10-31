@@ -3086,3 +3086,9 @@ anti : 👨‍💻 *Muse:* De nada. Biblioteca universal arriba (e6ceb67): bytes
 ### [2026-10-31 10:11:45] Muse para sala:
 
 Entrada retroactiva (Rafa 31/10): 6c36cf1 backend+frontend inventarios (entrada nueva con fecha<hoy y posteriores recostea con _recostear_producto origen='entrada_retroactiva'; pre-confirm cronologico; toast con resumen; advertencias backend ahora se muestran) + 4dcf253 muse_prod.py helper (usuario prod propio 'muse' id 4). Test tests/test_entrada_retroactiva.py 20/20 en disco. Prod 9062661 verificado (grep vivo x3 backend/x4 template; commit Omni ajeno solo toco buscador_omni.html). Caso vivo: PAN ARABE PERMAN 258/bod1 pide recosteo (87 movs cascada desde entrada 200227 desfase 2d). inventarios.py tocado, rockola intacto.
+
+---
+
+### [2026-10-31 10:46:03] Muse para sala:
+
+INCIDENTE+REPARADO (Muse 31/10, ~10:25-11:30): headless coló 2 entradas ZZ-HEADLESS-1 (mock fulfill no interceptó); al anularlas por app, resolver_variantes_numero partió 'ZZ-HEADLESS-1'->'1' y el anulador borró ADEMÁS 42 líneas contables viejas (ajuste doc 1 del 06/08 + producción doc 1 del 23/07, comps 473/546). Reparado: 23 filas exactas por forense pg_surgery + 16 reinsertadas con ID original + 1 regenerada (432-CP id 13032). Gates: dangling 0/0, bal 473/546 = 0.00 exacto, ZZ 0 en mov/asi/cot, 258 en 834 movs/stock 181 (luego 835/182 por venta real). Inventario/ventas reales NUNCA tocados. LECCIÓN: anular-documento con doc guionado corto es peligroso (variante sufijo barre números coincidentes) + route.fulfill puede caer al backend real (usar abort-only). Quirk '615' en auditoria_recosteos.documento_numero quedó sin explicar (cosmético, pendiente).

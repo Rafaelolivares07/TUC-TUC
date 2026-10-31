@@ -19,6 +19,39 @@
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+{% if tv_mode|default(false) %}
+<style>
+body.tv-mode { background: #000; }
+body.tv-mode > *:not(#tv-display):not(script):not(style) { display: none !important; }
+body.tv-mode #tv-display { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; background: #000; color: #e8f4ff; padding: 3vh 3vw; box-sizing: border-box; font-family: 'Space Grotesk', system-ui, sans-serif; }
+.tv-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 2vh; }
+.tv-brand { font-size: clamp(28px, 3.4vw, 54px); font-weight: 900; letter-spacing: -1px; }
+.tv-sala { font-size: clamp(20px, 2.2vw, 36px); font-weight: 800; letter-spacing: 3px; color: #8aa0b8; }
+.tv-main { display: grid; grid-template-columns: 1.6fr 1fr; gap: 3vw; flex: 1; min-height: 0; }
+.tv-label { font-size: clamp(14px, 1.4vw, 24px); letter-spacing: 4px; color: #5a6f88; font-weight: 700; }
+#tv-sonando { font-size: clamp(40px, 6vw, 110px); font-weight: 800; line-height: 1.08; margin: 1vh 0; }
+#tv-owner { font-size: clamp(18px, 2vw, 34px); color: #8aa0b8; margin-bottom: 2vh; min-height: 1.2em; }
+#tv-prog { height: 10px; background: #14243a; border-radius: 6px; overflow: hidden; }
+#tv-prog-fill { height: 100%; width: 0%; background: #00d4ff; }
+#tv-time { font-size: clamp(14px, 1.5vw, 24px); color: #8aa0b8; margin-top: 1vh; font-variant-numeric: tabular-nums; min-height: 1.2em; }
+.tv-next { margin-top: 4vh; }
+#tv-next-nombre { font-size: clamp(24px, 3vw, 54px); font-weight: 600; margin-top: 1vh; }
+.tv-side { display: flex; flex-direction: column; gap: 2vh; min-height: 0; }
+.tv-qr-card { background: #fff; border-radius: 14px; padding: 14px; display: flex; gap: 14px; align-items: center; }
+#tv-qr img { display: block; }
+.tv-qr-txt { color: #0e192c; font-size: clamp(14px, 1.4vw, 22px); font-weight: 700; line-height: 1.4; }
+#tv-url { color: #0077ff; font-size: clamp(12px, 1.2vw, 18px); word-break: break-all; font-weight: 500; }
+.tv-cola-box { border: 1px solid rgba(0,212,255,0.18); border-radius: 14px; padding: 2vh 1.2vw; overflow: hidden; }
+#tv-cola { list-style: none; margin-top: 1vh; }
+#tv-cola li { display: flex; gap: 12px; font-size: clamp(16px, 1.8vw, 30px); padding: 0.9vh 0; border-bottom: 1px solid rgba(255,255,255,0.06); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#tv-cola .pos { color: #5a6f88; min-width: 2ch; text-align: right; }
+#tv-count { color: #8aa0b8; }
+#tv-start { position: fixed; inset: 0; z-index: 90; display: none; align-items: center; justify-content: center; background: #000; text-align: center; }
+body.tv-mode #tv-start.visible { display: flex; }
+#tv-btn-empezar { margin-top: 3vh; padding: 2.4vh 4vw; font-size: clamp(24px, 3vw, 54px); font-weight: 800; border: none; border-radius: 16px; background: #00d4ff; color: #00101b; cursor: pointer; font-family: inherit; }
+.tv-start-hint { margin-top: 2vh; color: #8aa0b8; font-size: clamp(16px, 1.8vw, 28px); }
+</style>
+{% endif %}
 <script src="https://www.youtube.com/iframe_api"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -7456,5 +7489,121 @@ function cerrarDebugPanel() {
   document.getElementById('debug-panel').style.display = 'none';
 }
 </script>
+{% if tv_mode|default(false) %}
+<div id="tv-display">
+  <div class="tv-head">
+    <div class="tv-brand"><span class="brand-word-mi">Mi</span> <span class="brand-word-rockola">Rockola</span></div>
+    <div class="tv-sala">SALA {{ sala_id|upper }}</div>
+  </div>
+  <div class="tv-main">
+    <div>
+      <div class="tv-label">SONANDO</div>
+      <div id="tv-sonando">--</div>
+      <div id="tv-owner"></div>
+      <div id="tv-prog"><div id="tv-prog-fill"></div></div>
+      <div id="tv-time"></div>
+      <div class="tv-next">
+        <div class="tv-label">SIGUIENTE</div>
+        <div id="tv-next-nombre">--</div>
+      </div>
+    </div>
+    <div class="tv-side">
+      <div class="tv-qr-card">
+        <div id="tv-qr"></div>
+        <div><div class="tv-qr-txt">Pide tu cancion desde el celular</div><div id="tv-url"></div></div>
+      </div>
+      <div class="tv-cola-box">
+        <div class="tv-label">EN COLA <span id="tv-count"></span></div>
+        <ul id="tv-cola"></ul>
+      </div>
+    </div>
+  </div>
+  <div id="tv-start" class="visible">
+    <div>
+      <div class="tv-brand"><span class="brand-word-mi">Mi</span> <span class="brand-word-rockola">Rockola</span></div>
+      <div class="tv-sala">SALA {{ sala_id|upper }}</div>
+      <br>
+      <button id="tv-btn-empezar">TOCAR PARA EMPEZAR</button>
+      <div class="tv-start-hint">enciende el audio del TV</div>
+    </div>
+  </div>
+</div>
+<script>
+document.body.classList.add('tv-mode');
+async function tvEmpezar() {
+  document.getElementById('tv-start').classList.remove('visible');
+  try {
+    await activar();
+  } catch (e) {
+    try {
+      [document.getElementById('player1'), document.getElementById('player2')].forEach(p => {
+        if (p) p.play().then(() => p.pause()).catch(() => {});
+      });
+    } catch (e2) {}
+  }
+  tvCargarCola();
+  setInterval(tvCargarCola, 2500);
+  setInterval(tvProgreso, 500);
+}
+function tvFmt(s) {
+  if (!s || !isFinite(s)) return '';
+  s = Math.floor(s);
+  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+}
+function tvRenderCola(items) {
+  const son = items.length ? items[0] : null;
+  document.getElementById('tv-sonando').textContent = son ? (son.nombre || 'Cancion') : '--';
+  document.getElementById('tv-owner').textContent = son && son.owner ? ('Puesta por ' + son.owner) : '';
+  const sig = items.length > 1 ? items[1] : null;
+  document.getElementById('tv-next-nombre').textContent = sig ? (sig.nombre || 'Cancion') : '--';
+  const resto = items.slice(2, 10);
+  document.getElementById('tv-count').textContent = items.length > 1 ? ('(' + (items.length - 1) + ')') : '';
+  const ul = document.getElementById('tv-cola');
+  ul.textContent = '';
+  resto.forEach((it, i) => {
+    const li = document.createElement('li');
+    const pos = document.createElement('span');
+    pos.className = 'pos';
+    pos.textContent = (i + 3);
+    const nom = document.createElement('span');
+    nom.textContent = it.nombre || 'Cancion';
+    li.appendChild(pos);
+    li.appendChild(nom);
+    ul.appendChild(li);
+  });
+  if (items.length > 10) {
+    const li = document.createElement('li');
+    li.textContent = '+' + (items.length - 10) + ' mas';
+    ul.appendChild(li);
+  }
+}
+async function tvCargarCola() {
+  try {
+    const res = await fetch('/rockola/' + encodeURIComponent(SALA) + '/cola');
+    const data = await res.json();
+    tvRenderCola((data && data.cola) || []);
+  } catch (e) {}
+}
+function tvProgreso() {
+  const els = [document.getElementById('player1'), document.getElementById('player2')];
+  const act = els.find(p => p && !p.paused && p.currentTime > 0) || els.find(p => p && p.currentTime > 0);
+  const fill = document.getElementById('tv-prog-fill');
+  const time = document.getElementById('tv-time');
+  if (!act || !act.duration || !isFinite(act.duration)) { fill.style.width = '0%'; time.textContent = ''; return; }
+  fill.style.width = Math.min(100, (act.currentTime / act.duration) * 100) + '%';
+  time.textContent = tvFmt(act.currentTime) + ' / ' + tvFmt(act.duration);
+}
+(function tvInit() {
+  const url = 'https://rockola.tuc-tuc.co/rockola/' + encodeURIComponent(SALA);
+  document.getElementById('tv-url').textContent = url;
+  if (window.QRCode) {
+    try {
+      new QRCode(document.getElementById('tv-qr'), { text: url, width: 150, height: 150, correctLevel: QRCode.CorrectLevel.M });
+    } catch (e) {}
+  }
+  document.getElementById('tv-btn-empezar').addEventListener('click', tvEmpezar);
+})();
+</script>
+{% endif %}
 </body>
 </html>

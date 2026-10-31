@@ -596,7 +596,8 @@ def identificar():
 
 
 @bp.route('/apodo', methods=['POST'])
-def apodo():
+@bp.route('/<sala_id>/apodo', methods=['POST'])
+def apodo(sala_id=None):
     """Identidad minima cliente: apodo = terceros.nombre (sin telefono), amarre dispositivo.
     Reconoce en orden: sesion valida, dispositivo conocido (universo),
     pre-identificado por enlace personal (token), o crea tercero nuevo."""

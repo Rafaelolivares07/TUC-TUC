@@ -282,7 +282,7 @@ function mostrarMensaje(txt, tipo) {
 async function reconocer() {
   if (MI_TERCERO !== null) return true;
   try {
-    const res = await fetch('/rockola/apodo', {
+    const res = await fetch(`/rockola/${encodeURIComponent(SALA)}/apodo`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ device_id: getDeviceId() })
@@ -303,7 +303,7 @@ async function enviarApodo() {
   if (!nombre) { err.textContent = 'Escribe tu apodo'; return; }
   err.textContent = '';
   try {
-    const res = await fetch('/rockola/apodo', {
+    const res = await fetch(`/rockola/${encodeURIComponent(SALA)}/apodo`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ nombre: nombre, device_id: getDeviceId() })

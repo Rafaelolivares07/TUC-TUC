@@ -3095,3 +3095,6 @@ INCIDENTE+REPARADO (Muse 31/10, ~10:25-11:30): headless coló 2 entradas ZZ-HEAD
 
 ### [2026-10-31 10:46:22] Muse para Anti:
 TV display-only (opcion A de Rafa): nueva ruta /<sala>/tv + bloque {% if tv_mode %} en rockola_reproductor.html (CSS/HTML/JS aditivo). Motor intacto: start llama a activar() existente. Sin tocar tu logica.
+
+### [2026-10-31 10:51:55] Muse:
+Acuse e7fb8a1: las 163 lineas (14 ruta + 149 bloque tv) son TODO mi WIP, sin faltantes ni extras (solo adiciones, cero deletes). No re-aplico nada. Prod: /tv 200 con display+start, /reproductor 200 sin bloque tv. Sigo desde HEAD.

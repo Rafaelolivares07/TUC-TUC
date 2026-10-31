@@ -595,6 +595,11 @@ function generarCodigo() {
   document.getElementById('codigo-emisora').value = palabras[Math.floor(Math.random() * palabras.length)] + '-' + (Math.floor(Math.random() * 90) + 10);
 }
 
+function irAControlSala(sala) {
+  const k = localStorage.getItem('rockola_admin_' + sala) || '';
+  window.location.href = `https://rockola.tuc-tuc.co/control/${encodeURIComponent(sala)}${k ? '?key=' + encodeURIComponent(k) : ''}`;
+}
+
 function renderSala(sala, disponible) {
   const nombre = sala.sala_id;
   const dueno = sala.dispositivo_reproductor_nombre || 'otro dispositivo';
@@ -614,8 +619,8 @@ function renderSala(sala, disponible) {
       <div class="room-note">${nota}</div>
       <div class="room-actions">
         ${disponible
-          ? `<button class="btn small" onclick="abrirReproductor('${nombre}')">Reproducir</button><button class="btn secondary small" onclick="agregarComoCliente('${nombre}')">Agregar</button>`
-          : `<button class="btn small" style="background:linear-gradient(135deg, #ff9800, #ff5722); color:#fff; font-weight:800;" onclick="reclamarSala('${nombre}')">Tomar control</button><button class="btn secondary small" onclick="agregarComoCliente('${nombre}')">Agregar canciones</button>`
+          ? `<button class="btn small" onclick="abrirReproductor('${nombre}')">Reproducir</button><button class="btn secondary small" onclick="agregarComoCliente('${nombre}')">Agregar</button><button class="btn secondary small" onclick="irAControlSala('${nombre}')">Control</button>`
+          : `<button class="btn small" style="background:linear-gradient(135deg, #ff9800, #ff5722); color:#fff; font-weight:800;" onclick="reclamarSala('${nombre}')">Tomar control</button><button class="btn secondary small" onclick="agregarComoCliente('${nombre}')">Agregar canciones</button><button class="btn secondary small" onclick="irAControlSala('${nombre}')">Control</button>`
         }
       </div>
       ${disponible ? `

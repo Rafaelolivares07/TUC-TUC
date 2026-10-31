@@ -142,6 +142,15 @@
       align-items: center;
       justify-content: center;
       filter: drop-shadow(0 14px 35px rgba(0, 0, 0, 0.75));
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
+      outline: none;
+    }
+    /* El stage es cuadrado pero su destello tactil nunca debe notarse */
+    .vinyl-stage, .vinyl-stage * {
+      -webkit-tap-highlight-color: transparent;
+      outline: none;
     }
     .vinyl-disc {
       width: 100%;
@@ -165,8 +174,8 @@
     /* Botón flotante central de Play si está pausado */
     .play-overlay-btn {
       position: absolute;
-      width: 64px;
-      height: 64px;
+      width: 160px;
+      height: 160px;
       border-radius: 50%;
       background: rgba(0, 212, 255, 0.90);
       color: #040810;
@@ -184,9 +193,9 @@
       transform: scale(0.6);
     }
     .play-overlay-btn svg {
-      width: 30px;
-      height: 30px;
-      margin-left: 3px;
+      width: 75px;
+      height: 75px;
+      margin-left: 8px;
     }
 
     /* Canción Info */

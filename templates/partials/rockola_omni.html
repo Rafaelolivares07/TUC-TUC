@@ -231,18 +231,30 @@ function omniEnFoco() {
     }
   };
   try { llevarArriba(); } catch (e1) {}
-  setTimeout(() => {
-    const inp = document.getElementById(OMNI_ID + '-search-input');
-    if (inp && document.activeElement === inp) { try { llevarArriba(); } catch (e2) {} }
-  }, 400);
+  const enfocado = () => {
+    const ix = document.getElementById(OMNI_ID + '-search-input');
+    return !!(ix && document.activeElement === ix);
+  };
+  const reintentar = () => { if (enfocado()) { try { llevarArriba(); } catch (e2) {} } };
+  setTimeout(reintentar, 400);
+  setTimeout(reintentar, 900);
   try {
     if (window.visualViewport) {
       const rev = () => {
-        const inp2 = document.getElementById(OMNI_ID + '-search-input');
-        if (inp2 && document.activeElement === inp2) { try { llevarArriba(); } catch (e3) {} }
-        try { window.visualViewport.removeEventListener('resize', rev); } catch (e4) {}
+        reintentar();
+        if (!enfocado()) {
+          try { window.visualViewport.removeEventListener('resize', rev); } catch (e4) {}
+        }
       };
       window.visualViewport.addEventListener('resize', rev);
+      const inp0 = document.getElementById(OMNI_ID + '-search-input');
+      if (inp0) {
+        const soltar = () => {
+          try { window.visualViewport.removeEventListener('resize', rev); } catch (e6) {}
+          try { inp0.removeEventListener('blur', soltar); } catch (e7) {}
+        };
+        inp0.addEventListener('blur', soltar);
+      }
     }
   } catch (e5) {}
 }

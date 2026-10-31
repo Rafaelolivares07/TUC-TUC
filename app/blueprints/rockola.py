@@ -112,6 +112,8 @@ ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS admin_key TEXT;
 ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS volumen INTEGER NOT NULL DEFAULT 80;
 ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS dispositivo_reproductor_id TEXT;
 ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS dispositivo_reproductor_nombre TEXT;
+ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS dispositivo_control_id TEXT;
+ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS dispositivo_control_nombre TEXT;
 ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP;
 ALTER TABLE rockola_cola ADD COLUMN IF NOT EXISTS lista_envio_id TEXT;
 ALTER TABLE rockola_cola ADD COLUMN IF NOT EXISTS lista_envio_nombre TEXT;
@@ -2120,20 +2122,42 @@ def vincular_reproductor(sala_id):
 
 @bp.route('/<sala_id>/control-claim', methods=['POST'])
 def control_claim(sala_id):
-    """Auto-acceso a control: el equipo que SUENA la sala reclama su llave."""
+    """Titular de control: primera vez libre (queda titular), luego solo cesion.
+    Con llave valida toma titularidad; liberar la suelta."""
     data = request.get_json(silent=True) or {}
     dispositivo_id = (data.get('device_id') or '').strip()
+    dispositivo_nombre = (data.get('device_name') or 'Este equipo').strip()[:80]
+    key = (data.get('key') or '').strip()
+    liberar = bool(data.get('liberar'))
     if not dispositivo_id:
         return jsonify(ok=False, error='Dispositivo requerido'), 400
     conn = _connect()
     try:
-        sala = _get_sala(conn, sala_id)
+        with _lock:
+            sala = _get_sala(conn, sala_id)
+            admin_key = sala.get('admin_key') or ''
+            holder = sala.get('dispositivo_control_id') or ''
+            holder_nombre = sala.get('dispositivo_control_nombre') or 'otro equipo'
+            if liberar:
+                if holder and holder != dispositivo_id:
+                    return jsonify(ok=False, error='Solo libera quien tiene el control'), 403
+                conn.execute("UPDATE rockola_salas SET dispositivo_control_id = NULL, dispositivo_control_nombre = NULL WHERE sala_id = %s", (sala_id,))
+                conn.commit()
+                return jsonify(ok=True, liberado=True)
+            if key and admin_key and key == admin_key:
+                conn.execute("UPDATE rockola_salas SET dispositivo_control_id = %s, dispositivo_control_nombre = %s WHERE sala_id = %s",
+                             (dispositivo_id, dispositivo_nombre, sala_id))
+                conn.commit()
+                return jsonify(ok=True, admin_key=admin_key)
+            if holder and holder != dispositivo_id:
+                return jsonify(ok=False, error='El control lo tiene ' + holder_nombre), 403
+            if not holder:
+                conn.execute("UPDATE rockola_salas SET dispositivo_control_id = %s, dispositivo_control_nombre = %s WHERE sala_id = %s",
+                             (dispositivo_id, dispositivo_nombre, sala_id))
+                conn.commit()
+            return jsonify(ok=True, admin_key=admin_key)
     finally:
         conn.close()
-    owner = sala.get('dispositivo_reproductor_id') or ''
-    if owner and owner == dispositivo_id:
-        return jsonify(ok=True, admin_key=sala.get('admin_key', ''))
-    return jsonify(ok=False, error='Solo el equipo que suena puede reclamar'), 403
 
 
 @bp.route('/<sala_id>/eliminar', methods=['POST'])
@@ -2690,11 +2714,13 @@ def admin_info(sala_id):
     try:
         sala = _get_sala(conn, sala_id)
         autorizado = bool(key and key == (sala.get('admin_key') or ''))
+        control_en = sala.get('dispositivo_control_nombre') or ''
     finally:
         conn.close()
     return jsonify(
         ok=True,
         autorizado=autorizado,
+        control_en=control_en,
         cliente_url=f'https://rockola.tuc-tuc.co/rockola/{sala_id}',
         control_url=f'https://rockola.tuc-tuc.co/control/{sala_id}?key={key}' if key else '',
         reproductor_url=f'https://rockola.tuc-tuc.co/reproductor/{sala_id}',

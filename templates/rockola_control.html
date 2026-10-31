@@ -97,6 +97,7 @@ input[type=range].slider-range { width:100%; margin:0; padding:0; border:none; b
   </div>
 
   <div id="panel">
+    <div class="muted" id="holder-line" style="margin-bottom:8px"></div>
     <div class="card">
       <div class="label">Sonando ahora</div>
       <div class="now" id="sonando">Esperando canciones...</div>
@@ -106,6 +107,7 @@ input[type=range].slider-range { width:100%; margin:0; padding:0; border:none; b
         <button class="btn secondary" id="btn-pausa" onclick="togglePausaControl()">⏸ Pausar</button>
         <button class="btn secondary" onclick="compartirCancionControl()" style="border-color:rgba(201,100,66,0.5);color:#ff9e7d">💬 Compartir</button>
         <button class="btn secondary" onclick="actualizar()">Actualizar</button>
+        <button class="btn secondary" onclick="liberarControl()">Liberar control</button>
       </div>
     </div>
 
@@ -244,6 +246,37 @@ function controlDeviceId() {
   return id;
 }
 
+function controlDeviceName() {
+  let name = localStorage.getItem('rockola_device_name');
+  if (!name) {
+    const ua = navigator.userAgent || '';
+    name = /iPhone/i.test(ua) ? 'iPhone' : (/Android/i.test(ua) ? 'Android' : (/Windows/i.test(ua) ? 'Windows' : 'Este dispositivo'));
+    localStorage.setItem('rockola_device_name', name);
+  }
+  return name;
+}
+
+async function registrarHolder(key) {
+  try {
+    await fetch(`/rockola/${SALA}/control-claim`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ device_id: controlDeviceId(), device_name: controlDeviceName(), key: key })
+    });
+  } catch (e) {}
+}
+
+async function liberarControl() {
+  try {
+    await fetch(`/rockola/${SALA}/control-claim`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ device_id: controlDeviceId(), liberar: true })
+    });
+  } catch (e) {}
+  localStorage.removeItem('rockola_admin_' + SALA);
+  adminKey = '';
+  mostrarLogin(true);
+}
+
 function mostrarLogin(on) {
   document.getElementById('login-box').classList.toggle('visible', on);
   document.getElementById('panel').style.display = on ? 'none' : 'block';
@@ -257,6 +290,7 @@ function guardarKey() {
   }
   localStorage.setItem('rockola_admin_' + SALA, adminKey);
   controlUrl = `https://rockola.tuc-tuc.co/control/${encodeURIComponent(SALA)}?key=${encodeURIComponent(adminKey)}`;
+  registrarHolder(adminKey);
   mostrarLogin(false);
   actualizar();
 }
@@ -266,24 +300,28 @@ async function verificarKey() {
     try {
       const rc = await fetch(`/rockola/${SALA}/control-claim`, {
         method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ device_id: controlDeviceId() })
+        body: JSON.stringify({ device_id: controlDeviceId(), device_name: controlDeviceName() })
       });
       const dc = await rc.json();
       if (dc.ok && dc.admin_key) {
         adminKey = dc.admin_key;
         localStorage.setItem('rockola_admin_' + SALA, adminKey);
+      } else if (dc.error) {
+        document.getElementById('key-error').textContent = dc.error + ' — pídele el enlace o que libere el control.';
       }
     } catch (e) {}
   }
   if (!adminKey && SERVER_KEY) {
     adminKey = SERVER_KEY;
     localStorage.setItem('rockola_admin_' + SALA, adminKey);
+    registrarHolder(adminKey);
   }
   if (!adminKey) { mostrarLogin(true); return false; }
   const r = await fetch(`/rockola/${SALA}/admin-info?key=${encodeURIComponent(adminKey)}`);
   const d = await r.json();
   clienteUrl = d.cliente_url || clienteUrl;
   controlUrl = d.control_url || controlUrl;
+  document.getElementById('holder-line').textContent = d.control_en ? 'Control: ' + d.control_en : '';
   mostrarLogin(!d.autorizado);
   return d.autorizado;
 }

@@ -46,6 +46,8 @@ header.cli-head { margin: 4px 0 12px; }
 #lista-cola .nom { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #lista-cola li.cancion-tuya { border-color: rgba(0, 212, 255, 0.55); background: rgba(0, 212, 255, 0.08); }
 #lista-cola .vacia { color: var(--muted2); font-size: 13px; text-align: center; border-style: dashed; display: block; }
+#lista-cola li.encolando-row { border-style: dashed; border-color: rgba(255,176,32,0.55); background: rgba(255,176,32,0.06); }
+#lista-cola .enc-badge { margin-left: auto; font-size: 11px; color: #ffb020; font-weight: 700; white-space: nowrap; }
 #cli-msg { min-height: 18px; font-size: 12px; color: var(--muted); text-align: center; margin: 10px 0 0; }
 #cli-msg.err { color: var(--err); }
 #cli-msg.ok { color: var(--ok); }
@@ -194,9 +196,51 @@ function ocultarResultadosCliente() {
   if (clr) clr.style.display = 'none';
   document.body.classList.remove('omni-foco');
 }
+let recEncolando = [];
+function pintaEncolando(nombre) {
+  const qn = (nombre || '').toLowerCase().trim();
+  const ya = recEncolando.find(p => (p.nombre || '').toLowerCase().trim() === qn);
+  if (ya) return ya.key;
+  const key = 'pend-' + Date.now().toString(36) + Math.random().toString(36).slice(2);
+  recEncolando.push({ key, nombre, ts: Date.now() });
+  renderEncolando();
+  return key;
+}
+function quitaEncolando(key) {
+  recEncolando = recEncolando.filter(p => p.key !== key);
+}
+function renderEncolando() {
+  const ul = document.getElementById('lista-cola');
+  if (!ul) return;
+  const ahora = Date.now();
+  recEncolando = recEncolando.filter(p => ahora - p.ts < 90000);
+  ul.querySelectorAll('li.encolando-row').forEach(li => li.remove());
+  if (!recEncolando.length) return;
+  const vac = ul.querySelector('li.vacia');
+  if (vac) vac.remove();
+  recEncolando.forEach(p => {
+    const li = document.createElement('li');
+    li.className = 'encolando-row';
+    const pos = document.createElement('span');
+    pos.className = 'pos';
+    pos.textContent = '…';
+    const nom = document.createElement('span');
+    nom.className = 'nom';
+    nom.textContent = p.nombre || 'Canción';
+    const b = document.createElement('span');
+    b.className = 'enc-badge';
+    b.textContent = 'encolando…';
+    li.appendChild(pos);
+    li.appendChild(nom);
+    li.appendChild(b);
+    ul.appendChild(li);
+  });
+}
 async function encolarLocalCliente(id, nombre) {
+  const pend = pintaEncolando(nombre);
   const cancion = cancionesLocales.find(c => c.id === id) || await obtenerCancionLocal(id).catch(() => null);
   if (!cancion || !cancion.blob) {
+    quitaEncolando(pend);
     msgCli('Esa canción ya no está en este dispositivo', 'err');
     return;
   }
@@ -207,6 +251,7 @@ async function encolarLocalCliente(id, nombre) {
     form.append('archivo', cancion.blob, cancion.nombre);
     const res = await fetch(`/rockola/${encodeURIComponent(SALA)}/subir`, { method: 'POST', body: form });
     const data = await res.json();
+    quitaEncolando(pend);
     if (data.ok) {
       msgCli('Encolada ✓', 'ok');
       cargarCola();
@@ -214,11 +259,13 @@ async function encolarLocalCliente(id, nombre) {
       msgCli(data.error || 'No se pudo encolar', 'err');
     }
   } catch (e) {
+    quitaEncolando(pend);
     msgCli('Sin conexión', 'err');
   }
 }
 function encolarCatalogoCliente(tipo, id, nombre) {
   ocultarResultadosCliente();
+  pintaEncolando(nombre);
   const qn = limpiarNombre(nombre || '').toLowerCase();
   const hit = (cancionesLocales || []).find(c => limpiarNombre(c.nombre || '').toLowerCase() === qn);
   if (hit) { encolarLocalCliente(hit.id, hit.nombre); return; }
@@ -272,6 +319,7 @@ async function enviarApodo() {
 }
 async function encolarCliente(tipo, idOUrl, nombre, duracion) {
   ocultarResultadosCliente();
+  const pend = pintaEncolando(nombre);
   if (tipo === 'local') { encolarLocalCliente(idOUrl, nombre); return; }
   try {
     let url = '', body = {};
@@ -284,6 +332,7 @@ async function encolarCliente(tipo, idOUrl, nombre, duracion) {
     }
     const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const data = await res.json();
+    quitaEncolando(pend);
     if (data.ok) {
       msgCli('Encolada ✓', 'ok');
       cargarCola();
@@ -291,6 +340,7 @@ async function encolarCliente(tipo, idOUrl, nombre, duracion) {
       msgCli(data.error || 'No se pudo encolar', 'err');
     }
   } catch (e) {
+    quitaEncolando(pend);
     msgCli('Sin conexión', 'err');
   }
 }
@@ -304,7 +354,7 @@ async function cargarCola() {
     document.getElementById('cola-count').textContent = resto.length ? resto.length + ' en cola' : '';
     const ul = document.getElementById('lista-cola');
     ul.textContent = '';
-    if (!resto.length) {
+    if (!resto.length && !recEncolando.length) {
       const li = document.createElement('li');
       li.className = 'vacia';
       li.textContent = items.length ? 'Nada más encolado' : 'Cola vacía — busca y encola la primera';
@@ -324,6 +374,7 @@ async function cargarCola() {
       li.appendChild(nom);
       ul.appendChild(li);
     });
+    renderEncolando();
   } catch (e) {}
 }
 function urlSala() {

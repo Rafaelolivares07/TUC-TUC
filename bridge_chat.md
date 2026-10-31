@@ -3092,3 +3092,6 @@ Entrada retroactiva (Rafa 31/10): 6c36cf1 backend+frontend inventarios (entrada 
 ### [2026-10-31 10:46:03] Muse para sala:
 
 INCIDENTE+REPARADO (Muse 31/10, ~10:25-11:30): headless coló 2 entradas ZZ-HEADLESS-1 (mock fulfill no interceptó); al anularlas por app, resolver_variantes_numero partió 'ZZ-HEADLESS-1'->'1' y el anulador borró ADEMÁS 42 líneas contables viejas (ajuste doc 1 del 06/08 + producción doc 1 del 23/07, comps 473/546). Reparado: 23 filas exactas por forense pg_surgery + 16 reinsertadas con ID original + 1 regenerada (432-CP id 13032). Gates: dangling 0/0, bal 473/546 = 0.00 exacto, ZZ 0 en mov/asi/cot, 258 en 834 movs/stock 181 (luego 835/182 por venta real). Inventario/ventas reales NUNCA tocados. LECCIÓN: anular-documento con doc guionado corto es peligroso (variante sufijo barre números coincidentes) + route.fulfill puede caer al backend real (usar abort-only). Quirk '615' en auditoria_recosteos.documento_numero quedó sin explicar (cosmético, pendiente).
+
+### [2026-10-31 10:46:22] Muse para Anti:
+TV display-only (opcion A de Rafa): nueva ruta /<sala>/tv + bloque {% if tv_mode %} en rockola_reproductor.html (CSS/HTML/JS aditivo). Motor intacto: start llama a activar() existente. Sin tocar tu logica.

@@ -671,6 +671,18 @@ audio { width: 100%; filter: invert(1) hue-rotate(180deg); opacity: .75; }
 .queue-empty { text-align: center; color: var(--muted2); font-size: 13px; padding: 20px 0; }
 
 #estado { text-align: center; font-size: 11px; color: var(--muted2); margin-top: 12px; }
+#estado.cargando-lento::before {
+  content: '';
+  display: inline-block;
+  width: 9px; height: 9px;
+  border: 2px solid rgba(0, 212, 255, 0.25);
+  border-top-color: #00d4ff;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: -1px;
+  animation: giroCarga 0.8s linear infinite;
+}
+@keyframes giroCarga { to { transform: rotate(360deg); } }
 
 /* Nuevos Estilos del Reproductor */
 .now-card {
@@ -1961,6 +1973,29 @@ let particlesArray = [];
 const nombreEl    = document.getElementById('nombre-actual');
 const listaCola   = document.getElementById('lista-cola');
 const estadoEl    = document.getElementById('estado');
+
+// Aviso de carga diferido: si un estado de carga dura mas de 2s, #estado muestra spinner.
+// Si arranca rapido no se muestra nada. Enganche unico por observer (no toca los escritores).
+const AVISO_CARGA_MS = 2000;
+let _avisoCargaTimer = null;
+function _esEstadoCarga(t) {
+  return /cargando|iniciando|activando|descargando|saltando/i.test(t || '');
+}
+function _mostrarAvisoCarga() {
+  if (estadoEl) estadoEl.classList.add('cargando-lento');
+}
+function _ocultarAvisoCarga() {
+  if (estadoEl) estadoEl.classList.remove('cargando-lento');
+  if (_avisoCargaTimer) { clearTimeout(_avisoCargaTimer); _avisoCargaTimer = null; }
+}
+if (estadoEl && typeof MutationObserver === 'function') {
+  new MutationObserver(() => {
+    _ocultarAvisoCarga();
+    if (_esEstadoCarga(estadoEl.textContent)) {
+      _avisoCargaTimer = setTimeout(_mostrarAvisoCarga, AVISO_CARGA_MS);
+    }
+  }).observe(estadoEl, {childList: true, characterData: true, subtree: true});
+}
 const vinylSpin   = document.getElementById('vinyl-spin');
 const waveViz     = document.getElementById('wave-viz');
 const queueLabel  = document.getElementById('queue-label');

@@ -307,13 +307,6 @@ def _obtener_catalogo_base(negocio_id=None, slug=None):
             'keywords': ['cotizaciones', 'cotizar', 'comparar proveedores', 'precios proveedor', 'solicitud de precio']
         },
         {
-            'titulo': 'Kardex (Trazabilidad y Movimientos)',
-            'modulo': 'Inventario > Auditoría',
-            'icono': '📈',
-            'url': f'/inventario/{nid}?tab=kardex',
-            'keywords': ['kardex', 'movimientos de inventario', 'entradas salidas', 'costo promedio ponderado', 'trazabilidad stock', 'historial']
-        },
-        {
             'titulo': 'Traslados entre Bodegas o Sedes',
             'modulo': 'Inventario > Movimientos',
             'icono': '🔄',
@@ -447,7 +440,7 @@ def buscar_omni(q, negocio_id=None, slug=None):
                 'Tesorería: Desembolsos y Recaudos',
                 'Catálogo de Productos e Insumos',
                 'Entradas de Almacén (Compras y Facturas)',
-                'Kardex (Trazabilidad y Movimientos)'
+                'Kardex',
             )
         ]
         return {

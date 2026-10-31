@@ -153,6 +153,7 @@ def _ensure_db():
             conn.execute("ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS modo_repetir_cancion BOOLEAN DEFAULT FALSE;")
             conn.execute("ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS modo_repetir_lista BOOLEAN DEFAULT FALSE;")
             conn.execute("ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS modo_autoplay BOOLEAN DEFAULT FALSE;")
+            conn.execute("ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS modo_pausa BOOLEAN DEFAULT FALSE;")
             conn.execute("ALTER TABLE rockola_dispositivos ADD COLUMN IF NOT EXISTS tercero_id INTEGER REFERENCES terceros(id) ON DELETE SET NULL;")
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS rockola_compartidos (
@@ -2660,6 +2661,7 @@ def cola(sala_id):
         modo_repetir_cancion=bool(sala.get('modo_repetir_cancion') or False),
         modo_repetir_lista=bool(sala.get('modo_repetir_lista') or False),
         modo_autoplay=bool(sala.get('modo_autoplay') or False),
+        modo_pausa=bool(sala.get('modo_pausa') or False),
     )
 
 
@@ -2749,7 +2751,7 @@ def modos(sala_id):
             if not _es_admin_sala(conn, sala_id, data):
                 return jsonify(ok=False, error='No autorizado'), 403
 
-            for campo in ('modo_shuffle', 'modo_repetir_cancion', 'modo_repetir_lista', 'modo_autoplay'):
+            for campo in ('modo_shuffle', 'modo_repetir_cancion', 'modo_repetir_lista', 'modo_autoplay', 'modo_pausa'):
                 if data.get(campo) is not None:
                     conn.execute(
                         "UPDATE rockola_salas SET {} = %s WHERE sala_id = %s".format(campo),

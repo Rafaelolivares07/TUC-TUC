@@ -6312,6 +6312,8 @@ function valeAplicarModo(modo, serverVal) {
   return true;
 }
 
+let ultimoModoPausaVisto = null;
+
 function aplicarModosServidor(data) {
   if (data.modo_shuffle !== undefined && valeAplicarModo('modo_shuffle', data.modo_shuffle) && (!!data.modo_shuffle !== modoAleatorio)) {
     toggleModoAleatorio(!!data.modo_shuffle);
@@ -6327,6 +6329,14 @@ function aplicarModosServidor(data) {
     if (srv !== debeAutoreproducirAlEntrar()) {
       localStorage.setItem('rockola_autoreproducir', srv ? '1' : '0');
       actualizarAutoplayStatus();
+    }
+  }
+  if (data.modo_pausa !== undefined) {
+    const quieto = !!data.modo_pausa;
+    if (ultimoModoPausaVisto === null || quieto !== ultimoModoPausaVisto) {
+      ultimoModoPausaVisto = quieto;
+      if (quieto && reproduciendo && !transitioning) togglePlayPause();
+      else if (!quieto && !reproduciendo && !transitioning && currentCola && currentCola.length) togglePlayPause();
     }
   }
 }
@@ -6558,6 +6568,7 @@ function initProgressBarDrag() {
 }
 
 async function togglePlayPause() {
+  setTimeout(() => { try { postModos({modo_pausa: !reproduciendo}); } catch(e2){} }, 500);
   try { initAudioContext(); } catch(e) {}
   if (audioCtx && audioCtx.state === 'suspended') {
     try { audioCtx.resume(); } catch(e) {}

@@ -102,6 +102,7 @@ input[type=range].slider-range { width:100%; margin:0; padding:0; border:none; b
       <div class="actions">
         <button class="btn secondary" onclick="anteriorCancion()">⏮ Anterior</button>
         <button class="btn danger" onclick="saltarActual()">⏭ Saltar actual</button>
+        <button class="btn secondary" id="btn-pausa" onclick="togglePausaControl()">⏸ Pausar</button>
         <button class="btn secondary" onclick="compartirCancionControl()" style="border-color:rgba(201,100,66,0.5);color:#ff9e7d">💬 Compartir</button>
         <button class="btn secondary" onclick="actualizar()">Actualizar</button>
       </div>
@@ -411,6 +412,11 @@ function cargarModos(d) {
     const el = document.getElementById(id);
     if (el && document.activeElement !== el) el.checked = !!val;
   });
+  if (d.modo_pausa !== undefined) {
+    pausaActual = !!d.modo_pausa;
+    const bp = document.getElementById('btn-pausa');
+    if (bp) bp.textContent = pausaActual ? '▶ Seguir' : '⏸ Pausar';
+  }
 }
 
 function actualizarFundidoControlStatus() {
@@ -463,6 +469,15 @@ async function guardarFundidoControl() {
       fundido_duracion: parseInt(document.getElementById('c-fundido-duracion').value) || 5
     })
   });
+}
+
+let pausaActual = false;
+async function togglePausaControl() {
+  pausaActual = !pausaActual;
+  const bp = document.getElementById('btn-pausa');
+  if (bp) bp.textContent = pausaActual ? '▶ Seguir' : '⏸ Pausar';
+  await guardarModoControl('modo_pausa', pausaActual);
+  actualizar();
 }
 
 async function guardarModoControl(campo, valor) {

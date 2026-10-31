@@ -21,6 +21,7 @@
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 {% if tv_mode|default(false) %}
 <style>
+#tv-display { display: none; }
 body.tv-mode { background: #000; }
 body.tv-mode > *:not(#tv-display):not(script):not(style) { display: none !important; }
 body.tv-mode #tv-display { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; background: #000; color: #e8f4ff; padding: 3vh 3vw; box-sizing: border-box; font-family: 'Space Grotesk', system-ui, sans-serif; }

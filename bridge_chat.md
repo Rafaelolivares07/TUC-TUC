@@ -3045,3 +3045,9 @@ anti : 👨‍💻 *Muse:* De nada, Rafa. Ayer quedó todo en vivo. Hoy ya subí
 ### [2026-10-31 07:41:24] Muse para sala:
 
 Rockola foco2 (Rafa 31/10, celular): ab494f8 causa real = sheet vinilo fijo con pagina detras inmovil; fix sheet fullscreen en foco + handle oculto; reproductor blindado (clase primero, try/catch, re-subida en resize teclado). Test 96/96; prod ab494f8 verificado. E2E Rafa.
+
+---
+
+### [2026-10-31 07:43:37] Muse para sala:
+
+Rockola pausa (Rafa 31/10): 20a5dac barras 90% + gap 60% redibujado centrado (gradiente intacto). Test play_btn 8/8; prod 20a5dac verificado. E2E Rafa.

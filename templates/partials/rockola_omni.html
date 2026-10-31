@@ -85,15 +85,15 @@ body.omni-foco .ocultar-en-foco-omni {
   min-width: 0;
 }
 .global-result-title {
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 16.9px;
+  font-weight: 400;
   color: #fff;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .global-result-meta {
-  font-size: 11px;
+  font-size: 14.3px;
   color: var(--muted);
   margin-top: 2px;
   white-space: nowrap;
@@ -196,6 +196,7 @@ function onInputRockolaOmni(val) {
 }
 
 let omniScrollPrevio = null;
+let omniSuprimir = false;
 function omniGuardarScroll() {
   const pila = [{el: window, top: (window.scrollY || 0)}];
   const c = document.getElementById(OMNI_ID + '-search-container');
@@ -222,6 +223,7 @@ function omniRestaurarScroll() {
   omniScrollPrevio = null;
 }
 function omniEnFoco() {
+  omniSuprimir = false;
   document.body.classList.add('omni-foco');
   try { omniGuardarScroll(); } catch (e0) {}
   const llevarArriba = () => {
@@ -238,26 +240,21 @@ function omniEnFoco() {
   const reintentar = () => { if (enfocado()) { try { llevarArriba(); } catch (e2) {} } };
   setTimeout(reintentar, 400);
   setTimeout(reintentar, 900);
-  try {
-    if (window.visualViewport) {
-      const rev = () => {
-        reintentar();
-        if (!enfocado()) {
-          try { window.visualViewport.removeEventListener('resize', rev); } catch (e4) {}
-        }
-      };
-      window.visualViewport.addEventListener('resize', rev);
-      const inp0 = document.getElementById(OMNI_ID + '-search-input');
-      if (inp0) {
-        const soltar = () => {
-          try { window.visualViewport.removeEventListener('resize', rev); } catch (e6) {}
-          try { inp0.removeEventListener('blur', soltar); } catch (e7) {}
-        };
-        inp0.addEventListener('blur', soltar);
-      }
-    }
-  } catch (e5) {}
 }
+function omniEnResize() {
+  if (omniSuprimir) return;
+  const inp = document.getElementById(OMNI_ID + '-search-input');
+  const q = ((inp && inp.value) || '').trim();
+  if (!q) return;
+  document.body.classList.add('omni-foco');
+  const cont = document.getElementById(OMNI_ID + '-search-container');
+  if (cont && cont.scrollIntoView) {
+    try { cont.scrollIntoView({block: 'start'}); } catch (er) { try { cont.scrollIntoView(); } catch (er2) {} }
+  }
+}
+try {
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', omniEnResize);
+} catch (er3) {}
 
 function limpiarBusquedaOmni() {
   const inp = document.getElementById(OMNI_ID + '-search-input');
@@ -273,6 +270,7 @@ function omniElegir(tipo, idOUrl, nombre, duracion) {
   if (typeof fn === 'function') fn(tipo, idOUrl, nombre, duracion || '');
   document.body.classList.remove('omni-foco');
   omniRestaurarScroll();
+  omniSuprimir = true;
 }
 
 function omniElegirCatalogo(nombre) {
@@ -283,6 +281,7 @@ function omniElegirCatalogo(nombre) {
   }
   document.body.classList.remove('omni-foco');
   omniRestaurarScroll();
+  omniSuprimir = true;
 }
 
 async function omniResolverYPlay(nombre) {
@@ -524,6 +523,7 @@ document.addEventListener('click', function(e) {
     resultsBox.style.display = 'none';
     document.body.classList.remove('omni-foco');
     omniRestaurarScroll();
+    omniSuprimir = true;
   }
 });
 </script>

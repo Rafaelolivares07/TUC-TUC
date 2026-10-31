@@ -2177,6 +2177,8 @@ def reproductor_sala(sala_id):
 
 
 @bp.route('/<sala_id>/tv')
+@bp.route('/<sala_id>/reproductor/tv')
+@bp.route('/reproductor/<sala_id>/tv')
 def tv_sala(sala_id):
     conn = _connect()
     try:

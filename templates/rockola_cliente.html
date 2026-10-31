@@ -88,8 +88,9 @@ header.cli-head { margin: 4px 0 12px; }
   {% set omni_id = 'cliente' %}
   {% set omni_endpoint = '/rockola/' ~ sala_id ~ '/buscar-global' %}
   {% set omni_media = '/rockola/' ~ sala_id ~ '/archivo/' %}
-  {% set omni_local = '0' %}
+  {% set omni_local = '1' %}
   {% set omni_select = 'encolarCliente' %}
+  {% set omni_catalogo = 'encolarCatalogoCliente' %}
   {% set omni_placeholder = 'Buscar canción...' %}
   {% set omni_btn_title = 'Encolar' %}
   {% include 'partials/rockola_omni.html' %}
@@ -124,6 +125,108 @@ function msgCli(txt, cls) {
   const el = document.getElementById('cli-msg');
   el.textContent = txt || '';
   el.className = cls || '';
+}
+function limpiarNombre(nombre) {
+  return (nombre || '').replace(/\.[^.]+$/, '');
+}
+function escapeHtml(valor) {
+  return String(valor || '').replace(/[&<>"']/g, c => ({
+    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+  }[c]));
+}
+function escapeJs(valor) {
+  return String(valor || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
+}
+let cancionesLocales = [];
+function abrirDbLocal() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('rockola_local_library_v1', 3);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains('songs')) {
+        const store = db.createObjectStore('songs', { keyPath:'id' });
+        store.createIndex('deviceId', 'deviceId', { unique:false });
+        store.createIndex('nombre', 'nombre', { unique:false });
+      }
+      if (!db.objectStoreNames.contains('playlists')) {
+        const store = db.createObjectStore('playlists', { keyPath:'id' });
+        store.createIndex('deviceId', 'deviceId', { unique:false });
+        store.createIndex('nombre', 'nombre', { unique:false });
+      }
+      if (!db.objectStoreNames.contains('config')) {
+        db.createObjectStore('config', { keyPath:'key' });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function obtenerCancionLocal(id) {
+  const db = await abrirDbLocal();
+  const cancion = await new Promise((resolve, reject) => {
+    const tx = db.transaction('songs', 'readonly');
+    const req = tx.objectStore('songs').get(id);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  });
+  db.close();
+  return cancion;
+}
+async function cargarCancionesLocales() {
+  try {
+    const db = await abrirDbLocal();
+    cancionesLocales = await new Promise((resolve, reject) => {
+      const tx = db.transaction('songs', 'readonly');
+      const req = tx.objectStore('songs').getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => reject(req.error);
+    });
+    db.close();
+    cancionesLocales.sort((a, b) => (b.actualizado || 0) - (a.actualizado || 0));
+  } catch (e) {}
+}
+function ocultarResultadosCliente() {
+  const box = document.getElementById('cliente-search-results');
+  if (box) box.style.display = 'none';
+  const inp = document.getElementById('cliente-search-input');
+  if (inp) inp.value = '';
+  const clr = document.getElementById('cliente-btn-clear');
+  if (clr) clr.style.display = 'none';
+  document.body.classList.remove('omni-foco');
+}
+async function encolarLocalCliente(id, nombre) {
+  const cancion = cancionesLocales.find(c => c.id === id) || await obtenerCancionLocal(id).catch(() => null);
+  if (!cancion || !cancion.blob) {
+    msgCli('Esa canción ya no está en este dispositivo', 'err');
+    return;
+  }
+  msgCli('Enviando...', '');
+  try {
+    const form = new FormData();
+    form.append('owner', MI_NOMBRE || '');
+    form.append('archivo', cancion.blob, cancion.nombre);
+    const res = await fetch(`/rockola/${encodeURIComponent(SALA)}/subir`, { method: 'POST', body: form });
+    const data = await res.json();
+    if (data.ok) {
+      msgCli('Encolada ✓', 'ok');
+      cargarCola();
+    } else {
+      msgCli(data.error || 'No se pudo encolar', 'err');
+    }
+  } catch (e) {
+    msgCli('Sin conexión', 'err');
+  }
+}
+function encolarCatalogoCliente(tipo, id, nombre) {
+  ocultarResultadosCliente();
+  const qn = limpiarNombre(nombre || '').toLowerCase();
+  const hit = (cancionesLocales || []).find(c => limpiarNombre(c.nombre || '').toLowerCase() === qn);
+  if (hit) { encolarLocalCliente(hit.id, hit.nombre); return; }
+  msgCli('Resolviendo...', '');
+  omniResolverYPlay(nombre);
+}
+function mostrarMensaje(txt, tipo) {
+  msgCli(txt, tipo === 'error' ? 'err' : 'ok');
 }
 async function reconocer() {
   if (MI_TERCERO !== null) return true;
@@ -168,13 +271,8 @@ async function enviarApodo() {
   }
 }
 async function encolarCliente(tipo, idOUrl, nombre, duracion) {
-  const box = document.getElementById('cliente-search-results');
-  if (box) box.style.display = 'none';
-  const inp = document.getElementById('cliente-search-input');
-  if (inp) inp.value = '';
-  const clr = document.getElementById('cliente-btn-clear');
-  if (clr) clr.style.display = 'none';
-  document.body.classList.remove('omni-foco');
+  ocultarResultadosCliente();
+  if (tipo === 'local') { encolarLocalCliente(idOUrl, nombre); return; }
   try {
     let url = '', body = {};
     if (tipo === 'youtube') {
@@ -255,6 +353,7 @@ function copiarEnlaceSala() {
   }
 }
 (async function initCliente() {
+  cargarCancionesLocales();
   const conocido = await reconocer();
   if (!conocido) {
     document.getElementById('puerta-apodo').classList.add('visible');

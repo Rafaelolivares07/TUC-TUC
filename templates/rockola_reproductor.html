@@ -7534,7 +7534,7 @@ document.body.classList.add('tv-mode');
 async function tvEmpezar() {
   document.getElementById('tv-start').classList.remove('visible');
   try {
-    await activar();
+    await reclamarReproductor();
   } catch (e) {
     try {
       [document.getElementById('player1'), document.getElementById('player2')].forEach(p => {

@@ -29,9 +29,11 @@ body {
   min-height: 100dvh;
 }
 .wrap { max-width: 560px; margin: 0 auto; padding: 16px 14px 40px; }
-header.cli-head { display: flex; align-items: baseline; justify-content: space-between; margin: 4px 0 12px; }
-.brand { font-size: 17px; font-weight: 800; color: var(--ac1); letter-spacing: .5px; }
-#sala-nombre { font-size: 13px; color: var(--muted); font-weight: 600; }
+header.cli-head { margin: 4px 0 12px; }
+.brand-cli-title { font-size: clamp(24px, 6vw, 28px); font-weight: 900; letter-spacing: -0.8px; text-align: center; margin: 0 0 2px; line-height: 1.05; user-select: none; }
+.brand-word-mi { background: linear-gradient(135deg, #cdeeff 0%, #70c9ff 50%, #00d4ff 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; filter: drop-shadow(0 0 16px rgba(0, 212, 255, 0.4)); }
+.brand-word-rockola { background: linear-gradient(135deg, #00d4ff 0%, #0077ff 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; filter: drop-shadow(0 0 22px rgba(0, 212, 255, 0.6)); margin-left: 2px; }
+.sala-nombre { text-align: center; font-size: 15px; font-weight: 800; letter-spacing: 2px; color: var(--text); margin-top: 2px; }
 .sonando { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; margin-bottom: 14px; }
 .sonando .lbl { font-size: 10px; letter-spacing: 2px; color: var(--muted2); font-weight: 700; }
 #sonando-nombre { font-size: 16px; font-weight: 600; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -76,8 +78,8 @@ header.cli-head { display: flex; align-items: baseline; justify-content: space-b
 </div>
 <div class="wrap">
   <header class="cli-head ocultar-en-foco-omni">
-    <span class="brand">Mi Rockola</span>
-    <span id="sala-nombre"></span>
+    <div class="brand-cli-title"><span class="brand-word-mi">Mi</span> <span class="brand-word-rockola">Rockola</span></div>
+    <div id="sala-nombre" class="sala-nombre">SALA {{ sala_id|upper }}</div>
   </header>
   <div class="sonando ocultar-en-foco-omni">
     <div class="lbl">SONANDO</div>
@@ -107,8 +109,8 @@ header.cli-head { display: flex; align-items: baseline; justify-content: space-b
 <script>
 const SALA = {{ sala_id|tojson }};
 let MI_TERCERO = {{ session.get('usuario_id') or 'null' }};
-let MI_NOMBRE = {{ session.get('nombre') or '""' }};
-document.getElementById('sala-nombre').textContent = SALA;
+let MI_NOMBRE = {{ (session.get('nombre') or '')|tojson }};
+/* sala-nombre viene renderizado del servidor */
 function getDeviceId() {
   let id = null;
   try { id = localStorage.getItem('rockola_device_id'); } catch (e) {}

@@ -44,7 +44,7 @@
       <div class="relative w-full sm:max-w-[480px] md:max-w-[520px]">
         <label class="text-xs font-extrabold text-gray-600 uppercase tracking-wider block mb-1 leading-tight pl-1">Consultar Producto</label>
         <input id="kardex-ac-input" type="text" placeholder="Buscar producto…" autocomplete="off"
-               class="w-full px-4 py-2 font-medium text-gray-800 bg-white border border-gray-200 rounded-xl focus:border-rose-500 focus:ring-1 focus:ring-rose-500 transition-all text-sm"
+               class="w-full px-4 py-2 font-medium text-gray-800 bg-white border border-gray-200 rounded-xl focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all text-sm"
                oninput="filtrarACKardex()"
                onfocus="filtrarACKardex()"
                onkeydown="onKeydownACKardex(event)"
@@ -84,40 +84,40 @@
         <button type="button" id="btn-toggle-valores-kardex" onclick="toggleValoresKardex()"
                 class="px-3.5 py-2 rounded-xl font-bold border transition flex items-center gap-1.5 bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200 hover:text-slate-900 cursor-pointer select-none text-xs
                 title="Colapsar u ocultar columnas de costos y valores monetarios para enfocarse únicamente en cantidades físicas">
-          <span id="icon-toggle-valores-kardex" class="text-slate-500">💵</span>
+          <span id="icon-toggle-valores-kardex" class="text-slate-500 inline-flex"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 11 3H4v7l9.59 9.59a2 2 0 0 0 2.82 0l4.18-4.18a2 2 0 0 0 0-2.82z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg></span>
           <span id="text-toggle-valores-kardex">Solo Cantidades</span>
         </button>
 
         <!-- Selector interactivo de decimales para Kardex -->
         <div class="flex items-center gap-1.5 px-1 py-1.5 shrink-0">
           <label for="kardex-decimales-input" class="text-xs font-extrabold text-slate-600 uppercase tracking-wide select-none flex items-center gap-1" title="Número de decimales visibles en el Kardex (0 a 6)">
-            <span>🔢 Decimales:</span>
+            <span>Decimales:</span>
           </label>
           <input id="kardex-decimales-input" type="number" min="0" max="6" step="1" value="2"
                  oninput="cambiarDecimalesKardex(this.value)"
                  onchange="cambiarDecimalesKardex(this.value)"
                  onblur="validarDecimalesKardexInput(this)"
                  onfocus="setTimeout(() => this.select(), 50)"
-                 class="no-spinners w-12 text-center font-mono font-black text-xs bg-white border border-slate-300 rounded-lg px-1.5 py-0.5 outline-none text-slate-800 focus:bg-blue-50 focus:text-blue-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-400 selection:bg-blue-600 selection:text-white transition-all
+                 class="no-spinners w-12 text-center font-mono font-black text-xs bg-white border border-slate-300 rounded-lg px-1.5 py-0.5 outline-none text-slate-800 focus:bg-indigo-50 focus:text-indigo-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-400 selection:bg-indigo-600 selection:text-white transition-all
                  style="-moz-appearance: textfield; appearance: textfield;"
                  title="Número de decimales visibles para cantidades, costos y valores en Kardex (0 a 6)">
         </div>
 
         <button id="kardex-btn-pdf" onclick="generarPdfKardex()" class="hidden px-3.5 py-2 bg-gray-800 hover:bg-gray-900 text-white text-xs font-bold rounded-xl transition-colors items-center gap-1.5">
-          <span>📄</span> <span>PDF</span>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg> <span>PDF</span>
         </button>
       </div>
 
       <!-- Tarjeta Unificada y Compacta de Auditoría: 100% Coinciden Arriba de los 3 Elementos -->
-      <div id="kardex-conteo-cotejo" class="hidden flex flex-col items-center px-1 py-1.5 ml-auto gap-1" title="Cotejo en tiempo real de registros contados en Base de Datos vs renderizados en tabla">
+      <div id="kardex-conteo-cotejo" class="hidden flex flex-col items-center px-1 py-1.5 ml-auto gap-1" title="Cotejo: registros en base de datos frente a mostrados en tabla">
         <!-- Badge Superior: Porcentaje de coincidencia -->
         <div class="w-full flex items-center justify-center">
-          <span id="kardex-badge-cotejo" class="text-[11px] font-bold px-2.5 py-0.5 rounded-md bg-blue-100 text-blue-800 text-center w-full Contando BD...</span>
+          <span id="kardex-badge-cotejo" class="text-[11px] font-bold px-2.5 py-0.5 rounded-md bg-slate-100 text-slate-600 text-center w-full">Contando…</span>
         </div>
         <!-- 3 Elementos en una sola fila compacta -->
         <div class="flex items-center gap-3 text-center px-0.5">
           <div class="border-r border-slate-200 pr-2.5">
-            <span class="block text-slate-400 font-bold uppercase tracking-wider text-[9px] mb-0.5 leading-none">Total BD Global</span>
+            <span class="block text-slate-400 font-bold uppercase tracking-wider text-[9px] mb-0.5 leading-none">Total BD</span>
             <span id="kardex-conteo-global" class="text-xs font-extrabold text-blue-700 font-mono">...</span>
           </div>
           <div class="border-r border-slate-200 pr-2.5">
@@ -126,7 +126,7 @@
             <span id="kardex-conteo-bd" class="hidden">...</span>
           </div>
           <div>
-            <span class="block text-slate-400 font-bold uppercase tracking-wider text-[9px] mb-0.5 leading-none">Renderizados</span>
+            <span class="block text-slate-400 font-bold uppercase tracking-wider text-[9px] mb-0.5 leading-none">En tabla</span>
             <span id="kardex-conteo-render" class="text-xs font-extrabold text-slate-800 font-mono">...</span>
           </div>
         </div>
@@ -134,14 +134,14 @@
 
     </div>
 
-    <!-- ── BARRA DE SELECCIÓN DE BODEGA / CENTRO DE UTILIDAD Y TOTAL CONSOLIDADO ── -->
+    <!-- -- BARRA DE SELECCIÓN DE BODEGA / CENTRO DE UTILIDAD Y TOTAL CONSOLIDADO -- -->
     <div id="kardex-bodegas-bar" class="mb-3 py-2 border-y border-slate-200">
       <div class="flex items-center justify-between flex-wrap gap-3">
         <!-- Selector interactivo de bodegas -->
         <div class="flex items-center flex-wrap gap-2">
           <div class="flex items-center gap-1.5 pr-2.5 border-r border-slate-200">
             <span class="text-xs font-extrabold text-slate-700 uppercase tracking-wider flex items-center gap-1">
-              <span>🏬</span> Bodega / Centro:
+              Bodega / Centro:
             </span>
           </div>
           <!-- Contenedor dinámico de píldoras de bodegas -->
@@ -153,7 +153,6 @@
         <!-- Tarjeta de Total Consolidado Empresa (Solo Informativo) -->
         <div id="kardex-total-empresa-box" class="flex items-center gap-3 px-1 py-1.5 ml-auto" title="Sumatoria consolidada de existencias en todas las sedes de la empresa (Informativo, no se mezclan movimientos)">
           <div class="flex items-center gap-1.5 text-indigo-900 font-bold text-xs">
-            <span>🏢</span>
             <span>Total Empresa:</span>
           </div>
           <div class="text-xs font-extrabold text-slate-800 font-mono">
@@ -165,13 +164,16 @@
         </div>
       </div>
 
-      <!-- Aclaración explícita sobre Centros de Utilidad = Bodegas -->
-      <div class="mt-2.5 pt-2 border-t border-slate-200/70 flex items-start gap-2 text-[11px] text-slate-600 leading-normal">
-        <span class="text-blue-500 text-xs shrink-0 mt-0.5">ℹ️</span>
-        <span>
-          <strong class="text-slate-800">Regla de Inventario:</strong> En el sistema, cada <strong>Centro de Utilidad representa una bodega física independiente (relación 1:1)</strong>. Los registros no se mezclan en la tabla cronológica para garantizar la exactitud matemática de saldos y costos promedio. Actualmente no es posible crear más de una bodega por centro de utilidad.
-        </span>
-      </div>
+      <!-- Regla de inventario (colapsable, texto intacto) -->
+      <details class="mt-2.5 pt-2 border-t border-slate-200/70 text-[11px] text-slate-600 leading-normal group">
+        <summary class="cursor-pointer select-none font-semibold text-slate-500 hover:text-slate-800 flex items-center gap-1.5 list-none [&::-webkit-details-marker]:hidden">
+          <svg class="transition-transform group-open:rotate-90" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+          Regla de inventario: centros de utilidad y bodegas
+        </summary>
+        <p class="mt-1.5">
+          En el sistema, cada <strong>Centro de Utilidad representa una bodega física independiente (relación 1:1)</strong>. Los registros no se mezclan en la tabla cronológica para garantizar la exactitud matemática de saldos y costos promedio. Actualmente no es posible crear más de una bodega por centro de utilidad.
+        </p>
+      </details>
     </div>
 
     <div id="kardex-auditoria" class="hidden mb-3 rounded-xl border p-3 text-xs"></div>
@@ -252,7 +254,7 @@
         <!-- Selector de registros por página -->
         <div class="flex items-center gap-1.5 text-gray-500">
           <label for="kardex-por-pagina" class="text-[11px] font-bold text-gray-400 uppercase">Filas:</label>
-          <select id="kardex-por-pagina" onchange="cambiarKardexPorPagina(this.value)" class="text-xs bg-gray-50 border border-gray-300 rounded-lg px-2 py-1 font-bold text-gray-700 outline-none focus:border-rose-500 cursor-pointer">
+          <select id="kardex-por-pagina" onchange="cambiarKardexPorPagina(this.value)" class="text-xs bg-gray-50 border border-gray-300 rounded-lg px-2 py-1 font-bold text-gray-700 outline-none focus:border-indigo-500 cursor-pointer">
             <option value="todos" selected>Todos los registros (Sin excepción)</option>
             <option value="500">500 filas</option>
             <option value="200">200 filas</option>
@@ -266,11 +268,11 @@
           <button id="btn-kardex-primero" type="button" onclick="irPaginaKardex(1)"
                   class="px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 font-bold hover:bg-gray-100 disabled:opacity-30 disabled:pointer-events-none transition cursor-pointer select-none text-xs"
                   title="Primera página">
-            ⏮
+            «
           </button>
           <button id="btn-kardex-prev" type="button" onclick="irPaginaKardex(_kardexPaginaActual - 1)"
                   class="px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 font-bold hover:bg-gray-100 disabled:opacity-30 disabled:pointer-events-none transition cursor-pointer select-none text-xs">
-            ◀ Anterior
+            ‹ Anterior
           </button>
           
           <span id="kardex-texto-pagina" class="px-3 py-1 text-xs font-bold text-gray-700 bg-gray-50 rounded-lg border border-gray-200 min-w-[110px] text-center select-none">
@@ -279,12 +281,12 @@
 
           <button id="btn-kardex-next" type="button" onclick="irPaginaKardex(_kardexPaginaActual + 1)"
                   class="px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 font-bold hover:bg-gray-100 disabled:opacity-30 disabled:pointer-events-none transition cursor-pointer select-none text-xs">
-            Siguiente ▶
+            Siguiente ›
           </button>
           <button id="btn-kardex-ultimo" type="button" onclick="irPaginaKardex(_kardexTotalPaginas)"
                   class="px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 font-bold hover:bg-gray-100 disabled:opacity-30 disabled:pointer-events-none transition cursor-pointer select-none text-xs"
                   title="Última página">
-            ⏭
+            »
           </button>
         </div>
       </div>
@@ -299,7 +301,6 @@
     <div class="bg-white rounded-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-150 border border-slate-100">
       <div class="bg-slate-900 px-5 py-4 text-white flex items-center justify-between">
         <div class="flex items-center gap-2">
-          <span class="text-xl">🏢</span>
           <h3 class="font-bold text-sm tracking-wide">Reclasificar Bodega / Sede</h3>
         </div>
         <button type="button" onclick="cerrarModalReclasificarKardex()" class="text-white/70 hover:text-white text-xl font-bold leading-none cursor-pointer">&times;</button>
@@ -316,7 +317,7 @@
           <div>
             <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Sede Actual:</label>
             <div id="mrk-sede-actual-badge" class="px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-800 font-bold border border-slate-300 flex items-center gap-1.5 truncate">
-              <span>🏪</span> <span id="mrk-sede-actual-nombre" class="truncate">...</span>
+              <span id="mrk-sede-actual-nombre" class="truncate">...</span>
             </div>
           </div>
           <div>
@@ -338,7 +339,7 @@
         <!-- Explicación de impacto contable y físico -->
         <div class="rounded-xl bg-blue-50/70 border border-blue-200/80 p-3 space-y-1 text-[11px] text-blue-900">
           <div class="font-bold flex items-center gap-1 text-blue-950">
-            <span>🛡️</span> <span>Garantía de Integridad Automática:</span>
+            <span>Garantía de Integridad Automática:</span>
           </div>
           <ul class="list-disc list-inside space-y-0.5 text-blue-800 text-[10.5px]">
             <li>Actualiza el Kardex físico de la transacción a la nueva sede.</li>
@@ -353,7 +354,7 @@
           Cancelar
         </button>
         <button type="button" id="mrk-btn-confirmar" onclick="confirmarReclasificarSede()" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-extrabold transition flex items-center gap-1.5 cursor-pointer">
-          <span>⚡</span> <span>Reclasificar y Recostear</span>
+          <span>Reclasificar y Recostear</span>
         </button>
       </div>
     </div>
@@ -368,7 +369,7 @@
         <div>
           <span class="px-2 py-0.5 bg-indigo-500/30 text-indigo-300 rounded text-[10px] font-bold uppercase tracking-wider">Reordenamiento Cronológico / Kardex</span>
           <h3 class="text-base font-extrabold text-white mt-1 flex items-center gap-2">
-            <span>🕒</span> Reordenar Fecha y Hora de Documento
+            Reordenar Fecha y Hora de Documento
           </h3>
           <p id="fecha-doc-identidad" class="text-xs text-slate-300 font-semibold mt-0.5"></p>
         </div>
@@ -409,7 +410,6 @@
 
         <!-- ALERTA INFORMATIVA DE RECOSTEO -->
         <div class="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-start gap-2">
-          <span class="text-base">⚡</span>
           <div class="text-[11px] leading-relaxed">
             <b>Recosteo automático en cascada:</b> Al confirmar, se actualizará la fecha y hora de este documento en <b>Kardex</b>, <b>Contabilidad</b> y <b>Saldos</b>. Todos los movimientos posteriores de los productos listados arriba serán recalculados cronológicamente, impactando el costo de los insumos y el margen de los productos terminados donde participan.
           </div>
@@ -423,14 +423,14 @@
           Cancelar
         </button>
         <button id="btn-guardar-fecha-doc" type="button" onclick="guardarFechaDocumento()" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-xl text-xs transition flex items-center gap-1.5">
-          <span>✅ Confirmar y Recostear</span>
+          <span>Confirmar y Recostear</span>
         </button>
       </div>
 
     </div>
   </div>
 
-  <!-- ── TAB TRASLADOS ENTRE CENTROS DE UTILIDAD ───────────────────── -->
+  <!-- -- TAB TRASLADOS ENTRE CENTROS DE UTILIDAD --------------------- -->
   </main>
 
   <div id="toast" class="toast"></div>

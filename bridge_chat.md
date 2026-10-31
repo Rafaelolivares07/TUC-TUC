@@ -3007,3 +3007,9 @@ Rockola vinilo + PWA (Rafa 31/10): 1fa7272 vinilo play overlay x2.5 (svg 30->75,
 ### [2026-10-31 07:01:02] Muse para sala:
 
 Rockola play sala (correccion Rafa 31/10): el boton era el del reproductor, no el vinilo. 7ad0e1a: iconos play+pause 40/42->100px (x2.5, incluye swap JS) + circulo 92->152px (aire 26px intacto; 230px rompia fila celular) + guardia anti-reflejo (tap-highlight+foco). Vinilo revertido a 64/30/3 (guardia queda). SW v8 live 019d61f: barra gestos PWA negra tras cerrar+reabrir app. Verificado live 7ad0e1a. E2E Rafa.
+
+---
+
+### [2026-10-31 07:14:08] Muse para sala:
+
+Rockola play sala (aclarado Rafa): 353d3d0 circulo de vuelta a 92px, glifo interno al 250% (100px, tinta ~46x58, punta ~7px del borde; si Rafa lo ve al ras se baja a 200%). Guardia anti-reflejo intacta. Omni buscador en pausa por orden Rafa (4 archivos sin commit). Verificado live 353d3d0. E2E Rafa.

@@ -391,6 +391,14 @@ async function ejecutarBusquedaOmni(query) {
 
   // Normalizador unico de titulos (local + dedupe catalogo)
   function omniNormTitulo(s) { return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\.[^.]+$/, '').replace(/[^a-z0-9]/g, ''); }
+  // Mismo tema: igualdad exacta o uno contiene al otro (minimo 12 letras;
+  // temas cortos como 'quien' nunca se fusionan con 'quien eres tu')
+  function omniMismoTema(a, b) {
+    if (!a || !b) return false;
+    if (a === b) return true;
+    const m = Math.min(a.length, b.length);
+    return m >= 12 && (a.includes(b) || b.includes(a));
+  }
 
   // 1. Inmediato: Búsqueda local en este dispositivo (latencia 0 ms)
   const qLower = q.toLowerCase();
@@ -401,11 +409,11 @@ async function ejecutarBusquedaOmni(query) {
       })
     : [];
   // Dedupe: la misma cancion guardada 2+ veces se muestra una sola vez
-  const vistosLoc = new Set();
+  const vistosLoc = [];
   const cancionesLocUnicas = cancionesLoc.filter(c => {
     const n = omniNormTitulo(limpiarNombre(c.nombre));
-    if (!n || vistosLoc.has(n)) return false;
-    vistosLoc.add(n);
+    if (!n || vistosLoc.some(k => omniMismoTema(k, n))) return false;
+    vistosLoc.push(n);
     return true;
   }).slice(0, 10);
 
@@ -442,22 +450,34 @@ async function ejecutarBusquedaOmni(query) {
     const youtube = data.youtube || [];
 
     // Local manda: servidor que repite lo del dispositivo se oculta (solo si hay blob)
-    const vistosLocales = new Set();
-    cancionesLocUnicas.forEach(c => { if (c.blob) vistosLocales.add(omniNormTitulo(limpiarNombre(c.nombre))); });
-    const servidorUnico = servidor.filter(s => !vistosLocales.has(omniNormTitulo(limpiarNombre(s.nombre))));
+    const vistosLocales = [];
+    cancionesLocUnicas.forEach(c => {
+      if (!c.blob) return;
+      const nl = omniNormTitulo(limpiarNombre(c.nombre));
+      if (nl && !vistosLocales.some(k => omniMismoTema(k, nl))) vistosLocales.push(nl);
+    });
+    const vistosServ = [];
+    const servidorUnico = servidor.filter(s => {
+      const n = omniNormTitulo(limpiarNombre(s.nombre));
+      if (!n || vistosLocales.some(k => omniMismoTema(k, n))) return false;
+      if (vistosServ.some(k => omniMismoTema(k, n))) return false;
+      vistosServ.push(n);
+      return true;
+    });
 
     // Dedupe: el catálogo repite lo que ya está en dispositivo, servidor o YouTube
     const normTitulo = omniNormTitulo;
-    const vistos = new Set();
-    cancionesLocUnicas.forEach(c => vistos.add(normTitulo(limpiarNombre(c.nombre))));
-    servidorUnico.forEach(s => vistos.add(normTitulo(limpiarNombre(s.nombre))));
-    youtube.forEach(y => vistos.add(normTitulo(limpiarNombre(y.nombre))));
-    const usuariosUnicos = usuarios.filter(u => {
-      const n = normTitulo(limpiarNombre(u.nombre));
-      if (!n || vistos.has(n)) return false;
-      vistos.add(n);
+    const vistos = [];
+    const verTema = (t) => {
+      const n = normTitulo(limpiarNombre(t));
+      if (!n || vistos.some(k => omniMismoTema(k, n))) return false;
+      vistos.push(n);
       return true;
-    });
+    };
+    cancionesLocUnicas.forEach(c => verTema(c.nombre));
+    servidorUnico.forEach(s => verTema(s.nombre));
+    youtube.forEach(y => verTema(y.nombre));
+    const usuariosUnicos = usuarios.filter(u => verTema(u.nombre));
 
     let htmlServidor = '';
     if (servidorUnico.length > 0) {

@@ -286,6 +286,11 @@ function omniElegirCatalogo(nombre) {
 
 async function omniResolverYPlay(nombre) {
   try {
+    if (OMNI_LOCAL && typeof cancionesLocales !== 'undefined') {
+      const qn = limpiarNombre(nombre || '').toLowerCase();
+      const hit = (cancionesLocales || []).find(c => limpiarNombre(c.nombre || '').toLowerCase() === qn);
+      if (hit) { omniElegir('local', hit.id, limpiarNombre(hit.nombre)); return; }
+    }
     const res = await fetch('/rockola/yt-resolver?q=' + encodeURIComponent(nombre || ''));
     const data = await res.json();
     if (data && data.ok && data.youtube_url) {

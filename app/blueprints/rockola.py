@@ -2779,12 +2779,23 @@ def poner_desde_biblioteca(sala_id, archivo_id):
         with _lock:
             row = conn.execute(
                 """
-                SELECT archivo_id, nombre, youtube_url, origen
+                SELECT sala_id, archivo_id, nombre, youtube_url, origen
                 FROM rockola_biblioteca
-                WHERE sala_id = %s AND archivo_id = %s
+                WHERE archivo_id = %s
+                ORDER BY (sala_id = %s) DESC
                 """,
-                (sala_id, archivo_id),
+                (archivo_id, sala_id),
             ).fetchone()
+            if not row:
+                row = conn.execute(
+                    """
+                    SELECT sala_id, archivo_id, nombre, youtube_url, origen
+                    FROM rockola_compartidos
+                    WHERE archivo_id = %s
+                    ORDER BY (sala_id = %s) DESC
+                    """,
+                    (archivo_id, sala_id),
+                ).fetchone()
             if not row:
                 return jsonify(ok=False, error='Cancion no encontrada'), 404
 
@@ -2798,6 +2809,17 @@ def poner_desde_biblioteca(sala_id, archivo_id):
                 if os.path.isfile(p):
                     origen = p
                     break
+            if not origen:
+                # Viaje universal: bytes de otra sala suenan aqui (copia
+                # temporal abajo, sin duplicar filas de libreria).
+                base_tmp = os.path.join(os.path.dirname(__file__), '..', '..', 'static', 'rockola_tmp')
+                for root, _, files in os.walk(base_tmp):
+                    for cand in candidatos:
+                        if cand in files:
+                            origen = os.path.join(root, cand)
+                            break
+                    if origen:
+                        break
             if origen:
                 nuevo_id = str(uuid.uuid4()) + os.path.splitext(origen)[1]
                 destino = os.path.join(upload, nuevo_id)

@@ -3057,3 +3057,9 @@ Rockola pausa (Rafa 31/10): 20a5dac barras 90% + gap 60% redibujado centrado (gr
 ### [2026-10-31 07:46:44] Muse para sala:
 
 Rockola foco3 (Rafa 31/10, intermitente): c4437c2 subida persistente mientras enfocado (400+900+cada resize teclado, suelta en blur). Test 98/98; prod c4437c2 verificado. E2E Rafa.
+
+---
+
+### [2026-10-31 07:53:46] Muse para sala:
+
+Rockola query (Rafa 31/10): 651984f compacto sigue texto en resize (ocultar teclado ya no baja input; suprimido tras elegir/descartar) + resultados titulo 16.9/meta 14.3 peso 400. Test 102/102; prod 651984f verificado. E2E Rafa.

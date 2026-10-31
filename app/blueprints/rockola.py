@@ -2168,7 +2168,8 @@ def reproductor_sala(sala_id):
         sala = _get_sala(conn, sala_id)
     finally:
         conn.close()
-    resp = make_response(render_template('rockola_reproductor.html', sala_id=sala_id, admin_key=sala.get('admin_key', '')))
+    tv_mode = (request.args.get('tv') == '1')
+    resp = make_response(render_template('rockola_reproductor.html', sala_id=sala_id, admin_key=sala.get('admin_key', ''), tv_mode=tv_mode))
     resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
     resp.headers['Pragma'] = 'no-cache'
     resp.headers['Expires'] = '0'

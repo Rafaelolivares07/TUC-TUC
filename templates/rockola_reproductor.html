@@ -39,7 +39,10 @@ body.tv-mode #tv-display { display: flex; flex-direction: column; min-height: 10
 .tv-next { margin-top: 4vh; }
 #tv-next-nombre { font-size: clamp(24px, 3vw, 54px); font-weight: 600; margin-top: 1vh; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tv-side { display: flex; flex-direction: column; gap: 2vh; min-height: 0; min-width: 0; }
-.tv-qr-card { background: #fff; border-radius: 14px; padding: 14px; display: flex; gap: 14px; align-items: center; }
+.tv-qr-card { background: #fff; border-radius: 14px; padding: 14px; display: flex; gap: 14px; align-items: center; margin-bottom: 2vh; max-width: 430px; }
+.tv-img-slot { border: 1px solid rgba(0,212,255,0.18); border-radius: 14px; overflow: hidden; aspect-ratio: 16/9; background: #0a1626; display: flex; align-items: center; justify-content: center; }
+.tv-img-slot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tv-img-empty { color: #5a6f88; font-size: clamp(14px, 1.4vw, 22px); }
 #tv-qr img { display: block; }
 .tv-qr-txt { color: #0e192c; font-size: clamp(14px, 1.4vw, 22px); font-weight: 700; line-height: 1.4; }
 #tv-url { color: #0077ff; font-size: clamp(12px, 1.2vw, 18px); word-break: break-all; font-weight: 500; }
@@ -7583,6 +7586,10 @@ function cerrarDebugPanel() {
   </div>
   <div class="tv-main">
     <div>
+      <div class="tv-qr-card">
+        <div id="tv-qr"></div>
+        <div><div class="tv-qr-txt">Programa tu cancion desde tu celular</div><div id="tv-url"></div></div>
+      </div>
       <div class="tv-label">SONANDO</div>
       <div id="tv-sonando">--</div>
       <div id="tv-owner"></div>
@@ -7595,14 +7602,11 @@ function cerrarDebugPanel() {
       </div>
     </div>
     <div class="tv-side">
-      <div class="tv-qr-card">
-        <div id="tv-qr"></div>
-        <div><div class="tv-qr-txt">Programa tu cancion desde tu celular</div><div id="tv-url"></div></div>
-      </div>
       <div class="tv-cola-box">
         <div class="tv-label">EN COLA <span id="tv-count"></span></div>
         <ul id="tv-cola"></ul>
       </div>
+      <div class="tv-img-slot"><img id="tv-img" alt="" style="display:none"><span class="tv-img-empty" id="tv-img-empty">espacio imagen</span></div>
     </div>
   </div>
   <div id="tv-start" class="visible">
@@ -7654,8 +7658,24 @@ function tvFmt(s) {
   s = Math.floor(s);
   return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
 }
+const TV_IMGS = [];
+let tvImgIdx = -1;
+let tvImgSong = '';
+function tvRotarImagen(songId) {
+  try {
+    if (!TV_IMGS.length) return;
+    if (songId === tvImgSong) return;
+    tvImgSong = songId || '';
+    tvImgIdx = (tvImgIdx + 1) % TV_IMGS.length;
+    const img = document.getElementById('tv-img');
+    const emp = document.getElementById('tv-img-empty');
+    if (img) { img.src = TV_IMGS[tvImgIdx]; img.style.display = 'block'; }
+    if (emp) emp.style.display = 'none';
+  } catch (e) {}
+}
 function tvRenderCola(items) {
   const son = items.length ? items[0] : null;
+  tvRotarImagen(son ? son.id : '');
   document.getElementById('tv-sonando').textContent = son ? (son.nombre || 'Cancion') : '--';
   document.getElementById('tv-owner').textContent = son && son.owner ? ('Puesta por ' + son.owner) : '';
   const sig = items.length > 1 ? items[1] : null;

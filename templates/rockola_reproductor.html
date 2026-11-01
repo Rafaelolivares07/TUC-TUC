@@ -53,7 +53,8 @@ body.tv-mode #tv-display { display: flex; flex-direction: column; min-height: 10
 body.tv-mode #tv-start.visible { display: flex; }
 #tv-btn-empezar { margin-top: 3vh; padding: 2.4vh 4vw; font-size: clamp(24px, 3vw, 54px); font-weight: 800; border: none; border-radius: 16px; background: #00d4ff; color: #00101b; cursor: pointer; font-family: inherit; }
 .tv-start-hint { margin-top: 2vh; color: #8aa0b8; font-size: clamp(16px, 1.8vw, 28px); }
-#tv-diag { margin-top: 2vh; padding: 1.2vh 1.2vw; border-radius: 12px; background: #0a1626; border: 1px solid #1d3a5f; color: #9fd8ff; font-size: clamp(15px, 1.6vw, 26px); font-family: ui-monospace, Consolas, monospace; min-height: 1.4em; word-break: break-word; cursor: pointer; }
+/* diag TV oculto 31/10 (Rafa): quitar display:none para verlo. Codigo intacto. */
+#tv-diag { display: none; margin-top: 2vh; padding: 1.2vh 1.2vw; border-radius: 12px; background: #0a1626; border: 1px solid #1d3a5f; color: #9fd8ff; font-size: clamp(15px, 1.6vw, 26px); font-family: ui-monospace, Consolas, monospace; min-height: 1.4em; word-break: break-word; cursor: pointer; }
 #tv-diag.collapsed { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-height: 2.4em; font-size: clamp(12px, 1.2vw, 18px); opacity: .8; }
 </style>
 {% endif %}
@@ -6367,8 +6368,8 @@ function aplicarModosServidor(data) {
     const quieto = !!data.modo_pausa;
     if (ultimoModoPausaVisto === null || quieto !== ultimoModoPausaVisto) {
       ultimoModoPausaVisto = quieto;
-      if (quieto && reproduciendo && !transitioning) togglePlayPause();
-      else if (!quieto && !reproduciendo && !transitioning && currentCola && currentCola.length) togglePlayPause();
+      if (quieto && reproduciendo && !transitioning) togglePlayPause('srv');
+      else if (!quieto && !reproduciendo && !transitioning && currentCola && currentCola.length) togglePlayPause('srv');
     }
   }
 }
@@ -6599,8 +6600,9 @@ function initProgressBarDrag() {
   window.addEventListener('touchend', handleEnd);
 }
 
-async function togglePlayPause() {
-  setTimeout(() => { try { postModos({modo_pausa: !reproduciendo}); } catch(e2){} }, 500);
+async function togglePlayPause(origen) {
+  let nuevoQuieto = null;
+  setTimeout(() => { try { if (origen !== 'srv' && nuevoQuieto !== null) postModos({modo_pausa: nuevoQuieto}); } catch(e2){} }, 500);
   try { initAudioContext(); } catch(e) {}
   if (audioCtx && audioCtx.state === 'suspended') {
     try { audioCtx.resume(); } catch(e) {}
@@ -6613,6 +6615,7 @@ async function togglePlayPause() {
       if (state === YT.PlayerState.PLAYING) {
         activo.pauseVideo();
         reproduciendo = false;
+        nuevoQuieto = true;
         setVinylSpinning(false);
         actualizarPlayPauseBtn(false);
       } else {
@@ -6627,11 +6630,13 @@ async function togglePlayPause() {
         } else {
           activo.playVideo();
         }
+        nuevoQuieto = false;
         estadoEl.textContent = 'Iniciando YouTube...';
       }
     } else {
       const c = cancionActualObjeto || (currentCola && currentCola[0]);
       if (c) {
+        nuevoQuieto = false;
         intentarReproducir(c);
       }
     }
@@ -6641,6 +6646,7 @@ async function togglePlayPause() {
   // Si player ya tiene audio cargado, simplemente alternar play/pause en el segundo exacto
   if (player.src) {
     if (player.paused) {
+      nuevoQuieto = false;
       player.play().then(async () => {
         reproduciendo = true;
         playPendiente = false;
@@ -6671,6 +6677,7 @@ async function togglePlayPause() {
       });
     } else {
       player.pause();
+      nuevoQuieto = true;
       reproduciendo = false;
       setVinylSpinning(false);
       if (vizAnimFrame) cancelAnimationFrame(vizAnimFrame);
@@ -6695,6 +6702,7 @@ async function togglePlayPause() {
     const c = (currentCola && currentCola.length > 0) ? (currentCola.find(s => s.id === cancionActual) || currentCola[0]) : null;
     if (c) {
       cancionActual = c.id;
+      nuevoQuieto = false;
       await intentarReproducir(c);
       return;
     }
@@ -7582,7 +7590,7 @@ function cerrarDebugPanel() {
     <div class="tv-side">
       <div class="tv-qr-card">
         <div id="tv-qr"></div>
-        <div><div class="tv-qr-txt">Pide tu cancion desde el celular</div><div id="tv-url"></div></div>
+        <div><div class="tv-qr-txt">Programa tu cancion desde tu celular</div><div id="tv-url"></div></div>
       </div>
       <div class="tv-cola-box">
         <div class="tv-label">EN COLA <span id="tv-count"></span></div>

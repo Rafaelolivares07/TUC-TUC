@@ -72,6 +72,7 @@
   let itemsColeccion = []; // Almacena elementos navegables con teclado
   let datosProductos = []; // Matches de producto (grupo Datos)
   let datosExtras = null; // Sueltos global (fila 14)
+  let vistaDetalle = false; // Entro al detalle: no tapar con respuestas tardias
 
   // Contexto activo (si existe en la URL o variable global)
   function obtenerContextoNegocioId() {
@@ -136,6 +137,7 @@
   function cerrarDropdown() {
     dropdown.classList.add('hidden');
     selectedIndex = -1;
+    vistaDetalle = false;
     if (omniScrollPrevio !== null) {
       try { window.scrollTo({ top: omniScrollPrevio, behavior: 'smooth' }); } catch (e) {}
       omniScrollPrevio = null;
@@ -260,14 +262,16 @@
 
     abrirDropdown();
     loading.classList.remove('hidden');
-    itemsColeccion = [];
-    selectedIndex = -1;
 
     try {
       const nid = obtenerContextoNegocioId();
       const resp = await fetch('/api/buscador/omni?q=' + encodeURIComponent(q) + '&negocio_id=' + encodeURIComponent(nid));
       const d = await resp.json();
       loading.classList.add('hidden');
+      if (q !== input.value.trim()) return; // Respuesta tardia: ya escribio otra cosa
+      if (vistaDetalle) return; // Ya entro al detalle: no tapar con la lista
+      itemsColeccion = [];
+      selectedIndex = -1;
 
       if (!d.ok) {
         resultsBody.innerHTML = `<div class="p-4 text-center text-red-500 text-xs">Error al consultar el buscador</div>`;
@@ -478,7 +482,7 @@
     try {
       const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ disponible: next }) });
       const dd = await r.json();
-      if (dd && dd.ok) { ejecutarBusqueda(input.value.trim()); return; }
+      if (dd && dd.ok) { vistaDetalle = false; ejecutarBusqueda(input.value.trim()); return; }
       throw new Error((dd && dd.error) || 'fail');
     } catch (er) {
       chk.checked = !chk.checked;
@@ -509,6 +513,7 @@
     h += omniFilaDato(backIdx, '\u2190 Ver los ' + datosProductos.length + ' productos', 'volver a la lista', 'Atr\u00e1s');
     h += `</div></div>`;
     resultsBody.innerHTML = h;
+    vistaDetalle = true;
     resaltarElemento(0);
   };
 
@@ -516,7 +521,7 @@
     const it = itemsColeccion[idx];
     if (!it) return;
     if (it.tipo === 'dato-pick') { window.omniElegirProducto(it.prodIdx); return; }
-    if (it.tipo === 'dato-back') { ejecutarBusqueda(input.value.trim()); return; }
+    if (it.tipo === 'dato-back') { vistaDetalle = false; ejecutarBusqueda(input.value.trim()); return; }
     if (it.tipo === 'dato-toggle') { window.omniFilaToggle(idx); return; }
     if (it.tipo === 'dato-modal') { window.omniSueltosAbrir(); return; }
     omniNavegarA(it.url, it.titulo, it.modulo || '', it.icono || '');
@@ -603,6 +608,7 @@
   });
 
   input.addEventListener('input', () => {
+    vistaDetalle = false;
     clearTimeout(debounceTimer);
     const q = input.value.trim();
     if (q.length < 2) {

@@ -2884,6 +2884,7 @@ async function intentarReproducir(c) {
         console.log('[Watchdog YouTube] No arrancó en 5s (posible bloqueo autoplay en iPhone/Safari), activando fallback...');
         estadoEl.textContent = 'Activando audio nativo para este enlace...';
         const audioUrl = await resolverAudioEnServidor(c.id);
+        let okNativo = false;
         if (audioUrl && cancionActual === c.id) {
           detenerVideoYouTube();
           esYouTubeActual = false;
@@ -2892,12 +2893,18 @@ async function intentarReproducir(c) {
           try {
             await player.play();
             reproduciendo = true;
+            okNativo = true;
             actualizarPlayPauseBtn(true);
             estadoEl.textContent = 'Reproduciendo (Audio) ✓';
             actualizarMediaSession(c.nombre);
           } catch(err) {
             console.warn('[Watchdog YouTube] Error al reproducir audio nativo:', err);
           }
+        }
+        if (!okNativo && cancionActual === c.id && !transitioning) {
+          console.log('[Watchdog YouTube] Sin audio (YT bloqueado + resolver caido), saltando...');
+          estadoEl.textContent = 'YouTube bloqueado — saltando...';
+          setTimeout(() => { if (!reproduciendo && cancionActual === c.id && !transitioning) saltarActual(); }, 1500);
         }
       }
     }, 3500);

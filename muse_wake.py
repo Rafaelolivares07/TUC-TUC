@@ -329,6 +329,11 @@ def notify(text, chat_id, message_id):
     return True
 
 
+def _orden_envio(voz):
+    """Orden de entrega del outbox: audio primero (si aplica), texto siempre al final."""
+    return ['voz', 'texto'] if voz else ['texto']
+
+
 def _outbox_loop(base_getter):
     import urllib.request
     import urllib.parse
@@ -343,13 +348,18 @@ def _outbox_loop(base_getter):
                 if contenido:
                     base, cid = base_getter()
                     if base:
-                        data = urllib.parse.urlencode({'chat_id': cid, 'text': contenido}).encode()
-                        req = urllib.request.Request(base + '/sendMessage', data=data)
-                        urllib.request.urlopen(req, timeout=20).read()
-                        if voz:
-                            env = os.path.join(V2, 'muse_tg_enviar.py')
-                            subprocess.run([sys.executable, env, contenido, '--solo-voz'],
-                                           timeout=180)
+                        for paso in _orden_envio(voz):
+                            if paso == 'voz':
+                                try:
+                                    env = os.path.join(V2, 'muse_tg_enviar.py')
+                                    subprocess.run([sys.executable, env, contenido, '--solo-voz'],
+                                                   timeout=180)
+                                except Exception:
+                                    _l('outbox voz fallo, sigo con texto')
+                            else:
+                                data = urllib.parse.urlencode({'chat_id': cid, 'text': contenido}).encode()
+                                req = urllib.request.Request(base + '/sendMessage', data=data)
+                                urllib.request.urlopen(req, timeout=20).read()
                         _l('outbox => telegram (%d chars)%s' % (len(contenido), ' +voz' if voz else ''))
             time.sleep(2)
         except Exception as e:

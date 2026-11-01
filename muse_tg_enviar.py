@@ -2,11 +2,12 @@
 """muse_tg_enviar: manda texto y/o audio a Rafa por Telegram.
 Uso:  muse_tg_enviar.py "texto" [--voz] [--solo-voz]
 - Credenciales desde BD (muse_tg_listener.read_token), nunca en disco.
-- Audio: muse_voz/habla_edge.py (Salome) + sendAudio mp3.
+- Audio: muse_voz/habla_edge.py (Salome) + ffmpeg ogg-opus + sendVoice (nota de voz, sin playlist).
 Imprime message_id(s). Exit 1 si falla.
 """
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -25,22 +26,40 @@ def send_text(base, cid, text):
         return json.load(resp)
 
 
-def send_audio(base, cid, mp3path, title):
+def _mp3_a_ogg(mp3path, oggpath):
+    """Convierte mp3 a ogg-opus (formato nota de voz). True si queda en disco."""
+    ff = shutil.which('ffmpeg')
+    if not ff:
+        print('sin ffmpeg en PATH')
+        return False
+    p = subprocess.run([ff, '-y', '-loglevel', 'error', '-i', mp3path,
+                        '-c:a', 'libopus', '-b:a', '64k', oggpath],
+                       capture_output=True, text=True, timeout=120)
+    if p.returncode != 0 or not os.path.exists(oggpath):
+        print('ffmpeg fallo:', (p.stderr or '')[:200])
+        return False
+    return True
+
+
+def _multipart_voice(cid, audio):
+    """Cuerpo multipart para sendVoice. Retorna (body, boundary)."""
     b = uuid.uuid4().hex.encode()
-    with open(mp3path, 'rb') as f:
+    parts = [b'--' + b,
+             b'Content-Disposition: form-data; name="chat_id"',
+             b'', str(cid).encode(),
+             b'--' + b,
+             b'Content-Disposition: form-data; name="voice"; filename="muse.ogg"',
+             b'Content-Type: audio/ogg', b'', audio,
+             b'--' + b + b'--', b'']
+    return b'\r\n'.join(parts), b.decode()
+
+
+def send_voice(base, cid, oggpath):
+    with open(oggpath, 'rb') as f:
         audio = f.read()
-    parts = []
-    for k, v in (('chat_id', cid), ('title', title)):
-        parts += [b'--' + b,
-                  ('Content-Disposition: form-data; name="%s"' % k).encode(),
-                  b'', str(v).encode()]
-    parts += [b'--' + b,
-              b'Content-Disposition: form-data; name="audio"; filename="muse.mp3"',
-              b'Content-Type: audio/mpeg', b'', audio,
-              b'--' + b + b'--', b'']
-    body = b'\r\n'.join(parts)
-    req = urllib.request.Request(base + '/sendAudio', data=body,
-                                 headers={'Content-Type': 'multipart/form-data; boundary=' + b.decode()})
+    body, boundary = _multipart_voice(cid, audio)
+    req = urllib.request.Request(base + '/sendVoice', data=body,
+                                 headers={'Content-Type': 'multipart/form-data; boundary=' + boundary})
     with urllib.request.urlopen(req, timeout=60) as resp:
         return json.load(resp)
 
@@ -67,6 +86,7 @@ def main(argv):
         tmp = tempfile.gettempdir()
         txt = os.path.join(tmp, 'muse_tg_txt.txt')
         mp3 = os.path.join(tmp, 'muse_tg_audio.mp3')
+        ogg = os.path.join(tmp, 'muse_tg_audio.ogg')
         with open(txt, 'w', encoding='utf-8') as f:
             f.write(text)
         habla = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'muse_voz', 'habla_edge.py')
@@ -75,9 +95,11 @@ def main(argv):
         if p.returncode != 0 or not os.path.exists(mp3):
             print('tts fallo:', (p.stderr or p.stdout or '')[:200])
             return 1
-        r = send_audio(base, cid, mp3, text[:60])
+        if not _mp3_a_ogg(mp3, ogg):
+            return 1
+        r = send_voice(base, cid, ogg)
         print('audio_ok:', r.get('ok'), '| id:', r.get('result', {}).get('message_id'))
-        for f in (txt, mp3):
+        for f in (txt, mp3, ogg):
             try:
                 os.unlink(f)
             except OSError:

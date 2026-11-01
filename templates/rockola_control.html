@@ -307,7 +307,7 @@ function guardarKey() {
   actualizar();
 }
 
-async function verificarKey() {
+async function verificarKey(reintento) {
   if (!adminKey && !SERVER_KEY) {
     try {
       const rc = await fetch(`/rockola/${SALA}/control-claim`, {
@@ -320,8 +320,12 @@ async function verificarKey() {
         localStorage.setItem('rockola_admin_' + SALA, adminKey);
       } else if (dc.error) {
         document.getElementById('key-error').textContent = dc.error + ' — pídele el enlace o que libere el control.';
+      } else if (dc.ok) {
+        document.getElementById('key-error').textContent = 'La sala aún no tiene llave de control.';
       }
-    } catch (e) {}
+    } catch (e) {
+      document.getElementById('key-error').textContent = 'Sin conexión al reclamar el control. Reintenta.';
+    }
   }
   if (!adminKey && SERVER_KEY) {
     adminKey = SERVER_KEY;
@@ -329,11 +333,21 @@ async function verificarKey() {
     registrarHolder(adminKey);
   }
   if (!adminKey) { mostrarLogin(true); return false; }
-  const r = await fetch(`/rockola/${SALA}/admin-info?key=${encodeURIComponent(adminKey)}`);
-  const d = await r.json();
+  let d = null;
+  try {
+    const r = await fetch(`/rockola/${SALA}/admin-info?key=${encodeURIComponent(adminKey)}`);
+    d = await r.json();
+  } catch (e) {
+    return true;
+  }
   clienteUrl = d.cliente_url || clienteUrl;
   controlUrl = d.control_url || controlUrl;
   document.getElementById('holder-line').textContent = d.control_en ? 'Control: ' + d.control_en : '';
+  if (!d.autorizado && !reintento && !urlKey && !SERVER_KEY) {
+    localStorage.removeItem('rockola_admin_' + SALA);
+    adminKey = '';
+    return verificarKey(true);
+  }
   mostrarLogin(!d.autorizado);
   return d.autorizado;
 }

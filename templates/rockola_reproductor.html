@@ -29,15 +29,16 @@ body.tv-mode #tv-display { display: flex; flex-direction: column; min-height: 10
 .tv-brand { font-size: clamp(28px, 3.4vw, 54px); font-weight: 900; letter-spacing: -1px; }
 .tv-sala { font-size: clamp(20px, 2.2vw, 36px); font-weight: 800; letter-spacing: 3px; color: #8aa0b8; }
 .tv-main { display: grid; grid-template-columns: 1.6fr 1fr; gap: 3vw; flex: 1; min-height: 0; }
+.tv-main > * { min-width: 0; }
 .tv-label { font-size: clamp(14px, 1.4vw, 24px); letter-spacing: 4px; color: #5a6f88; font-weight: 700; }
-#tv-sonando { font-size: clamp(40px, 6vw, 110px); font-weight: 800; line-height: 1.08; margin: 1vh 0; }
+#tv-sonando { font-size: clamp(26px, 3.4vw, 58px); font-weight: 800; line-height: 1.12; margin: 1vh 0; overflow-wrap: anywhere; max-height: 2.5em; overflow: hidden; }
 #tv-owner { font-size: clamp(18px, 2vw, 34px); color: #8aa0b8; margin-bottom: 2vh; min-height: 1.2em; }
 #tv-prog { height: 10px; background: #14243a; border-radius: 6px; overflow: hidden; }
 #tv-prog-fill { height: 100%; width: 0%; background: #00d4ff; }
 #tv-time { font-size: clamp(14px, 1.5vw, 24px); color: #8aa0b8; margin-top: 1vh; font-variant-numeric: tabular-nums; min-height: 1.2em; }
 .tv-next { margin-top: 4vh; }
-#tv-next-nombre { font-size: clamp(24px, 3vw, 54px); font-weight: 600; margin-top: 1vh; }
-.tv-side { display: flex; flex-direction: column; gap: 2vh; min-height: 0; }
+#tv-next-nombre { font-size: clamp(24px, 3vw, 54px); font-weight: 600; margin-top: 1vh; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tv-side { display: flex; flex-direction: column; gap: 2vh; min-height: 0; min-width: 0; }
 .tv-qr-card { background: #fff; border-radius: 14px; padding: 14px; display: flex; gap: 14px; align-items: center; }
 #tv-qr img { display: block; }
 .tv-qr-txt { color: #0e192c; font-size: clamp(14px, 1.4vw, 22px); font-weight: 700; line-height: 1.4; }
@@ -45,13 +46,15 @@ body.tv-mode #tv-display { display: flex; flex-direction: column; min-height: 10
 .tv-cola-box { border: 1px solid rgba(0,212,255,0.18); border-radius: 14px; padding: 2vh 1.2vw; overflow: hidden; }
 #tv-cola { list-style: none; margin-top: 1vh; }
 #tv-cola li { display: flex; gap: 12px; font-size: clamp(16px, 1.8vw, 30px); padding: 0.9vh 0; border-bottom: 1px solid rgba(255,255,255,0.06); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-#tv-cola .pos { color: #5a6f88; min-width: 2ch; text-align: right; }
+#tv-cola .pos { color: #5a6f88; min-width: 2ch; text-align: right; flex-shrink: 0; }
+#tv-cola li > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #tv-count { color: #8aa0b8; }
 #tv-start { position: fixed; inset: 0; z-index: 90; display: none; align-items: center; justify-content: center; background: #000; text-align: center; }
 body.tv-mode #tv-start.visible { display: flex; }
 #tv-btn-empezar { margin-top: 3vh; padding: 2.4vh 4vw; font-size: clamp(24px, 3vw, 54px); font-weight: 800; border: none; border-radius: 16px; background: #00d4ff; color: #00101b; cursor: pointer; font-family: inherit; }
 .tv-start-hint { margin-top: 2vh; color: #8aa0b8; font-size: clamp(16px, 1.8vw, 28px); }
-#tv-diag { margin-top: 2vh; padding: 1.2vh 1.2vw; border-radius: 12px; background: #0a1626; border: 1px solid #1d3a5f; color: #9fd8ff; font-size: clamp(15px, 1.6vw, 26px); font-family: ui-monospace, Consolas, monospace; min-height: 1.4em; word-break: break-word; }
+#tv-diag { margin-top: 2vh; padding: 1.2vh 1.2vw; border-radius: 12px; background: #0a1626; border: 1px solid #1d3a5f; color: #9fd8ff; font-size: clamp(15px, 1.6vw, 26px); font-family: ui-monospace, Consolas, monospace; min-height: 1.4em; word-break: break-word; cursor: pointer; }
+#tv-diag.collapsed { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-height: 2.4em; font-size: clamp(12px, 1.2vw, 18px); opacity: .8; }
 </style>
 {% endif %}
 <script src="https://www.youtube.com/iframe_api"></script>
@@ -2441,6 +2444,7 @@ function handlePlayerTimeUpdate(e) {
   const timeLeft = p.duration ? (p.duration - p.currentTime) : 999;
   
   // El fundido audible corre exactamente durante los ultimos crossfadeDuration segundos y NUNCA si la cancion esta programada para repetir
+  try { precargarFundidoStandby(nextSong, timeLeft); } catch (_e) {}
   if (!modoRepetirCancion && crossfadeEnabled && nextSong && p.duration && (timeLeft <= crossfadeDuration) && !transitioning && !recienAgregada) {
     iniciarCrossfade(crossfadeDuration);
   }
@@ -2789,6 +2793,7 @@ function iniciarYtProgresoTimer() {
         const timeLeft = dur - curr;
 
         // El fundido audible corre exactamente durante los ultimos crossfadeDuration segundos y NUNCA si la cancion esta programada para repetir
+        try { precargarFundidoStandby(nextSong, timeLeft); } catch (_e) {}
         if (!modoRepetirCancion && crossfadeEnabled && nextSong && (timeLeft <= crossfadeDuration) && !transitioning && !recienAgregada) {
           iniciarCrossfade(crossfadeDuration);
         }
@@ -6211,6 +6216,8 @@ let memoriaListaCola = [];
 let fundidoCruzado = true;
 let fundidoSegundos = 12;
 let fundidoDuracion = 5;
+let fundidoPrecargaHead = '';
+let fundidoPrecargaId = null;
 const intentModos = {};
 
 function actualizarShuffleStatus() {
@@ -6842,6 +6849,33 @@ async function _ejecutarAnteriorCancion() {
   }
 }
 
+async function precargarFundidoStandby(nextSong, timeLeft) {
+  try {
+    const headId = (currentCola && currentCola[0] && currentCola[0].id) || '';
+    if (headId !== fundidoPrecargaHead) { fundidoPrecargaHead = headId; fundidoPrecargaId = null; }
+    if (!nextSong || !nextSong.id || fundidoPrecargaId === nextSong.id) return;
+    if (!(timeLeft <= fundidoSegundos)) return;
+    fundidoPrecargaId = nextSong.id;
+    if (nextSong.youtube_url) {
+      const vid = extractYouTubeId(nextSong.youtube_url);
+      if (!vid) return;
+      let st = null;
+      try { st = getYtPlayerStandby(); } catch (e0) {}
+      const ready = (typeof isYtStandbyReady === 'function') ? isYtStandbyReady() : false;
+      if (st && ready && typeof st.cueVideoById === 'function') {
+        try { st.setVolume(0); } catch (e1) {}
+        st.cueVideoById(vid);
+      }
+    } else if (typeof obtenerUrlDeAudio === 'function' && typeof standbyPlayer !== 'undefined' && standbyPlayer) {
+      const resAudio = await obtenerUrlDeAudio(nextSong);
+      if (fundidoPrecargaId !== nextSong.id || !resAudio || !resAudio.url) return;
+      try {
+        if (standbyPlayer.src !== resAudio.url) { standbyPlayer.src = resAudio.url; standbyPlayer.load(); }
+        standbyPlayer.volume = 0;
+      } catch (e2) {}
+    }
+  } catch (e) {}
+}
 async function iniciarCrossfade(secs, targetSong = null) {
   if (transitioning) return;
   const nextSong = targetSong || (currentCola && currentCola[1]);
@@ -7539,7 +7573,7 @@ function cerrarDebugPanel() {
       <div id="tv-owner"></div>
       <div id="tv-prog"><div id="tv-prog-fill"></div></div>
       <div id="tv-time"></div>
-      <div id="tv-diag">listo: toca EMPEZAR</div>
+      <div id="tv-diag" class="collapsed" title="tocar para expandir">listo: toca EMPEZAR</div>
       <div class="tv-next">
         <div class="tv-label">SIGUIENTE</div>
         <div id="tv-next-nombre">--</div>
@@ -7571,7 +7605,9 @@ document.body.classList.add('tv-mode');
 function tvDiag(msg) {
   try {
     const el = document.getElementById('tv-diag');
-    if (el) el.textContent = msg;
+    if (!el) return;
+    el.textContent = msg;
+    if (msg.indexOf('FALLO') > -1 || msg.indexOf('MOTOR NO CARGO') > -1) el.classList.remove('collapsed');
   } catch (e) {}
 }
 async function tvEmpezar() {
@@ -7666,6 +7702,7 @@ function tvProgreso() {
     } catch (e) {}
   }
   document.getElementById('tv-btn-empezar').addEventListener('click', tvEmpezar);
+  document.getElementById('tv-diag').addEventListener('click', function() { this.classList.toggle('collapsed'); });
 })();
 </script>
 {% endif %}

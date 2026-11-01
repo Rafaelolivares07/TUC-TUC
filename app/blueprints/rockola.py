@@ -2245,7 +2245,11 @@ def control_sala(sala_id):
     finally:
         conn.close()
     admin_key = sala.get('admin_key', '') if key and key == sala.get('admin_key') else ''
-    return render_template('rockola_control.html', sala_id=sala_id, admin_key=admin_key)
+    resp = make_response(render_template('rockola_control.html', sala_id=sala_id, admin_key=admin_key))
+    resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    resp.headers['Pragma'] = 'no-cache'
+    resp.headers['Expires'] = '0'
+    return resp
 
 
 @bp.route('/sync/<sala_id>')

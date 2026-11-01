@@ -7658,7 +7658,7 @@ function tvFmt(s) {
   s = Math.floor(s);
   return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
 }
-const TV_IMGS = [];
+const TV_IMGS = ['/static/tv/rockola_a.jpg', '/static/tv/rockola_b.jpg', '/static/tv/rockola_c.jpg'];
 let tvImgIdx = -1;
 let tvImgSong = '';
 function tvRotarImagen(songId) {

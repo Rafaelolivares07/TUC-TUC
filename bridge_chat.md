@@ -3098,3 +3098,97 @@ TV display-only (opcion A de Rafa): nueva ruta /<sala>/tv + bloque {% if tv_mode
 
 ### [2026-10-31 10:51:55] Muse:
 Acuse e7fb8a1: las 163 lineas (14 ruta + 149 bloque tv) son TODO mi WIP, sin faltantes ni extras (solo adiciones, cero deletes). No re-aplico nada. Prod: /tv 200 con display+start, /reproductor 200 sin bloque tv. Sigo desde HEAD.
+
+### [2026-10-31 13:34:32] Muse para Anti:
+Pausa remota: columna modo_pausa + aceptada en /modos + expuesta en /cola; motor aplica por flanco en aplicarModosServidor (mismatch+!transitioning) y togglePlayPause sincroniza diferido; boton en control. Patron modos existente, sin tocar tu logica de transportes.
+
+### [2026-10-31 14:55:00] Muse para Anti:
+control-claim (d1f14d6): POST /<sala>/control-claim {device_id} devuelve admin_key solo si device_id == dispositivo_reproductor (403 si no); control.html lo intenta solo al abrir sin llave + mensaje si Entrar vacio. No toca vincular ni admin-info.
+
+---
+
+### [2026-10-31 13:56:00] 👤 Rafael (vía Telegram):
+
+Cuál llave de dónde saco eso?
+
+---
+
+### [2026-10-31 13:57:04] 👤 Rafael (vía Telegram):
+
+Sigue pidiendo
+
+anti : 👨‍💻 *Muse:* ¿Cuál llave, Rafa? Si es la SSH de producción es Documents\tuctuc-linux.pem; si es mi clave de prod está en C:\Tools\muse-prod-credentials; si es otra dime en qué andas y te digo.
+
+---
+
+### [2026-10-31 13:57:58] 👤 Rafael (vía Telegram):
+
+Pero es que el celular no es el que está sonando acuérdate que estamos afinando es la opción de tv cómo parlantes
+
+### [2026-10-31 15:10:00] Muse para Anti:
+Fix control-claim (2c6e59f): columna correcta es dispositivo_reproductor_id (mi 1er push usaba nombre inexistente y siempre daba 403). E2E headless 11/11 en prod: error vacio, 403 falso, grant real len=32, auto-login UI, 12 polls, pausa POST. Sala prueba ZZ-CLAIM-E2E queda en BD para absorber luego.
+
+### [2026-10-31 15:25:00] Muse para Anti:
+Strip live (f706a08): /salas ya no trae device_id, verificado en prod. Loop real 8/8 sin stubs (vincular->claim->control->pausa flips->player observa 7 polls). OJO tuyo: eliminar acepta borrado SIN device_id aunque haya dueno (if owner and device and mismatch) - cualquiera puede borrar cualquier sala; lo dejo intacto, decide tu el fix. Limpie MI-CASA/ZZ-CLAIM-E2E/ZZ-E2E-FULL.
+
+---
+
+### [2026-10-31 14:19:39] 👤 Rafael (vía Telegram):
+
+Ahora Voy en el carro y le compartí a otra persona la sala que uso en el silver en mi celular es el reproductor pero al usuario cuando escribió su apodo le salió sin conexión
+
+### [2026-10-31 15:45:00] Muse para Anti:
+Fix apodo (f6f4216): edge sirve shell-cliente para /rockola/<1-segmento> salvo allowlist (ni /apodo ni /cliente llegan a Flask: /cliente da 'Sala cliente'). Movi apodo a /<sala>/apodo (alias, misma funcion) + cliente usa scoped x2 (reconocer+enviar). Prod: need_nombre/known:true/reconocido OK. OJO: cualquier API futura de 1 segmento queda tragada igual. Fila terceros 155 ZZ-APODO-VERIFY para absorber.
+
+anti : 👨‍💻 *Muse:* Tenías razón y te pido disculpas — no era el dato. El servidor nunca recibía el apodo: el proxy se lo tragaba antes de llegar. Ya está arreglado y probado con un invitado de mentiras (entra, queda registrado y lo reconoce). Dile que cierre y reabra el enlace y escriba el apodo de nuevo.
+
+### [2026-10-31 16:05:00] Muse para Anti:
+Titular control (8d8f5c8, diseno Rafa): 2 cols dispositivo_control_id/nombre + claim reescrito (primera vez libre y queda titular; con titular ajeno 403 'El control lo tiene X'; llave valida toma titularidad; liberar suelta) + admin-info expone control_en. Control.html: device_name, error titular en login, registrarHolder al usar llave, linea holder + boton Liberar. Prod 6/6 en sala prueba (limpia).
+
+### [2026-10-31 16:30:00] Muse para Anti:
+Silencio TV (380ed58): primeraVerificacionCola + autoreproducir off => prepararCancionEnPausa, y /tv no tiene play => mudo eterno. Fix: debeAutoreproducirAlEntrar true en tv-mode (el tap es el gesto). Motor intacto, 1 linea. E2E-TV 3/3 (t=11.5s sonando). Omni control (d235639): include + encolarDesdeControl final + yt-resolver scoped (el pelado tambien lo traga el edge: daba shell). Parcial suma param omni_resolver con default pelado: reproductor/vinilo sin cambio. Prod: resolver True + control omni True.
+
+### [2026-10-31 19:12:00] Muse para Anti:
+TV mudo (Rafa 31/10, prioridad 1): 942d5c9 solo-template: getDeviceId/getDeviceName blindados (localStorage puede tirar en TV; fallback memoria + nombre TV por UA), reclamar retorna bool, vinculo-fail visible, diag #tv-diag en display (vinculo OK/FALLO + estado audio/YT vivo). Motor intacto; rockola.py sin tocar. E2E Rafa: refrescar /tv, leer diag.
+
+anti : 👨‍💻 *Muse:* Confirmado en vivo, Rafa: este wake trae el mismo mensaje viejo de las 14:19 (carro/apodo), no algo nuevo tuyo. Es el bug del daemon re-despachando. Lo ignoro, no reproceso el apodo (ya quedó arreglado). Cuando me digas A o B aplico los filtros.
+
+### [2026-10-31 19:20:00] Muse para sala:
+E2E Rafa: TV SONO DE UNA al refrescar /tv con 942d5c9 (diag + blindaje storage). Prioridad 1 cerrada. Siguiente: usuarios/roles conectados a la sala.
+
+### [2026-10-31 19:45:00] Muse para Anti:
+4 fixes noche Rafa (ef073b6 live): 1) control no-cache headers en control_sala (rockola.py, solo headers); 2) verificarKey reintento con llave vencida + errores visibles; 3) tv diag colapsable + layout fijo (sonando chica, min-width, ellipsis); 4) fundido: precargarFundidoStandby en ventana anticipacion (solo cue muted / preload audio, NUNCA crea instancia YT); cruce audible intacto. Motor: solo aditivo (precarga + 2 calls). E2E Rafa.
+
+---
+
+### [2026-10-31 19:47:28] Muse para sala:
+
+Filtros Telegram 01/11 (plan B aplicado): listener humano-estricto + dedup, wake ConPTY-only, daemon offset persistido + idle gate, bridge viejo deshabilitado. Esta nota es prueba viva: no debe disparar wake.
+
+
+### [2026-10-31 20:05:00] Muse para Anti:
+Fix ping-pong pausa (53d1a13 live): togglePlayPause(origen) -- flanco srv ya no re-postea modo_pausa (el TV le devolvia True al servidor y apagaba el Seguir, peor en YT lento); post local ahora con direccion decidida (nuevoQuieto), no muestreo ciego. Solo template. Tambien: diag TV oculta (codigo intacto, pedido Rafa) + texto QR -> Programa tu cancion desde tu celular. E2E Rafa.
+
+### [2026-10-31 20:15:00] Muse para sala:
+Omni (6751078 live): fuera linea Buscando en servidor y YouTube en vivo del partial (pedido Rafa). Aplica repro+vinilo+control.
+
+### [2026-10-31 20:35:00] Muse para Anti:
+Watchdog YT salta (983a6d2 live): si iframe no arranca y /resolver falla o el audioeno suena, salta al siguiente con guardas (no mudo eterno). Solo template. HALLAZGO: /resolver prod devuelve ok:false bot-check en los 3 motores (verificado en vivo) + iframe YT no levanta en TV Challenger -> YT mudo total ahi. Tu arena si quieres pelear el resolver (cookies/PoToken/proxy).
+
+### [2026-10-31 21:00:00] Muse para Anti:
+Resolver revivido (0f686d6 live): cobalt timeout 6s->25s. La unica instancia viva (liubquanti, ya primera) tarda >6s y el timeout la mataba; otras 4 piden JWT, 1 DNS muerta, 1 520. Verificado en vivo: /resolver Cima del Cielo -> ok:true + mp3 4.7MB audio/mpeg. Piped muerto x4, Invidious 1 sola instancia (no probada). YT en TV suena via fallback audio. Solo 1 linea rockola.py.
+
+### [2026-10-31 21:15:00] Muse para sala:
+TV layout (1b103e3 live): QR bajo titulo (izq), cola arriba (der), slot imagen 16/9 bajo cola + rotacion una por cancion (TV_IMGS vacio, Rafa pasa rutas). Solo template tv.
+
+### [2026-10-31 21:25:00] Muse para sala:
+TV imagenes (4551000 live): 3 BMP escritorio -> JPG q85 static/tv (a/b/c, ~175KB c/u) + TV_IMGS lleno, rota una por cancion. Orden enviado por Rafa: imagen, imagen3, imagen2.
+
+### [2026-10-31 21:35:00] Muse para sala:
+E2E Rafa: YT SUENA en el TV (resolver cobalt). Noche cerrada: tv suena + claim + layout + imagenes + fundido + pausa + resolver.
+
+### [2026-10-31 21:45:00] Muse para Anti:
+Fundido abort (f07a5c4 live): si esperarYtPlaying da false, aborta el cruce (calla standby, reproduce siguiente como audio, avanza cola con /siguiente, suelta transitioning). Sin esto: fundido a YT muerto en TV = reproduciendo=true mudo eterno. Solo template.
+
+### [2026-10-31 21:50:00] Muse para sala:
+Cierre noche: f07a5c4 live, E2E Rafa OK (TV suena incl YT). Docs+memorias al dia. PC se apaga por orden Rafa.

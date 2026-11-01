@@ -2589,18 +2589,32 @@
           </span>
         </div>
 
-        <button type="button" onclick="document.getElementById('input-escanear-factura').click()"
+        <span class="relative inline-flex">
+        <button type="button" onclick="toggleMenuEscanearFactura(event)"
                 id="btn-escanear-factura-ia"
+                title="Escanear con cámara, cargar imagen, o pegar con Ctrl+V si la factura está en el portapapeles"
                 class="px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-95 text-white font-extrabold text-xs rounded-xl shadow-sm flex items-center gap-1.5 transition cursor-pointer">
-          <span class="text-sm">📷</span> <span>Escanear Factura</span>
+          <span class="text-sm">📷</span> <span>Escanear / Cargar factura</span>
         </button>
+        <div id="menu-escanear-factura" class="hidden absolute left-0 top-full mt-1 z-50 w-64 rounded-xl border border-slate-200 bg-white shadow-lg py-1 text-left">
+          <button type="button" onclick="elegirEscanerFactura('camara')"
+                  class="w-full px-3 py-2 text-xs font-bold text-slate-700 hover:bg-emerald-50 flex items-center gap-2 cursor-pointer">
+            <span>📷</span> Escanear con cámara
+          </button>
+          <button type="button" onclick="elegirEscanerFactura('imagen')"
+                  class="w-full px-3 py-2 text-xs font-bold text-slate-700 hover:bg-emerald-50 flex items-center gap-2 cursor-pointer">
+            <span>🖼️</span> Seleccionar imagen
+          </button>
+          <div class="px-3 py-1.5 text-[11px] text-slate-500 border-t border-slate-100">o pega la imagen con <b>Ctrl+V</b></div>
+        </div>
+        </span>
         <button type="button" onclick="abrirModalDiccionarioAlias()"
                 id="btn-memoria-proveedor"
                 class="px-3.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold text-xs rounded-xl border border-amber-200 flex items-center gap-1.5 transition shadow-2xs cursor-pointer"
                 title="Consultar y gestionar las equivalencias y memoria aprendidas para proveedores">
           <span>📖</span> <span class="hidden sm:inline">Memoria /</span> Equivalencias
         </button>
-        <input type="file" id="input-escanear-factura" accept="image/*" capture="environment" class="hidden" onchange="escanearFacturaConIA(this)">
+        <input type="file" id="input-escanear-factura" accept="image/*" class="hidden" onchange="escanearFacturaConIA(this)">
         <button type="button" onclick="abrirModalGestionPresentaciones()"
                 class="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-xl border border-indigo-200 flex items-center gap-1.5 transition shadow-2xs cursor-pointer">
           <span>📦</span> <span class="hidden sm:inline">Unidades de Empaque /</span> Presentaciones
@@ -10255,6 +10269,32 @@ async function initDefaultProveedor() {
 
 
 
+// == escanear-factura-menu ==
+function toggleMenuEscanearFactura(ev) {
+  if (ev) ev.stopPropagation();
+  const m = document.getElementById('menu-escanear-factura');
+  if (m) m.classList.toggle('hidden');
+}
+function elegirEscanerFactura(modo) {
+  const m = document.getElementById('menu-escanear-factura');
+  if (m) m.classList.add('hidden');
+  const inp = document.getElementById('input-escanear-factura');
+  if (!inp) return;
+  if (modo === 'camara') inp.setAttribute('capture', 'environment');
+  else inp.removeAttribute('capture');
+  inp.click();
+}
+document.addEventListener('click', function(e) {
+  const m = document.getElementById('menu-escanear-factura');
+  if (m && !m.classList.contains('hidden') && !m.contains(e.target)) m.classList.add('hidden');
+});
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    const m = document.getElementById('menu-escanear-factura');
+    if (m) m.classList.add('hidden');
+  }
+});
+// == /escanear-factura-menu ==
 function escanearFacturaConIA(input) {
   if (!input.files || !input.files[0]) return;
   const archivo = input.files[0];

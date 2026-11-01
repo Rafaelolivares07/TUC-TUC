@@ -6945,7 +6945,27 @@ async function iniciarCrossfade(secs, targetSong = null) {
 
     // Esperar a que el video en standby esté efectivamente reproduciéndose (PLAYING)
     // Mientras espera, la pista actual SIGUE SONANDO a volumen normal
-    await esperarYtPlaying(entranteYt, 4500);
+    const entranteOk = await esperarYtPlaying(entranteYt, 4500);
+    if (!entranteOk) {
+      console.warn('[Fundido] Standby YT no arranco, abortando cruce a audio nativo...');
+      try { if (entranteYt && typeof entranteYt.setVolume === 'function') entranteYt.setVolume(0); } catch (e3) {}
+      try { if (entranteYt && typeof entranteYt.stopVideo === 'function') entranteYt.stopVideo(); } catch (e4) {}
+      cancionActual = nextSong.id;
+      cancionActualObjeto = nextSong;
+      await intentarReproducir(nextSong);
+      fetch(`/rockola/${SALA}/siguiente`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: oldActiveSongId })
+      }).then(() => {
+        transitioning = false;
+        verificarCola();
+      }).catch(() => {
+        transitioning = false;
+        verificarCola();
+      });
+      return;
+    }
 
     try {
       if (entranteYt && typeof entranteYt.setVolume === 'function') {

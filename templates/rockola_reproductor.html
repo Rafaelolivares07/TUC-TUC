@@ -51,6 +51,7 @@ body.tv-mode #tv-display { display: flex; flex-direction: column; min-height: 10
 body.tv-mode #tv-start.visible { display: flex; }
 #tv-btn-empezar { margin-top: 3vh; padding: 2.4vh 4vw; font-size: clamp(24px, 3vw, 54px); font-weight: 800; border: none; border-radius: 16px; background: #00d4ff; color: #00101b; cursor: pointer; font-family: inherit; }
 .tv-start-hint { margin-top: 2vh; color: #8aa0b8; font-size: clamp(16px, 1.8vw, 28px); }
+#tv-diag { margin-top: 2vh; padding: 1.2vh 1.2vw; border-radius: 12px; background: #0a1626; border: 1px solid #1d3a5f; color: #9fd8ff; font-size: clamp(15px, 1.6vw, 26px); font-family: ui-monospace, Consolas, monospace; min-height: 1.4em; word-break: break-word; }
 </style>
 {% endif %}
 <script src="https://www.youtube.com/iframe_api"></script>
@@ -2146,23 +2147,42 @@ function ocultarCargando() {
   }
 }
 
+let _memDeviceId = null;
 function getDeviceId() {
-  let id = localStorage.getItem('rockola_device_id');
-  if (!id) {
-    id = 'dev-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
-    localStorage.setItem('rockola_device_id', id);
+  try {
+    let id = localStorage.getItem('rockola_device_id');
+    if (!id) {
+      id = 'dev-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+      try { localStorage.setItem('rockola_device_id', id); } catch (e0) {}
+    }
+    return id;
+  } catch (e) {
+    if (!_memDeviceId) _memDeviceId = 'dev-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    return _memDeviceId;
   }
-  return id;
 }
 
+let _memDeviceName = null;
+function tvNombrePorUA(ua) {
+  ua = ua || '';
+  if (/iPhone/i.test(ua)) return 'iPhone';
+  if (/Android/i.test(ua)) return 'Android';
+  if (/Windows/i.test(ua)) return 'Windows';
+  if (/TV|SmartTV|Web0S|Tizen|NetCast|Challenger/i.test(ua)) return 'TV';
+  return 'Este dispositivo';
+}
 function getDeviceName() {
-  let name = localStorage.getItem('rockola_device_name');
-  if (!name) {
-    const ua = navigator.userAgent || '';
-    name = /iPhone/i.test(ua) ? 'iPhone' : (/Android/i.test(ua) ? 'Android' : (/Windows/i.test(ua) ? 'Windows' : 'Este dispositivo'));
-    localStorage.setItem('rockola_device_name', name);
+  try {
+    let name = localStorage.getItem('rockola_device_name');
+    if (!name) {
+      name = tvNombrePorUA(navigator.userAgent);
+      try { localStorage.setItem('rockola_device_name', name); } catch (e0) {}
+    }
+    return name;
+  } catch (e) {
+    if (!_memDeviceName) _memDeviceName = tvNombrePorUA(navigator.userAgent);
+    return _memDeviceName;
   }
-  return name;
 }
 
 
@@ -2275,6 +2295,8 @@ async function vincularEsteReproductor(tomarControl = false) {
   const data = await res.json();
   if (!data.ok) {
     const sala = data.sala || {};
+    window._tvVincularError = data.error || ('suena en ' + (sala.dispositivo_reproductor_nombre || 'otro dispositivo'));
+    try { if (typeof tvDiag === 'function') tvDiag('vinculo FALLO: ' + window._tvVincularError); } catch (_e) {}
     setDeviceMessage(`Esta sala suena en ${sala.dispositivo_reproductor_nombre || 'otro dispositivo'}.`, true);
     if (btnReclamar) btnReclamar.style.display = 'inline-block';
     if (deviceActions) deviceActions.classList.add('visible');
@@ -2292,7 +2314,9 @@ async function reclamarReproductor() {
     setTimeout(async () => {
       await activar(true);
     }, 400);
+    return true;
   }
+  return false;
 }
 
 async function activar(skipUnlock = false) {
@@ -7515,6 +7539,7 @@ function cerrarDebugPanel() {
       <div id="tv-owner"></div>
       <div id="tv-prog"><div id="tv-prog-fill"></div></div>
       <div id="tv-time"></div>
+      <div id="tv-diag">listo: toca EMPEZAR</div>
       <div class="tv-next">
         <div class="tv-label">SIGUIENTE</div>
         <div id="tv-next-nombre">--</div>
@@ -7543,17 +7568,32 @@ function cerrarDebugPanel() {
 </div>
 <script>
 document.body.classList.add('tv-mode');
+function tvDiag(msg) {
+  try {
+    const el = document.getElementById('tv-diag');
+    if (el) el.textContent = msg;
+  } catch (e) {}
+}
 async function tvEmpezar() {
   document.getElementById('tv-start').classList.remove('visible');
+  if (typeof reclamarReproductor === 'undefined' || typeof SALA === 'undefined') {
+    tvDiag('MOTOR NO CARGO: el navegador del TV no soporta el reproductor');
+    try { tvCargarCola(); } catch (e0) {}
+    return;
+  }
+  tvDiag('reclamando vinculo…');
+  window._tvVinculoOk = false;
   try {
-    await reclamarReproductor();
+    window._tvVinculoOk = !!(await reclamarReproductor());
   } catch (e) {
+    window._tvVincularError = (e && e.message) || 'error de red';
     try {
       [document.getElementById('player1'), document.getElementById('player2')].forEach(p => {
         if (p) p.play().then(() => p.pause()).catch(() => {});
       });
     } catch (e2) {}
   }
+  tvDiag(window._tvVinculoOk ? 'vinculo OK · arrancando motor…' : ('vinculo FALLO: ' + (window._tvVincularError || 'motivo desconocido')));
   tvCargarCola();
   setInterval(tvCargarCola, 2500);
   setInterval(tvProgreso, 500);
@@ -7599,6 +7639,17 @@ async function tvCargarCola() {
 }
 function tvProgreso() {
   const els = [document.getElementById('player1'), document.getElementById('player2')];
+  try {
+    if (window._tvVinculoOk) {
+      let est = 'motor: sin audio';
+      const son = els.find(p => p && !p.paused && p.currentTime > 0);
+      if (son) est = 'motor: SONANDO ' + tvFmt(son.currentTime);
+      else if (typeof esYouTubeActual !== 'undefined' && esYouTubeActual) est = 'motor: YT ' + ((typeof reproduciendo !== 'undefined' && reproduciendo) ? '(tocando)' : '(pausado)');
+      else if (typeof reproduciendo !== 'undefined' && reproduciendo) est = 'motor: reproduciendo sin player activo';
+      else if (typeof cancionActual !== 'undefined' && cancionActual) est = 'motor: cargada, en pausa';
+      tvDiag('vinculo OK · ' + est);
+    }
+  } catch (e) {}
   const act = els.find(p => p && !p.paused && p.currentTime > 0) || els.find(p => p && p.currentTime > 0);
   const fill = document.getElementById('tv-prog-fill');
   const time = document.getElementById('tv-time');

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """muse_wake: despierta la sesion Muse (trigger __MUSE__) y reenvia su outbox a Telegram.
-Lo mejor del merlin_daemon: inbox/outbox + pegar trigger + minimizar + cooldown.
+Inbox/outbox + inyeccion ConPTY (sin foco ni clipboard) + cooldown.
 - Inbox/outbox: muse_inbox.json / muse_outbox.json en V2 (separados de Claude).
 - Titulo de pestana: %TEMP%\\muse_tab_title.txt (lo escribe INICIAR_MUSE.bat).
 - Sin titulo coincidente visible: NO pega (aborta seguro); el mensaje igual
@@ -18,6 +18,7 @@ V2 = os.path.dirname(os.path.abspath(__file__))
 INBOX = os.path.join(V2, 'muse_inbox.json')
 OUTBOX = os.path.join(V2, 'muse_outbox.json')
 TITLE_FILE = os.path.join(tempfile.gettempdir(), 'muse_tab_title.txt')
+CLI_PID_FILE = os.path.join(tempfile.gettempdir(), 'muse_cli_pid.txt')
 TRIGGER = '__MUSE__'
 COOLDOWN_SEC = 30
 VERIFY_SEC = 90
@@ -62,79 +63,8 @@ def load_title(path=TITLE_FILE):
         return None
 
 
-def _cycle_tabs_to(title, wshell):
-    """Busca la pestana en TODAS las ventanas WT con Ctrl+Tab verificado. True si queda enfocada."""
-    try:
-        import win32gui
-        import win32process
-        import win32api
-        hwnds = []
-
-        def _enum(h, acc):
-            if not win32gui.IsWindowVisible(h):
-                return
-            try:
-                _, pid = win32process.GetWindowThreadProcessId(h)
-                hp = win32api.OpenProcess(1024, False, pid)
-                name = win32process.GetModuleFileNameEx(hp, 0).lower()
-                win32api.CloseHandle(hp)
-                if 'windowsterminal' in name:
-                    acc.append((h, pid))
-            except Exception:
-                pass
-
-        win32gui.EnumWindows(_enum, hwnds)
-        _l('wake ciclo: %d ventanas WT' % len(hwnds))
-        for hwnd, pid in hwnds:
-            try:
-                try:
-                    wshell.AppActivate(pid)
-                except Exception:
-                    pass
-                time.sleep(0.5)
-                if win32gui.GetForegroundWindow() != hwnd:
-                    try:
-                        wshell.AppActivate(hwnd)
-                    except Exception:
-                        pass
-                    time.sleep(0.5)
-                if win32gui.GetForegroundWindow() != hwnd:
-                    _l('wake ciclo: foco no llego pid=%d' % pid)
-                    continue
-                vistos = []
-                for _ in range(30):
-                    if win32gui.GetForegroundWindow() != hwnd:
-                        _l('wake ciclo: foco perdido a mitad')
-                        break
-                    t = win32gui.GetWindowText(hwnd) or ''
-                    if title.lower() in t.lower():
-                        return True
-                    if len(vistos) < 6:
-                        vistos.append(t[:25])
-                    wshell.SendKeys('^{TAB}')
-                    time.sleep(0.3)
-                else:
-                    _l('wake ciclo: 30 tabs sin match pid=%d' % pid)
-                    continue
-                _l('wake ciclo: vistos=%s' % vistos)
-            except Exception as e:
-                _l('wake ciclo ventana error %s' % type(e).__name__)
-                continue
-        return False
-    except Exception as e:
-        _l('wake ciclo error %s' % type(e).__name__)
-        return False
-
-
-def _is_muse(exe):
-    base = exe.rsplit('\\', 1)[-1].rsplit('/', 1)[-1]
-    return base in ('muse.exe', 'muse-code.exe') or \
-        (base.startswith('muse-bin-') and base.endswith('.exe'))
-
-
-def _ancestry_muse_pid():
-    """PID de mi CLI: ancestro muse si existe (cadena viva), si no el unico muse vivo.
-    El listener es huerfano (su shell murio), por eso el ancestro falla ahi."""
+def _snapshot():
+    """{pid: (ppid, exe_lower)} via Toolhelp32. {} si falla."""
     import ctypes
     from ctypes import wintypes
 
@@ -147,17 +77,90 @@ def _ancestry_muse_pid():
                     ('pcPriClassBase', wintypes.LONG), ('dwFlags', wintypes.DWORD),
                     ('szExeFile', ctypes.c_wchar * 260)]
 
-    k = ctypes.windll.kernel32
-    snap = k.CreateToolhelp32Snapshot(0x2, 0)
     procs = {}
-    pe = PE()
-    pe.dwSize = ctypes.sizeof(PE)
-    if k.Process32FirstW(snap, ctypes.byref(pe)):
-        while True:
-            procs[pe.th32ProcessID] = (pe.th32ParentProcessID, pe.szExeFile.lower())
-            if not k.Process32NextW(snap, ctypes.byref(pe)):
-                break
-    k.CloseHandle(snap)
+    try:
+        k = ctypes.windll.kernel32
+        snap = k.CreateToolhelp32Snapshot(0x2, 0)
+        pe = PE()
+        pe.dwSize = ctypes.sizeof(PE)
+        if k.Process32FirstW(snap, ctypes.byref(pe)):
+            while True:
+                procs[pe.th32ProcessID] = (pe.th32ParentProcessID, pe.szExeFile.lower())
+                if not k.Process32NextW(snap, ctypes.byref(pe)):
+                    break
+        k.CloseHandle(snap)
+    except Exception:
+        pass
+    return procs
+
+
+def load_cli_pid(path=CLI_PID_FILE):
+    """Pid del CLI Muse grabado por la sesion; None si ausente/corrupto/muerto/no-muse."""
+    try:
+        pid = int(open(path, encoding='utf-8').read().strip())
+    except (OSError, ValueError):
+        return None
+    procs = _snapshot()
+    if pid in procs and _is_muse(procs[pid][1]):
+        return pid
+    return None
+
+
+def _muse_pid_for_tab(title):
+    """Muse hijo de la ventana WT cuyo titulo calza (determinista con N sesiones)."""
+    if not title:
+        return None
+    try:
+        import win32gui
+        import win32process
+        wt_pids = []
+
+        def _enum(h, acc):
+            if not win32gui.IsWindowVisible(h):
+                return
+            t = (win32gui.GetWindowText(h) or '').lower()
+            if title.lower() not in t:
+                return
+            try:
+                _, pid = win32process.GetWindowThreadProcessId(h)
+                acc.append(pid)
+            except Exception:
+                pass
+
+        win32gui.EnumWindows(_enum, wt_pids)
+        if not wt_pids:
+            return None
+        procs = _snapshot()
+        hits = []
+        for pid, (ppid, exe) in procs.items():
+            if not _is_muse(exe):
+                continue
+            p, seen = ppid, set()
+            while p and p not in seen:
+                seen.add(p)
+                if p in wt_pids:
+                    hits.append(pid)
+                    break
+                p = procs.get(p, (0, ''))[0]
+        if len(hits) == 1:
+            return hits[0]
+        _l('wake: %d muses bajo pestana %r' % (len(hits), title))
+        return None
+    except Exception as e:
+        _l('wake tab-match error %s' % type(e).__name__)
+        return None
+
+
+def _is_muse(exe):
+    base = exe.rsplit('\\', 1)[-1].rsplit('/', 1)[-1]
+    return base in ('muse.exe', 'muse-code.exe') or \
+        (base.startswith('muse-bin-') and base.endswith('.exe'))
+
+
+def _ancestry_muse_pid():
+    """PID de mi CLI: ancestro muse si existe (cadena viva), si no el unico muse vivo.
+    El listener es huerfano (su shell murio), por eso el ancestro falla ahi."""
+    procs = _snapshot()
     muses = [pid for pid, (ppid, exe) in procs.items() if _is_muse(exe)]
     mine = set()
     p = os.getpid()
@@ -246,77 +249,20 @@ def _conpty_inject(pid, text):
 
 
 def wake_tab(title):
-    """Enfoca pestana por titulo, pega trigger, minimiza, devuelve foco. False si aborta."""
+    """Inyecta trigger por ConPTY al CLI correcto. Nunca toca foco, ventanas
+    ni clipboard (01/11: el pegado por ventana interrumpia a Rafa al escribir).
+    Sin pid claro, aborta seguro: el mensaje queda en sala + inbox."""
     try:
-        import pythoncom
-        pythoncom.CoInitialize()
-        import win32com.client
-        import win32gui
-        import win32clipboard
-        pid = _ancestry_muse_pid()
+        pid, via = load_cli_pid(), 'pid-file'
+        if not pid:
+            pid, via = _muse_pid_for_tab(title), 'pestana'
+        if not pid:
+            pid, via = _ancestry_muse_pid(), 'ancestro'
         if pid and _conpty_inject(pid, TRIGGER + '\r\n'):
-            _l('wake: inyectado ConPTY pid=%d' % pid)
+            _l('wake: inyectado ConPTY pid=%d (%s)' % (pid, via))
             return True
-        _l('wake: ConPTY fallo, via ventana...')
-        if not title:
-            _l('wake: sin titulo, aborto')
-            return False
-        wshell = win32com.client.Dispatch('WScript.Shell')
-        try:
-            prev = win32gui.GetForegroundWindow()
-        except Exception:
-            prev = None
-        matched = False
-        if wshell.AppActivate(title):
-            time.sleep(0.3)
-            actual = win32gui.GetWindowText(win32gui.GetForegroundWindow())
-            if title.lower() in actual.lower():
-                matched = True
-        if not matched:
-            _l('wake: via rapida fallo, ciclo pestanas...')
-            matched = _cycle_tabs_to(title, wshell)
-        if not matched:
-            _l('wake: pestana no encontrada, aborto seguro')
-            return False
-        old = None
-        try:
-            win32clipboard.OpenClipboard()
-            if win32clipboard.IsClipboardFormatAvailable(win32clipboard.CF_UNICODETEXT):
-                old = win32clipboard.GetClipboardData(win32clipboard.CF_UNICODETEXT)
-            win32clipboard.CloseClipboard()
-        except Exception:
-            pass
-        try:
-            win32clipboard.OpenClipboard()
-            win32clipboard.EmptyClipboard()
-            win32clipboard.SetClipboardText(TRIGGER)
-            win32clipboard.CloseClipboard()
-            time.sleep(0.3)
-            wshell.SendKeys('^v')
-            time.sleep(0.4)
-            wshell.SendKeys('{ENTER}')
-            time.sleep(0.5)
-            wshell.SendKeys('{ENTER}')
-            time.sleep(0.5)
-        finally:
-            if old is not None:
-                try:
-                    win32clipboard.OpenClipboard()
-                    win32clipboard.EmptyClipboard()
-                    win32clipboard.SetClipboardData(win32clipboard.CF_UNICODETEXT, old)
-                    win32clipboard.CloseClipboard()
-                except Exception:
-                    pass
-        try:
-            import ctypes
-            hwnd = win32gui.GetForegroundWindow()
-            if hwnd and hwnd != prev:
-                win32gui.ShowWindow(hwnd, 6)
-            if prev:
-                wshell.AppActivate(int(ctypes.windll.user32.GetWindowThreadProcessId(prev, None)))
-        except Exception:
-            pass
-        return True
+        _l('wake: sin pid claro o attach fallo, aborto seguro (inbox intacto)')
+        return False
     except Exception as e:
         _l('wake error %s' % type(e).__name__)
         return False

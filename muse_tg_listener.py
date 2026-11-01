@@ -61,11 +61,35 @@ def extract_update(u):
     return None, {}
 
 
+SEEN_FILE = os.path.join(tempfile.gettempdir(), 'muse_tg_seen.txt')
+SEEN_CAP = 500
+
+
+def load_seen(path=SEEN_FILE):
+    try:
+        with open(path, encoding='utf-8') as f:
+            return set(l.strip() for l in f if l.strip())
+    except OSError:
+        return set()
+
+
+def save_seen(mid, path=SEEN_FILE):
+    seen = load_seen(path)
+    seen.add(str(mid))
+    while len(seen) > SEEN_CAP:
+        seen.pop()
+    with open(path, 'w', encoding='utf-8') as f:
+        f.write('\n'.join(sorted(seen)))
+
+
 def should_deliver(cfg_id, msg):
-    """Pasa si el remitente o el chat es Rafael (cubre privado, grupos, topicos)."""
-    f = str((msg.get('from') or {}).get('id'))
-    ch = str((msg.get('chat') or {}).get('id'))
-    return f == str(cfg_id) or ch == str(cfg_id)
+    """Solo el humano Rafa: from.id == cfg y no bot. El chat puede ser
+    privado, grupo o topico; lo que manda es el remitente (01/11: el chat
+    solo dejaba pasar mensajes de bots como si fueran de Rafa)."""
+    f = msg.get('from') or {}
+    if f.get('is_bot'):
+        return False
+    return str(f.get('id')) == str(cfg_id)
 
 
 def pick_voice_file(msg):
@@ -209,8 +233,14 @@ def run():
                     continue
                 f = str((m.get('from') or {}).get('id'))
                 ch = str((m.get('chat') or {}).get('id'))
+                is_bot = bool((m.get('from') or {}).get('is_bot'))
                 if not should_deliver(chat_id, m):
-                    log('filtrado update=%d kind=%s chat=%s from=%s' % (u['update_id'], kind, ch, f))
+                    log('filtrado update=%d kind=%s chat=%s from=%s bot=%s' % (
+                        u['update_id'], kind, ch, f, is_bot))
+                    continue
+                mid = m.get('message_id')
+                if mid is not None and str(mid) in load_seen():
+                    log('duplicado update=%d message_id=%s (ya procesado)' % (u['update_id'], mid))
                     continue
                 text = m.get('text')
                 if not text:
@@ -227,6 +257,8 @@ def run():
                         text = '[mensaje sin texto]'
                 if kind == 'edited_message':
                     text = '[editado] ' + text
+                if mid is not None:
+                    save_seen(mid)
                 append_bridge(text)
                 log('puente <= telegram (%d chars) update=%d kind=%s' % (len(text), u['update_id'], kind))
                 try:

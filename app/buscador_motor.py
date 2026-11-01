@@ -516,9 +516,10 @@ def buscar_omni(q, negocio_id=None, slug=None):
         'rutas': resultados_rutas[:8],
         'ayuda': resultados_ayuda[:6]
     }
-def buscar_datos_producto(conn, q, negocio_id, slug=None, limite=5):
-    """Datos de producto para omni (scope negocio activo). Slice 1+2: match +
-    saldo/precio/margen/mov/urls + alerta/proveedor/top/urls extra. Lista (max limite)."""
+def buscar_datos_producto(conn, q, negocio_id, slug=None, limite=20):
+    """Datos de producto para omni (scope negocio activo). Filas 1-10 + 12-14:
+    saldo/precio/mov/editar/agotado/sobrestock/estado/fisico/urgente/margen/
+    rankings/top + urls. Lista (max limite)."""
     q_limpio = (q or '').strip()
     if len(q_limpio) < 2 or not negocio_id:
         return []
@@ -530,30 +531,43 @@ def buscar_datos_producto(conn, q, negocio_id, slug=None, limite=5):
     try:
         rows = conn.execute(
             """SELECT p.id, p.nombre, p.precio, p.costo, p.codigo_barra, p.disponible,
+                      p.categoria, p.dias_max_stock, um.codigo AS unidad,
+                      (EXISTS(SELECT 1 FROM pedido_items i WHERE i.producto_id = p.id)
+                       OR EXISTS(SELECT 1 FROM items_pedido_tienda i WHERE i.producto_id = p.id)) AS vendido,
                       COALESCE((SELECT SUM(s.stock) FROM saldos_inventario s
                                 WHERE s.negocio_id = p.negocio_id AND s.producto_id = p.id), 0) AS stock
-               FROM productos p
+               FROM productos p LEFT JOIN unidades_medida um ON um.id = p.unidad_medida_id
                WHERE p.negocio_id = %s
                  AND (p.nombre ILIKE %s OR COALESCE(p.codigo_barra, '') ILIKE %s)
-               ORDER BY (LOWER(p.nombre) = LOWER(%s)) DESC, p.nombre
-               LIMIT 5""",
+               ORDER BY p.disponible DESC, (LOWER(p.nombre) = LOWER(%s)) DESC, p.nombre
+               LIMIT 20""",
             (nid, like, like, q_limpio)).fetchall()
     except Exception:
         return []
     if not rows:
         return []
+    _ql = q_limpio.lower()
+    try:
+        rows = sorted(rows, key=lambda _r: (not bool(_r.get('disponible')),
+                                            ((_r.get('nombre') or '').lower() != _ql),
+                                            (_r.get('nombre') or '').lower()))
+    except Exception:
+        pass
     ids = [r['id'] for r in rows]
-    movs, alertas, provs, tops = {}, {}, {}, {}
+    movs, alertas, provs, tops, rankv, v30, urg, rankm = {}, {}, {}, {}, {}, {}, {}, {}
+    rankv_total, rankm_total = 0, 0
     try:
         for m in conn.execute(
-                """SELECT DISTINCT ON (m.producto_id) m.producto_id, m.tipo,
-                          m.documento_numero AS doc,
+                """SELECT DISTINCT ON (m.producto_id) m.producto_id, m.tipo, m.motivo,
+                          m.cantidad, m.documento_numero AS doc,
                           TO_CHAR(m.created_at, 'YYYY-MM-DD') AS fecha
                    FROM movimientos_inventario m
                    WHERE m.producto_id = ANY(%s)
                    ORDER BY m.producto_id, m.id DESC""",
                 (ids,)).fetchall():
-            movs[m['producto_id']] = {'tipo': m['tipo'], 'doc': m['doc'], 'fecha': m['fecha']}
+            movs[m['producto_id']] = {'tipo': m['tipo'], 'motivo': m['motivo'],
+                                      'cantidad': float(m['cantidad'] or 0),
+                                      'doc': m['doc'], 'fecha': m['fecha']}
     except Exception:
         movs = {}
     try:
@@ -588,12 +602,54 @@ def buscar_datos_producto(conn, q, negocio_id, slug=None, limite=5):
                 "  WHERE t.tercero_id = %s AND date_trunc('month', i.created_at) = date_trunc('month', NOW())"
                 "  GROUP BY 1"
                 "), tot AS (SELECT producto_id, SUM(cant) AS cant FROM v GROUP BY 1) "
-                "SELECT producto_id, RANK() OVER (ORDER BY cant DESC) AS rk FROM tot",
+                "SELECT producto_id, RANK() OVER (ORDER BY cant DESC) AS rk, COUNT(*) OVER () AS total FROM tot",
                 (nid, nid)).fetchall():
+            rankv[rk['producto_id']] = rk['rk']
+            rankv_total = rk['total']
             if rk['rk'] <= 10:
                 tops[rk['producto_id']] = rk['rk']
     except Exception:
-        tops = {}
+        tops, rankv, rankv_total = {}, {}, 0
+    try:
+        for s in conn.execute(
+                "/* ventas30 */ SELECT producto_id, SUM(cant) AS cant FROM ("
+                "  SELECT i.producto_id, SUM(i.cantidad) AS cant"
+                "  FROM pedido_items i JOIN pedidos p ON p.id = i.pedido_id"
+                "  WHERE p.negocio_id = %s AND i.producto_id = ANY(%s) AND i.created_at >= NOW() - INTERVAL '30 days'"
+                "  GROUP BY 1"
+                "  UNION ALL "
+                "  SELECT i.producto_id, SUM(i.cantidad)"
+                "  FROM items_pedido_tienda i JOIN pedidos_tienda p ON p.id = i.pedido_id"
+                "  JOIN tiendas t ON t.id = p.tienda_id"
+                "  WHERE t.tercero_id = %s AND i.producto_id = ANY(%s) AND i.created_at >= NOW() - INTERVAL '30 days'"
+                "  GROUP BY 1) x GROUP BY 1",
+                (nid, ids, nid, ids)).fetchall():
+            v30[s['producto_id']] = float(s['cant'] or 0)
+    except Exception:
+        v30 = {}
+    try:
+        for u in conn.execute(
+                "/* urgencia */ SELECT producto_id, RANK() OVER (ORDER BY score DESC) AS rk FROM ("
+                "  SELECT p.id AS producto_id,"
+                "   (COALESCE((SELECT SUM(s2.stock) FROM saldos_inventario s2"
+                "     WHERE s2.producto_id = p.id AND s2.negocio_id = p.negocio_id), 0)"
+                "    * COALESCE(p.costo, p.precio, 0))"
+                "   * (1 + (SELECT COUNT(*) FROM movimientos_inventario m"
+                "     WHERE m.producto_id = p.id AND m.created_at >= NOW() - INTERVAL '30 days')) AS score"
+                "  FROM productos p WHERE p.negocio_id = %s) t",
+                (nid,)).fetchall():
+            urg[u['producto_id']] = u['rk']
+    except Exception:
+        urg = {}
+    try:
+        for g in conn.execute(
+                "/* rankmargen */ SELECT id AS producto_id,"
+                " RANK() OVER (ORDER BY (precio - costo) / NULLIF(precio, 0) DESC) AS rk,"
+                " COUNT(*) OVER () AS total FROM productos WHERE negocio_id = %s AND precio > 0",
+                (nid,)).fetchall():
+            rankm[g['producto_id']] = (g['rk'], g['total'])
+    except Exception:
+        rankm = {}
 
     out = []
     for r in rows[:limite]:
@@ -605,6 +661,13 @@ def buscar_datos_producto(conn, q, negocio_id, slug=None, limite=5):
         kurl = (f'https://{slug}.tuc-tuc.co/kardex?producto_id={pid}' if slug
                 else f'/inventario/{nid}/kardex?producto_id={pid}')
         al = alertas.get(pid) or {}
+        v = v30.get(pid, 0)
+        valor = stock * costo
+        dmax = r['dias_max_stock'] if r['dias_max_stock'] else 15
+        cob = round(stock / (v / 30), 1) if v > 0 else None
+        sobre = bool(valor > 0 and (cob is None or cob > dmax))
+        urg_rk = urg.get(pid)
+        rm = rankm.get(pid)
         out.append({
             'id': pid,
             'nombre': r['nombre'],
@@ -613,12 +676,24 @@ def buscar_datos_producto(conn, q, negocio_id, slug=None, limite=5):
             'costo': costo,
             'margen': margen,
             'codigo': r['codigo_barra'],
+            'categoria': r['categoria'],
+            'unidad': r['unidad'],
             'disponible': bool(r['disponible']),
+            'vendido': bool(r['vendido']),
             'agotado': stock <= 0,
             'alerta': al.get('estado'),
             'cobertura': float(al['cobertura_dias']) if al.get('cobertura_dias') is not None else None,
             'proveedor': provs.get(pid),
             'top_rank': tops.get(pid),
+            'rank_ventas': rankv.get(pid),
+            'rank_ventas_total': rankv_total or None,
+            'rank_margen': rm[0] if rm else None,
+            'rank_margen_total': rm[1] if rm else None,
+            'sobre': sobre,
+            'cobertura_calc': cob,
+            'dias_max': dmax,
+            'urgente': bool(urg_rk is not None and urg_rk <= 10),
+            'urg_rank': urg_rk,
             'ult_mov': movs.get(pid),
             'urls': {
                 'kardex': kurl,

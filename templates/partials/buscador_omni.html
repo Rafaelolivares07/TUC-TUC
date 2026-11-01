@@ -50,6 +50,15 @@
   </div>
 </div>
 
+<div id="dato-sueltos-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-4" style="background:rgba(15,23,42,.5)" onclick="if(event.target===this)omniSueltosCerrar()">
+  <div class="bg-white rounded-2xl shadow-xl max-w-sm w-full p-4">
+    <div class="text-sm font-bold text-gray-900" id="dato-sueltos-titulo">Ítems sueltos</div>
+    <p class="text-[11px] text-gray-500 mt-1">Se compraron y se movieron, pero no están en ninguna receta y nunca se vendieron. Revisa si sobran o si falta registrar su uso.</p>
+    <div id="dato-sueltos-cuerpo" class="mt-2 space-y-1 max-h-56 overflow-y-auto"></div>
+    <button type="button" onclick="omniSueltosCerrar()" class="mt-3 w-full px-3 py-2 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl cursor-pointer">Cerrar</button>
+  </div>
+</div>
+
 <script>
 (function() {
   const wrapper = document.getElementById('omni-search-wrapper');
@@ -349,16 +358,18 @@
         html += omniFilasProducto(datos[0], datosExtras);
         html += `</div></div>`;
       } else if (datos.length > 1) {
+        const lista = (datos || []).slice().sort((a, b) => (((b.disponible ? 1 : 0) - (a.disponible ? 1 : 0)) || ('' + (a.nombre || '')).localeCompare(b.nombre || '')));
         html += `
           <div>
             <div class="px-2 py-1 text-[11px] font-bold text-sky-600 uppercase tracking-wider flex items-center justify-between">
-              <span>Productos (${datos.length}): escoge cu\u00e1l</span>
+              <span>Productos (${lista.length}): escoge cu\u00e1l</span>
             </div>
             <div class="mt-1 space-y-1">
         `;
-        datos.forEach((p, i) => {
-          const pIdx = omniPushDato({ tipo: 'dato-pick', prodIdx: i, titulo: p.nombre, modulo: 'Producto', icono: '' });
-          html += omniFilaDato(pIdx, p.nombre, 'stock ' + omniFmt(p.stock), 'Elegir \u203a');
+        lista.forEach((p) => {
+          const meta = 'stock ' + omniFmt(p.stock) + ' \u00b7 $' + omniFmt(p.precio) + (p.disponible ? '' : ' \u00b7 deshabilitado');
+          const pIdx = omniPushDato({ tipo: 'dato-pick', prodIdx: datosProductos.indexOf(p), titulo: p.nombre, modulo: 'Producto', icono: '' });
+          html += omniFilaDato(pIdx, p.nombre, meta, 'Elegir \u203a');
         });
         html += `</div></div>`;
       }
@@ -398,26 +409,54 @@
     let h = '';
     let idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Ver saldo ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.productos });
     h += omniFilaDato(idx, 'Saldo: ' + omniFmt(p.stock) + ' unid \u00b7 $' + omniFmt(p.costo) + ' c/u \u00b7 $' + omniFmt(p.stock * p.costo), p.nombre, 'Abrir \u203a');
-    const margenTxt = (p.margen === null || p.margen === undefined) ? 'sin precio' : ('margen ' + p.margen + '%');
+    const precioTxt = p.precio > 0 ? ('Venta $' + omniFmt(p.precio) + ((p.margen !== null && p.margen !== undefined) ? ' \u00b7 margen ' + p.margen + '%' : '')) : ('Costo $' + omniFmt(p.costo) + ' \u00b7 sin precio');
     idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Precio ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.editar });
-    h += omniFilaDato(idx, 'Venta $' + omniFmt(p.precio) + ' \u00b7 ' + margenTxt, p.nombre, 'Abrir \u203a');
-    const movTxt = p.ult_mov ? (p.ult_mov.tipo + ' ' + (p.ult_mov.doc || '') + ' \u00b7 ' + p.ult_mov.fecha) : 'Sin movimientos a\u00fan';
+    h += omniFilaDato(idx, precioTxt, p.nombre, 'Abrir \u203a');
+    const mv = p.ult_mov;
+    const movTxt = mv ? ('Movimiento: ' + mv.tipo + (mv.motivo ? ' (' + mv.motivo + ')' : '') + ' ' + (mv.doc || '') + ' \u00b7 ' + mv.fecha + ' \u00b7 ' + omniFmt(mv.cantidad) + ' unid') : 'Movimiento: sin movimientos a\u00fan';
     idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Movimiento ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.kardex });
     h += omniFilaDato(idx, movTxt, p.nombre, 'Kardex \u203a');
+    const meta4 = ((p.categoria || '') + (p.unidad ? ' \u00b7 ' + p.unidad : '')) || p.nombre;
     idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Editar ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.editar });
-    h += omniFilaDato(idx, 'Editar: ' + p.nombre, 'c\u00f3d ' + (p.codigo || '\u2014'), 'Editar \u203a');
+    h += omniFilaDato(idx, 'Editar: ' + p.nombre, meta4, 'Editar \u203a');
     if (p.alerta === 'agotado' || p.agotado) {
       idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Agotado ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.compras });
       const provTxt = p.proveedor ? ('Agotado: comprar a ' + p.proveedor) : 'Agotado: sin stock disponible';
       h += omniFilaDato(idx, provTxt, p.nombre, 'Compra \u203a');
     }
+    if (p.sobre) {
+      idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Sobrestock ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.editar });
+      const cobTxt = (p.cobertura_calc === null || p.cobertura_calc === undefined) ? 'sin rotaci\u00f3n' : (p.cobertura_calc + ' d\u00edas (m\u00e1x ' + p.dias_max + ')');
+      h += omniFilaDato(idx, 'Sobrestock: ' + cobTxt, p.nombre, 'Ver \u203a');
+    }
     idx = omniPushDato({ tipo: 'dato-toggle', titulo: 'Estado ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.toggle, next: !p.disponible });
-    h += omniFilaDato(idx, p.disponible ? 'Estado: habilitado \u2192 apagar' : 'Estado: deshabilitado \u2192 prender', p.nombre, 'Aqu\u00ed');
+    h += '<div data-omni-index="' + idx + '" onclick="omniFilaToggle(' + idx + ')" class="omni-item flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer hover:bg-sky-50/80 transition">'
+      + '<div class="truncate"><div class="text-xs font-bold text-gray-900 truncate">Estado: ' + (p.disponible ? 'habilitado' : 'deshabilitado') + '</div>'
+      + '<div class="text-[10px] text-gray-400 font-medium truncate">' + p.nombre + '</div></div>'
+      + '<label class="relative inline-flex cursor-pointer items-center shrink-0" onclick="event.stopPropagation()">'
+      + '<input type="checkbox" class="peer sr-only"' + (p.disponible ? ' checked' : '') + ' onchange="omniToggleEstado(this, \'' + p.urls.toggle + '\', ' + (!p.disponible) + ')">'
+      + '<span class="block w-9 h-5 rounded-full bg-slate-300 peer-checked:bg-emerald-500 transition"></span>'
+      + '<span class="absolute top-0.5 left-0.5 block w-4 h-4 rounded-full bg-white shadow transition peer-checked:translate-x-4"></span>'
+      + '</label></div>';
     idx = omniPushDato({ tipo: 'dato-fila', titulo: 'F\u00edsico ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.fisico });
     h += omniFilaDato(idx, 'Hacer inventario f\u00edsico', p.nombre, 'Conteo \u203a');
-    if (p.margen !== null && p.margen !== undefined) {
-      idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Margen ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.vcosto });
-      h += omniFilaDato(idx, 'Margen ' + p.margen + '% \u00b7 ver an\u00e1lisis', p.nombre, 'Ventas \u203a');
+    if (p.urgente) {
+      idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Urgente ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.fisico });
+      h += omniFilaDato(idx, 'F\u00edsico urgente: prioridad #' + p.urg_rank + ' de conteo', p.nombre, 'Conteo \u203a');
+    }
+    if (p.vendido) {
+      if (p.margen !== null && p.margen !== undefined) {
+        idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Margen ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.vcosto });
+        h += omniFilaDato(idx, 'Margen ' + p.margen + '% \u00b7 ver an\u00e1lisis', p.nombre, 'Ventas \u203a');
+      }
+      if (p.rank_ventas) {
+        idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Ranking ventas ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.vcosto });
+        h += omniFilaDato(idx, 'Ranking ventas: #' + p.rank_ventas + ' de ' + p.rank_ventas_total, p.nombre, 'Ventas \u203a');
+      }
+      if (p.rank_margen) {
+        idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Ranking margen ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.vcosto });
+        h += omniFilaDato(idx, 'Ranking margen: #' + p.rank_margen + ' de ' + p.rank_margen_total, p.nombre, 'Ventas \u203a');
+      }
     }
     if (p.top_rank) {
       idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Top ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.vcosto });
@@ -425,26 +464,37 @@
     }
     const xt = extras || {};
     if (xt.sueltos_total > 0) {
-      idx = omniPushDato({ tipo: 'dato-expand' });
-      h += omniFilaDato(idx, '\u00cdtems sueltos: ' + xt.sueltos_total + ' \u2192 ver', 'comprados sin usar', 'Ver \u203a');
-      const nombres = (xt.sueltos || []).map(s => s.nombre).join(' \u00b7 ');
-      h += '<div id="dato-sueltos-lista" class="hidden px-3 py-2 text-[11px] text-gray-500">' + nombres + '</div>';
+      idx = omniPushDato({ tipo: 'dato-modal' });
+      h += omniFilaDato(idx, '\u00cdtems sueltos: ' + xt.sueltos_total + ' \u2192 ver reporte', 'comprados sin usar', 'Ver \u203a');
     }
     return h;
   }
+  window.omniFilaToggle = function(idx) {
+    const box = resultsBody.querySelector('[data-omni-index="' + idx + '"] input[type="checkbox"]');
+    if (box) box.click();
+  };
 
-  window.omniCambiarEstado = async function(idx, url, next) {
+  window.omniToggleEstado = async function(chk, url, next) {
     try {
       const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ disponible: next }) });
       const dd = await r.json();
       if (dd && dd.ok) { ejecutarBusqueda(input.value.trim()); return; }
       throw new Error((dd && dd.error) || 'fail');
     } catch (er) {
-      const el = resultsBody.querySelector('[data-omni-index="' + idx + '"] span:last-child');
-      if (el) { el.textContent = 'Error'; el.classList.add('text-rose-600'); }
+      chk.checked = !chk.checked;
     }
   };
 
+  window.omniSueltosAbrir = function() {
+    const xt = datosExtras || {};
+    document.getElementById('dato-sueltos-titulo').textContent = '\u00cdtems sueltos (' + (xt.sueltos_total || 0) + ')';
+    document.getElementById('dato-sueltos-cuerpo').innerHTML = (xt.sueltos || []).map(s => '<div class="text-[11px] text-slate-700 px-2 py-1.5 bg-slate-50 rounded-lg">' + s.nombre + ' \u00b7 ' + s.movs + ' mov</div>').join('');
+    document.getElementById('dato-sueltos-modal').classList.remove('hidden');
+  };
+
+  window.omniSueltosCerrar = function() {
+    document.getElementById('dato-sueltos-modal').classList.add('hidden');
+  };
   window.omniElegirProducto = function(i) {
     const p = datosProductos[i];
     if (!p) return;
@@ -467,8 +517,8 @@
     if (!it) return;
     if (it.tipo === 'dato-pick') { window.omniElegirProducto(it.prodIdx); return; }
     if (it.tipo === 'dato-back') { ejecutarBusqueda(input.value.trim()); return; }
-    if (it.tipo === 'dato-toggle') { window.omniCambiarEstado(idx, it.url, it.next); return; }
-    if (it.tipo === 'dato-expand') { const l = document.getElementById('dato-sueltos-lista'); if (l) l.classList.toggle('hidden'); return; }
+    if (it.tipo === 'dato-toggle') { window.omniFilaToggle(idx); return; }
+    if (it.tipo === 'dato-modal') { window.omniSueltosAbrir(); return; }
     omniNavegarA(it.url, it.titulo, it.modulo || '', it.icono || '');
   };
 
@@ -594,6 +644,8 @@
         else { omniNavegarA(item.url, item.titulo, item.modulo || item.manual, item.icono || ''); }
       }
     } else if (e.key === 'Escape') {
+      const sm = document.getElementById('dato-sueltos-modal');
+      if (sm && !sm.classList.contains('hidden')) { sm.classList.add('hidden'); return; }
       cerrarDropdown();
       input.blur();
     }

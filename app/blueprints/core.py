@@ -1844,4 +1844,22 @@ def api_buscador_omni():
             pass
 
     res = buscar_omni(q, negocio_id=negocio_id, slug=slug)
+    datos = []
+    extras = {'sueltos': [], 'sueltos_total': 0}
+    if negocio_id and len(q) >= 2:
+        from ..buscador_motor import buscar_datos_producto, buscar_sueltos
+        from ..db import get_db_connection
+        try:
+            _c2 = get_db_connection()
+            try:
+                datos = buscar_datos_producto(_c2, q, negocio_id, slug)
+                if datos:
+                    _s = buscar_sueltos(_c2, negocio_id)
+                    extras = {'sueltos': _s['items'], 'sueltos_total': _s['total']}
+            finally:
+                _c2.close()
+        except Exception:
+            datos = []
+    res['datos'] = datos
+    res['extras'] = extras
     return jsonify(res)

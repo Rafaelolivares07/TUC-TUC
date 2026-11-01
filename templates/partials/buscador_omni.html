@@ -61,6 +61,8 @@
   let debounceTimer = null;
   let selectedIndex = -1;
   let itemsColeccion = []; // Almacena elementos navegables con teclado
+  let datosProductos = []; // Matches de producto (grupo Datos)
+  let datosExtras = null; // Sueltos global (fila 14)
 
   // Contexto activo (si existe en la URL o variable global)
   function obtenerContextoNegocioId() {
@@ -265,8 +267,11 @@
 
       const rutas = d.rutas || [];
       const ayuda = d.ayuda || [];
+      const datos = d.datos || [];
+      datosProductos = datos;
+      datosExtras = d.extras || null;
 
-      if (rutas.length === 0 && ayuda.length === 0) {
+      if (rutas.length === 0 && ayuda.length === 0 && datos.length === 0) {
         resultsBody.innerHTML = `
           <div class="py-8 text-center text-gray-400">
             <p class="text-xs font-bold text-gray-600">No encontramos resultados para "${q}"</p>
@@ -332,6 +337,32 @@
         html += `</div></div>`;
       }
 
+      // 3. Grupo de Datos: productos (1 match -> filas directo, N -> escoger)
+      if (datos.length === 1) {
+        html += `
+          <div>
+            <div class="px-2 py-1 text-[11px] font-bold text-sky-600 uppercase tracking-wider flex items-center justify-between">
+              <span>Producto (1)</span>
+            </div>
+            <div class="mt-1 space-y-1">
+        `;
+        html += omniFilasProducto(datos[0], datosExtras);
+        html += `</div></div>`;
+      } else if (datos.length > 1) {
+        html += `
+          <div>
+            <div class="px-2 py-1 text-[11px] font-bold text-sky-600 uppercase tracking-wider flex items-center justify-between">
+              <span>Productos (${datos.length}): escoge cu\u00e1l</span>
+            </div>
+            <div class="mt-1 space-y-1">
+        `;
+        datos.forEach((p, i) => {
+          const pIdx = omniPushDato({ tipo: 'dato-pick', prodIdx: i, titulo: p.nombre, modulo: 'Producto', icono: '' });
+          html += omniFilaDato(pIdx, p.nombre, 'stock ' + omniFmt(p.stock), 'Elegir \u203a');
+        });
+        html += `</div></div>`;
+      }
+
       resultsBody.innerHTML = html;
       resaltarElemento(0);
     } catch(err) {
@@ -339,6 +370,107 @@
       resultsBody.innerHTML = `<div class="p-4 text-center text-red-500 text-xs">Error de conexión con el buscador</div>`;
     }
   }
+
+  function omniFmt(n) {
+    const v = Number(n || 0);
+    return v.toLocaleString('es-CO', { maximumFractionDigits: 2 });
+  }
+
+  function omniPushDato(item) {
+    itemsColeccion.push(item);
+    return itemsColeccion.length - 1;
+  }
+
+  function omniFilaDato(idx, titulo, meta, badge) {
+    return `
+      <div data-omni-index="${idx}" onclick="omniDatoIr(${idx})"
+           class="omni-item flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer hover:bg-sky-50/80 transition">
+        <div class="truncate">
+          <div class="text-xs font-bold text-gray-900 truncate">${titulo}</div>
+          <div class="text-[10px] text-gray-400 font-medium truncate">${meta}</div>
+        </div>
+        <span class="text-[10px] font-bold text-sky-600 bg-sky-50 px-2 py-0.5 rounded-md shrink-0">${badge}</span>
+      </div>
+    `;
+  }
+
+  function omniFilasProducto(p, extras) {
+    let h = '';
+    let idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Ver saldo ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.productos });
+    h += omniFilaDato(idx, 'Saldo: ' + omniFmt(p.stock) + ' unid \u00b7 $' + omniFmt(p.costo) + ' c/u \u00b7 $' + omniFmt(p.stock * p.costo), p.nombre, 'Abrir \u203a');
+    const margenTxt = (p.margen === null || p.margen === undefined) ? 'sin precio' : ('margen ' + p.margen + '%');
+    idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Precio ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.editar });
+    h += omniFilaDato(idx, 'Venta $' + omniFmt(p.precio) + ' \u00b7 ' + margenTxt, p.nombre, 'Abrir \u203a');
+    const movTxt = p.ult_mov ? (p.ult_mov.tipo + ' ' + (p.ult_mov.doc || '') + ' \u00b7 ' + p.ult_mov.fecha) : 'Sin movimientos a\u00fan';
+    idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Movimiento ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.kardex });
+    h += omniFilaDato(idx, movTxt, p.nombre, 'Kardex \u203a');
+    idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Editar ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.editar });
+    h += omniFilaDato(idx, 'Editar: ' + p.nombre, 'c\u00f3d ' + (p.codigo || '\u2014'), 'Editar \u203a');
+    if (p.alerta === 'agotado' || p.agotado) {
+      idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Agotado ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.compras });
+      const provTxt = p.proveedor ? ('Agotado: comprar a ' + p.proveedor) : 'Agotado: sin stock disponible';
+      h += omniFilaDato(idx, provTxt, p.nombre, 'Compra \u203a');
+    }
+    idx = omniPushDato({ tipo: 'dato-toggle', titulo: 'Estado ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.toggle, next: !p.disponible });
+    h += omniFilaDato(idx, p.disponible ? 'Estado: habilitado \u2192 apagar' : 'Estado: deshabilitado \u2192 prender', p.nombre, 'Aqu\u00ed');
+    idx = omniPushDato({ tipo: 'dato-fila', titulo: 'F\u00edsico ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.fisico });
+    h += omniFilaDato(idx, 'Hacer inventario f\u00edsico', p.nombre, 'Conteo \u203a');
+    if (p.margen !== null && p.margen !== undefined) {
+      idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Margen ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.vcosto });
+      h += omniFilaDato(idx, 'Margen ' + p.margen + '% \u00b7 ver an\u00e1lisis', p.nombre, 'Ventas \u203a');
+    }
+    if (p.top_rank) {
+      idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Top ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.vcosto });
+      h += omniFilaDato(idx, 'Top #' + p.top_rank + ' del mes: crear similares', p.nombre, 'Ver \u203a');
+    }
+    const xt = extras || {};
+    if (xt.sueltos_total > 0) {
+      idx = omniPushDato({ tipo: 'dato-expand' });
+      h += omniFilaDato(idx, '\u00cdtems sueltos: ' + xt.sueltos_total + ' \u2192 ver', 'comprados sin usar', 'Ver \u203a');
+      const nombres = (xt.sueltos || []).map(s => s.nombre).join(' \u00b7 ');
+      h += '<div id="dato-sueltos-lista" class="hidden px-3 py-2 text-[11px] text-gray-500">' + nombres + '</div>';
+    }
+    return h;
+  }
+
+  window.omniCambiarEstado = async function(idx, url, next) {
+    try {
+      const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ disponible: next }) });
+      const dd = await r.json();
+      if (dd && dd.ok) { ejecutarBusqueda(input.value.trim()); return; }
+      throw new Error((dd && dd.error) || 'fail');
+    } catch (er) {
+      const el = resultsBody.querySelector('[data-omni-index="' + idx + '"] span:last-child');
+      if (el) { el.textContent = 'Error'; el.classList.add('text-rose-600'); }
+    }
+  };
+
+  window.omniElegirProducto = function(i) {
+    const p = datosProductos[i];
+    if (!p) return;
+    itemsColeccion = [];
+    let h = `
+      <div>
+        <div class="px-2 py-1 text-[11px] font-bold text-sky-600 uppercase tracking-wider"><span>${p.nombre}</span></div>
+        <div class="mt-1 space-y-1">
+    `;
+    h += omniFilasProducto(p, datosExtras);
+    const backIdx = omniPushDato({ tipo: 'dato-back' });
+    h += omniFilaDato(backIdx, '\u2190 Ver los ' + datosProductos.length + ' productos', 'volver a la lista', 'Atr\u00e1s');
+    h += `</div></div>`;
+    resultsBody.innerHTML = h;
+    resaltarElemento(0);
+  };
+
+  window.omniDatoIr = function(idx) {
+    const it = itemsColeccion[idx];
+    if (!it) return;
+    if (it.tipo === 'dato-pick') { window.omniElegirProducto(it.prodIdx); return; }
+    if (it.tipo === 'dato-back') { ejecutarBusqueda(input.value.trim()); return; }
+    if (it.tipo === 'dato-toggle') { window.omniCambiarEstado(idx, it.url, it.next); return; }
+    if (it.tipo === 'dato-expand') { const l = document.getElementById('dato-sueltos-lista'); if (l) l.classList.toggle('hidden'); return; }
+    omniNavegarA(it.url, it.titulo, it.modulo || '', it.icono || '');
+  };
 
   // -- SELECCIÓN Y NAVEGACIÓN -----------------------------------------
   window.omniNavegarA = function(url, titulo, modulo, icono) {
@@ -454,10 +586,12 @@
       e.preventDefault();
       if (selectedIndex >= 0 && selectedIndex < total) {
         const item = itemsColeccion[selectedIndex];
-        omniNavegarA(item.url, item.titulo, item.modulo || item.manual, item.icono || '');
+        if (item.tipo && item.tipo.indexOf('dato') === 0) { window.omniDatoIr(selectedIndex); }
+        else { omniNavegarA(item.url, item.titulo, item.modulo || item.manual, item.icono || ''); }
       } else if (total > 0) {
         const item = itemsColeccion[0];
-        omniNavegarA(item.url, item.titulo, item.modulo || item.manual, item.icono || '');
+        if (item.tipo && item.tipo.indexOf('dato') === 0) { window.omniDatoIr(0); }
+        else { omniNavegarA(item.url, item.titulo, item.modulo || item.manual, item.icono || ''); }
       }
     } else if (e.key === 'Escape') {
       cerrarDropdown();

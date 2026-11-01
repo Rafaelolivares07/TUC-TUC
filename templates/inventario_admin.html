@@ -16920,6 +16920,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   await cargarProductos();
 
+  // Omni: abrir modal producto directo (?editar_producto=<id>)
+  const qEditarProd = initUrlParams.get('editar_producto');
+  if (qEditarProd && typeof abrirModalProducto === 'function') {
+    mostrarTab('productos');
+    abrirModalProducto(parseInt(qEditarProd, 10));
+  }
+
   await cargarTiposDocEntrada();
 
   await cargarTiposDocProduccion();

@@ -516,3 +516,152 @@ def buscar_omni(q, negocio_id=None, slug=None):
         'rutas': resultados_rutas[:8],
         'ayuda': resultados_ayuda[:6]
     }
+def buscar_datos_producto(conn, q, negocio_id, slug=None, limite=5):
+    """Datos de producto para omni (scope negocio activo). Slice 1+2: match +
+    saldo/precio/margen/mov/urls + alerta/proveedor/top/urls extra. Lista (max limite)."""
+    q_limpio = (q or '').strip()
+    if len(q_limpio) < 2 or not negocio_id:
+        return []
+    try:
+        nid = int(negocio_id)
+    except (TypeError, ValueError):
+        return []
+    like = '%' + q_limpio + '%'
+    try:
+        rows = conn.execute(
+            """SELECT p.id, p.nombre, p.precio, p.costo, p.codigo_barra, p.disponible,
+                      COALESCE((SELECT SUM(s.stock) FROM saldos_inventario s
+                                WHERE s.negocio_id = p.negocio_id AND s.producto_id = p.id), 0) AS stock
+               FROM productos p
+               WHERE p.negocio_id = %s
+                 AND (p.nombre ILIKE %s OR COALESCE(p.codigo_barra, '') ILIKE %s)
+               ORDER BY (LOWER(p.nombre) = LOWER(%s)) DESC, p.nombre
+               LIMIT 5""",
+            (nid, like, like, q_limpio)).fetchall()
+    except Exception:
+        return []
+    if not rows:
+        return []
+    ids = [r['id'] for r in rows]
+    movs, alertas, provs, tops = {}, {}, {}, {}
+    try:
+        for m in conn.execute(
+                """SELECT DISTINCT ON (m.producto_id) m.producto_id, m.tipo,
+                          m.documento_numero AS doc,
+                          TO_CHAR(m.created_at, 'YYYY-MM-DD') AS fecha
+                   FROM movimientos_inventario m
+                   WHERE m.producto_id = ANY(%s)
+                   ORDER BY m.producto_id, m.id DESC""",
+                (ids,)).fetchall():
+            movs[m['producto_id']] = {'tipo': m['tipo'], 'doc': m['doc'], 'fecha': m['fecha']}
+    except Exception:
+        movs = {}
+    try:
+        for a in conn.execute(
+                "SELECT producto_id, estado, cobertura_dias FROM inventario_alertas_agotados "
+                "WHERE negocio_id = %s AND producto_id = ANY(%s)",
+                (nid, ids)).fetchall():
+            alertas[a['producto_id']] = a
+    except Exception:
+        alertas = {}
+    try:
+        for x in conn.execute(
+                "SELECT DISTINCT ON (m.producto_id) m.producto_id, m.proveedor_nombre "
+                "FROM movimientos_inventario m WHERE m.producto_id = ANY(%s) "
+                "AND m.tipo = 'entrada' AND m.proveedor_nombre IS NOT NULL "
+                "ORDER BY m.producto_id, m.id DESC",
+                (ids,)).fetchall():
+            provs[x['producto_id']] = x['proveedor_nombre']
+    except Exception:
+        provs = {}
+    try:
+        for rk in conn.execute(
+                "WITH v AS ("
+                "  SELECT i.producto_id, SUM(i.cantidad) AS cant"
+                "  FROM pedido_items i JOIN pedidos p ON p.id = i.pedido_id"
+                "  WHERE p.negocio_id = %s AND date_trunc('month', i.created_at) = date_trunc('month', NOW())"
+                "  GROUP BY 1"
+                "  UNION ALL "
+                "  SELECT i.producto_id, SUM(i.cantidad)"
+                "  FROM items_pedido_tienda i JOIN pedidos_tienda p ON p.id = i.pedido_id"
+                "  JOIN tiendas t ON t.id = p.tienda_id"
+                "  WHERE t.tercero_id = %s AND date_trunc('month', i.created_at) = date_trunc('month', NOW())"
+                "  GROUP BY 1"
+                "), tot AS (SELECT producto_id, SUM(cant) AS cant FROM v GROUP BY 1) "
+                "SELECT producto_id, RANK() OVER (ORDER BY cant DESC) AS rk FROM tot",
+                (nid, nid)).fetchall():
+            if rk['rk'] <= 10:
+                tops[rk['producto_id']] = rk['rk']
+    except Exception:
+        tops = {}
+
+    out = []
+    for r in rows[:limite]:
+        precio = float(r['precio'] or 0)
+        costo = float(r['costo'] or 0)
+        stock = float(r['stock'] or 0)
+        margen = round((precio - costo) / precio * 100, 1) if precio > 0 else None
+        pid = r['id']
+        kurl = (f'https://{slug}.tuc-tuc.co/kardex?producto_id={pid}' if slug
+                else f'/inventario/{nid}/kardex?producto_id={pid}')
+        al = alertas.get(pid) or {}
+        out.append({
+            'id': pid,
+            'nombre': r['nombre'],
+            'stock': stock,
+            'precio': precio,
+            'costo': costo,
+            'margen': margen,
+            'codigo': r['codigo_barra'],
+            'disponible': bool(r['disponible']),
+            'agotado': stock <= 0,
+            'alerta': al.get('estado'),
+            'cobertura': float(al['cobertura_dias']) if al.get('cobertura_dias') is not None else None,
+            'proveedor': provs.get(pid),
+            'top_rank': tops.get(pid),
+            'ult_mov': movs.get(pid),
+            'urls': {
+                'kardex': kurl,
+                'productos': f'/inventario/{nid}?tab=productos',
+                'editar': f'/inventario/{nid}?tab=productos&editar_producto={pid}',
+                'compras': f'/inventario/{nid}?tab=compras_sugerencias',
+                'fisico': f'/admin/inventario-fisico/{nid}',
+                'vcosto': f'/inventario/{nid}?tab=ventas_costos',
+                'toggle': f'/api/inventario/producto/{pid}/disponible',
+            },
+        })
+    return out
+
+
+def buscar_sueltos(conn, negocio_id, limite=10):
+    """Reporte puntual: sueltos con movimiento y sin venta (scope negocio)."""
+    if not negocio_id:
+        return {'items': [], 'total': 0}
+    try:
+        nid = int(negocio_id)
+    except (TypeError, ValueError):
+        return {'items': [], 'total': 0}
+    try:
+        items = conn.execute(
+            "SELECT p.id, p.nombre, "
+            "(SELECT COUNT(*) FROM movimientos_inventario m WHERE m.producto_id = p.id) AS movs "
+            "FROM productos p WHERE p.negocio_id = %s "
+            "AND NOT EXISTS (SELECT 1 FROM tarjeta_estandar te WHERE te.producto_id = p.id) "
+            "AND NOT EXISTS (SELECT 1 FROM tarjeta_estandar te WHERE te.componente_id = p.id) "
+            "AND EXISTS (SELECT 1 FROM movimientos_inventario m WHERE m.producto_id = p.id) "
+            "AND NOT EXISTS (SELECT 1 FROM pedido_items i WHERE i.producto_id = p.id) "
+            "AND NOT EXISTS (SELECT 1 FROM items_pedido_tienda i WHERE i.producto_id = p.id) "
+            "ORDER BY movs DESC LIMIT 10",
+            (nid,)).fetchall()
+        tot = conn.execute(
+            "SELECT COUNT(*) AS total FROM productos p WHERE p.negocio_id = %s "
+            "AND NOT EXISTS (SELECT 1 FROM tarjeta_estandar te WHERE te.producto_id = p.id) "
+            "AND NOT EXISTS (SELECT 1 FROM tarjeta_estandar te WHERE te.componente_id = p.id) "
+            "AND EXISTS (SELECT 1 FROM movimientos_inventario m WHERE m.producto_id = p.id) "
+            "AND NOT EXISTS (SELECT 1 FROM pedido_items i WHERE i.producto_id = p.id) "
+            "AND NOT EXISTS (SELECT 1 FROM items_pedido_tienda i WHERE i.producto_id = p.id)",
+            (nid,)).fetchone()
+        return {'items': [{'id': x['id'], 'nombre': x['nombre'], 'movs': int(x['movs'])} for x in items],
+                'total': int((tot or {}).get('total') or 0)}
+    except Exception:
+        return {'items': [], 'total': 0}

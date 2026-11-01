@@ -605,7 +605,7 @@ function renderSala(sala, disponible) {
   const dueno = sala.dispositivo_reproductor_nombre || 'otro dispositivo';
   const nota = disponible
     ? 'Esta sala puede reproducirse desde este dispositivo.'
-    : `Esta sala suena en ${dueno}. Desde aqui puedes agregar canciones, pero no reproducir.`;
+    : `Esta sala suena en ${dueno}. Puedes agregar canciones o pasar la reproducción a este equipo.`;
   
   const predActual = (localStorage.getItem(PRED_KEY) || '').toLowerCase();
   const esPred = disponible && predActual === nombre.toLowerCase();
@@ -620,7 +620,7 @@ function renderSala(sala, disponible) {
       <div class="room-actions">
         ${disponible
           ? `<button class="btn small" onclick="abrirReproductor('${nombre}')">Reproducir</button><button class="btn secondary small" onclick="agregarComoCliente('${nombre}')">Agregar</button><button class="btn secondary small" onclick="irAControlSala('${nombre}')">Control</button>`
-          : `<button class="btn small" style="background:linear-gradient(135deg, #ff9800, #ff5722); color:#fff; font-weight:800;" onclick="reclamarSala('${nombre}')">Tomar control</button><button class="btn secondary small" onclick="agregarComoCliente('${nombre}')">Agregar canciones</button><button class="btn secondary small" onclick="irAControlSala('${nombre}')">Control</button>`
+          : `<button class="btn small" style="background:linear-gradient(135deg, #ff9800, #ff5722); color:#fff; font-weight:800;" onclick="reclamarSala('${nombre}')">Modo reproductor</button><button class="btn secondary small" onclick="agregarComoCliente('${nombre}')">Agregar canciones</button><button class="btn secondary small" onclick="irAControlSala('${nombre}')">Control</button>`
         }
       </div>
       ${disponible ? `

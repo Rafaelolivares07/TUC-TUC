@@ -2351,11 +2351,13 @@ async function activar(skipUnlock = false) {
   [player1, player2].forEach(p => {
     p.addEventListener('ended', handlePlayerEnded);
     p.addEventListener('timeupdate', handlePlayerTimeUpdate);
+    p.addEventListener('error', handlePlayerError);
   });
 
   player.play().catch(() => {});
   player.pause();
   setInterval(verificarCola, 1500);
+  if (!window._vigilanteAtasco) { window._vigilanteAtasco = setInterval(vigilarAtascoAudio, 5000); }
   verificarCola();
   setInterval(cargarPeticionesRemotas, 4000);
   cargarPeticionesRemotas();
@@ -2364,6 +2366,32 @@ async function activar(skipUnlock = false) {
   chequearYRestaurarDirectorio();
 }
 
+let atascoUltimoT = -1;
+let atascoRachas = 0;
+function vigilarAtascoAudio() {
+  try {
+    if (transitioning || esYouTubeActual || !reproduciendo) { atascoRachas = 0; return; }
+    if (!player || player.paused || player.ended) { atascoRachas = 0; return; }
+    const t = player.currentTime || 0;
+    if (t <= 0) { atascoRachas = 0; atascoUltimoT = t; return; }
+    if (t === atascoUltimoT) {
+      atascoRachas++;
+      if (atascoRachas >= 3) {
+        atascoRachas = 0;
+        console.warn('[Rockola] Audio atascado 15s, saltando:', cancionActual);
+        try { saltarActual(); } catch (e3) {}
+      }
+    } else { atascoRachas = 0; atascoUltimoT = t; }
+  } catch (e) {}
+}
+function handlePlayerError(e) {
+  try {
+    const p = e.target;
+    if (!p || p !== player || transitioning) return;
+    console.warn('[Rockola] Error de audio en pista activa, saltando:', cancionActual);
+    saltarActual();
+  } catch (e2) {}
+}
 function handlePlayerEnded(e) {
   const p = e.target;
   if (p !== player) return;
@@ -3199,6 +3227,11 @@ async function verificarCola() {
       }
     }
 
+    if (!reproduciendo && !playPendiente && cola.length > 0 && !esYouTubeActual && player && player.ended && !transitioning && !saltandoCancion && cola[0].id === cancionActual) {
+      console.warn('[Rockola] Pista terminada sin avanzar, re-avanzando:', cancionActual);
+      saltarActual();
+      return;
+    }
     if (!reproduciendo && !playPendiente && cola.length > 0) {
       const c = cola[0];
       if (c.id !== cancionActual || (!player.src && !esYouTubeActual)) {
@@ -7719,6 +7752,10 @@ async function tvEmpezar() {
     } catch (e2) {}
   }
   tvDiag(window._tvVinculoOk ? 'vinculo OK · arrancando motor…' : ('vinculo FALLO: ' + (window._tvVincularError || 'motivo desconocido')));
+  if (window._tvVinculoOk) {
+    try { postModos({modo_pausa: false}); } catch (ePm) {}
+    try { if (!reproduciendo && !playPendiente && !fadeIntervalTimer) transitioning = false; } catch (eTr) {}
+  }
   tvCargarCola();
   setInterval(tvCargarCola, 2500);
   setInterval(tvProgreso, 500);

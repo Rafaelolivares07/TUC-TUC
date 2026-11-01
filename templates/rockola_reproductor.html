@@ -2752,6 +2752,7 @@ async function onYtPlayerError(index, event) {
           actualizarPlayPauseBtn(true);
           estadoEl.textContent = 'Reproduciendo (Audio) ✓';
           actualizarMediaSession(cancion.nombre);
+          ytIframeMuerto = true;
           return;
         } catch(playErr) {
           console.warn('[YouTube Fallback] Error al reproducir audio resuelto:', playErr);
@@ -2865,6 +2866,30 @@ async function intentarReproducir(c) {
   }
 
   if (c.youtube_url) {
+    if (ytIframeMuerto) {
+      const audioDirecto = await resolverAudioEnServidor(c.id);
+      if (audioDirecto && cancionActual === c.id) {
+        esYouTubeActual = false;
+        detenerVideoYouTube();
+        player.src = audioDirecto;
+        player.load();
+        try {
+          await player.play();
+          reproduciendo = true;
+          playPendiente = false;
+          fallosPlay = 0;
+          setVinylSpinning(true);
+          actualizarPlayPauseBtn(true);
+          estadoEl.textContent = 'Reproduciendo (Audio) ✓';
+          actualizarMediaSession(c.nombre);
+          return;
+        } catch (errDirecto) {
+          console.warn('[YT muerto] No arranco el mp3 directo, reintentando iframe:', errDirecto);
+        }
+      }
+      if (cancionActual !== c.id) return;
+      ytIframeMuerto = false;
+    }
     const vidId = extractYouTubeId(c.youtube_url);
     if (!vidId) {
       console.warn('URL de YouTube no valida:', c.youtube_url);
@@ -2897,6 +2922,7 @@ async function intentarReproducir(c) {
             await player.play();
             reproduciendo = true;
             okNativo = true;
+            ytIframeMuerto = true;
             actualizarPlayPauseBtn(true);
             estadoEl.textContent = 'Reproduciendo (Audio) ✓';
             actualizarMediaSession(c.nombre);
@@ -6229,6 +6255,8 @@ let fundidoSegundos = 12;
 let fundidoDuracion = 5;
 let fundidoPrecargaHead = '';
 let fundidoPrecargaId = null;
+let ytIframeMuerto = false;
+let fundidoResolverCooldownTs = 0;
 const intentModos = {};
 
 function actualizarShuffleStatus() {
@@ -6874,7 +6902,7 @@ async function precargarFundidoStandby(nextSong, timeLeft) {
     if (!nextSong || !nextSong.id || fundidoPrecargaId === nextSong.id) return;
     if (!(timeLeft <= fundidoSegundos)) return;
     fundidoPrecargaId = nextSong.id;
-    if (nextSong.youtube_url) {
+    if (nextSong.youtube_url && !ytIframeMuerto) {
       const vid = extractYouTubeId(nextSong.youtube_url);
       if (!vid) return;
       let st = null;
@@ -6884,8 +6912,15 @@ async function precargarFundidoStandby(nextSong, timeLeft) {
         try { st.setVolume(0); } catch (e1) {}
         st.cueVideoById(vid);
       }
-    } else if (typeof obtenerUrlDeAudio === 'function' && typeof standbyPlayer !== 'undefined' && standbyPlayer) {
-      const resAudio = await obtenerUrlDeAudio(nextSong);
+    } else if (typeof standbyPlayer !== 'undefined' && standbyPlayer) {
+      let resAudio = null;
+      if (nextSong.youtube_url) {
+        if (Date.now() - fundidoResolverCooldownTs < 20000) return;
+        const urlMuerto = await resolverAudioEnServidor(nextSong.id);
+        if (urlMuerto) resAudio = { url: urlMuerto };
+      } else if (typeof obtenerUrlDeAudio === 'function') {
+        resAudio = await obtenerUrlDeAudio(nextSong);
+      }
       if (fundidoPrecargaId !== nextSong.id || !resAudio || !resAudio.url) return;
       try {
         if (standbyPlayer.src !== resAudio.url) { standbyPlayer.src = resAudio.url; standbyPlayer.load(); }
@@ -6902,7 +6937,7 @@ async function iniciarCrossfade(secs, targetSong = null) {
   transitioning = true;
   const oldActiveSongId = cancionActual;
   const actualEsYt = esYouTubeActual;
-  const siguienteEsYt = !!nextSong.youtube_url;
+  const siguienteEsYt = !!nextSong.youtube_url && !ytIframeMuerto;
   
   console.log(`Iniciando fundido cruzado híbrido de ${secs}s para:`, nextSong.nombre, { actualEsYt, siguienteEsYt });
   
@@ -6948,6 +6983,7 @@ async function iniciarCrossfade(secs, targetSong = null) {
     const entranteOk = await esperarYtPlaying(entranteYt, 4500);
     if (!entranteOk) {
       console.warn('[Fundido] Standby YT no arranco, abortando cruce a audio nativo...');
+      ytIframeMuerto = true;
       try { if (entranteYt && typeof entranteYt.setVolume === 'function') entranteYt.setVolume(0); } catch (e3) {}
       try { if (entranteYt && typeof entranteYt.stopVideo === 'function') entranteYt.stopVideo(); } catch (e4) {}
       cancionActual = nextSong.id;
@@ -6974,7 +7010,20 @@ async function iniciarCrossfade(secs, targetSong = null) {
     } catch(e) {}
   } else {
     try {
-      const resAudio = await obtenerUrlDeAudio(nextSong);
+      let resAudio = null;
+      if (nextSong.youtube_url) {
+        if (Date.now() - fundidoResolverCooldownTs < 20000) { transitioning = false; return; }
+        const urlMuerto = await resolverAudioEnServidor(nextSong.id);
+        const headIdAhora = (currentCola && currentCola[0] && currentCola[0].id) || '';
+        if (!urlMuerto || headIdAhora !== oldActiveSongId || cancionActual !== oldActiveSongId) {
+          if (!urlMuerto) { ytIframeMuerto = false; fundidoResolverCooldownTs = Date.now(); }
+          transitioning = false;
+          return;
+        }
+        resAudio = { url: urlMuerto };
+      } else {
+        resAudio = await obtenerUrlDeAudio(nextSong);
+      }
       standbyPlayer.src = resAudio.url;
       standbyPlayer.load();
       standbyPlayer.volume = 0;

@@ -2343,7 +2343,7 @@ def _descargar_youtube_con_cobalt(url, tmp_path):
                 method='POST',
             )
             try:
-                with urllib.request.urlopen(req, timeout=6) as response:
+                with urllib.request.urlopen(req, timeout=25) as response:
                     cobalt = _json.loads(response.read())
             except urllib.error.HTTPError as error:
                 body = error.read().decode('utf-8', errors='ignore')[:300]

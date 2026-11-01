@@ -24,31 +24,32 @@
 #tv-display { display: none; }
 body.tv-mode { background: #000; }
 body.tv-mode > *:not(#tv-display):not(script):not(style) { display: none !important; }
-body.tv-mode #tv-display { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; background: #000; color: #e8f4ff; padding: 3vh 3vw; box-sizing: border-box; font-family: 'Space Grotesk', system-ui, sans-serif; }
-.tv-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 2vh; }
+body.tv-mode #tv-display { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; background: #000; color: #e8f4ff; padding: 3vh 3vw; box-sizing: border-box; font-family: 'Space Grotesk', system-ui, sans-serif; overflow: hidden; }
+.tv-head { display: flex; align-items: baseline; gap: 2vw; margin-bottom: 2vh; }
 .tv-brand { font-size: clamp(28px, 3.4vw, 54px); font-weight: 900; letter-spacing: -1px; }
 .tv-sala { font-size: clamp(20px, 2.2vw, 36px); font-weight: 800; letter-spacing: 3px; color: #8aa0b8; }
-.tv-main { display: grid; grid-template-columns: 1.6fr 1fr; gap: 3vw; flex: 1; min-height: 0; }
+.tv-main { display: grid; grid-template-columns: 1.6fr 1fr; grid-template-rows: minmax(0, 1fr); gap: 3vw; flex: 1; min-height: 0; }
 .tv-main > * { min-width: 0; }
+.tv-left { display: flex; flex-direction: column; min-height: 0; }
 .tv-label { font-size: clamp(14px, 1.4vw, 24px); letter-spacing: 4px; color: #5a6f88; font-weight: 700; }
 #tv-sonando { font-size: clamp(26px, 3.4vw, 58px); font-weight: 800; line-height: 1.12; margin: 1vh 0; overflow-wrap: anywhere; max-height: 2.5em; overflow: hidden; }
 #tv-owner { font-size: clamp(18px, 2vw, 34px); color: #8aa0b8; margin-bottom: 2vh; min-height: 1.2em; }
 #tv-prog { height: 10px; background: #14243a; border-radius: 6px; overflow: hidden; }
 #tv-prog-fill { height: 100%; width: 0%; background: #00d4ff; }
 #tv-time { font-size: clamp(14px, 1.5vw, 24px); color: #8aa0b8; margin-top: 1vh; font-variant-numeric: tabular-nums; min-height: 1.2em; }
-.tv-next { margin-top: 4vh; }
+.tv-next { margin-top: 4vh; margin-bottom: 2vh; }
 #tv-next-nombre { font-size: clamp(24px, 3vw, 54px); font-weight: 600; margin-top: 1vh; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tv-side { display: flex; flex-direction: column; gap: 2vh; min-height: 0; min-width: 0; }
-.tv-qr-card { background: #fff; border-radius: 14px; padding: 14px; display: flex; gap: 14px; align-items: center; margin-bottom: 2vh; max-width: 430px; }
+.tv-qr-card { background: #fff; border-radius: 14px; padding: 14px; display: flex; gap: 14px; align-items: center; margin-top: auto; margin-bottom: 0; max-width: 430px; }
 .tv-img-slot { border: 1px solid rgba(0,212,255,0.18); border-radius: 14px; overflow: hidden; aspect-ratio: 16/9; background: #0a1626; display: flex; align-items: center; justify-content: center; }
 .tv-img-slot img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .tv-img-empty { color: #5a6f88; font-size: clamp(14px, 1.4vw, 22px); }
 #tv-qr img { display: block; }
 .tv-qr-txt { color: #0e192c; font-size: clamp(14px, 1.4vw, 22px); font-weight: 700; line-height: 1.4; }
 #tv-url { color: #0077ff; font-size: clamp(12px, 1.2vw, 18px); word-break: break-all; font-weight: 500; }
-.tv-cola-box { border: 1px solid rgba(0,212,255,0.18); border-radius: 14px; padding: 2vh 1.2vw; overflow: hidden; }
-#tv-cola { list-style: none; margin-top: 1vh; }
-#tv-cola li { display: flex; gap: 12px; font-size: clamp(16px, 1.8vw, 30px); padding: 0.9vh 0; border-bottom: 1px solid rgba(255,255,255,0.06); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tv-cola-box { border: 1px solid rgba(0,212,255,0.18); border-radius: 14px; padding: 2vh 1.2vw; overflow: hidden; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+#tv-cola { list-style: none; margin-top: 1vh; flex: 1 1 auto; min-height: 0; overflow: hidden; }
+#tv-cola li { display: flex; gap: 12px; font-size: clamp(16px, 1.8vw, 30px); height: 2.1em; line-height: 2.1em; padding: 0; border-bottom: 1px solid rgba(255,255,255,0.06); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #tv-cola .pos { color: #5a6f88; min-width: 2ch; text-align: right; flex-shrink: 0; }
 #tv-cola li > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #tv-count { color: #8aa0b8; }
@@ -7649,15 +7650,11 @@ function cerrarDebugPanel() {
 </script>
 {% if tv_mode|default(false) %}
 <div id="tv-display">
-  <div class="tv-head">
-    <div class="tv-brand"><span class="brand-word-mi">Mi</span> <span class="brand-word-rockola">Rockola</span></div>
-    <div class="tv-sala">SALA {{ sala_id|upper }}</div>
-  </div>
   <div class="tv-main">
-    <div>
-      <div class="tv-qr-card">
-        <div id="tv-qr"></div>
-        <div><div class="tv-qr-txt">Programa tu cancion desde tu celular</div><div id="tv-url"></div></div>
+    <div class="tv-left">
+      <div class="tv-head">
+        <div class="tv-brand"><span class="brand-word-mi">Mi</span> <span class="brand-word-rockola">Rockola</span></div>
+        <div class="tv-sala">SALA {{ sala_id|upper }}</div>
       </div>
       <div class="tv-label">SONANDO</div>
       <div id="tv-sonando">--</div>
@@ -7668,6 +7665,10 @@ function cerrarDebugPanel() {
       <div class="tv-next">
         <div class="tv-label">SIGUIENTE</div>
         <div id="tv-next-nombre">--</div>
+      </div>
+      <div class="tv-qr-card">
+        <div id="tv-qr"></div>
+        <div><div class="tv-qr-txt">Programa tu cancion desde tu celular</div><div id="tv-url"></div></div>
       </div>
     </div>
     <div class="tv-side">
@@ -7749,11 +7750,22 @@ function tvRenderCola(items) {
   document.getElementById('tv-owner').textContent = son && son.owner ? ('Puesta por ' + son.owner) : '';
   const sig = items.length > 1 ? items[1] : null;
   document.getElementById('tv-next-nombre').textContent = sig ? (sig.nombre || 'Cancion') : '--';
-  const resto = items.slice(2, 10);
+  const resto = items.slice(2);
   document.getElementById('tv-count').textContent = items.length > 1 ? ('(' + (items.length - 1) + ')') : '';
   const ul = document.getElementById('tv-cola');
   ul.textContent = '';
-  resto.forEach((it, i) => {
+  let nVis = resto.length;
+  try {
+    const probe = document.createElement('li');
+    probe.textContent = 'X';
+    ul.appendChild(probe);
+    const rowH = probe.offsetHeight || 0;
+    probe.remove();
+    const avail = ul.clientHeight || 0;
+    if (rowH > 0 && avail > 0) nVis = Math.max(1, Math.floor(avail / rowH));
+  } catch (e) {}
+  const visibles = resto.length > nVis ? resto.slice(0, Math.max(0, nVis - 1)) : resto;
+  visibles.forEach((it, i) => {
     const li = document.createElement('li');
     const pos = document.createElement('span');
     pos.className = 'pos';
@@ -7764,9 +7776,9 @@ function tvRenderCola(items) {
     li.appendChild(nom);
     ul.appendChild(li);
   });
-  if (items.length > 10) {
+  if (resto.length > nVis) {
     const li = document.createElement('li');
-    li.textContent = '+' + (items.length - 10) + ' mas';
+    li.textContent = 'y ' + (resto.length - visibles.length) + ' mas';
     ul.appendChild(li);
   }
 }

@@ -20,6 +20,28 @@
       <span>Ctrl</span><span>K</span>
     </div>
     
+    <!-- V6 voz: microfono para hablar en vez de escribir -->
+    <button type="button" id="omni-mic" title="Hablar para buscar"
+            class="shrink-0 ms-1 p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition cursor-pointer">
+      <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15a3 3 0 003-3V6a3 3 0 10-6 0v6a3 3 0 003 3z"/>
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 10v2a7 7 0 01-14 0v-2m7 9v3"/>
+      </svg>
+    </button>
+    
+    <!-- V6 voz: silenciar la guia hablada -->
+    <button type="button" id="omni-mute" title="Silenciar al buscador"
+            class="shrink-0 p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition cursor-pointer">
+      <svg id="omni-mute-icon-on" class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5L6 9H3v6h3l5 4V5z"/>
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.5 8.5a5 5 0 010 7M18 6a8.5 8.5 0 010 12"/>
+      </svg>
+      <svg id="omni-mute-icon-off" class="hidden w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5L6 9H3v6h3l5 4V5z"/>
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M22 9l-6 6M16 9l6 6"/>
+      </svg>
+    </button>
+    
     <!-- Spinner de carga -->
     <div id="omni-loading" class="hidden shrink-0 ms-2 text-indigo-500 animate-spin">
       <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none">
@@ -28,6 +50,9 @@
       </svg>
     </div>
   </div>
+
+  <!-- V6 voz: lo que dice el Omni, siempre escrito -->
+  <div id="omni-guia" class="hidden px-3 sm:px-4 pt-1.5 text-[11px] font-medium text-slate-500"></div>
 
   <!-- Desplegable Omnibox (Absolute dentro de Relative - Doctrina de UI) -->
   <div id="omni-dropdown" 
@@ -74,6 +99,153 @@
   let datosProductos = []; // Matches de producto (grupo Datos)
   let datosExtras = null; // Sueltos global (fila 14)
   let vistaDetalle = false; // Entro al detalle: no tapar con respuestas tardias
+  // -- VOZ V6: microfono + guia hablada/escrita + silencio -------------
+  // Dos ajustes independientes en el navegador: omni_mic_on (entrada por
+  // voz) y omni_mudo (guia callada). El texto guia siempre se escribe.
+  const OMNI_KEY_MIC = 'omni_mic_on';
+  const OMNI_KEY_MUDO = 'omni_mudo';
+  function omniPref(k, fb) {
+    try { const v = localStorage.getItem(k); return v === null ? fb : v; } catch (e) { return fb; }
+  }
+  function omniGuardarPref(k, v) {
+    try { localStorage.setItem(k, v); } catch (e) {}
+  }
+  const guiaEl = document.getElementById('omni-guia');
+  const micBtn = document.getElementById('omni-mic');
+  const muteBtn = document.getElementById('omni-mute');
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let omniRec = null;
+  let omniEscuchando = false;
+  let omniMicHoldT = null;
+  let omniMicHoldOff = 0;
+
+  function omniMudo() { return omniPref(OMNI_KEY_MUDO, '0') === '1'; }
+  function omniMicOn() { return omniPref(OMNI_KEY_MIC, '1') === '1'; }
+  function omniPintarMute() {
+    try {
+      const m = omniMudo();
+      document.getElementById('omni-mute-icon-on').classList.toggle('hidden', m);
+      document.getElementById('omni-mute-icon-off').classList.toggle('hidden', !m);
+    } catch (e) {}
+  }
+  function omniPintarMic() {
+    try {
+      if (!micBtn) return;
+      micBtn.classList.toggle('opacity-30', !omniMicOn());
+      micBtn.classList.toggle('text-red-500', omniEscuchando);
+      micBtn.classList.toggle('text-slate-400', !omniEscuchando);
+    } catch (e) {}
+  }
+  function omniCallar() {
+    try { if (window.speechSynthesis) speechSynthesis.cancel(); } catch (e) {}
+  }
+  function omniHablar(texto) {
+    try { guiaEl.textContent = texto; guiaEl.classList.remove('hidden'); } catch (e) {}
+    if (omniMudo()) return;
+    try {
+      if (!window.speechSynthesis) return;
+      speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(texto);
+      u.lang = 'es-CO';
+      u.rate = 1;
+      const vs = speechSynthesis.getVoices ? speechSynthesis.getVoices() : [];
+      const es = vs.filter((v) => ((v.lang || '').toLowerCase().indexOf('es') === 0));
+      const co = es.filter((v) => ((v.lang || '').toLowerCase().indexOf('co') > 0));
+      if (co.length) u.voice = co[0];
+      else if (es.length) u.voice = es[0];
+      speechSynthesis.speak(u);
+    } catch (e) {}
+  }
+  function omniGuiaPaisaje(q, rutas, ayuda, datos) {
+    const partes = [];
+    if (rutas.length) partes.push(rutas.length + (rutas.length === 1 ? ' pantalla' : ' pantallas'));
+    if (ayuda.length) partes.push(ayuda.length + (ayuda.length === 1 ? ' ayuda' : ' ayudas'));
+    let txt = 'Busqué \'' + q + '\': ';
+    if (!partes.length && !datos.length) return txt + 'no encontré nada sobre eso. Prueba con otra palabra.';
+    if (!partes.length) txt += 'no encontré pantallas ni ayudas sobre eso, ';
+    else txt += 'encontré ' + partes.join(' y ') + (datos.length ? ', ' : '. ');
+    if (datos.length) {
+      const ord = datos.slice().sort((a, b) => (((b.disponible ? 1 : 0) - (a.disponible ? 1 : 0)) || ('' + (a.nombre || '')).localeCompare(b.nombre || '')));
+      txt += (partes.length ? 'y ' : 'pero sí ') + datos.length + (datos.length === 1 ? ' producto' : ' productos');
+      if (ord.length === 1) txt += ': ' + ord[0].nombre + '. ';
+      else txt += ', como ' + ord[0].nombre + ' y ' + ord[1].nombre + '. ';
+      txt += (ord.length === 1 ? 'Ahí tienes sus opciones.' : 'Escoge uno si quieres ver su información.');
+    } else if (partes.length) {
+      txt += 'Elige una opción para ir.';
+    }
+    return txt;
+  }
+  function omniPararEscucha() {
+    try { if (omniRec) omniRec.stop(); } catch (e) {}
+    omniRec = null;
+    omniEscuchando = false;
+    omniPintarMic();
+  }
+  if (!SR && micBtn) { try { micBtn.style.display = 'none'; } catch (e) {} }
+  if (micBtn) micBtn.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    if (omniMicHoldOff && Date.now() - omniMicHoldOff < 2000) { omniMicHoldOff = 0; return; }
+    omniMicHoldOff = 0;
+    if (!SR) return;
+    if (!omniMicOn()) { omniHablar('Micrófono desactivado. Mantenlo presionado para activarlo.'); return; }
+    if (omniEscuchando) { omniPararEscucha(); return; }
+    try {
+      omniCallar();
+      omniRec = new SR();
+      omniRec.lang = 'es-CO';
+      omniRec.interimResults = false;
+      omniRec.maxAlternatives = 1;
+      omniRec.onresult = (e) => {
+        try {
+          const tx = ((e.results[0][0].transcript || '').trim());
+          omniPararEscucha();
+          if (tx) {
+            input.value = tx;
+            vistaDetalle = false;
+            clearTimeout(debounceTimer);
+            ejecutarBusqueda(tx);
+            try { input.focus(); } catch (e2) {}
+          }
+        } catch (er) {}
+      };
+      omniRec.onerror = (e) => {
+        omniPararEscucha();
+        const cod = (e && e.error) || '';
+        if (cod === 'not-allowed' || cod === 'service-not-allowed') omniHablar('No tengo permiso para usar el micrófono. Revisa el permiso en el navegador.');
+        else if (cod === 'no-speech') omniHablar('No te escuché. Toca el micrófono e intenta de nuevo.');
+        else if (cod !== 'aborted') omniHablar('No pude escuchar. Intenta de nuevo.');
+      };
+      omniRec.onend = () => { omniEscuchando = false; omniRec = null; omniPintarMic(); };
+      omniRec.start();
+      omniEscuchando = true;
+      omniPintarMic();
+    } catch (er) { omniPararEscucha(); }
+  });
+  if (micBtn) {
+    micBtn.addEventListener('pointerdown', () => {
+      try {
+        if (omniMicHoldT) clearTimeout(omniMicHoldT);
+        omniMicHoldT = setTimeout(() => {
+          omniMicHoldT = null;
+          omniMicHoldOff = Date.now();
+          omniGuardarPref(OMNI_KEY_MIC, omniMicOn() ? '0' : '1');
+          omniPararEscucha();
+          omniPintarMic();
+          omniHablar(omniMicOn() ? 'Micrófono activado.' : 'Micrófono desactivado.');
+        }, 600);
+      } catch (e) {}
+    });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach((evN) => {
+      micBtn.addEventListener(evN, () => { try { if (omniMicHoldT) { clearTimeout(omniMicHoldT); omniMicHoldT = null; } } catch (e) {} });
+    });
+  }
+  if (muteBtn) muteBtn.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    omniGuardarPref(OMNI_KEY_MUDO, omniMudo() ? '0' : '1');
+    omniPintarMute();
+    if (omniMudo()) omniCallar();
+  });
+
 
   // Contexto activo (si existe en la URL o variable global)
   function obtenerContextoNegocioId() {
@@ -136,6 +308,7 @@
   }
 
   function cerrarDropdown() {
+    omniCallar();
     dropdown.classList.add('hidden');
     selectedIndex = -1;
     vistaDetalle = false;
@@ -325,6 +498,7 @@
   // -- EJECUTAR BÚSQUEDA REACTIVA -------------------------------------
   async function ejecutarBusqueda(query) {
     const q = query.trim();
+    omniCallar();
     if (q.length < 2) {
       omniEncuadreTipeo();
       return;
@@ -345,6 +519,7 @@
 
       if (!d.ok) {
         resultsBody.innerHTML = `<div class="p-4 text-center text-red-500 text-xs">Error al consultar el buscador</div>`;
+        omniHablar('Tuve un problema consultando el buscador. Intenta de nuevo.');
         return;
       }
 
@@ -361,6 +536,7 @@
             <p class="text-[11px] text-gray-400 mt-0.5">Prueba con palabras como "puc", "gasto", "kardex", "receta", "auditor" o "iva".</p>
           </div>
         `;
+        omniHablar(omniGuiaPaisaje(q, rutas, ayuda, datos));
         return;
       }
 
@@ -448,6 +624,7 @@
         html += `</div></div>`;
       }
 
+      omniHablar(omniGuiaPaisaje(q, rutas, ayuda, datos));
       resultsBody.innerHTML = html;
       ajustarDropdownViewport();
       resaltarElemento(0);
@@ -587,6 +764,7 @@
     h += `</div></div>`;
     resultsBody.innerHTML = h;
     ajustarDropdownViewport();
+    omniHablar('Elegiste ' + p.nombre + '. Estas son sus opciones.');
     vistaDetalle = true;
     resaltarElemento(0);
   };
@@ -688,6 +866,7 @@
 
   input.addEventListener('input', () => {
     vistaDetalle = false;
+    omniCallar();
     clearTimeout(debounceTimer);
     const q = input.value.trim();
     if (q.length < 2) {
@@ -769,5 +948,7 @@
       }
     }, 100);
   }
+  omniPintarMute();
+  omniPintarMic();
 })();
 </script>

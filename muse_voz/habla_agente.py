@@ -78,7 +78,7 @@ async def sintetizar(texto: str, ruta_mp3: str, voz: str, volumen: str = '+50%')
     await com.save(ruta_mp3)
 
 
-def reproducir(ruta_mp3: str, script_reproducir: str, bloqueante: bool = False, borrar_al_final: bool = True):
+def reproducir(ruta_mp3: str, script_reproducir: str, bloqueante: bool = True, borrar_al_final: bool = True):
     cmd = [
         'powershell',
         '-NoProfile',
@@ -91,7 +91,6 @@ def reproducir(ruta_mp3: str, script_reproducir: str, bloqueante: bool = False, 
     if bloqueante:
         subprocess.run(cmd, check=False)
     else:
-        # Ejecutar en segundo plano desacoplado
         subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
@@ -138,7 +137,7 @@ def main():
 
     try:
         asyncio.run(sintetizar(texto, archivo_mp3, voz, volumen))
-        reproducir(archivo_mp3, script_reproducir, bloqueante=args.bloqueante, borrar_al_final=True)
+        reproducir(archivo_mp3, script_reproducir, bloqueante=True, borrar_al_final=True)
     except Exception as e:
         sys.stderr.write(f'Error en habla_agente: {e}\n')
 

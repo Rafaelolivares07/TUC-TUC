@@ -327,11 +327,11 @@ def _obtener_catalogo_base(negocio_id=None, slug=None):
             'url': f'/inventario/{nid}?tab=ensambles_historicos',
             'keywords': ['ensambles historicos', 'historico ensambles', 'registros ensambles', 'combos armados']
         },
-        {
-            'titulo': 'Ventas y Costos de Inventario',
-            'modulo': 'Inventario > Rentabilidad',
-            'icono': '💹',
-            'url': f'/inventario/{nid}?tab=ventas_costos',
+                {
+            'titulo': 'Ventas y Costos (Margen de Contribución)',
+            'modulo': 'Comercial > Rentabilidad',
+            'icono': '📊',
+            'url': f'/ventas-costos/{nid}',
             'keywords': ['ventas costos', 'costo de ventas', 'margen de ganancia', 'utilidad bruta', 'rentabilidad productos', 'ventas/costos', 'costos']
         },
         {
@@ -701,7 +701,7 @@ def buscar_datos_producto(conn, q, negocio_id, slug=None, limite=20):
                 'editar': f'/inventario/{nid}?tab=productos&editar_producto={pid}',
                 'compras': f'/inventario/{nid}?tab=compras_sugerencias',
                 'fisico': f'/admin/inventario-fisico/{nid}',
-                'vcosto': f'/inventario/{nid}?tab=ventas_costos',
+                'vcosto': f'/ventas-costos/{nid}',
                 'toggle': f'/api/inventario/producto/{pid}/disponible',
             },
         })

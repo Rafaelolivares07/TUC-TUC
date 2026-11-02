@@ -119,18 +119,25 @@
   </main>
 
   <!-- FOOTER VACÍO PARA BALANCE / ESPACIO -->
-  <footer class="py-3 px-6 text-center"><span class="text-[10px] text-slate-300 font-mono">desk V5q</span></footer>
+  <footer class="py-3 px-6 text-center"><span class="text-[10px] text-slate-300 font-mono">desk V5r</span></footer>
 
   <!-- SCRIPTS DE INTERACCIÓN -->
   <script>
     function omniFijarCabecera() {
       try {
         var h = document.querySelector('body[data-page="portal"] > header');
-        if (h) document.body.style.paddingTop = h.offsetHeight + 'px';
+        if (h) {
+          document.body.style.paddingTop = h.offsetHeight + 'px';
+          var inp = document.getElementById('omni-input');
+          if (inp) inp.style.scrollMarginTop = (h.offsetHeight + 12) + 'px';
+        }
       } catch (e) {}
     }
     document.addEventListener('DOMContentLoaded', omniFijarCabecera);
+    window.addEventListener('load', omniFijarCabecera);
     window.addEventListener('resize', omniFijarCabecera);
+    try { if (document.fonts && document.fonts.ready) document.fonts.ready.then(function() { omniFijarCabecera(); }); } catch (eF) {}
+    setTimeout(omniFijarCabecera, 800);
     function toggleMenuNegocios() {
       const el = document.getElementById('dropdown-negocios');
       if (el) el.classList.toggle('hidden');

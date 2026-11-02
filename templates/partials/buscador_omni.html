@@ -10,7 +10,7 @@
       </svg>
     </div>
     
-    <input type="text" id="omni-input" 
+    <input type="text" id="omni-input" style="scroll-margin-top:64px" 
            placeholder="Buscar pantallas, pestañas o manuales de ayuda..." 
            autocomplete="off" spellcheck="false"
            class="w-full h-full bg-transparent border-0 outline-none text-sm sm:text-base font-medium text-slate-800 placeholder-slate-400 p-0 m-0">
@@ -251,7 +251,7 @@
             try {
               var rr = input.getBoundingClientRect();
               var vhh = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
-              if (rr.top < 60 || rr.bottom > vhh - 8) { omniDbgPinta('repin', Math.round(rr.top), vhh, 0, Math.round(window.scrollY)); window.scrollTo({ top: 0 }); }
+              if (rr.top < 60 || rr.bottom > vhh - 8) { omniDbgPinta('repin', Math.round(rr.top), vhh, 0, Math.round(window.scrollY)); try { input.scrollIntoView({ block: 'start' }); } catch (eS) { try { window.scrollTo({ top: 0 }); } catch (eS2) {} } }
             } catch (eR) {}
           }, 350);
         }

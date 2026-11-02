@@ -172,11 +172,11 @@ def _obtener_catalogo_base(negocio_id=None, slug=None):
             'keywords': ['metodos de pago', 'formas de pago', 'tarjeta', 'nequi', 'daviplata', 'transferencia', 'efectivo', 'bancos']
         },
         {
-            'titulo': 'Tesorería: Desembolsos y Recaudos',
+            'titulo': 'Tesorería: Pagos, Desembolsos y Recaudos',
             'modulo': 'Contabilidad > Tesorería',
             'icono': '🏛️',
-            'url': f'/contabilidad/{nid}?tab=desembolsos',
-            'keywords': ['gastos', 'desembolsos', 'recaudos', 'caja menor', 'pagos', 'egresos', 'salidas de dinero', 'compras gastos']
+            'url': f'/tesoreria/{nid}',
+            'keywords': ['tesoreria', 'tesorería', 'gastos', 'desembolsos', 'recaudos', 'caja menor', 'pagos', 'egresos', 'salidas de dinero', 'compras gastos', 'pagos proveedores']
         },
         {
             'titulo': 'Amortizaciones de Gastos y Préstamos',
@@ -335,11 +335,11 @@ def _obtener_catalogo_base(negocio_id=None, slug=None):
             'keywords': ['ventas costos', 'costo de ventas', 'margen de ganancia', 'utilidad bruta', 'rentabilidad productos', 'ventas/costos', 'costos']
         },
         {
-            'titulo': 'Desembolsos y Gastos de Inventario',
+            'titulo': 'Tesorería y Desembolsos de Inventario',
             'modulo': 'Inventario > Pagos',
             'icono': '💸',
-            'url': f'/inventario/{nid}?tab=desembolsos',
-            'keywords': ['desembolsos', 'gastos inventario', 'pagos proveedores', 'egresos inventario']
+            'url': f'/tesoreria/{nid}',
+            'keywords': ['tesoreria', 'tesorería', 'desembolsos', 'gastos inventario', 'pagos proveedores', 'egresos inventario', 'pagos']
         },
         {
             'titulo': 'Estado de Resultados de Inventario',

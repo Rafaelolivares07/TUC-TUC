@@ -2,6 +2,7 @@
 """Cuota Muse Code para el launcher. Imprime linea completa y deja tag corto
 en %TEMP%/muse_cuota_tag.txt para concatenar al titulo WT. Best-effort exit 0."""
 import json
+import math
 import os
 import sys
 import tempfile
@@ -12,6 +13,11 @@ from zoneinfo import ZoneInfo
 BOG = ZoneInfo('America/Bogota')
 DIAS = ['lun', 'mar', 'mie', 'jue', 'vie', 'sab', 'dom']
 TAG = os.path.join(tempfile.gettempdir(), 'muse_cuota_tag.txt')
+
+
+def _pct(v):
+    """Porcentaje redondeado hacia arriba (02/11: <1% ya no sale 0%)."""
+    return int(math.ceil(float(v or 0)))
 
 
 def main():
@@ -35,8 +41,8 @@ def main():
         w = u.get('window') or {}
         s = u.get('weekly') or {}
         tier = d.get('subs_tier_name') or '?'
-        uw = int(w.get('used_percent', 0) or 0)
-        us = int(s.get('used_percent', 0) or 0)
+        uw = _pct(w.get('used_percent', 0))
+        us = _pct(s.get('used_percent', 0))
         rw = datetime.fromtimestamp(w.get('resets_at', 0), timezone.utc).astimezone(BOG)
         rs = datetime.fromtimestamp(s.get('resets_at', 0), timezone.utc).astimezone(BOG)
         corte = '%s %s' % (DIAS[rs.weekday()], rs.strftime('%d/%m'))

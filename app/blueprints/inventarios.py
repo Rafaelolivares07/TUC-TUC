@@ -10349,6 +10349,8 @@ def admin_inventario(negocio_id, tab_name=None):
             return redirect(f'/entradas/{negocio_id}')
         if tab_pedido in ('produccion', 'producción'):
             return redirect(f'/produccion/{negocio_id}')
+        if tab_pedido in ('desembolsos', 'gastos', 'tesoreria', 'tesorería'):
+            return redirect(f'/tesoreria/{negocio_id}')
         if 'usuario_id' not in session:
             return redirect(url_for('auth.admin_login'))
         _crear_tablas(conn)

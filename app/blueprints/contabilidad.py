@@ -2132,6 +2132,10 @@ def admin_contabilidad(negocio_id, tab_name=None):
         if not negocio:
             return "Negocio no encontrado", 404
 
+        tab_pedido = (tab_name or request.args.get('tab', '')).lower()
+        if tab_pedido in ('desembolsos', 'gastos', 'tesoreria', 'tesorería'):
+            return __import__('flask').redirect(f'/tesoreria/{negocio_id}')
+
         if tab_name == 'gastos':
             tab_name = 'desembolsos'
         elif not tab_name:
@@ -2143,6 +2147,71 @@ def admin_contabilidad(negocio_id, tab_name=None):
                                negocio_id=negocio_id,
                                negocio_nombre=negocio['nombre'],
                                tab_inicial=tab_name)
+    except Exception as e:
+        try: conn.close()
+        except Exception: pass
+        return f"Error: {e}", 500
+
+
+@bp.route('/tesoreria')
+@bp.route('/tesoreria/<int:negocio_id>')
+@bp.route('/desembolsos')
+@bp.route('/desembolsos/<int:negocio_id>')
+def tesoreria_standalone(negocio_id=None):
+    """Vista corporativa independiente de Tesorería: Pagos, Desembolsos y Recaudos."""
+    if not session.get('usuario_id'):
+        return __import__('flask').redirect('/login')
+    from ..db import get_db_connection
+    try:
+        conn = get_db_connection()
+        _asegurar_tablas(conn)
+        if not negocio_id:
+            negocio_activo = session.get('negocio_activo')
+            if negocio_activo and isinstance(negocio_activo, dict) and negocio_activo.get('id'):
+                negocio_id = negocio_activo['id']
+            elif session.get('negocio_id'):
+                negocio_id = session.get('negocio_id')
+            else:
+                n_row = conn.execute("SELECT id FROM negocios WHERE activo = TRUE ORDER BY id ASC LIMIT 1").fetchone()
+                if not n_row:
+                    n_row = conn.execute("SELECT id FROM terceros WHERE (es_empresa = TRUE OR es_proveedor = TRUE OR tipo_tercero = 'negocio') ORDER BY id ASC LIMIT 1").fetchone()
+                if n_row:
+                    negocio_id = n_row['id']
+                else:
+                    conn.close()
+                    return "No hay negocios registrados", 404
+
+        negocio = conn.execute(
+            "SELECT nombre, COALESCE(razon_social, nombre) as nombre_oficial FROM terceros WHERE id=%s LIMIT 1",
+            (negocio_id,)
+        ).fetchone()
+        negocio_nombre = negocio['nombre_oficial'] if negocio else (negocio['nombre'] if negocio else f"Negocio #{negocio_id}")
+
+        centros_rows = conn.execute("""
+            SELECT id, codigo, nombre, tipo, color_badge, imagen_url, telefono, direccion
+            FROM centros_utilidad
+            WHERE negocio_id = %s AND activo = TRUE
+            ORDER BY id ASC
+        """, (negocio_id,)).fetchall()
+        centros = [dict(c) for c in centros_rows]
+        
+        centro_activo_id = session.get('centro_utilidad_id')
+        centro_activo = None
+        if centro_activo_id:
+            for c in centros:
+                if str(c['id']) == str(centro_activo_id):
+                    centro_activo = c
+                    break
+        if not centro_activo and centros:
+            centro_activo = centros[0]
+
+        conn.close()
+        return render_template('tesoreria.html',
+                               negocio_id=negocio_id,
+                               negocio_nombre=negocio_nombre,
+                               centros_utilidad=centros,
+                               centro_activo=centro_activo,
+                               volver_url='/inicio')
     except Exception as e:
         try: conn.close()
         except Exception: pass

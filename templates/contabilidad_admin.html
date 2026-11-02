@@ -96,7 +96,7 @@
       <button onclick="cambiarTab('tipos')"  id="tab-tipos" data-tab-id="tipos" class="tab-btn">📄 Tipos Doc</button>
       <button onclick="cambiarTab('params')" id="tab-params" data-tab-id="params" class="tab-btn">⚙️ Parametrización</button>
       <button onclick="cambiarTab('pago_metodos')" id="tab-pago_metodos" data-tab-id="pago_metodos" class="tab-btn">💳 Métodos de Pago</button>
-      <button onclick="cambiarTab('desembolsos')" id="tab-desembolsos" data-tab-id="desembolsos" class="tab-btn font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200">🏛️ Tesorería (Desembolsos y Recaudos)</button>
+      <a href="/tesoreria/{{ negocio_id }}" id="tab-desembolsos" data-tab-id="desembolsos" class="tab-btn font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200" title="Tesorería: Pagos, Desembolsos y Recaudos">🏛️ Tesorería &nearr;</a>
       <button onclick="cambiarTab('amortizaciones')" id="tab-amortizaciones" data-tab-id="amortizaciones" class="tab-btn font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200">⏳ Amortizaciones</button>
       <button onclick="cambiarTab('estado_resultados')" id="tab-estado_resultados" data-tab-id="estado_resultados" class="tab-btn">📊 Estado de Resultados</button>
       <button onclick="cambiarTab('punto_equilibrio')" id="tab-punto_equilibrio" data-tab-id="punto_equilibrio" class="tab-btn font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200">🎯 Punto de Equilibrio</button>
@@ -1250,7 +1250,10 @@ let acTimers = {};
 // ── Tabs ──────────────────────────────────────────────────────
 function cambiarTab(t) {
   if (window.isTabDraggingNow) return;
-  if (t === 'gastos') t = 'desembolsos';
+  if (t === 'desembolsos' || t === 'gastos' || t === 'tesoreria') {
+    window.location.href = '/tesoreria/' + NEGOCIO_ID;
+    return;
+  }
   TABS.forEach(x => {
     const el = document.getElementById(`panel-${x}`);
     if (el) el.classList.toggle('hidden', x !== t);

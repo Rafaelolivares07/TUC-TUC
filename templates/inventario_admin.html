@@ -1991,7 +1991,7 @@
 
       <a href="/ventas-costos/{{ negocio_id }}" class="tab-btn" title="Ventas, Costos y Margen de Contribución">Ventas/Costos &nearr;</a>
 
-      <button class="tab-btn" onclick="mostrarTab('desembolsos')">💸 Desembolsos</button>
+      <a href="/tesoreria/{{ negocio_id }}" class="tab-btn" title="Tesorería: Pagos, Desembolsos y Recaudos">💸 Tesorería &nearr;</a>
 
       <button class="tab-btn" onclick="mostrarTab('estado_resultados')">📊 Estado de Resultados</button>
 
@@ -4985,6 +4985,10 @@ function mostrarTab(t) {
   }
   if (t === 'ventas_costos') {
     window.location.href = '/ventas-costos/' + NEGOCIO_ID;
+    return;
+  }
+  if (t === 'desembolsos' || t === 'gastos' || t === 'tesoreria') {
+    window.location.href = '/tesoreria/' + NEGOCIO_ID;
     return;
   }
   if (t === 'gastos') t = 'desembolsos';

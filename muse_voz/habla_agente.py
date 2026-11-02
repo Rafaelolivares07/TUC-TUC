@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Sintetizador y reproductor de voz multi-agente con edge-tts.
+"""Sintetizador y reproductor de voz multi-agente con edge-tts y reproduccion nativa.
 Lee la configuracion de voces desde `voces_config.json` en el mismo directorio.
 
 Perfiles predeterminados:
@@ -15,13 +15,14 @@ import asyncio
 import json
 import os
 import re
-import subprocess
 import sys
 import tempfile
 import time
 import uuid
 
 import edge_tts
+import av
+import winsound
 
 DIR_ACTUAL = os.path.dirname(os.path.abspath(__file__))
 RUTA_CONFIG = os.path.join(DIR_ACTUAL, 'voces_config.json')
@@ -66,7 +67,6 @@ def limpiar_texto_para_voz(texto: str) -> str:
     # Quitar viñetas y numeraciones al inicio de linea
     texto = re.sub(r'^\s*[-*+]\s+', '', texto, flags=re.MULTILINE)
     texto = re.sub(r'^\s*\d+\.\s+', '', texto, flags=re.MULTILINE)
-    # Quitar emoticones y caracteres no verbales comunes si causan ruido
     # Normalizar espacios en blanco
     texto = re.sub(r'[ \t]+', ' ', texto)
     texto = re.sub(r'\n{2,}', '\n', texto)
@@ -78,20 +78,30 @@ async def sintetizar(texto: str, ruta_mp3: str, voz: str, volumen: str = '+50%')
     await com.save(ruta_mp3)
 
 
-def reproducir(ruta_mp3: str, script_reproducir: str, bloqueante: bool = True, borrar_al_final: bool = True):
-    cmd = [
-        'powershell',
-        '-NoProfile',
-        '-ExecutionPolicy', 'Bypass',
-        '-File', script_reproducir,
-        ruta_mp3
-    ]
-    if borrar_al_final:
-        cmd.append('-deleteAfter')
-    if bloqueante:
-        subprocess.run(cmd, check=False)
-    else:
-        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+def mp3_a_wav(ruta_mp3: str, ruta_wav: str):
+    """Convierte MP3 a WAV usando PyAV para reproduccion 100% nativa sin depender de WPF."""
+    in_container = av.open(ruta_mp3)
+    out_container = av.open(ruta_wav, mode='w', format='wav')
+    in_stream = in_container.streams.audio[0]
+    out_stream = out_container.add_stream('pcm_s16le', rate=in_stream.rate)
+    out_stream.layout = in_stream.layout
+
+    for frame in in_container.decode(in_stream):
+        for packet in out_stream.encode(frame):
+            out_container.mux(packet)
+    for packet in out_stream.encode():
+        out_container.mux(packet)
+
+    in_container.close()
+    out_container.close()
+
+
+def reproducir_nativo(ruta_wav: str, bloqueante: bool = True):
+    """Reproduce WAV usando la API nativa de Windows (winsound / winmm)."""
+    flags = winsound.SND_FILENAME
+    if not bloqueante:
+        flags |= winsound.SND_ASYNC
+    winsound.PlaySound(ruta_wav, flags)
 
 
 def main():
@@ -101,7 +111,7 @@ def main():
     parser.add_argument('--agente', '-a', default='anti', help='Perfil de agente (anti, muse, merlin)')
     parser.add_argument('--voz', '-v', default=None, help='Sobrescribir nombre de voz edge-tts')
     parser.add_argument('--volumen', default=None, help='Sobrescribir volumen (ej: +50%%)')
-    parser.add_argument('--bloqueante', action='store_true', help='Esperar a que termine de reproducir')
+    parser.add_argument('--bloqueante', action='store_true', default=True, help='Esperar a que termine de reproducir')
     parser.add_argument('--no-limpiar', action='store_true', help='No limpiar formato markdown')
 
     args = parser.parse_args()
@@ -131,15 +141,24 @@ def main():
     voz = args.voz or cfg_agente.get('voz', 'es-CO-GonzaloNeural')
     volumen = args.volumen or cfg_agente.get('volumen', '+50%')
 
-    script_reproducir = os.path.join(DIR_ACTUAL, 'reproducir.ps1')
     uid = uuid.uuid4().hex[:6]
-    archivo_mp3 = os.path.join(tempfile.gettempdir(), f'{args.agente}_habla_{int(time.time()*1000)}_{os.getpid()}_{uid}.mp3')
+    temp_dir = tempfile.gettempdir()
+    archivo_mp3 = os.path.join(temp_dir, f'{args.agente}_habla_{int(time.time()*1000)}_{os.getpid()}_{uid}.mp3')
+    archivo_wav = os.path.join(temp_dir, f'{args.agente}_habla_{int(time.time()*1000)}_{os.getpid()}_{uid}.wav')
 
     try:
         asyncio.run(sintetizar(texto, archivo_mp3, voz, volumen))
-        reproducir(archivo_mp3, script_reproducir, bloqueante=True, borrar_al_final=True)
+        mp3_a_wav(archivo_mp3, archivo_wav)
+        reproducir_nativo(archivo_wav, bloqueante=True)
     except Exception as e:
         sys.stderr.write(f'Error en habla_agente: {e}\n')
+    finally:
+        for p in (archivo_mp3, archivo_wav):
+            try:
+                if os.path.exists(p):
+                    os.remove(p)
+            except Exception:
+                pass
 
 
 if __name__ == '__main__':

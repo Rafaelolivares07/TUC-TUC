@@ -128,7 +128,7 @@
   // -- MOSTRAR / OCULTAR DROPDOWN -------------------------------------
   function abrirDropdown() {
     if (input.value.trim().length < 2) {
-      cerrarDropdown();
+      omniEncuadreTipeo();
       return;
     }
     dropdown.classList.remove('hidden');
@@ -144,6 +144,16 @@
     if (omniScrollPrevio !== null) {
       try { window.scrollTo({ top: omniScrollPrevio, behavior: omniSuave }); } catch (e) {}
       omniScrollPrevio = null;
+    }
+  }
+
+  function omniEncuadreTipeo() {
+    dropdown.classList.add('hidden');
+    selectedIndex = -1;
+    vistaDetalle = false;
+    if (document.body && document.body.dataset && document.body.dataset.page === 'portal') {
+      document.body.classList.add('omni-heroe');
+      try { window.scrollTo({ top: 0 }); } catch (eT) {}
     }
   }
 
@@ -316,7 +326,7 @@
   async function ejecutarBusqueda(query) {
     const q = query.trim();
     if (q.length < 2) {
-      cerrarDropdown();
+      omniEncuadreTipeo();
       return;
     }
 
@@ -672,7 +682,7 @@
     if (q.length >= 2) {
       abrirDropdown();
     } else {
-      cerrarDropdown();
+      omniEncuadreTipeo();
     }
   });
 
@@ -681,7 +691,7 @@
     clearTimeout(debounceTimer);
     const q = input.value.trim();
     if (q.length < 2) {
-      cerrarDropdown();
+      omniEncuadreTipeo();
       return;
     }
     debounceTimer = setTimeout(() => {

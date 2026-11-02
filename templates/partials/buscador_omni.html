@@ -191,6 +191,7 @@
       if (document.body && document.body.dataset && document.body.dataset.page === 'portal') {
         const yHeroe0 = r.top;
         document.body.classList.add('omni-heroe');
+        try { window.scrollTo({ top: 0 }); } catch (e5) {}
         const rHeroe = input.getBoundingClientRect();
         dropdown.style.maxHeight = Math.max(220, Math.floor(Math.min(vh - rHeroe.bottom - 28, tope))) + 'px';
         omniDbgPinta('heroe', Math.round(rHeroe.top), vh, Math.round(yHeroe0 - rHeroe.top), Math.round(window.scrollY));

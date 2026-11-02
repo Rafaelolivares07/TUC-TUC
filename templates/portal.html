@@ -21,6 +21,7 @@
     }
     /* Omni: al buscar con resultados, el heroe se compacta arriba (encabezado + input siempre visibles) */
     body.omni-heroe main { justify-content: flex-start !important; margin-top: 0 !important; padding-top: 10px !important; }
+    body[data-page="portal"] > header { position: sticky; top: 0; z-index: 30; }
   </style>
 </head>
 <body data-page="portal" class="bg-white min-h-screen flex flex-col justify-between text-slate-800 selection:bg-indigo-500 selection:text-white">

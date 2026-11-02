@@ -1,0 +1,2715 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full bg-slate-50">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Producción & Fabricación — {{ negocio_nombre }} | TUC TUC</title>
+
+  <script src="/static/js/tailwind.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #f8fafc;
+    }
+    .font-mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .no-spinners::-webkit-inner-spin-button,
+    .no-spinners::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    .no-spinners {
+      -moz-appearance: textfield;
+      appearance: textfield;
+    }
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+    /* Overlays base styles */
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(2px);
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+    .overlay.hidden {
+      display: none !important;
+    }
+    .modal {
+      background: white;
+      border-radius: 1rem;
+      max-width: 100%;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+      border: 1px solid #e2e8f0;
+      overflow: hidden;
+      padding: 1.25rem;
+    }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      background: #1e293b;
+      color: white;
+      padding: 0.75rem 1.25rem;
+      border-radius: 0.75rem;
+      font-size: 0.875rem;
+      font-weight: 600;
+      box-shadow: 0 10px 25px -5px rgba(0,0,0,0.3);
+      z-index: 9999;
+      transform: translateY(100px);
+      opacity: 0;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      pointer-events: none;
+    }
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .toast-ok { background: #059669 !important; }
+    .toast-err { background: #dc2626 !important; }
+    .toast-warn { background: #d97706 !important; }
+
+    /* Autocomplete list */
+    .ac-list {
+      max-height: 240px;
+      overflow-y: auto;
+    }
+    .ac-focus {
+      background-color: #f1f5f9;
+    }
+  </style>
+</head>
+<body class="min-h-full flex flex-col text-slate-800 bg-slate-50 selection:bg-rose-100 selection:text-rose-900">
+
+  <!-- ================= TOPBAR CORPORATIVA OFICIAL ================= -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-2xs">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+      
+      <!-- Identidad Corporativa Oficial: TUC TUC | Negocio | Sede -->
+      <div class="flex items-center gap-3">
+        <a href="/inicio" class="group flex items-center gap-2.5 text-slate-900 hover:text-rose-600 transition-colors" title="Regresar al Menú Principal">
+          <span class="font-extrabold text-sm sm:text-base tracking-wider text-slate-900 group-hover:text-rose-600 transition-colors">
+            TUC TUC
+          </span>
+          <span class="text-sm font-semibold tracking-wider text-slate-300">|</span>
+          <span class="text-sm sm:text-base font-bold tracking-tight text-slate-900 group-hover:text-rose-600 transition-colors uppercase">
+            {{ negocio_nombre }}
+          </span>
+        </a>
+
+        {% if centro_activo %}
+        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+          {{ centro_activo.nombre | upper }}
+        </span>
+        {% endif %}
+      </div>
+
+      <!-- Contexto y Navegación -->
+      <div class="flex items-center gap-2.5">
+        <span class="hidden md:inline-flex px-3 py-1 bg-slate-100 text-slate-600 font-semibold text-xs rounded-xl border border-slate-200">
+          Órdenes & Transformación de Insumos
+        </span>
+        <a href="/inventario/{{ negocio_id }}" class="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all border border-slate-200 flex items-center gap-1.5">
+          <span>&larr;</span> <span>Inventario</span>
+        </a>
+        <a href="/inicio" class="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all border border-slate-200 flex items-center gap-1.5">
+          <span>&larr;</span> <span>Inicio</span>
+        </a>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- ================= CONTENEDOR PRINCIPAL ================= -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+  <div id="tab-produccion" class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-5 sm:p-6">
+
+    <!-- Sección de Sugerencias de Producción -->
+
+        <div id="seccion-sugerencias-produccion" class="mb-6 bg-slate-50 border border-slate-200 rounded-2xl p-5">
+
+      <div class="flex items-center justify-between flex-wrap gap-2">
+
+        <button type="button" onclick="togglePronosticoProduccion()" aria-expanded="false" aria-controls="pronostico-produccion-body" class="font-bold text-slate-800 text-xs flex items-center gap-1.5 outline-none hover:text-indigo-700 cursor-pointer">
+
+          <span id="pronostico-toggle-icon">▶</span><span>💡</span> Pronóstico de Producción (Consumo y frecuencia)
+
+        </button>
+
+      </div>
+
+      <div id="pronostico-produccion-body" class="hidden mt-3">
+
+      <div class="flex items-center justify-end flex-wrap gap-2 mb-3">
+
+        <!-- Detalles de Ajuste Colapsables -->
+
+        <details class="text-[11px] text-indigo-600 hover:text-indigo-800 cursor-pointer font-bold outline-none">
+
+          <summary class="list-none flex items-center gap-1">
+
+            <i class="bi bi-gear-fill"></i> Ajustar parámetros de cálculo
+
+          </summary>
+
+          <div class="mt-3 p-4 bg-white border border-gray-150 rounded-xl cursor-default text-gray-700 font-normal space-y-4">
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+
+              <div>
+
+                <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">📅 Historial analizado (días)</label>
+
+                <input type="number" id="cfg-dias-historial" value="30" min="1" max="90" class="border rounded-lg px-2 py-1 text-xs w-full outline-none">
+
+                <p class="text-[9px] text-slate-400 mt-1">Días de movimientos hacia atrás para calcular promedios y quiebres.</p>
+
+              </div>
+
+              <div>
+
+                <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">🔁 Ciclo por defecto (días)</label>
+
+                <input type="number" id="cfg-dias-defecto" value="7" min="1" max="30" class="border rounded-lg px-2 py-1 text-xs w-full outline-none">
+
+                <p class="text-[9px] text-slate-400 mt-1">Días de abastecimiento asignados si el producto es nuevo y sin histórico.</p>
+
+              </div>
+
+              <div>
+
+                <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">📈 Ventana de tendencia (días)</label>
+
+                <input type="number" id="cfg-growth-window" value="7" min="1" max="15" class="border rounded-lg px-2 py-1 text-xs w-full outline-none">
+
+                <p class="text-[9px] text-slate-400 mt-1">Días de comparación semanal para establecer porcentaje de crecimiento.</p>
+
+              </div>
+
+              <div>
+
+                <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">🚀 Crecimiento Máximo (%)</label>
+
+                <input type="number" id="cfg-max-growth" value="100" min="0" max="500" class="border rounded-lg px-2 py-1 text-xs w-full outline-none">
+
+                <p class="text-[9px] text-slate-400 mt-1">Límite tope de incremento proyectado para evitar excesos de stock.</p>
+
+              </div>
+
+              <div>
+
+                <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">📉 Decrecimiento Mínimo (%)</label>
+
+                <input type="number" id="cfg-min-growth" value="-50" min="-100" max="0" class="border rounded-lg px-2 py-1 text-xs w-full outline-none">
+
+                <p class="text-[9px] text-slate-400 mt-1">Límite tope de decrecimiento proyectado (ej. -50% es reducir a la mitad).</p>
+
+              </div>
+
+              <div class="flex items-end">
+
+                <button type="button" onclick="cargarSugerenciasProduccion()"
+
+                        class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs py-2 px-3 rounded-lg transition">
+
+                  Recalcular Pronóstico
+
+                </button>
+
+              </div>
+
+            </div>
+
+          </div>
+
+        </details>
+
+      </div>
+
+<div class="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+
+        <div class="overflow-y-auto max-h-60 custom-scrollbar">
+
+          <table class="w-full text-xs text-gray-700 align-middle">
+
+            <thead class="bg-gray-50 text-[10px] uppercase text-gray-500 font-bold sticky top-0 z-10 border-b border-gray-200">
+
+              <tr>
+
+                <th class="px-3 py-2 text-left bg-gray-50">Producto</th>
+
+                <th class="px-3 py-2 text-right bg-gray-50">Stock</th>
+
+                <th class="px-3 py-2 text-right bg-gray-50">Consumo Diario</th>
+
+                <th class="px-3 py-2 text-center bg-gray-50">Ciclo (Frecuencia)</th>
+
+                <th class="px-3 py-2 text-center bg-gray-50">Tendencia</th>
+
+                <th class="px-3 py-2 text-center bg-gray-50">Próxima Producción</th>
+
+                <th class="px-3 py-2 text-right bg-gray-50">Sugerido</th>
+
+                <th class="px-3 py-2 text-center bg-gray-50">Insumos</th>
+
+                <th class="px-3 py-2 text-center bg-gray-50">Acción</th>
+
+              </tr>
+
+            </thead>
+
+            <tbody id="sugerencias-tabla-body">
+
+              <tr>
+
+                <td colspan="9" class="px-3 py-4 text-center text-gray-400 italic">Analizando consumos e inventarios...</td>
+
+              </tr>
+
+            </tbody>
+
+          </table>
+
+        </div>
+
+      </div>
+
+      </div>
+
+    </div>
+
+
+
+    <!-- Bloque Arm?nico y Centrado: Registrar Producci?n -->
+    <div class="w-full mb-6">
+      <div class="bg-gradient-to-b from-white to-slate-50/70 border border-slate-200/90 rounded-2xl p-5 sm:p-6 shadow-sm">
+        
+        <!-- Cabecera del bloque -->
+        <div class="flex items-center justify-between pb-3.5 mb-4 border-b border-slate-200/80">
+          <div class="flex items-center gap-2.5">
+            <span class="w-8 h-8 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center text-base shadow-2xs">🏭</span>
+            <div>
+              <h2 class="font-bold text-slate-800 text-lg sm:text-xl leading-tight">Registrar Producción</h2>
+              <p class="text-sm text-slate-500">Selecciona el producto con receta estándar y define la cantidad a fabricar</p>
+            </div>
+          </div>
+          <span class="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+            TucTuc V2
+          </span>
+        </div>
+
+        <!-- Fila 1: Metadatos del Documento -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
+          <div>
+            <label class="block text-sm font-bold text-slate-600 uppercase tracking-wide mb-1.5">Tipo doc. producción</label>
+            <select id="prod-tipo-doc" onchange="mostrarConsecutivoProduccion()" class="w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm sm:text-base bg-white font-semibold text-slate-800 outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-100 transition">
+              <option value="">Cargando tipos...</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-bold text-slate-600 uppercase tracking-wide mb-1.5">No. documento</label>
+            <input id="prod-num-doc" type="text" readonly placeholder="Auto-consecutivo" class="w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm sm:text-base bg-slate-50 font-mono font-bold text-slate-700 outline-none">
+          </div>
+          <div>
+            <label class="block text-sm font-bold text-slate-600 uppercase tracking-wide mb-1.5">Fecha documento</label>
+            <input id="prod-fecha" type="date" readonly class="w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm sm:text-base bg-slate-100 font-semibold text-slate-700 outline-none cursor-not-allowed" title="Solo fecha actual">
+            <p class="mt-1 text-xs text-slate-500 font-medium">🔒 Registrado con fecha actual (no modificable)</p>
+
+          </div>
+          <div class="relative">
+            <label class="block text-sm font-bold text-slate-600 uppercase tracking-wide mb-1.5">Responsable (Tercero)</label>
+            <input id="prod-responsable" type="text" placeholder="Buscar responsable..." autocomplete="off" onfocus="this.select()" class="w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm sm:text-base bg-white font-semibold text-slate-800 outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-100 transition" value="{{ session.get('nombre', '') }}">
+            <div id="prod-responsable-list" class="ac-list hidden absolute left-0 right-0 z-50 bg-white border border-gray-200 rounded-lg shadow-lg"></div>
+            <input type="hidden" id="prod-responsable-id" value="{{ session.get('chat_tercero_id', '') }}">
+          </div>
+        </div>
+
+        <!-- Fila 2: Producto a Preparar (80%) y Cantidad a Simular (20%) en la misma línea -->
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-3 mb-3.5 items-end">
+          
+          <!-- Columna Producto (~80%) -->
+          <div class="md:col-span-9 lg:col-span-10">
+            <label class="block text-xs font-black text-slate-700 uppercase tracking-wide mb-1.5 flex items-center justify-between">
+              <span><span>🔍</span> Producto a Preparar / Producir <span class="text-rose-500">*</span></span>
+              <span class="text-[10px] text-slate-400 font-normal hidden sm:inline">Escribe el nombre del producto estándar</span>
+            </label>
+            <div class="relative">
+              <input id="prod-ac-input" type="text" placeholder="Buscar producto con tarjeta estándar…" autocomplete="off" class="w-full border-2 border-slate-300 rounded-xl px-3.5 py-2.5 text-base sm:text-lg bg-white font-black text-slate-900 placeholder:text-slate-400 placeholder:font-normal outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-100 transition shadow-xs">
+              <div id="prod-ac-list" class="ac-list hidden"></div>
+              <input type="hidden" id="prod-ac-id">
+            </div>
+          </div>
+
+          <!-- Columna Cantidad a Simular (~20%) -->
+          <div class="md:col-span-3 lg:col-span-2">
+            <label class="block text-xs font-black text-slate-800 uppercase tracking-wide mb-1.5 flex items-center justify-between" title="Cantidad teórica para calcular la receta">
+              <span class="truncate"><span>🔢</span> Cant. Simular <span class="text-rose-500">*</span></span>
+            </label>
+            <div class="flex items-center gap-1.5">
+              <input id="prod-cantidad" type="number" min="0.0001" step="0.0001" value="1"
+                     oninput="onInputProdCantidad(this.value)"
+                     onkeydown="if(event.key==='Enter'){event.preventDefault();previsualizarProduccion(true, true);}"
+                     placeholder="0"
+                     class="w-full border-2 border-slate-300 rounded-xl px-3 py-2.5 text-base sm:text-lg bg-slate-50/70 font-mono font-black text-slate-900 text-right outline-none focus:bg-white focus:border-rose-500 focus:ring-2 focus:ring-rose-100 transition shadow-xs"
+                     title="Lote o cantidad teórica a simular">
+              <span class="text-xs font-bold text-slate-500 shrink-0">Und/g</span>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Tira Predictiva Integrada y Armónica -->
+        <div id="prod-sugerencia" class="hidden mb-3 rounded-xl border border-amber-300 bg-gradient-to-r from-amber-50/95 via-yellow-50/90 to-amber-50/70 p-3.5 shadow-2xs transition-all">
+          
+          <!-- Barra fija de Advertencia y Tope Real (Siempre visible) -->
+          <div class="flex flex-wrap items-center justify-between gap-2.5 text-xs">
+            <div class="flex items-center gap-2">
+              <span class="text-lg">⚡</span>
+              <div>
+                <span class="font-bold text-amber-950 text-xs sm:text-sm">
+                  Tope máximo por inventario: <span id="prod-sug-max-real" class="font-mono font-black text-amber-900 text-sm sm:text-base">0</span> und
+                </span>
+                <p class="text-[11px] text-amber-900/80 font-normal">
+                  Insumo limitante: <b id="prod-sug-limita-nombre" class="text-amber-950">-</b> (Stock en bodega: <span id="prod-sug-limita-stock" class="font-mono font-bold">0</span>)
+                </p>
+              </div>
+            </div>
+            
+            <div class="flex items-center gap-2">
+              <span id="prod-sug-sim-info" class="hidden text-[11px] font-bold text-amber-900 bg-amber-200/80 px-2.5 py-1 rounded-lg border border-amber-300 shadow-2xs"></span>
+              <button type="button" id="btn-toggle-mp-sim" onclick="toggleSimulacionMP()" class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-amber-300 bg-white hover:bg-amber-100 text-amber-900 font-bold text-xs transition shadow-2xs cursor-pointer">
+                <span>🧪 Simular por Materia Prima</span>
+                <span id="prod-mp-toggle-icon" class="text-[10px] transition-transform">▼</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Cuerpo Desplegable de Simulación por Materia Prima (Colapsado por defecto) -->
+          <div id="prod-sugerencia-body" class="hidden mt-3 pt-3 border-t border-amber-200/80 space-y-3">
+            
+            <!-- 1. Ingrediente Guía a Ancho Completo -->
+            <div>
+              <div class="flex items-center justify-between gap-2 mb-1">
+                <label class="text-xs font-black text-slate-800 uppercase tracking-wide">
+                  1. Ingrediente Guía (Materia Prima)
+                </label>
+                <span id="prod-sug-stock-guia-badge" class="text-[11px] font-mono font-bold text-amber-900 bg-amber-100 px-2 py-0.5 rounded-lg border border-amber-300"></span>
+              </div>
+              <select id="prod-sug-guia" onchange="sugerenciaCambioGuia()" onwheel="this.blur()" class="w-full border-2 border-amber-300 rounded-xl px-3 py-2 text-sm sm:text-base bg-white font-bold text-slate-900 outline-none shadow-sm focus:border-amber-500 cursor-pointer"></select>
+              <div class="flex items-center justify-between gap-2 mt-1.5 flex-wrap">
+                <p id="prod-sug-guia-helper" class="text-[11px] text-amber-900 font-semibold leading-tight"></p>
+                <span class="text-[10px] text-slate-500 font-medium italic">⚡ Por defecto calcula usando todo el stock disponible de esta materia prima</span>
+              </div>
+            </div>
+
+            <!-- 2. Variación / Simulación de MP -->
+            <div class="pt-2 border-t border-amber-200/60">
+              <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">
+                2. ¿Vas a usar una cantidad diferente de MP? <span class="font-normal text-slate-500 lowercase">(opcional)</span>
+              </label>
+              <div class="flex items-center gap-2">
+                <input id="prod-sug-mp-cant" type="number" min="0" step="any" placeholder="Digita cant. a usar" onkeydown="if(event.key==='Enter'){event.preventDefault();sugerenciaDesdeMP();}" class="w-40 border border-amber-300 rounded-xl px-3 py-2 text-sm sm:text-base bg-white font-mono font-black text-slate-900 text-right outline-none shadow-sm focus:border-amber-500">
+                <span id="prod-sug-mp-nombre" class="text-xs text-slate-600 font-semibold truncate max-w-[150px]"></span>
+                <button type="button" onclick="sugerenciaDesdeMP()" class="px-3.5 py-2 rounded-xl border border-amber-400 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-bold text-xs transition shadow-xs whitespace-nowrap">
+                  Recalcular Insumos
+                </button>
+              </div>
+            </div>
+
+            <!-- Micro-guía explicativa para el usuario -->
+            <div class="flex items-start gap-1.5 text-[11px] text-amber-900/90 bg-amber-100/50 rounded-lg px-3 py-1.5 border border-amber-200/50">
+              <span class="text-xs">💡</span>
+              <span><b>Flujo por Materia Prima:</b> 1) Elige el ingrediente guía, 2) digita cuánto vas a procesar si no es todo el stock y pulsa <b>Recalcular Insumos</b>. Toda la receta se ajustará en vivo.</span>
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+
+    <div id="prod-preview" class="hidden mb-6" style="scroll-margin-top: 90px;">
+      <!-- Hidden element to keep JS backward compatible -->
+      <span id="prod-preview-nombre-prod" class="hidden"></span>
+
+      <!-- Barra compacta sobre la tabla de insumos -->
+      <div class="bg-gradient-to-r from-slate-100 via-rose-50/40 to-slate-100 border border-slate-200 rounded-xl px-3.5 py-2 mb-2 shadow-2xs flex items-center justify-between flex-wrap gap-2">
+        <div class="flex items-center gap-2">
+          <span class="text-sm">📋</span>
+          <span class="font-bold text-xs sm:text-sm text-slate-800">Insumos y Materias Primas Requeridas:</span>
+          <span id="prod-preview-items-count" class="font-black text-rose-700 bg-rose-100/90 border border-rose-200 px-2 py-0.5 rounded-lg text-xs">
+            0 insumos
+          </span>
+        </div>
+
+        <div class="flex items-center gap-2.5">
+          <!-- Sede / Centro -->
+          <div id="prod-preview-centro-badge" class="text-xs font-black px-2.5 py-0.5 rounded-lg border"></div>
+
+          <!-- Selector de Decimales Ultra Compacto -->
+          <div class="flex items-center gap-1 bg-white border border-slate-300 rounded-lg px-2 py-0.5 shadow-2xs">
+            <label for="prod-preview-decimales" class="font-bold text-[11px] text-slate-600">
+              Dec:
+            </label>
+            <input id="prod-preview-decimales" type="number" min="0" max="6" step="1" value="2"
+                   oninput="cambiarDecimalesPreviewProduccion(this.value)"
+                   onchange="cambiarDecimalesPreviewProduccion(this.value)"
+                   onblur="validarDecimalesPreviewProduccionInput(this)"
+                   class="w-9 text-center font-mono font-bold text-xs bg-slate-50 border border-slate-200 rounded px-1 py-0.2 outline-none text-slate-800 focus:border-rose-500">
+          </div>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto rounded-xl border border-gray-200 shadow-2xs">
+
+        <table class="w-full text-sm">
+
+          <thead>
+
+            <tr class="bg-slate-100 text-[11px] uppercase font-black text-slate-600 border-b border-slate-200">
+              <th class="px-2.5 py-1 text-left">Componente / Insumo</th>
+              <th class="px-2 py-1 text-right">Stock actual</th>
+              <th class="px-2 py-1 text-right w-36 sm:w-40">A consumir</th>
+              <th class="px-2 py-1 text-right">Costo unit.</th>
+              <th class="px-2 py-1 text-right">Total Línea</th>
+              <th class="px-2 py-1 text-center">Estado</th>
+            </tr>
+
+          </thead>
+
+          <tbody id="prod-preview-tabla"></tbody>
+
+          <tfoot>
+
+            <tr class="bg-slate-50 border-t border-slate-200 font-black text-slate-800 text-xs">
+              <td class="px-2.5 py-1 text-left">Total costo producción</td>
+              <td colspan="3"></td>
+              <td id="prod-resumen-total" class="px-2 py-1 text-right text-rose-600 font-mono font-black text-sm"></td>
+              <td></td>
+            </tr>
+            <tr class="bg-slate-50 border-t border-slate-100 font-bold text-slate-700 text-xs">
+              <td class="px-2.5 py-1 text-left">Costo unitario estimado</td>
+              <td colspan="3"></td>
+              <td id="prod-resumen-unitario" class="px-2 py-1 text-right text-rose-600 font-mono font-black text-sm"></td>
+              <td></td>
+            </tr>
+
+          </tfoot>
+
+        </table>
+
+      </div>
+
+      
+
+      
+
+
+
+      <div id="prod-alerta" class="hidden mt-3 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 font-semibold font-normal"></div>
+
+
+
+      <!-- Contenedor Rosado Unificado: Liquidación Final y Registro del Lote -->
+      <div class="mt-6 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-rose-50/90 via-pink-50/70 to-rose-50/90 border-2 border-rose-300 shadow-sm space-y-4">
+        
+        <div class="flex items-center justify-between border-b border-rose-200/80 pb-2.5">
+          <div class="flex items-center gap-2">
+            <span class="text-base sm:text-lg">🔥</span>
+            <span class="font-black text-xs sm:text-sm text-rose-950 uppercase tracking-wide">Liquidación y Registro de este Lote</span>
+          </div>
+          <span class="text-[10px] sm:text-xs font-bold text-rose-800 bg-rose-200/60 px-2.5 py-0.5 rounded-lg border border-rose-300">
+            Paso final de producción
+          </span>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
+          
+          <!-- Columna Izquierda: Cantidad Real Obtenida + Notas (7 columnas en lg) -->
+          <div class="lg:col-span-7 flex flex-col justify-between space-y-3.5">
+            <!-- 1. Cantidad Real Obtenida -->
+            <div>
+              <div class="flex items-center justify-between gap-2 mb-1.5">
+                <label class="text-xs font-black text-rose-950 uppercase tracking-wide flex items-center gap-1.5">
+                  <span>⚖️</span> Cantidad Real Obtenida (Física) <span class="text-rose-600">*</span>
+                </label>
+                <span class="text-[10px] font-black bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded border border-emerald-300/60" title="Al editar esta cantidad final, los insumos de la tabla se mantienen fijos">
+                  🔒 Insumos fijos
+                </span>
+              </div>
+              <div class="flex items-center gap-2">
+                <input id="prod-preview-cant-input" type="number" min="0.0001" step="any"
+                       oninput="ajustarCantidadRealProducida(this.value, 'preview')"
+                       placeholder="Resultado real de paila/cocina"
+                       class="w-full text-right border-2 border-rose-300 focus:border-rose-600 rounded-xl px-3.5 py-2.5 text-base sm:text-lg font-black text-rose-800 font-mono bg-white outline-none transition shadow-2xs"
+                       title="Ajusta la cantidad real producida sin recalcular los insumos">
+                <span class="text-xs font-bold text-rose-700 shrink-0">Und/g</span>
+              </div>
+              <span id="prod-preview-cant-badge" class="hidden"></span>
+              <div id="prod-preview-rendimiento-info" class="w-full mt-1.5 text-[11px] font-bold text-slate-600 flex items-center justify-between gap-1 flex-wrap"></div>
+              <p class="text-[11px] text-rose-900/80 mt-1 leading-tight">
+                <b>¿Qué es?:</b> Lo que efectivamente se pesó/contó al salir de cocina. Esto ingresará a bodega como producto terminado sin alterar los insumos consumidos.
+              </p>
+            </div>
+
+            <!-- 2. Notas u Observaciones -->
+            <div class="pt-2.5 border-t border-rose-200/60">
+              <label class="block text-xs font-bold text-rose-950 uppercase tracking-wide mb-1 flex items-center gap-1.5">
+                <span>📝</span> Notas u observaciones de esta producción <span class="font-normal text-slate-500 lowercase">(opcional)</span>
+              </label>
+              <input id="prod-notas" type="text" placeholder="Ej. Lote matutino, cocción a fuego lento, textura esperada..." 
+                     class="w-full border-2 border-rose-200 rounded-xl px-3.5 py-2 text-xs sm:text-sm bg-white text-slate-800 outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-100 transition shadow-2xs">
+            </div>
+          </div>
+
+          <!-- Columna Derecha: Botón de Registro y Acción (5 columnas en lg) -->
+          <div class="lg:col-span-5 bg-white/80 border-2 border-rose-200/90 rounded-xl p-4 flex flex-col justify-between gap-3 shadow-2xs">
+            <div>
+              <div class="flex items-center gap-1.5 font-bold text-rose-950 text-xs sm:text-sm mb-1">
+                <span>✨</span>
+                <span>Asentar producción realizada hoy</span>
+              </div>
+              <p class="text-[11px] text-rose-900/80 leading-relaxed">
+                Descuenta del inventario los insumos consumidos en la tabla e ingresa la <b>Cantidad Real Obtenida</b> como producto terminado en bodega. <b>No modifica</b> la receta maestra.
+              </p>
+            </div>
+            
+            <button id="prod-btn-registrar" onclick="registrarProduccion()" disabled type="button"
+                    class="w-full py-3.5 px-4 bg-rose-600 hover:bg-rose-700 active:scale-98 text-white font-black rounded-xl disabled:opacity-40 disabled:cursor-not-allowed text-xs sm:text-sm transition shadow-md flex items-center justify-center gap-2 cursor-pointer">
+              <span>✨</span> REGISTRAR PRODUCCIÓN (SOLO ESTE LOTE)
+            </button>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- Acción Secundaria Claramente Fuera del Contenedor: Ajuste Permanente de Receta Oficial -->
+      <div class="mt-4 p-3.5 rounded-2xl bg-indigo-50/40 border border-indigo-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
+        <div class="flex-1">
+          <div class="flex items-center gap-1.5 font-bold text-indigo-950 text-xs sm:text-sm">
+            <span>🔄</span>
+            <span>Mantenimiento de Receta: ¿Quieres actualizar la fórmula oficial?</span>
+          </div>
+          <p class="text-[11px] text-indigo-900/75 mt-0.5 leading-tight">
+            Divide los insumos de la tabla entre tu cantidad real para fijar la <b>nueva receta estándar definitiva</b> en el catálogo. Úsalo solo si la fórmula cambió permanentemente.
+          </p>
+        </div>
+        <button id="prod-btn-receta" onclick="abrirAjusteReceta()" type="button"
+                class="shrink-0 px-3.5 py-2 border-2 border-indigo-300 text-indigo-900 bg-white hover:bg-indigo-100 font-bold rounded-xl text-xs transition flex items-center gap-1.5 shadow-2xs cursor-pointer">
+          <span>🔄</span> Ajustar Receta Estándar (Permanente)
+        </button>
+      </div>
+
+    </div>
+
+
+
+    <!-- Historial de Producción -->
+
+    <div class="mt-8 border-t border-gray-150 pt-6">
+      <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
+        <button type="button" onclick="toggleHistorialProduccion()" aria-expanded="false" aria-controls="prod-historial-wrapper" class="font-bold text-slate-800 text-xs flex items-center gap-1.5 outline-none hover:text-indigo-700 cursor-pointer">
+          <span id="historial-toggle-icon">▼</span><span>📋</span> Historial Reciente de Producción
+        </button>
+      </div>
+
+      <div id="prod-historial-wrapper" class="hidden">
+        <div class="overflow-x-auto rounded-xl border border-gray-100 shadow-sm bg-white">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="bg-gray-50 text-xs uppercase text-gray-500 border-b border-gray-100">
+                <th class="px-4 py-3 text-left">Documento</th>
+                <th class="px-4 py-3 text-left">Fecha</th>
+                <th class="px-4 py-3 text-left">Responsable</th>
+                <th class="px-4 py-3 text-left">Producto Terminado</th>
+                <th class="px-4 py-3 text-right">Cantidad</th>
+                <th class="px-4 py-3 text-right">Costo Total</th>
+                <th class="px-4 py-3 text-center">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="prod-historial-body" class="divide-y divide-gray-100 text-gray-700">
+              <tr>
+                <td colspan="7" class="text-center py-4 text-gray-400 italic">Cargando historial...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="flex items-center justify-between gap-3 mt-3">
+          <span id="prod-hist-total" class="text-xs text-gray-500 font-semibold"></span>
+          <div class="flex items-center gap-2">
+            <button id="btn-prod-prev" onclick="cargarHistorialProduccion(histProdPagina - 1)" class="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-bold text-gray-600 hover:bg-gray-50 transition disabled:opacity-40 disabled:pointer-events-none">? Anterior</button>
+            <span id="prod-hist-pagina" class="text-xs font-bold text-gray-700"></span>
+            <button id="btn-prod-next" onclick="cargarHistorialProduccion(histProdPagina + 1)" class="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-bold text-gray-600 hover:bg-gray-50 transition disabled:opacity-40 disabled:pointer-events-none">Siguiente ?</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Registro Contable de Producción (Al pie de la vista de producción) -->
+    <div class="mt-8 p-4 bg-blue-50/80 border border-blue-200/80 rounded-2xl text-xs text-blue-900 flex flex-col gap-1.5 shadow-2xs">
+      <div class="flex items-center gap-2 font-bold text-blue-950">
+        <span class="text-base">🛈</span>
+        <span>Información del Registro Contable de Producción</span>
+      </div>
+      <p class="text-[11px] text-blue-800 leading-relaxed">
+        Si tu negocio tiene habilitada la contabilidad de producción, al registrar cada orden se generará automáticamente el comprobante de reclasificación interna:
+      </p>
+      <ul class="list-disc pl-5 text-[11px] space-y-0.5 text-blue-900 font-medium">
+        <li><b>Crédito (Salida de inventario):</b> Cuentas 14x de los componentes/insumos por su costo total consumido.</li>
+        <li><b>Débito (Entrada de inventario):</b> Cuenta 14x del producto terminado fabricado por el costo total acumulado.</li>
+      </ul>
+    </div>
+
+  </div>
+
+
+
+
+
+  <!-- ── TAB COMPRAS SUGERIDAS (ETAPA 5) ────────────────────────────── -->
+
+
+  </main>
+
+  <!-- Modal Ajuste Permanente de Receta Estándar -->
+<div id="overlay-ajuste-receta" class="overlay hidden" onclick="if(event.target===this)cerrarAjusteReceta()">
+
+  <div class="modal shadow-2xl border border-gray-100" style="max-width:600px; max-height:85vh; display:flex; flex-direction:column; position:relative; background:white;">
+
+    <!-- Header -->
+
+    <div class="flex-shrink-0 mb-3 border-b border-gray-100 pb-2 flex justify-between items-center">
+
+      <h3 class="text-sm font-bold text-gray-800">Ajustar Proporciones de Receta Estándar</h3>
+
+      <button onclick="cerrarAjusteReceta()" class="text-gray-400 hover:text-gray-600 text-lg">&times;</button>
+
+    </div>
+
+
+
+    <!-- Warnings / Info -->
+    <div class="flex-shrink-0 bg-indigo-50 border-2 border-indigo-200 rounded-xl p-3.5 mb-4 text-xs text-indigo-950 space-y-1 shadow-2xs">
+      <div class="font-bold flex items-center gap-1.5 text-indigo-900 text-xs sm:text-sm">
+        <span>💡</span> ¿Cómo se recalcula la fórmula oficial?
+      </div>
+      <p class="text-[11px] text-indigo-900/90 leading-relaxed">
+        Cada insumo consumido en la tabla se dividirá entre las <strong><span id="ajuste-cant-producir" class="font-mono font-black text-indigo-950"></span> unidades</strong> (tu Cantidad Real Obtenida) para fijar la nueva proporción por <strong>1 unidad</strong> de producto terminado.
+      </p>
+      <p class="text-[10px] text-indigo-700 font-bold bg-white/80 rounded-lg p-2 border border-indigo-200">
+        ⚠️ <b>Importante:</b> Al confirmar, se reescribe la Tarjeta Estándar maestra en la base de datos. De aquí en adelante, todas las futuras producciones usarán estas nuevas cantidades y costos.
+      </p>
+    </div>
+
+
+
+    <!-- Comparison List -->
+
+    <div class="flex-1 overflow-y-auto mb-4 border border-gray-100 rounded-xl p-3 bg-gray-50/50">
+
+      <table class="w-full text-xs">
+
+        <thead>
+
+          <tr class="text-gray-500 uppercase font-bold text-[9px] border-b border-gray-200 text-left">
+
+            <th class="py-2">Componente</th>
+
+            <th class="py-2 text-right">Cant. Actual (1u)</th>
+
+            <th class="py-2 text-right text-indigo-600">Cant. Nueva (1u)</th>
+
+            <th class="py-2 text-right">Diferencia</th>
+
+          </tr>
+
+        </thead>
+
+        <tbody id="ajuste-comparativa-body" class="divide-y divide-gray-100"></tbody>
+
+      </table>
+
+    </div>
+
+
+
+    <!-- Cost impact box -->
+
+    <div id="ajuste-impacto-costo" class="flex-shrink-0 p-4 rounded-xl mb-4 border flex flex-col gap-1.5 text-xs bg-gray-50 border-gray-150">
+
+      <div class="flex justify-between font-bold text-gray-700">
+
+        <span>Costo Receta Actual (1 u):</span>
+
+        <span id="ajuste-costo-actual" class="font-mono text-gray-800"></span>
+
+      </div>
+
+      <div class="flex justify-between font-bold text-indigo-600">
+
+        <span>Costo Receta Nuevo (1 u):</span>
+
+        <span id="ajuste-costo-nuevo" class="font-mono"></span>
+
+      </div>
+
+      <div class="flex justify-between items-center mt-2 pt-2 border-t border-gray-200/80">
+
+        <span class="font-bold text-gray-700">Impacto estimado en costo:</span>
+
+        <span id="ajuste-costo-impacto-pct" class="px-2.5 py-1 rounded-lg text-xs font-extrabold font-mono"></span>
+
+      </div>
+
+    </div>
+
+
+
+    <!-- Footer Buttons -->
+
+    <div class="flex-shrink-0 flex gap-3 justify-end pt-2 border-t border-gray-100">
+
+      <button onclick="cerrarAjusteReceta()" class="px-4 py-2 border border-gray-200 rounded-xl hover:bg-gray-50 text-xs font-semibold text-gray-600 transition">
+
+        Cancelar
+
+      </button>
+
+      <button onclick="confirmarAjusteReceta()" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition">
+
+        Confirmar y Guardar Receta
+
+      </button>
+
+    </div>
+
+  </div>
+
+</div>
+
+
+  <!-- Toast Notificaciones -->
+  <div id="toast" class="toast"></div>
+
+  <!-- Scripts Logic -->
+  <script>
+    const NEGOCIO_ID = {{ negocio_id }};
+    const CENTRO_ACTIVO = {{ (centro_activo | tojson) if centro_activo else 'null' }};
+    let productos = [];
+    let activePreviewData = null;
+    let prodPuedeRegistrar = false;
+    let _prodPreviewDecimales = 2;
+    try {
+      const _savedProdDec = localStorage.getItem('prod_preview_decimales');
+      if (_savedProdDec !== null) {
+        const p = parseInt(_savedProdDec, 10);
+        if (!isNaN(p) && p >= 0 && p <= 6) _prodPreviewDecimales = p;
+      }
+    } catch(e) {}
+    let _prodCantRecalcTimer = null;
+    let _prodRealManualmenteModificada = false;
+    let prodSugerenciaData = null;
+    let tiposDocProduccion = [];
+    let histProdPagina = 1;
+    let histProdTotalPaginas = 1;
+
+    // Formateadores numéricos de precisión
+    const fmt = n => (n == null ? '—' : Number(n).toLocaleString('es-CO', {minimumFractionDigits: 0, maximumFractionDigits: 2}));
+    const fmtMon = n => (n == null ? '—' : '$' + Number(n).toLocaleString('es-CO', {minimumFractionDigits: 0, maximumFractionDigits: 0}));
+    const fmtMonExact = n => (n == null ? '—' : '$' + Number(n).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+    const fmtUnitCost = n => {
+      if (n == null || isNaN(n)) return '—';
+      const val = Number(n);
+      if (val === 0) return '$0,00';
+      const hasSubCents = Math.abs(val % 0.01) > 0.000001;
+      const decimals = (Math.abs(val) < 1 || hasSubCents) ? 6 : 2;
+      return '$' + val.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: decimals });
+    };
+
+function getFechaHoyBogota() {
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Bogota',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).format(new Date());
+  } catch(e) {
+    const d = new Date();
+    const offset = d.getTimezoneOffset() * 60000;
+    return new Date(d.getTime() - offset).toISOString().slice(0, 10);
+  }
+}
+
+function toast(msg, ok = true, duracion = 3200) {
+
+  const el = document.getElementById('toast');
+  if (!el) return;
+
+  el.textContent = msg;
+
+  let cls = 'toast-ok';
+  if (ok === false || ok === 'error') cls = 'toast-err';
+  else if (ok === 'warning' || ok === 'warn' || ok === 'info') cls = 'toast-warn';
+
+  el.className = `toast show ${cls}`;
+
+  clearTimeout(el._t);
+
+  el._t = setTimeout(() => el.classList.remove('show'), duracion);
+
+}
+
+async function guardarParametroNegocio(nombre, inputId, overrideVal) {
+  let val;
+  let inp = null;
+  if (overrideVal !== undefined) {
+    val = overrideVal;
+  } else {
+    inp = document.getElementById(inputId);
+    if (!inp) return;
+    val = inp.value.trim();
+    if (val === '') return;
+  }
+  
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/parametro`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nombre: nombre, valor: val })
+    });
+    const d = await r.json();
+    
+    if (d.ok) {
+      if (inp) {
+        inp.classList.add('border-emerald-500', 'bg-emerald-50');
+        setTimeout(() => inp.classList.remove('border-emerald-500', 'bg-emerald-50'), 1500);
+      }
+    } else {
+      alert('Error al guardar: ' + d.error);
+    }
+  } catch (err) {
+    console.error(err);
+    alert('Error de conexion al guardar parametro.');
+  }
+}
+
+function setupAC(inputId, listId, hiddenId, data, onSelect) {
+
+  const inp = document.getElementById(inputId);
+
+  const list = document.getElementById(listId);
+
+  if (!inp || !list) return;
+
+  let idx = -1, timer = null;
+
+
+
+  const normalizeStr = str => {
+
+    if (!str) return '';
+
+    try {
+
+      return str.toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+
+    } catch (e) {
+
+      return str.toString().toLowerCase().trim();
+
+    }
+
+  };
+
+
+
+  inp.addEventListener('input', () => {
+
+    clearTimeout(timer);
+
+    timer = setTimeout(() => renderAC(), 150);
+
+  });
+
+
+
+  inp.addEventListener('focus', () => {
+
+    if (typeof cargarProductosSilencioso === 'function') {
+      cargarProductosSilencioso().then(() => {
+        if (inp === document.activeElement && inp.value.trim().length >= 1) {
+          renderAC();
+        }
+      });
+    } else if (typeof cargarProductos === 'function' && (!productos || !productos.length)) {
+
+      cargarProductos();
+
+    }
+
+    if (inp.value.trim().length >= 1) {
+
+      renderAC();
+
+    }
+
+  });
+
+
+
+  inp.addEventListener('keydown', e => {
+
+    const items = list.querySelectorAll('.ac-item');
+
+    if (e.key === 'ArrowDown') {
+
+      if (list.classList.contains('hidden')) {
+
+        renderAC();
+
+      } else {
+
+        idx = Math.min(idx + 1, items.length - 1);
+
+        highlightAC(items);
+
+      }
+
+      e.preventDefault();
+
+    }
+
+    else if (e.key === 'ArrowUp') {
+
+      idx = Math.max(idx - 1, 0);
+
+      highlightAC(items);
+
+      e.preventDefault();
+
+    }
+
+    else if (e.key === 'Enter') {
+
+      if (idx >= 0 && items[idx]) {
+
+        items[idx].dispatchEvent(new Event('mousedown'));
+
+        e.preventDefault();
+
+      }
+
+    }
+
+    else if (e.key === 'Escape') {
+
+      list.classList.add('hidden');
+
+      inp.focus();
+
+      e.preventDefault();
+
+    }
+
+  });
+
+
+
+  inp.addEventListener('blur', () => setTimeout(() => list.classList.add('hidden'), 220));
+
+
+
+  function renderAC() {
+
+    const rawQ = inp.value;
+
+    const qNorm = normalizeStr(rawQ);
+
+    if (!qNorm) { list.classList.add('hidden'); return; }
+
+    const itemsList = typeof data === 'function' ? data() : (data || []);
+
+    if (!itemsList || !itemsList.length) {
+      if (typeof cargarProductosSilencioso === 'function' && !inp._buscandoEnServidor) {
+        inp._buscandoEnServidor = true;
+        cargarProductosSilencioso(true).then(() => {
+          inp._buscandoEnServidor = false;
+          if (inp === document.activeElement && inp.value === rawQ) {
+            renderAC();
+          }
+        });
+      }
+    }
+
+    const matches = (itemsList || []).filter(p => {
+
+      if (!p || !p.nombre) return false;
+
+      const nameNorm = normalizeStr(p.nombre);
+
+      const catNorm = normalizeStr(p.categoria);
+
+      return nameNorm.includes(qNorm) || catNorm.includes(qNorm);
+
+    }).slice(0, 20);
+
+    // Si no hubo matches locales pero el usuario escribió 2+ caracteres, consultar al servidor como máximo UNA vez por texto
+    const qClean = rawQ.trim().toLowerCase();
+    if (matches.length === 0 && qClean.length >= 2 && !inp._buscandoEnServidor && inp._ultimoQServidor !== qClean) {
+      inp._buscandoEnServidor = true;
+      inp._ultimoQServidor = qClean;
+      if (typeof cargarProductosSilencioso === 'function') {
+        cargarProductosSilencioso(true).then(() => {
+          inp._buscandoEnServidor = false;
+          // Si el usuario sigue en este campo, reconstruir la lista con los productos recién traídos sin re-consultar al servidor
+          if (inp === document.activeElement && inp.value.trim().toLowerCase() === qClean) {
+            const freshItems = typeof data === 'function' ? data() : (data || []);
+            renderAC();
+          }
+        }).catch(() => {
+          inp._buscandoEnServidor = false;
+        });
+      }
+    }
+
+    idx = -1;
+
+    let html = matches.map(p =>
+
+      `<div class="ac-item text-left px-3 py-2 hover:bg-gray-100 cursor-pointer" data-id="${p.id}" data-nombre="${(p.nombre || '').replace(/"/g,'&quot;')}">
+
+        <span class="font-semibold text-gray-800">${p.nombre}</span>${p.categoria ? ` <span class="text-xs text-gray-400">(${p.categoria})</span>` : ''}
+
+       </div>`
+
+    ).join('');
+
+    // Opción para recargar productos si se creó en otra pestaña
+    if (rawQ.trim().length >= 1) {
+      html += `
+        <div class="ac-item text-left px-3 py-1.5 hover:bg-indigo-50 cursor-pointer text-indigo-700 font-bold border-t border-gray-100 text-xs flex items-center justify-between gap-1" data-recargar="true">
+          <span>🔄 ¿Lo creaste en otra pestaña? Recargar catálogo</span>
+          <span class="text-[10px] text-indigo-500 bg-indigo-100/70 px-1.5 py-0.5 rounded font-mono">Actualizar</span>
+        </div>
+      `;
+    }
+
+    if (rawQ.trim().length >= 2) {
+
+      html += `
+
+        <div class="ac-item text-left px-3 py-2 hover:bg-rose-50 cursor-pointer text-rose-600 font-bold border-t border-gray-100 text-xs flex items-center gap-1" data-crear="true" data-nombre="${rawQ.replace(/"/g,'&quot;')}">
+
+          <span>➕ Crear nuevo producto:</span> <span class="italic text-gray-700">"${rawQ}"</span>
+
+        </div>
+
+      `;
+
+    }
+
+    list.innerHTML = html;
+
+    list.querySelectorAll('.ac-item').forEach(el => {
+
+      el.addEventListener('mousedown', (e) => {
+
+        e.preventDefault();
+
+        if (el.dataset.recargar) {
+          el.innerHTML = '<span class="text-indigo-600 font-bold">⏳ Actualizando productos desde el servidor...</span>';
+          if (typeof cargarProductosSilencioso === 'function') {
+            cargarProductosSilencioso(true).then(() => {
+              renderAC();
+              toast('Catálogo de productos actualizado', true);
+            });
+          }
+          return;
+        }
+
+        if (el.dataset.crear) {
+
+          list.classList.add('hidden');
+
+          abrirModalCrearDesdeAC(inputId, hiddenId, el.dataset.nombre);
+
+          return;
+
+        }
+
+        document.getElementById(hiddenId).value = el.dataset.id;
+
+        inp.value = el.dataset.nombre;
+
+        list.classList.add('hidden');
+
+        if (onSelect) onSelect({id: +el.dataset.id, nombre: el.dataset.nombre});
+
+      });
+
+    });
+
+    list.classList.remove('hidden');
+
+  }
+
+
+
+  function highlightAC(items) {
+
+    items.forEach((el, i) => el.classList.toggle('ac-focus', i === idx));
+
+    if (idx >= 0) items[idx].scrollIntoView({block: 'nearest'});
+
+  }
+
+}
+
+function setupRemoteAC(inputId, listId, hiddenId, searchUrl, onSelect) {
+
+  const inp = document.getElementById(inputId);
+
+  const list = document.getElementById(listId);
+
+  const hid = document.getElementById(hiddenId);
+
+  if (!inp || !list) return;
+
+  let idx = -1, timer = null;
+
+
+
+  inp.addEventListener('input', () => {
+
+    clearTimeout(timer);
+
+    hid.value = ''; // Limpiar ID al escribir
+
+    timer = setTimeout(() => search(), 280);
+
+  });
+
+  
+
+  inp.addEventListener('focus', () => {
+
+    if (inp.value.trim().length >= 2) {
+
+      search();
+
+    }
+
+  });
+
+
+
+  inp.addEventListener('keydown', e => {
+
+    const items = list.querySelectorAll('.ac-item');
+
+    if (e.key === 'ArrowDown') {
+
+      if (list.classList.contains('hidden')) {
+
+        search();
+
+      } else {
+
+        idx = Math.min(idx + 1, items.length - 1);
+
+        highlightAC(items);
+
+      }
+
+      e.preventDefault();
+
+    }
+
+    else if (e.key === 'ArrowUp') {
+
+      idx = Math.max(idx - 1, 0);
+
+      highlightAC(items);
+
+      e.preventDefault();
+
+    }
+
+    else if (e.key === 'Enter') {
+
+      if (idx >= 0 && items[idx]) {
+
+        items[idx].dispatchEvent(new Event('mousedown'));
+
+        e.preventDefault();
+
+      }
+
+    }
+
+    else if (e.key === 'Escape') {
+
+      list.classList.add('hidden');
+
+      inp.focus();
+
+      e.preventDefault();
+
+    }
+
+  });
+
+  inp.addEventListener('blur', () => setTimeout(() => list.classList.add('hidden'), 220));
+
+
+
+  async function search() {
+
+    const q = inp.value.trim();
+
+    if (q.length < 2) { list.classList.add('hidden'); return; }
+
+    try {
+
+      const r = await fetch(`${searchUrl}?q=${encodeURIComponent(q)}`);
+
+      const matches = await r.json();
+
+      if (!matches.length) { list.classList.add('hidden'); return; }
+
+      idx = -1;
+
+      list.innerHTML = matches.map(p =>
+
+        `<div class="ac-item text-left px-3 py-2 hover:bg-gray-100 cursor-pointer" data-id="${p.id}" data-nombre="${p.nombre.replace(/"/g,'&quot;')}">
+
+          ${p.nombre}${p.telefono ? ` <span class="text-gray-400">(${p.telefono})</span>` : ''}
+
+         </div>`
+
+      ).join('');
+
+      list.querySelectorAll('.ac-item').forEach(el => {
+
+        el.addEventListener('mousedown', () => {
+
+          hid.value = el.dataset.id;
+
+          inp.value = el.dataset.nombre;
+
+          list.classList.add('hidden');
+
+          if (onSelect) onSelect({id: +el.dataset.id, nombre: el.dataset.nombre});
+
+        });
+
+      });
+
+      list.classList.remove('hidden');
+
+    } catch(e) {
+
+      console.error(e);
+
+    }
+
+  }
+
+  function highlightAC(items) {
+
+    items.forEach((el, i) => el.classList.toggle('ac-focus', i === idx));
+
+    if (idx >= 0) items[idx].scrollIntoView({block: 'nearest'});
+
+  }
+
+}
+
+async function cargarProductos(silencioso = false) {
+  const bodParam = (CENTRO_ACTIVO && CENTRO_ACTIVO.id) ? `?bodega=${CENTRO_ACTIVO.id}` : '';
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/productos${bodParam}`);
+    const d = await r.json();
+    if (!d.ok) {
+      if (!silencioso) toast(d.error, false);
+      return [];
+    }
+    productos = d.productos || [];
+    _ultimoFetchProductosTimestamp = Date.now();
+    
+    // Solo actualizamos la tabla si el usuario está físicamente viendo la pestaña de productos
+    const tabProd = document.getElementById('tab-productos');
+    if (tabProd && !tabProd.classList.contains('hidden') && typeof filtrarTablaProductos === 'function') {
+      filtrarTablaProductos();
+    }
+    return productos;
+  } catch(e) {
+    if (!silencioso) toast('Error al cargar productos', false);
+    return [];
+  }
+}
+
+function _fmtProdNum(n) {
+  if (n == null || isNaN(n)) return '0';
+  const val = Number(n);
+  return val.toLocaleString('es-CO', { 
+    minimumFractionDigits: _prodDecimales, 
+    maximumFractionDigits: _prodDecimales 
+  });
+}
+
+function _fmtProdMon(n) {
+  if (n == null || isNaN(n)) return '—';
+  const val = Number(n);
+  return '$' + val.toLocaleString('es-CO', { 
+    minimumFractionDigits: _prodDecimales, 
+    maximumFractionDigits: _prodDecimales 
+  });
+}
+
+function cambiarDecimalesPreviewProduccion(val) {
+  let d = parseInt(val, 10);
+  if (isNaN(d)) return;
+  d = Math.max(0, Math.min(6, d));
+  _prodPreviewDecimales = d;
+  try { localStorage.setItem('prod_preview_decimales', d); } catch(e) {}
+
+  const inp = document.getElementById('prod-preview-decimales');
+  if (inp && parseInt(inp.value, 10) !== d) inp.value = d;
+
+  if (activePreviewData) {
+    const cantBadgeEl = document.getElementById('prod-preview-cant-badge');
+    if (cantBadgeEl) {
+      cantBadgeEl.textContent = `${_fmtProdNum(activePreviewData.cantidad)} Unidades`;
+    }
+    renderInfoRendimientoProduccion();
+    renderTablaPrevisualizacion();
+  }
+}
+
+function validarDecimalesPreviewProduccionInput(inputEl) {
+  let d = parseInt(inputEl.value, 10);
+  if (isNaN(d) || d < 0) d = 2;
+  if (d > 6) d = 6;
+  inputEl.value = d;
+  cambiarDecimalesPreviewProduccion(d);
+}
+
+function inicializarDecimalesPreviewProduccion() {
+  const inp = document.getElementById('prod-preview-decimales');
+  if (inp) inp.value = _prodPreviewDecimales;
+}
+
+function limpiarPreview() {
+  const prevEl = document.getElementById('prod-preview');
+  if (prevEl) prevEl.classList.add('hidden');
+  const btnReg = document.getElementById('prod-btn-registrar');
+  if (btnReg) btnReg.disabled = true;
+  const lockPill = document.getElementById('prod-cantidad-lock-pill');
+  if (lockPill) lockPill.classList.add('hidden');
+  const modoHint = document.getElementById('prod-cantidad-modo-hint');
+  if (modoHint) modoHint.classList.add('hidden');
+  const sugRealEl = document.getElementById('prod-sug-real-cant');
+  if (sugRealEl) sugRealEl.value = '';
+  prodPuedeRegistrar = false;
+  activePreviewData = null;
+  _prodRealManualmenteModificada = false;
+}
+
+function onInputProdCantidad(valStr) {
+  if (_prodCantRecalcTimer) clearTimeout(_prodCantRecalcTimer);
+  const val = parseFloat(valStr);
+  const id = document.getElementById('prod-ac-id')?.value;
+  if (!id || !val || isNaN(val) || val <= 0) {
+    limpiarPreview();
+    return;
+  }
+  // Al digitar en "Cantidad a producir" (arriba), se conserva el flujo original:
+  // recalcular todos los insumos de la receta proporcionalmente a esta cantidad.
+  _prodCantRecalcTimer = setTimeout(() => {
+    previsualizarProduccion(false, true);
+  }, 300);
+}
+
+function ajustarCantidadRealProducida(valStr, origen = 'preview') {
+  if (origen === 'preview') {
+    _prodRealManualmenteModificada = true;
+  } else if (origen === 'restore') {
+    _prodRealManualmenteModificada = false;
+  }
+
+  const prevInp = document.getElementById('prod-preview-cant-input');
+  const sugInp = document.getElementById('prod-sug-real-cant');
+
+  // Solo sincronizar el input de la vista previa si el llamado no vino de él mismo
+  if (origen !== 'preview' && prevInp) prevInp.value = valStr;
+  if (sugInp) sugInp.value = valStr;
+  // NOTA: 'Cantidad Real Obtenida' NO debe modificar 'prod-cantidad' (Cantidad a Simular),
+  // para mantener desacoplada la intención teórica de la producción real obtenida.
+
+  if (!activePreviewData) return;
+
+  const val = parseFloat(valStr);
+  if (!val || isNaN(val) || val <= 0) {
+    activePreviewData.cantidad = 0;
+    const unitEl = document.getElementById('prod-resumen-unitario');
+    if (unitEl) unitEl.textContent = '-';
+    const infoEl = document.getElementById('prod-preview-rendimiento-info');
+    if (infoEl) {
+      infoEl.innerHTML = `<span class="text-rose-600 font-extrabold">⚠️ Digita una cantidad real obtenida &gt; 0</span>`;
+    }
+    prodPuedeRegistrar = false;
+    const btnReg = document.getElementById('prod-btn-registrar');
+    if (btnReg) btnReg.disabled = true;
+    return;
+  }
+
+  activePreviewData.cantidad = val;
+  const cantBadgeEl = document.getElementById('prod-preview-cant-badge');
+  if (cantBadgeEl) cantBadgeEl.textContent = `${_fmtProdNum(val)} Unidades`;
+
+  renderInfoRendimientoProduccion();
+  actualizarTotalesPrevisualizacion();
+}
+
+function restaurarCantidadEsperadaProduccion() {
+  if (!activePreviewData) return;
+  const esp = activePreviewData.cantidad_esperada || activePreviewData.cantidad || 1;
+  ajustarCantidadRealProducida(String(esp), 'restore');
+}
+
+function renderInfoRendimientoProduccion() {
+  const infoEl = document.getElementById('prod-preview-rendimiento-info');
+  if (!infoEl || !activePreviewData) return;
+  const real = Number(activePreviewData.cantidad || 0);
+  const esp = Number(activePreviewData.cantidad_esperada || real);
+  if (real <= 0) return;
+
+  const diff = real - esp;
+  if (Math.abs(diff) < 0.0001 || esp <= 0) {
+    infoEl.innerHTML = `<span class="text-slate-500">Esperado según receta: <b class="text-slate-800 font-mono">${_fmtProdNum(esp)}</b></span>`;
+    return;
+  }
+
+  const pct = (diff / esp) * 100;
+  const sign = diff > 0 ? '+' : '';
+  const badgeClass = diff < 0
+    ? 'bg-amber-100 text-amber-900 border-amber-300'
+    : 'bg-emerald-100 text-emerald-900 border-emerald-300';
+  const labelTipo = diff < 0 ? '📉 Merma' : '📈 Rendimiento';
+
+  infoEl.innerHTML = `
+    <span class="text-slate-500">Esperado: <b class="text-slate-700 font-mono">${_fmtProdNum(esp)}</b></span>
+    <span class="px-1.5 py-0.5 rounded border text-[10px] font-mono font-extrabold ${badgeClass}">
+      ${labelTipo}: ${sign}${_fmtProdNum(diff)} (${sign}${pct.toFixed(1)}%)
+    </span>
+    <button type="button" onclick="restaurarCantidadEsperadaProduccion()" class="text-rose-600 hover:text-rose-800 underline font-extrabold text-[10px] cursor-pointer" title="Restaurar a la cantidad esperada por tarjeta">
+      ↺ Restaurar
+    </button>
+  `;
+}
+
+function _prodSugBodegaParam() {
+  return (typeof CENTRO_ACTIVO !== 'undefined' && CENTRO_ACTIVO && CENTRO_ACTIVO.id) ? `&bodega=${encodeURIComponent(CENTRO_ACTIVO.id)}` : '';
+}
+
+async function sugerirProduccion() {
+  const id = document.getElementById('prod-ac-id').value;
+  const strip = document.getElementById('prod-sugerencia');
+  prodSugerenciaData = null;
+  if (!id) { if (strip) strip.classList.add('hidden'); return; }
+  const seq = ++_sugSeq;
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion/sugerencia?producto_id=${id}${_prodSugBodegaParam()}`);
+    const d = await r.json();
+    if (seq !== _sugSeq) return;
+    if (!d.ok) { if (strip) strip.classList.add('hidden'); toast(d.error || 'Sin sugerencia para este producto', false); return; }
+    prodSugerenciaData = d;
+    document.getElementById('prod-sug-mp-cant').value = '';
+    renderSugerencia(true);
+  } catch(e) { console.error(e); if (seq === _sugSeq) toast('Error de red al cargar sugerencia', false); }
+}
+
+function toggleSimulacionMP() {
+  const body = document.getElementById('prod-sugerencia-body');
+  const icon = document.getElementById('prod-mp-toggle-icon');
+  if (!body) return;
+  const colapsado = body.classList.contains('hidden');
+  if (colapsado) {
+    body.classList.remove('hidden');
+    if (icon) icon.textContent = '▲';
+  } else {
+    body.classList.add('hidden');
+    if (icon) icon.textContent = '▼';
+  }
+}
+
+function renderSugerencia(autoPreview = true) {
+  const d = prodSugerenciaData;
+  if (!d) return;
+  const comps = d.componentes || [];
+  const guia = comps.find(c => c.id === d.guia_id) || comps[0] || {};
+  const lim = comps.find(c => c.id === d.limitante_id) || comps[0] || {};
+  const prodNombre = d.producto || 'producto a fabricar';
+
+  // 1. Cabecera fija: El tope máximo real según el insumo limitante (cuello de botella de inventario)
+  const maxReal = (d.tope_maximo !== undefined && d.tope_maximo !== null) ? d.tope_maximo : (lim.max_qty || 0);
+  const maxRealEl = document.getElementById('prod-sug-max-real');
+  if (maxRealEl) maxRealEl.textContent = _fmtProdNum(maxReal);
+
+  const limNombreEl = document.getElementById('prod-sug-limita-nombre');
+  if (limNombreEl) limNombreEl.textContent = d.limitante_nombre || lim.nombre || '-';
+
+  const limStockEl = document.getElementById('prod-sug-limita-stock');
+  if (limStockEl) limStockEl.textContent = _fmtProdNum(d.limitante_stock !== undefined ? d.limitante_stock : lim.stock);
+
+  // 2. Información de simulación activa (si está en modo desde_mp)
+  const simInfoEl = document.getElementById('prod-sug-sim-info');
+  if (simInfoEl) {
+    if (d.modo === 'desde_mp') {
+      const cantMP = parseFloat(document.getElementById('prod-sug-mp-cant').value) || 0;
+      simInfoEl.innerHTML = `🔬 Simulación: <b>${_fmtProdNum(cantMP)}</b> de <i>${guia.nombre}</i> → Esperado: <b>${_fmtProdNum(d.sugerida)} und</b>`;
+      simInfoEl.classList.remove('hidden');
+    } else {
+      simInfoEl.classList.add('hidden');
+    }
+  }
+
+  // 1. Opciones del selector: Mostrar el nombre de la MP y su stock disponible en bodega
+  const sel = document.getElementById('prod-sug-guia');
+  sel.innerHTML = comps.map(c => {
+    const esSel = (c.id === d.guia_id);
+    return `<option value="${c.id}"${esSel ? ' selected' : ''}>${c.nombre} (Stock en bodega: ${_fmtProdNum(c.stock)})</option>`;
+  }).join('');
+
+  // 2. Badge de stock de la materia prima seleccionada
+  const stockBadge = document.getElementById('prod-sug-stock-guia-badge');
+  if (stockBadge) {
+    stockBadge.textContent = `Stock disponible: ${_fmtProdNum(guia.stock)}`;
+  }
+
+  // 3. Explicación clara de rendimiento: cuánto producto final permite fabricar
+  const helperEl = document.getElementById('prod-sug-guia-helper');
+  if (helperEl) {
+    helperEl.innerHTML = `💡 Con tu stock de <b>${guia.nombre}</b> (${_fmtProdNum(guia.stock)}) puedes fabricar hasta: <span class="text-amber-950 font-black">${_fmtProdNum(guia.max_qty)} und</span> de <i>${prodNombre}</i>.`;
+  }
+
+  // 4. Placeholder del input MP
+  const mpCantInput = document.getElementById('prod-sug-mp-cant');
+  if (mpCantInput && !mpCantInput.value) {
+    mpCantInput.placeholder = `Máx: ${_fmtProdNum(guia.stock)}`;
+  }
+  document.getElementById('prod-sug-mp-nombre').textContent = guia.nombre ? `de ${guia.nombre}` : '';
+
+  // 5. Asignar cantidad esperada a producir
+  document.getElementById('prod-cantidad').value = d.sugerida;
+  const sugRealEl = document.getElementById('prod-sug-real-cant');
+  if (sugRealEl) sugRealEl.value = d.sugerida;
+
+  document.getElementById('prod-sugerencia').classList.remove('hidden');
+  if (autoPreview && d.sugerida > 0) {
+    previsualizarProduccion(false, false);
+  } else {
+    limpiarPreview();
+  }
+}
+
+async function sugerenciaCambioGuia() {
+  const id = document.getElementById('prod-ac-id').value;
+  const guiaId = document.getElementById('prod-sug-guia').value;
+  if (!id || !guiaId) return;
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion/sugerencia?producto_id=${id}&guia_id=${guiaId}${_prodSugBodegaParam()}`);
+    const d = await r.json();
+    if (!d.ok) { toast(d.error, false); return; }
+    prodSugerenciaData = d;
+    document.getElementById('prod-sug-mp-cant').value = '';
+    renderSugerencia();
+  } catch(e) { console.error(e); toast('Error de red al recalcular sugerencia', false); }
+}
+
+async function sugerenciaDesdeMP() {
+  const id = document.getElementById('prod-ac-id').value;
+  const guiaId = document.getElementById('prod-sug-guia').value;
+  const val = parseFloat(document.getElementById('prod-sug-mp-cant').value);
+  if (!val || val <= 0) { toast('Digita la cantidad de materia prima a usar', false); return; }
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion/sugerencia?producto_id=${id}&guia_id=${guiaId}&modo=desde_mp&cantidad_mp=${val}${_prodSugBodegaParam()}`);
+    const d = await r.json();
+    if (!d.ok) { toast(d.error, false); return; }
+    prodSugerenciaData = d;
+    renderSugerencia(true);
+    if (d.excede_stock_guia) toast('La cantidad supera el stock de la guía: verifica disponibilidad en la tabla', false);
+  } catch(e) { console.error(e); toast('Error de red al recalcular sugerencia', false); }
+}
+
+function sugerenciaUsarMaximo() {
+  const d = prodSugerenciaData;
+  if (d && d.componentes) {
+    const guia = d.componentes.find(c => c.id === d.guia_id) || d.componentes[0];
+    if (guia && guia.stock > 0) {
+      document.getElementById('prod-sug-mp-cant').value = guia.stock;
+      sugerenciaDesdeMP();
+      return;
+    }
+  }
+  document.getElementById('prod-sug-mp-cant').value = '';
+  sugerenciaCambioGuia();
+}
+
+function ocultarSugerencia() {
+  const strip = document.getElementById('prod-sugerencia');
+  if (strip) strip.classList.add('hidden');
+  _sugSeq++;
+  prodSugerenciaData = null;
+}
+
+async function previsualizarProduccion(scrollSmooth = true, forzarDesdeTarjeta = false) {
+  const id  = document.getElementById('prod-ac-id').value;
+  const qty = parseFloat(document.getElementById('prod-cantidad').value);
+  if (!id) { toast('Selecciona un producto', false); return; }
+  if (!qty || qty <= 0) { toast('Cantidad inválida', false); return; }
+
+  const bodParam = (CENTRO_ACTIVO && CENTRO_ACTIVO.id) ? `&bodega=${encodeURIComponent(CENTRO_ACTIVO.id)}` : '';
+  let mpParams = '';
+  if (!forzarDesdeTarjeta && prodSugerenciaData && prodSugerenciaData.modo === 'desde_mp') {
+    const guiaId = document.getElementById('prod-sug-guia')?.value || prodSugerenciaData.guia_id;
+    const cantMP = parseFloat(document.getElementById('prod-sug-mp-cant')?.value || 0);
+    if (guiaId && cantMP > 0) {
+      mpParams = `&guia_id=${encodeURIComponent(guiaId)}&cantidad_mp=${encodeURIComponent(cantMP)}`;
+    }
+  }
+
+  const r = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion/preview?producto_id=${id}&cantidad=${qty}${bodParam}${mpParams}`);
+  const d = await r.json();
+  if (!d.ok) { toast(d.error, false); return; }
+
+  // Guardar cantidad esperada según receta para poder comparar cuando el usuario ajuste la cantidad real obtenida
+  d.cantidad_esperada = d.cantidad;
+  activePreviewData = d;
+
+  const centroBadge = document.getElementById('prod-preview-centro-badge');
+  if (centroBadge) {
+    const icon = d.centro_tipo === 'movil' ? '🛵' : '🏪';
+    const bgCol = d.centro_color || '#4f46e5';
+    centroBadge.style.backgroundColor = `${bgCol}18`;
+    centroBadge.style.color = bgCol;
+    centroBadge.style.border = `1px solid ${bgCol}50`;
+    centroBadge.innerHTML = `<span>${icon}</span> <span>${d.centro_nombre || 'Sede'} (${d.centro_codigo || 'LOC'})</span>`;
+  }
+
+  // Poblar cabecera destacada del producto a producir
+  const prodTitleEl = document.getElementById('prod-preview-nombre-prod');
+  if (prodTitleEl) prodTitleEl.textContent = d.producto || 'Producto';
+  
+  const cantBadgeEl = document.getElementById('prod-preview-cant-badge');
+  if (cantBadgeEl) cantBadgeEl.textContent = `${_fmtProdNum(qty)} Unidades`;
+
+  const prevCantInput = document.getElementById('prod-preview-cant-input');
+  if (prevCantInput) {
+    if (!_prodRealManualmenteModificada) {
+      prevCantInput.value = qty;
+    } else {
+      const valManual = parseFloat(prevCantInput.value);
+      if (valManual && !isNaN(valManual) && valManual > 0) {
+        d.cantidad = valManual;
+      }
+    }
+  }
+
+  const sugRealEl = document.getElementById('prod-sug-real-cant');
+  if (sugRealEl) sugRealEl.value = qty;
+
+  const lockPill = document.getElementById('prod-cantidad-lock-pill');
+  if (lockPill) lockPill.classList.remove('hidden');
+  const modoHint = document.getElementById('prod-cantidad-modo-hint');
+  if (modoHint) modoHint.classList.remove('hidden');
+
+  const countEl = document.getElementById('prod-preview-items-count');
+  const numLineas = (d.lineas || []).length;
+  if (countEl) {
+    countEl.textContent = `${numLineas} ingrediente${numLineas === 1 ? '' : 's'} / insumo${numLineas === 1 ? '' : 's'}`;
+  }
+
+  inicializarDecimalesPreviewProduccion();
+  renderInfoRendimientoProduccion();
+  renderTablaPrevisualizacion();
+  const previewEl = document.getElementById('prod-preview');
+  if (previewEl) {
+    previewEl.classList.remove('hidden');
+    if (scrollSmooth) {
+      setTimeout(() => {
+        previewEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 80);
+    }
+  }
+}
+
+function renderTablaPrevisualizacion() {
+  if (!activePreviewData) return;
+  const qty = activePreviewData.cantidad;
+  const tb = document.getElementById('prod-preview-tabla');
+
+  tb.innerHTML = activePreviewData.lineas.map(l => {
+    const suf = l.stock_actual >= l.a_consumir;
+    const aConsumirFmt = Number(l.a_consumir || 0).toFixed(_prodPreviewDecimales);
+    return `
+      <tr id="prod-preview-row-${l.id}" class="border-b border-slate-100 hover:bg-amber-50/40 transition">
+        <td class="px-2.5 py-0.5 text-left font-bold text-slate-800 text-xs leading-tight">${l.nombre}</td>
+        <td id="prod-stock-${l.id}" class="px-2 py-0.5 text-right num text-xs font-mono font-bold ${suf ? 'text-emerald-700' : 'text-rose-600'}">${_fmtProdNum(l.stock_actual)}</td>
+        <td class="px-2 py-0.5 text-right">
+          <input type="number" step="any" min="0" value="${aConsumirFmt}"
+                 oninput="actualizarConsumoPrevisualizacion(${l.id}, this.value)"
+                 onblur="this.value = Number(this.value || 0).toFixed(_prodPreviewDecimales); actualizarConsumoPrevisualizacion(${l.id}, this.value);"
+                 class="w-36 sm:w-40 text-right border border-slate-300 rounded px-2 py-0 h-6 text-xs font-mono font-black focus:outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-400 bg-white shadow-2xs">
+        </td>
+        <td class="px-2 py-0.5 text-right num font-mono text-xs text-slate-600">${_fmtProdMon(l.costo_und)}</td>
+        <td id="prod-subtotal-${l.id}" class="px-2 py-0.5 text-right num font-mono font-black text-xs text-slate-900">${_fmtProdMon(l.costo_total)}</td>
+        <td id="prod-badge-${l.id}" class="px-2 py-0.5 text-center">
+          ${suf
+            ? '<span class="px-1.5 py-0.2 rounded-md text-[10px] font-black bg-emerald-100 text-emerald-800">✓ OK</span>'
+            : '<span class="px-1.5 py-0.2 rounded-md text-[10px] font-black bg-rose-100 text-rose-800">✗ Insuficiente</span>'}
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  actualizarTotalesPrevisualizacion();
+}
+
+function actualizarConsumoPrevisualizacion(componenteId, valStr) {
+  if (!activePreviewData) return;
+  const val = parseFloat(valStr) || 0;
+  const l = activePreviewData.lineas.find(line => line.id === componenteId);
+  if (!l) return;
+
+  l.a_consumir = val;
+  l.costo_total = val * l.costo_und;
+  l.suficiente = l.stock_actual >= l.a_consumir;
+
+  // Actualizar fila in-place
+  const subEl = document.getElementById(`prod-subtotal-${componenteId}`);
+  if (subEl) subEl.textContent = _fmtProdMon(l.costo_total);
+
+  const stockEl = document.getElementById(`prod-stock-${componenteId}`);
+  if (stockEl) {
+    stockEl.className = `px-3 py-1.5 text-right num text-xs sm:text-sm font-mono font-bold ${l.suficiente ? 'text-green-600' : 'text-red-500'}`;
+    stockEl.textContent = _fmtProdNum(l.stock_actual);
+  }
+
+  const badgeEl = document.getElementById(`prod-badge-${componenteId}`);
+  if (badgeEl) {
+    badgeEl.innerHTML = l.suficiente
+      ? '<span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-green-100 text-green-800">✓ OK</span>'
+      : '<span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-red-100 text-red-800">✗ Insuficiente</span>';
+  }
+
+  actualizarTotalesPrevisualizacion();
+}
+
+function actualizarTotalesPrevisualizacion() {
+  if (!activePreviewData) return;
+
+  let costoTotal = 0;
+  activePreviewData.lineas.forEach(l => {
+    costoTotal += l.costo_total;
+  });
+
+  activePreviewData.costo_total_produccion = costoTotal;
+  const qty = Number(activePreviewData.cantidad || 0);
+  activePreviewData.costo_unitario_produccion = qty > 0 ? (costoTotal / qty) : 0;
+
+  document.getElementById('prod-resumen-total').textContent = _fmtProdMon(activePreviewData.costo_total_produccion);
+  document.getElementById('prod-resumen-unitario').textContent = qty > 0 ? _fmtProdMon(activePreviewData.costo_unitario_produccion) : '-';
+
+  // Validar si todos son suficientes y cantidad real > 0
+  activePreviewData.puede_producir = qty > 0 && activePreviewData.lineas.every(l => l.suficiente);
+
+  const alerta = document.getElementById('prod-alerta');
+  if (!activePreviewData.lineas.every(l => l.suficiente)) {
+    alerta.textContent = 'Stock insuficiente en uno o más componentes. No se puede registrar la producción.';
+    alerta.classList.remove('hidden');
+  } else {
+    alerta.classList.add('hidden');
+  }
+
+  prodPuedeRegistrar = activePreviewData.puede_producir;
+  document.getElementById('prod-btn-registrar').disabled = !prodPuedeRegistrar;
+}
+
+async function registrarProduccion() {
+  const idVal = document.getElementById('prod-ac-id').value;
+  if (!idVal) {
+    toast('Selecciona un producto a producir de la lista', false);
+    return;
+  }
+
+  if (!prodPuedeRegistrar || !activePreviewData) {
+    toast('No se puede registrar. Primero genera la vista previa y asegúrate de contar con stock suficiente de componentes.', false);
+    return;
+  }
+
+  const id    = parseInt(idVal);
+  const qty   = (activePreviewData && Number(activePreviewData.cantidad) > 0)
+    ? Number(activePreviewData.cantidad)
+    : parseFloat(document.getElementById('prod-cantidad').value);
+  if (!qty || qty <= 0) {
+    toast('La cantidad real producida debe ser mayor a cero.', false);
+    return;
+  }
+  const fecha = (document.getElementById('prod-fecha')?.value || '').trim() || null;
+  const notas = document.getElementById('prod-notas').value.trim() || null;
+  const tipo_doc_id = parseInt(document.getElementById('prod-tipo-doc').value) || null;
+  const td = tiposDocProduccion.find(t => t.id === tipo_doc_id);
+  const tipo_documento = td ? td.nombre : null;
+  const documento_numero = document.getElementById('prod-num-doc').value || null;
+  const tercero_id = parseInt(document.getElementById('prod-responsable-id').value) || null;
+  const tercero_nombre = document.getElementById('prod-responsable').value.trim() || null;
+
+  const btn = document.getElementById('prod-btn-registrar');
+  if (btn) btn.disabled = true;
+
+  // Extraer componentes reales consumidos
+  const componentes = activePreviewData.lineas.map(l => ({
+    componente_id: l.id,
+    cantidad: l.a_consumir
+  }));
+
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        producto_id: id,
+        cantidad: qty,
+        fecha,
+        notas,
+        tipo_documento_id: tipo_doc_id,
+        tipo_documento,
+        documento_numero,
+        tercero_id,
+        tercero_nombre,
+        componentes
+      })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast(`✅ Producción registrada: ${d.producido} × ${d.producto}`);
+      document.getElementById('prod-ac-input').value = '';
+      document.getElementById('prod-ac-id').value = '';
+      document.getElementById('prod-cantidad').value = '1';
+      document.getElementById('prod-notas').value = '';
+      const prodFechaEl = document.getElementById('prod-fecha');
+      if (prodFechaEl) {
+        prodFechaEl.value = getFechaHoyBogota();
+        prodFechaEl.max = getFechaHoyBogota();
+      }
+      document.getElementById('prod-responsable').value = '{{ session.get("nombre", "") }}';
+      document.getElementById('prod-responsable-id').value = '{{ session.get("chat_tercero_id", "") }}';
+      limpiarPreview();
+      ocultarSugerencia();
+      sessionStorage.removeItem('tuctuc_produccion_reemplazo');
+      actualizarAvisoProduccionReemplazo();
+      cargarProductos();
+      cargarTiposDocProduccion();
+
+    } else {
+
+      toast(d.error || 'Error al registrar la producción', false);
+
+      if (btn) btn.disabled = false;
+
+    }
+
+  } catch(e) {
+
+    console.error(e);
+
+    toast('Error de red al registrar producción', false);
+
+    if (btn) btn.disabled = false;
+
+  }
+
+}
+
+function abrirAjusteReceta() {
+
+  if (!activePreviewData) {
+
+    toast('Debe cargar la vista previa de producción antes de ajustar la receta', false);
+
+    return;
+
+  }
+
+  
+
+  const qty = activePreviewData.cantidad;
+
+  document.getElementById('ajuste-cant-producir').textContent = fmt(qty);
+
+  
+
+  let costoActualUnitario = 0;
+
+  let costoNuevoUnitario = 0;
+
+  
+
+  const tb = document.getElementById('ajuste-comparativa-body');
+
+  tb.innerHTML = activePreviewData.lineas.map(l => {
+
+    const cantActual = l.cant_tarjeta;
+
+    const cantNueva = l.a_consumir / qty;
+
+    const dif = cantNueva - cantActual;
+
+    
+
+    costoActualUnitario += cantActual * l.costo_und;
+
+    costoNuevoUnitario += cantNueva * l.costo_und;
+
+    
+
+    let diffClass = 'text-gray-500';
+
+    let diffSign = '';
+
+    if (dif > 0) {
+
+      diffClass = 'text-red-600 font-bold';
+
+      diffSign = '+';
+
+    } else if (dif < 0) {
+
+      diffClass = 'text-emerald-600 font-bold';
+
+    }
+
+    
+
+    return `
+
+      <tr>
+
+        <td class="py-2 text-left font-semibold text-gray-800">${l.nombre}</td>
+
+        <td class="py-2 text-right font-mono">${fmt(cantActual)}</td>
+
+        <td class="py-2 text-right font-mono text-indigo-600 font-bold">${fmt(cantNueva)}</td>
+
+        <td class="py-2 text-right font-mono ${diffClass}">${diffSign}${fmt(dif)}</td>
+
+      </tr>
+
+    `;
+
+  }).join('');
+
+  
+
+  // Actualizar caja de costo e impacto
+
+  document.getElementById('ajuste-costo-actual').textContent = '$ ' + fmt(costoActualUnitario);
+
+  document.getElementById('ajuste-costo-nuevo').textContent = '$ ' + fmt(costoNuevoUnitario);
+
+  
+
+  const diffCosto = costoNuevoUnitario - costoActualUnitario;
+
+  const pctImpacto = costoActualUnitario > 0 ? ((diffCosto / costoActualUnitario) * 100) : 0;
+
+  
+
+  const pctEl = document.getElementById('ajuste-costo-impacto-pct');
+
+  const impactBox = document.getElementById('ajuste-impacto-costo');
+
+  
+
+  if (diffCosto > 0.01) {
+
+    pctEl.textContent = `Aumento de +${pctImpacto.toFixed(2)}%`;
+
+    pctEl.className = 'px-2.5 py-1 rounded-lg text-xs font-extrabold font-mono bg-red-100 text-red-800 border border-red-255';
+
+    impactBox.className = 'flex-shrink-0 p-4 rounded-xl mb-4 border flex flex-col gap-1.5 text-xs bg-red-50/50 border-red-100';
+
+  } else if (diffCosto < -0.01) {
+
+    pctEl.textContent = `Disminución de ${pctImpacto.toFixed(2)}%`;
+
+    pctEl.className = 'px-2.5 py-1 rounded-lg text-xs font-extrabold font-mono bg-emerald-100 text-emerald-800 border border-emerald-255';
+
+    impactBox.className = 'flex-shrink-0 p-4 rounded-xl mb-4 border flex flex-col gap-1.5 text-xs bg-emerald-50/50 border-emerald-100';
+
+  } else {
+
+    pctEl.textContent = 'Sin cambio (0.00%)';
+
+    pctEl.className = 'px-2.5 py-1 rounded-lg text-xs font-semibold font-mono bg-gray-100 text-gray-800 border border-gray-250';
+
+    impactBox.className = 'flex-shrink-0 p-4 rounded-xl mb-4 border flex flex-col gap-1.5 text-xs bg-gray-50 border-gray-150';
+
+  }
+
+  
+
+  document.getElementById('overlay-ajuste-receta').classList.remove('hidden');
+
+}
+
+function cerrarAjusteReceta() {
+
+  document.getElementById('overlay-ajuste-receta').classList.add('hidden');
+
+}
+
+async function confirmarAjusteReceta() {
+
+  if (!activePreviewData) return;
+
+  const qty = activePreviewData.cantidad;
+
+  const componentes = activePreviewData.lineas.map(l => ({
+
+    componente_id: l.id,
+
+    cantidad_unidad: l.a_consumir / qty
+
+  }));
+
+  
+
+  try {
+
+    const r = await fetch(`/api/inventario/producto/${activePreviewData.producto_id}/tarjeta/update-proportions`, {
+
+      method: 'POST',
+
+      headers: {'Content-Type': 'application/json'},
+
+      body: JSON.stringify({ componentes })
+
+    });
+
+    const d = await r.json();
+
+    if (d.ok) {
+
+      toast('✅ ¡Receta estándar actualizada permanentemente!');
+
+      cerrarAjusteReceta();
+
+      // Volver a previsualizar para cargar los nuevos estándar de receta
+
+      await previsualizarProduccion();
+
+    } else {
+
+      toast(d.error || 'Error al actualizar receta', false);
+
+    }
+
+  } catch(e) {
+
+    console.error(e);
+
+    toast('Error de red al actualizar receta', false);
+
+  }
+
+}
+
+async function cargarTiposDocProduccion() {
+  try {
+    const prodFechaEl = document.getElementById('prod-fecha');
+    if (prodFechaEl) {
+      if (!prodFechaEl.value) prodFechaEl.value = getFechaHoyBogota();
+      prodFechaEl.max = getFechaHoyBogota();
+    }
+    actualizarAvisoProduccionReemplazo();
+    const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/tipos-doc`);
+    const d = await r.json();
+    if (d.ok) {
+      tiposDocProduccion = d.tipos.filter(t => t.activo && t.mueve_inventario && t.tipo_movimiento === 'produccion');
+      const select = document.getElementById('prod-tipo-doc');
+      if (select) {
+        select.innerHTML = tiposDocProduccion.map(t => `<option value="${t.id}" ${t.predeterminado ? 'selected' : ''}>${t.nombre}</option>`).join('');
+        if (!tiposDocProduccion.length) {
+          select.innerHTML = '<option value="">No hay tipos de doc. de producción configurados</option>';
+        }
+        mostrarConsecutivoProduccion();
+        cargarHistorialProduccion();
+      }
+    }
+  } catch(e) {
+    console.error('Error al cargar tipos de documento para producción:', e);
+  }
+}
+
+function mostrarConsecutivoProduccion() {
+
+  const id = parseInt(document.getElementById('prod-tipo-doc').value);
+
+  const td = tiposDocProduccion.find(t => t.id === id);
+
+  const input = document.getElementById('prod-num-doc');
+
+  if (input) {
+
+    if (td) {
+
+      const nextNum = Math.max((td.consecutivo || 0) + 1, (td.numero_inicio || 1));
+
+      input.value = nextNum;
+
+    } else {
+
+      input.value = '';
+
+    }
+
+  }
+
+}
+
+async function cargarHistorialProduccion(pagina = 1) {
+
+  histProdPagina = Math.max(1, pagina);
+
+  const tbody = document.getElementById('prod-historial-body');
+
+  if (!tbody) return;
+
+  try {
+
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion/historial?pagina=${histProdPagina}`);
+
+    const d = await r.json();
+
+    if (d.ok) {
+
+      histProdTotalPaginas = d.total_paginas || 1;
+
+      actualizarPaginadorHistProd(d.total || 0);
+
+      if (!d.historial.length) {
+
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-gray-400 italic">No hay registros de producción.</td></tr>';
+
+        return;
+
+      }
+
+      renderHistorialProduccion(d.historial);
+
+    } else {
+
+      tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-red-500 italic">Error al cargar historial: ${d.error}</td></tr>`;
+
+    }
+
+  } catch(e) {
+
+    console.error(e);
+
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-red-500 italic">Error de conexión al cargar historial.</td></tr>';
+
+  }
+
+}
+
+function actualizarPaginadorHistProd(total) {
+
+  const tPagina = document.getElementById('prod-hist-pagina');
+
+  const tTotal = document.getElementById('prod-hist-total');
+
+  const prev = document.getElementById('btn-prod-prev');
+
+  const next = document.getElementById('btn-prod-next');
+
+  if (tPagina) tPagina.textContent = `Página ${histProdPagina} de ${histProdTotalPaginas}`;
+
+  if (tTotal) tTotal.textContent = `${total.toLocaleString('es-CO')} registros`;
+
+  if (prev) prev.disabled = histProdPagina <= 1;
+
+  if (next) next.disabled = histProdPagina >= histProdTotalPaginas;
+
+}
+
+function renderHistorialProduccion(historial) {
+
+  const tbody = document.getElementById('prod-historial-body');
+
+  tbody.innerHTML = historial.map(h => `
+
+        <tr class="hover:bg-gray-50 border-b border-gray-100">
+
+          <td class="px-4 py-3 font-medium text-gray-900">
+
+            <span class="font-bold text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded">${h.documento_numero || ('PROD-' + h.prod_token)}</span>
+
+          </td>
+
+          <td class="px-4 py-3 text-xs text-gray-500">${h.fecha}</td>
+
+          <td class="px-4 py-3 text-xs text-gray-700 font-medium">${h.responsable || '—'}</td>
+
+          <td class="px-4 py-3 font-semibold text-gray-800 text-xs">${h.producto_nombre}</td>
+
+          <td class="px-4 py-3 text-right text-gray-600 font-medium">${h.cantidad.toLocaleString('es-CO')}</td>
+
+          <td class="px-4 py-3 text-right text-blue-600 font-bold">$${h.valor_total.toLocaleString('es-CO')}</td>
+
+          <td class="px-4 py-3 text-center flex items-center justify-center gap-1.5">
+
+            <button onclick="imprimirProduccion(${h.prod_token})" 
+
+                    class="inline-flex items-center gap-1 text-xs text-rose-500 hover:text-rose-700 font-bold border border-rose-100 hover:border-rose-300 bg-rose-50/50 hover:bg-rose-50 rounded-lg px-2.5 py-1 transition"
+
+                    title="Imprimir Comprobante">
+
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+
+              Imprimir
+
+            </button>
+
+            <button onclick="anularProduccion(${h.prod_token}, '${h.producto_nombre}')" 
+
+                    class="inline-flex items-center gap-1 text-xs text-red-600 hover:text-red-800 font-bold border border-red-100 hover:border-red-300 bg-red-50/50 hover:bg-red-50 rounded-lg px-2.5 py-1 transition"
+
+                    title="Anular Producción">
+
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+
+              Anular
+
+            </button>
+
+          </td>
+
+        </tr>
+
+      `).join('');
+
+}
+
+function imprimirProduccion(token) {
+
+  window.open(`/api/inventario/${NEGOCIO_ID}/produccion/${token}/imprimir`, '_blank');
+
+}
+
+async function anularProduccion(token, nombre) {
+  const confirmed = confirm(`¿Estás seguro de que deseas ANULAR la producción de "${nombre}"?\n\nEsta acción eliminará el registro de producción, devolverá los insumos al inventario, borrará el asiento contable y recalculará los costos promedio ponderados de todos los productos afectados.`);
+  if (!confirmed) return;
+
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion/${token}/anular`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ forzar: false })
+    });
+    const d = await r.json();
+
+    if (d.requiere_confirmacion && d.alerta) {
+      const a = d.alerta;
+      let msg = `⚠️ ALERTA DE KARDEX Y CONSISTENCIA DE COSTOS\n`;
+      msg += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+      msg += `Estás a punto de anular la producción de "${nombre}".\n\n`;
+      if (a.motivos && a.motivos.length) {
+        msg += `Detalles detectados:\n`;
+        a.motivos.forEach(m => { msg += `• ${m}\n`; });
+      }
+      msg += `\n🚨 IMPACTO CRUCIAL:\n`;
+      msg += `Si anulas esta producción para afinar mermas o corregir cantidades, es OBLIGATORIO que la nueva producción que registres TENGA LA FECHA ORIGINAL: ${a.fecha_produccion_fmt || a.fecha_produccion}.\n\n`;
+      msg += `De lo contrario, las ventas intermedias se desfasarán en costos y el Kardex entrará en saldo negativo.\n\n`;
+      msg += `¿Deseas continuar y ANULAR esta producción bajo tu confirmación?`;
+
+      if (!confirm(msg)) return;
+
+      const r2 = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion/${token}/anular`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ forzar: true })
+      });
+      const d2 = await r2.json();
+      if (d2.ok) {
+        if (d2.fecha_original) {
+          sessionStorage.setItem('tuctuc_produccion_reemplazo', JSON.stringify({
+            producto_id: d2.producto_id,
+            nombre: nombre,
+            fecha: d2.fecha_original
+          }));
+          actualizarAvisoProduccionReemplazo();
+        }
+        toast(`Producción anulada. Si vas a rehacerla, usa la fecha original: ${d2.fecha_original || a.fecha_produccion}`, true);
+        cargarHistorialProduccion();
+        cargarProductos();
+      } else {
+        toast(d2.error || 'Error al anular producción', false);
+      }
+      return;
+    }
+
+    if (d.ok) {
+      if (d.fecha_original) {
+        sessionStorage.setItem('tuctuc_produccion_reemplazo', JSON.stringify({
+          producto_id: d.producto_id,
+          nombre: nombre,
+          fecha: d.fecha_original
+        }));
+        actualizarAvisoProduccionReemplazo();
+      }
+      toast('Producción anulada con éxito y costos recalculados');
+      cargarHistorialProduccion();
+      cargarProductos();
+    } else {
+      toast(d.error || 'Error al anular producción', false);
+    }
+  } catch (e) {
+    console.error(e);
+    toast('Error de red al anular producción', false);
+  }
+}
+
+function actualizarAvisoProduccionReemplazo() {
+  const box = document.getElementById('aviso-prod-reemplazo');
+  const spanFecha = document.getElementById('aviso-prod-reemplazo-fecha');
+  if (!box || !spanFecha) return;
+  const raw = sessionStorage.getItem('tuctuc_produccion_reemplazo');
+  if (!raw) {
+    box.classList.add('hidden');
+    return;
+  }
+  try {
+    const data = JSON.parse(raw);
+    if (data && data.fecha) {
+      spanFecha.textContent = data.fecha;
+      box.classList.remove('hidden');
+    } else {
+      box.classList.add('hidden');
+    }
+  } catch(e) {
+    box.classList.add('hidden');
+  }
+}
+
+function aplicarFechaProduccionReemplazo() {
+  toast('La fecha de producción está bloqueada estrictamente a la fecha actual.', false);
+}
+
+function toggleHistorialProduccion() {
+  const body = document.getElementById('prod-historial-wrapper');
+  const icon = document.getElementById('historial-toggle-icon');
+  const btn = document.querySelector('[aria-controls="prod-historial-wrapper"]');
+  if (!body) return;
+  const collapsed = body.classList.toggle('hidden');
+  if (icon) icon.textContent = collapsed ? '?' : '?';
+  if (btn) btn.setAttribute('aria-expanded', String(!collapsed));
+  if (!collapsed && body.dataset.cargado !== '1') {
+    body.dataset.cargado = '1';
+    cargarHistorialProduccion();
+  }
+}
+
+function togglePronosticoProduccion() {
+
+  const body = document.getElementById('pronostico-produccion-body');
+
+  const icon = document.getElementById('pronostico-toggle-icon');
+
+  const btn = document.querySelector('[aria-controls="pronostico-produccion-body"]');
+
+  if (!body) return;
+
+  const collapsed = body.classList.toggle('hidden');
+
+  if (icon) icon.textContent = collapsed ? '▶' : '▼';
+
+  if (btn) btn.setAttribute('aria-expanded', String(!collapsed));
+
+  if (!collapsed && body.dataset.cargado !== '1') {
+
+    body.dataset.cargado = '1';
+
+    cargarSugerenciasProduccion();
+
+  }
+
+}
+
+async function cargarSugerenciasProduccion() {
+
+  const el = document.getElementById('sugerencias-tabla-body');
+
+  if (!el) return;
+
+  
+
+  el.innerHTML = '<tr><td colspan="9" class="px-3 py-4 text-center text-slate-400 italic">Analizando consumos e inventarios...</td></tr>';
+
+  
+
+  // Extraer valores de configuración si existen en el DOM
+
+  const diasHistorial = document.getElementById('cfg-dias-historial')?.value || '30';
+
+  const diasDefecto = document.getElementById('cfg-dias-defecto')?.value || '7';
+
+  const growthWindow = document.getElementById('cfg-growth-window')?.value || '7';
+
+  const maxGrowth = document.getElementById('cfg-max-growth')?.value || '100';
+
+  const minGrowth = document.getElementById('cfg-min-growth')?.value || '-50';
+
+  
+
+  const queryParams = `?dias_historial=${diasHistorial}&dias_defecto=${diasDefecto}&growth_window=${growthWindow}&max_growth=${maxGrowth}&min_growth=${minGrowth}`;
+
+  
+
+  try {
+
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion/sugerencias` + queryParams);
+
+    const d = await r.json();
+
+    
+
+    if (!d.ok) {
+
+      el.innerHTML = `<tr><td colspan="9" class="px-3 py-4 text-center text-red-500 font-bold">Error: ${d.error}</td></tr>`;
+
+      return;
+
+    }
+
+    
+
+    if (!d.sugerencias || d.sugerencias.length === 0) {
+
+      el.innerHTML = `
+
+        <tr>
+
+          <td colspan="9" class="px-3 py-4 text-center text-slate-500 font-medium">
+
+            ✅ Todos los productos producidos están al día y no tienen consumos o inconsistencias.
+
+          </td>
+
+        </tr>
+
+      `;
+
+      return;
+
+    }
+
+    
+
+    el.innerHTML = d.sugerencias.map(s => {
+
+      const classFactible = s.factible 
+
+        ? 'bg-emerald-50 border-emerald-100 text-emerald-800' 
+
+        : 'bg-amber-50 border-amber-100 text-amber-800';
+
+      const labelFactible = s.factible 
+
+        ? '✓ OK' 
+
+        : '✗ Incompleto';
+
+        
+
+      const growthLabel = s.growth_rate_pct > 0 
+
+        ? `<span class="text-emerald-600 font-bold">↑ ${s.growth_rate_pct}%</span>`
+
+        : s.growth_rate_pct < 0 
+
+          ? `<span class="text-red-500 font-bold">↓ ${Math.abs(s.growth_rate_pct)}%</span>`
+
+          : '<span class="text-slate-400">0%</span>';
+
+
+
+      // Estilo y texto de la fecha de producción
+
+      let fechaBadge = '';
+
+      if (s.fecha_probable === 'Inmediato') {
+
+        fechaBadge = '<span class="text-red-600 font-extrabold uppercase bg-red-50 border border-red-200 px-2 py-0.5 rounded-lg text-[10px]">Urgente</span>';
+
+      } else if (s.fecha_probable === 'Sin consumo') {
+
+        fechaBadge = '<span class="text-slate-400 font-semibold bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-lg text-[10px]">N/A</span>';
+
+      } else {
+
+        fechaBadge = `<span class="text-indigo-600 font-bold bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-lg text-[10px]">${s.fecha_probable}</span>`;
+
+      }
+
+
+
+      return `
+
+        <tr class="hover:bg-slate-50 border-b border-gray-100 transition-colors">
+
+          <td class="px-3 py-2 font-bold text-slate-800 text-left">${s.producto_nombre}</td>
+
+          <td class="px-3 py-2 text-right font-semibold ${s.stock_actual < 0 ? 'text-red-500 font-bold' : 'text-slate-700'}">${fmt(s.stock_actual)}</td>
+
+          <td class="px-3 py-2 text-right num text-slate-600">${fmt(s.demanda_diaria)}</td>
+
+          <td class="px-3 py-2 text-center text-slate-600">${s.frecuencia_dias} días</td>
+
+          <td class="px-3 py-2 text-center">${growthLabel}</td>
+
+          <td class="px-3 py-2 text-center">${fechaBadge}</td>
+
+          <td class="px-3 py-2 text-right font-bold text-slate-700">${fmt(s.cantidad_sugerida)}</td>
+
+          <td class="px-3 py-2 text-center">
+
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full border ${classFactible}">
+
+              ${labelFactible}
+
+            </span>
+
+          </td>
+
+          <td class="px-3 py-2 text-center">
+
+            <button onclick="seleccionarSugerencia(${s.producto_id}, '${s.producto_nombre.replace(/'/g, "\\'")}', ${s.cantidad_sugerida})"
+
+                    class="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold rounded-lg transition text-[10px]">
+
+              Producir
+
+            </button>
+
+          </td>
+
+        </tr>
+
+      `;
+
+    }).join('');
+
+  } catch (err) {
+
+    console.error(err);
+
+    el.innerHTML = '<tr><td colspan="9" class="px-3 py-4 text-center text-red-500 font-bold">Error de conexión al cargar sugerencias.</td></tr>';
+
+  }
+
+}
+
+async function seleccionarSugerencia(productoId, productoNombre, cantidad) {
+
+  // 1. Cargar datos en el formulario
+
+  document.getElementById('prod-ac-input').value = productoNombre;
+
+  document.getElementById('prod-ac-id').value = productoId;
+
+  document.getElementById('prod-cantidad').value = cantidad;
+
+  await sugerirProduccion();
+
+  document.getElementById('prod-cantidad').value = cantidad;
+
+  
+
+  // 2. Ejecutar vista previa
+
+  previsualizarProduccion();
+
+  
+
+  // 3. Scroll suave centrado
+
+  setTimeout(() => {
+
+    const el = document.getElementById('prod-preview');
+
+    if (el) {
+
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    }
+
+  }, 150);
+
+}
+
+    // Inicialización al cargar la página
+    document.addEventListener('DOMContentLoaded', async () => {
+      // 1. Cargar productos
+      await cargarProductos(true);
+
+      // 2. Setup Autocomplete de Producto a Fabricar
+      setupAC('prod-ac-input', 'prod-ac-list', 'prod-ac-id', () => productos, () => {
+        limpiarPreview();
+        sugerirProduccion();
+      });
+      document.getElementById('prod-ac-input')?.addEventListener('input', ocultarSugerencia);
+
+      // 3. Setup Autocomplete de Responsable
+      setupRemoteAC('prod-responsable', 'prod-responsable-list', 'prod-responsable-id', '/api/inventario/proveedores/buscar');
+
+      // 4. Cargar tipos de documento y consecutivo
+      await cargarTiposDocProduccion();
+
+      // 5. Inicializar decimales configurados
+      inicializarDecimalesPreviewProduccion();
+
+      // 6. Asignar fecha de hoy (Bogotá)
+      const fechaEl = document.getElementById('prod-fecha');
+      if (fechaEl && !fechaEl.value) {
+        fechaEl.value = getFechaHoyBogota();
+      }
+
+      // 7. Cargar Historial inicial (página 1)
+      await cargarHistorialProduccion(1);
+    });
+  </script>
+</body>
+</html>

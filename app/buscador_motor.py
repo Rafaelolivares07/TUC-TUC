@@ -289,7 +289,7 @@ def _obtener_catalogo_base(negocio_id=None, slug=None):
             'titulo': 'Órdenes de Producción y Fabricación',
             'modulo': 'Inventario > Producción',
             'icono': '⚙️',
-            'url': f'/inventario/{nid}?tab=produccion',
+            'url': f'/produccion/{nid}',
             'keywords': ['produccion', 'orden de produccion', 'fabricacion', 'lote', 'transformacion', 'cocina']
         },
         {

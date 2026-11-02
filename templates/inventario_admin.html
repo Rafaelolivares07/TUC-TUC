@@ -1976,7 +1976,7 @@
 
       <a href="/entradas/{{ negocio_id }}" class="tab-btn" title="Entradas de Almacén (Compras y Facturas)">Entradas &nearr;</a>
 
-      <button class="tab-btn" onclick="mostrarTab('produccion')">Producción</button>
+      <a href="/produccion/{{ negocio_id }}" class="tab-btn" title="Órdenes y Registro de Producción">Producción &nearr;</a>
 
       <button class="tab-btn" onclick="mostrarTab('compras_sugerencias')">🛒 Compras</button>
       <button class="tab-btn" onclick="mostrarTab('cotizaciones')">📋 Cotizaciones</button>
@@ -4977,6 +4977,10 @@ const TABS = ['productos', 'tarjetas', 'entradas', 'produccion', 'compras_sugere
 function mostrarTab(t) {
   if (t === 'entradas') {
     window.location.href = '/entradas/' + NEGOCIO_ID;
+    return;
+  }
+  if (t === 'produccion') {
+    window.location.href = '/produccion/' + NEGOCIO_ID;
     return;
   }
   if (t === 'ventas_costos') {

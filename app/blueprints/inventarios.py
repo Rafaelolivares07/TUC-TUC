@@ -10347,6 +10347,8 @@ def admin_inventario(negocio_id, tab_name=None):
             return redirect(f'/ventas-costos/{negocio_id}')
         if tab_pedido in ('entradas', 'entrada'):
             return redirect(f'/entradas/{negocio_id}')
+        if tab_pedido in ('produccion', 'producción'):
+            return redirect(f'/produccion/{negocio_id}')
         if 'usuario_id' not in session:
             return redirect(url_for('auth.admin_login'))
         _crear_tablas(conn)
@@ -10523,6 +10525,69 @@ def entradas_standalone(negocio_id=None):
         _slug = contexto.get('slug') or session.get('negocio_slug') or ''
 
         return render_template('entradas.html',
+                               negocio_id=negocio_id,
+                               negocio_nombre=contexto['negocio_nombre'],
+                               centros_utilidad=centros,
+                               centro_activo=centro_activo,
+                               negocio_slug=_slug,
+                               volver_url='/inicio')
+    except Exception as e:
+        return f"Error: {e}", 500
+    finally:
+        conn.close()
+
+
+@bp.route('/produccion')
+@bp.route('/produccion/<int:negocio_id>')
+def produccion_standalone(negocio_id=None):
+    """Vista corporativa independiente de Órdenes y Registro de Producción."""
+    if 'usuario_id' not in session and 'rol' not in session:
+        return redirect(url_for('auth.admin_login'))
+    
+    conn = get_db_connection()
+    try:
+        if not negocio_id:
+            negocio_activo = session.get('negocio_activo')
+            if negocio_activo and isinstance(negocio_activo, dict) and negocio_activo.get('id'):
+                negocio_id = negocio_activo['id']
+            elif session.get('negocio_id'):
+                negocio_id = session.get('negocio_id')
+            else:
+                n_row = conn.execute("SELECT id FROM negocios WHERE activo = TRUE ORDER BY id ASC LIMIT 1").fetchone()
+                if not n_row:
+                    n_row = conn.execute("SELECT id FROM terceros WHERE es_empresa = TRUE OR es_proveedor = TRUE ORDER BY id ASC LIMIT 1").fetchone()
+                if n_row:
+                    negocio_id = n_row['id']
+                else:
+                    return "No hay negocios registrados", 404
+
+        contexto = _contexto_negocio(conn, negocio_id)
+        if not contexto:
+            return "Negocio no encontrado", 404
+        if not _puede_gestionar_negocio(contexto):
+            return "No autorizado para este negocio", 403
+
+        centros_rows = conn.execute("""
+            SELECT id, codigo, nombre, tipo, color_badge, imagen_url, telefono, direccion
+            FROM centros_utilidad
+            WHERE negocio_id = %s AND activo = TRUE
+            ORDER BY id ASC
+        """, (negocio_id,)).fetchall()
+        centros = [dict(c) for c in centros_rows]
+        
+        centro_activo_id = session.get('centro_utilidad_id')
+        centro_activo = None
+        if centro_activo_id:
+            for c in centros:
+                if str(c['id']) == str(centro_activo_id):
+                    centro_activo = c
+                    break
+        if not centro_activo and centros:
+            centro_activo = centros[0]
+
+        _slug = contexto.get('slug') or session.get('negocio_slug') or ''
+
+        return render_template('produccion.html',
                                negocio_id=negocio_id,
                                negocio_nombre=contexto['negocio_nombre'],
                                centros_utilidad=centros,

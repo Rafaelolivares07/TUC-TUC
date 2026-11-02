@@ -141,6 +141,7 @@
     selectedIndex = -1;
     vistaDetalle = false;
     if (omniSpacer) { try { omniSpacer.remove(); } catch (e) {} omniSpacer = null; }
+    try { document.body.classList.remove('omni-heroe'); } catch (e) {}
     if (omniScrollPrevio !== null) {
       try { window.scrollTo({ top: omniScrollPrevio, behavior: omniSuave }); } catch (e) {}
       omniScrollPrevio = null;
@@ -179,6 +180,17 @@
       }
       dropdown.style.maxHeight = Math.floor(Math.min(Math.max(espacio, 220), tope)) + 'px';
       if (!desplazar) return;
+      if (document.body && document.body.dataset && document.body.dataset.page === 'portal') {
+        const yHeroe0 = r.top;
+        document.body.classList.add('omni-heroe');
+        const rHeroe = input.getBoundingClientRect();
+        dropdown.style.maxHeight = Math.max(220, Math.floor(Math.min(vh - rHeroe.bottom - 28, tope))) + 'px';
+        omniDbgPinta('heroe', Math.round(rHeroe.top), vh, Math.round(yHeroe0 - rHeroe.top), Math.round(window.scrollY));
+        if (yHeroe0 - rHeroe.top > 8 && omniSuave === 'smooth' && wrapper.animate) {
+          try { wrapper.animate([{ transform: 'translateY(' + Math.round(yHeroe0 - rHeroe.top) + 'px)' }, { transform: 'none' }], { duration: 280, easing: 'ease-out' }); } catch (e4) {}
+        }
+        return;
+      }
       if (vh < 320) { dropdown.style.maxHeight = Math.floor(Math.min(Math.max(espacio, 220), tope)) + 'px'; return; }
       const metaTop = Math.max(vh * 0.25, 76);
       if (r.top <= metaTop + 4) return;

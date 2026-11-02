@@ -18,6 +18,8 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
+import uuid
 
 import edge_tts
 
@@ -76,7 +78,7 @@ async def sintetizar(texto: str, ruta_mp3: str, voz: str, volumen: str = '+50%')
     await com.save(ruta_mp3)
 
 
-def reproducir(ruta_mp3: str, script_reproducir: str, bloqueante: bool = False):
+def reproducir(ruta_mp3: str, script_reproducir: str, bloqueante: bool = False, borrar_al_final: bool = True):
     cmd = [
         'powershell',
         '-NoProfile',
@@ -84,6 +86,8 @@ def reproducir(ruta_mp3: str, script_reproducir: str, bloqueante: bool = False):
         '-File', script_reproducir,
         ruta_mp3
     ]
+    if borrar_al_final:
+        cmd.append('-deleteAfter')
     if bloqueante:
         subprocess.run(cmd, check=False)
     else:
@@ -129,11 +133,12 @@ def main():
     volumen = args.volumen or cfg_agente.get('volumen', '+50%')
 
     script_reproducir = os.path.join(DIR_ACTUAL, 'reproducir.ps1')
-    archivo_mp3 = os.path.join(tempfile.gettempdir(), f'{args.agente}_habla.mp3')
+    uid = uuid.uuid4().hex[:6]
+    archivo_mp3 = os.path.join(tempfile.gettempdir(), f'{args.agente}_habla_{int(time.time()*1000)}_{os.getpid()}_{uid}.mp3')
 
     try:
         asyncio.run(sintetizar(texto, archivo_mp3, voz, volumen))
-        reproducir(archivo_mp3, script_reproducir, bloqueante=args.bloqueante)
+        reproducir(archivo_mp3, script_reproducir, bloqueante=args.bloqueante, borrar_al_final=True)
     except Exception as e:
         sys.stderr.write(f'Error en habla_agente: {e}\n')
 

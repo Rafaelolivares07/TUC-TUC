@@ -153,7 +153,7 @@
     vistaDetalle = false;
     if (document.body && document.body.dataset && document.body.dataset.page === 'portal') {
       document.body.classList.add('omni-heroe');
-      try { window.scrollTo({ top: 0 }); } catch (eT) {}
+      try { input.scrollIntoView({ block: 'start' }); } catch (eT) { try { window.scrollTo({ top: 0 }); } catch (eT2) {} }
     }
   }
 
@@ -202,7 +202,7 @@
       if (document.body && document.body.dataset && document.body.dataset.page === 'portal') {
         const yHeroe0 = r.top;
         document.body.classList.add('omni-heroe');
-        try { window.scrollTo({ top: 0 }); } catch (e5) {}
+        try { input.scrollIntoView({ block: 'start' }); } catch (e5) { try { window.scrollTo({ top: 0 }); } catch (e5b) {} }
         const rHeroe = input.getBoundingClientRect();
         dropdown.style.maxHeight = Math.max(220, Math.floor(Math.min(vh - rHeroe.bottom - 28, tope))) + 'px';
         omniDbgPinta('heroe', Math.round(rHeroe.top), vh, Math.round(yHeroe0 - rHeroe.top), Math.round(window.scrollY));
@@ -241,22 +241,26 @@
       }, 300);
     } catch (e) {}
   }
+  function omniRepinTeclado() {
+    try {
+      if (document.body && document.body.dataset && document.body.dataset.page === 'portal' && document.activeElement === input) {
+        clearTimeout(omniRepinT);
+        omniRepinT = setTimeout(function() {
+          try {
+            var rr = input.getBoundingClientRect();
+            var vhh = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+            if (rr.top < 60 || rr.bottom > vhh - 8) { omniDbgPinta('repin', Math.round(rr.top), vhh, 0, Math.round(window.scrollY)); try { input.scrollIntoView({ block: 'start' }); } catch (eS) { try { window.scrollTo({ top: 0 }); } catch (eS2) {} } }
+          } catch (eR) {}
+        }, 350);
+      }
+    } catch (eR0) {}
+  }
   if (window.visualViewport) {
     visualViewport.addEventListener('resize', function() {
       if (!dropdown.classList.contains('hidden')) ajustarDropdownViewport(false);
-      try {
-        if (document.body && document.body.dataset && document.body.dataset.page === 'portal' && document.activeElement === input) {
-          clearTimeout(omniRepinT);
-          omniRepinT = setTimeout(function() {
-            try {
-              var rr = input.getBoundingClientRect();
-              var vhh = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
-              if (rr.top < 60 || rr.bottom > vhh - 8) { omniDbgPinta('repin', Math.round(rr.top), vhh, 0, Math.round(window.scrollY)); try { input.scrollIntoView({ block: 'start' }); } catch (eS) { try { window.scrollTo({ top: 0 }); } catch (eS2) {} } }
-            } catch (eR) {}
-          }, 350);
-        }
-      } catch (eR0) {}
+      omniRepinTeclado();
     });
+    visualViewport.addEventListener('scroll', function() { omniRepinTeclado(); });
   }
 
   // -- RENDERIZADO DEL ESTADO INICIAL (VACÍO / ENFOQUE) ----------------

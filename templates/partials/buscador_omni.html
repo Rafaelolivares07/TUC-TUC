@@ -38,6 +38,8 @@
       <!-- Se llena por JavaScript -->
     </div>
     
+    <!-- V5-QUITAR depuracion temporal: se quita al cerrar el caso -->
+    <div id="omni-dbgline" class="px-3 py-0.5 text-[10px] text-gray-300 font-mono"></div>
     <!-- Footer de atajos rápidos -->
     <div class="px-3 py-2 bg-gray-50/80 flex items-center justify-between text-[11px] text-gray-400">
       <div class="flex items-center gap-3">
@@ -149,8 +151,15 @@
   // la pagina hasta dejar el input al 25% de arriba y la lista toma el resto)
   let omniScrollPrevio = null;
   let omniSpacer = null;
+  let omniSubeHasta = 0;
   let omniSuave = 'smooth';
   try { if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) omniSuave = 'auto'; } catch (e) {}
+  function omniDbgPinta(ev, a, b, c, d) {
+    try {
+      const _dl = document.getElementById('omni-dbgline');
+      if (_dl) _dl.textContent = 'dbg ' + ev + ' top=' + a + ' vh=' + b + ' x=' + c + ' y=' + d;
+    } catch (e9) {}
+  }
   function ajustarDropdownViewport(desplazar) {
     try {
       if (desplazar === undefined) desplazar = true;
@@ -159,6 +168,7 @@
       const tope = vh * 0.75;
       const espacio = vh - r.bottom - 28;
       const contenido = resultsBody ? resultsBody.scrollHeight : 0;
+      omniDbgPinta('in', Math.round(r.top), vh, Math.round(espacio), contenido);
       if (contenido > 0 && contenido <= espacio) {
         dropdown.style.maxHeight = Math.floor(Math.min(espacio, tope)) + 'px';
         return;
@@ -169,8 +179,12 @@
       }
       dropdown.style.maxHeight = Math.floor(Math.min(Math.max(espacio, 220), tope)) + 'px';
       if (!desplazar) return;
-      const metaTop = vh * 0.25;
+      if (vh < 320) { dropdown.style.maxHeight = Math.floor(Math.min(Math.max(espacio, 220), tope)) + 'px'; return; }
+      const metaTop = Math.max(vh * 0.25, 76);
       if (r.top <= metaTop + 4) return;
+      const ahoraSube = Date.now();
+      if (ahoraSube - omniSubeHasta < 450) return;
+      omniSubeHasta = ahoraSube;
       if (omniScrollPrevio === null) omniScrollPrevio = window.scrollY;
       try {
         const falta = Math.ceil(r.top - metaTop);
@@ -184,6 +198,7 @@
       } catch (e3) {}
       const rPost = input.getBoundingClientRect();
       if (rPost.top <= metaTop + 4) return;
+      omniDbgPinta('sube', Math.round(rPost.top), vh, Math.ceil(rPost.top - metaTop), Math.round(window.scrollY));
       window.scrollBy({ top: Math.ceil(rPost.top - metaTop), behavior: omniSuave });
       setTimeout(function() {
         try {

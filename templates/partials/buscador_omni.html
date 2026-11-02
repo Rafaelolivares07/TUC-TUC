@@ -668,9 +668,16 @@
     }
   });
 
-  // Cerrar al hacer clic afuera
-  document.addEventListener('click', (e) => {
-    if (!wrapper.contains(e.target)) {
+  // Cerrar al toque afuera: manda el press (Elegir repinta la lista durante
+  // el clic y suelta el target; juzgar el clic cerraria el detalle)
+  let omniPressFuera = false;
+  document.addEventListener('pointerdown', (e) => {
+    try { omniPressFuera = !wrapper.contains(e.target); } catch (err) { omniPressFuera = false; }
+  }, true);
+  document.addEventListener('click', () => {
+    const omniClickFuera = omniPressFuera;
+    omniPressFuera = false;
+    if (omniClickFuera) {
       cerrarDropdown();
     }
   });

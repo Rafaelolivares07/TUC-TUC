@@ -165,21 +165,6 @@
   let omniRepinT = 0;
   let omniSuave = 'smooth';
   try { if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) omniSuave = 'auto'; } catch (e) {}
-  let omniDbgHist = [];
-  function omniDbgPinta(ev, a, b, c, d) {
-    try {
-      let _dl = document.getElementById('omni-dbgline');
-      if (!_dl) {
-        _dl = document.createElement('div');
-        _dl.id = 'omni-dbgline';
-        _dl.style.cssText = 'position:fixed;top:8px;right:8px;z-index:9999;background:#111;color:#0f0;font:12px monospace;padding:6px 8px;border-radius:6px;opacity:0.92;pointer-events:none;';
-        document.body.appendChild(_dl);
-      }
-      omniDbgHist.unshift(ev + ' t=' + a + ' v=' + b + ' x=' + c + ' y=' + d);
-      omniDbgHist = omniDbgHist.slice(0, 3);
-      _dl.innerHTML = omniDbgHist.join('<br>');
-    } catch (e9) {}
-  }
   function ajustarDropdownViewport(desplazar) {
     try {
       if (desplazar === undefined) desplazar = true;
@@ -205,7 +190,6 @@
         try { input.scrollIntoView({ block: 'start' }); } catch (e5) { try { window.scrollTo({ top: 0 }); } catch (e5b) {} }
         const rHeroe = input.getBoundingClientRect();
         dropdown.style.maxHeight = Math.max(220, Math.floor(Math.min(vh - rHeroe.bottom - 28, tope))) + 'px';
-        omniDbgPinta('heroe', Math.round(rHeroe.top), vh, Math.round(yHeroe0 - rHeroe.top), Math.round(window.scrollY));
         if (yHeroe0 - rHeroe.top > 8 && omniSuave === 'smooth' && wrapper.animate) {
           try { wrapper.animate([{ transform: 'translateY(' + Math.round(yHeroe0 - rHeroe.top) + 'px)' }, { transform: 'none' }], { duration: 280, easing: 'ease-out' }); } catch (e4) {}
         }
@@ -230,7 +214,6 @@
       } catch (e3) {}
       const rPost = input.getBoundingClientRect();
       if (rPost.top <= metaTop + 4) return;
-      omniDbgPinta('sube', Math.round(rPost.top), vh, Math.ceil(rPost.top - metaTop), Math.round(window.scrollY));
       window.scrollBy({ top: Math.ceil(rPost.top - metaTop), behavior: omniSuave });
       setTimeout(function() {
         try {
@@ -249,7 +232,7 @@
           try {
             var rr = input.getBoundingClientRect();
             var vhh = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
-            if (rr.top < 60 || rr.bottom > vhh - 8) { omniDbgPinta('repin', Math.round(rr.top), vhh, 0, Math.round(window.scrollY)); try { input.scrollIntoView({ block: 'start' }); } catch (eS) { try { window.scrollTo({ top: 0 }); } catch (eS2) {} } }
+            if (rr.top < 60 || rr.bottom > vhh - 8) { try { input.scrollIntoView({ block: 'start' }); } catch (eS) { try { window.scrollTo({ top: 0 }); } catch (eS2) {} } }
           } catch (eR) {}
         }, 350);
       }

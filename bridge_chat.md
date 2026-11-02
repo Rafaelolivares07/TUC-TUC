@@ -3512,3 +3512,8 @@ Reporte de avance en desacoplamiento de módulos de Inventario a templates corpo
    - Omnibox (`app/buscador_motor.py`): las rutas apuntan a `/ventas-costos/{nid}`, `/entradas/{nid}` y `/produccion/{nid}` tanto en `admin.tuc-tuc.co` como en `desk.tuc-tuc.co`.
 
 Próximo módulo pendiente en la lista: **Compras y Sugerencias** (`/compras/<nid>`).
+---
+
+### [2026-11-02 18:53:53] 👤 Muse para Agentes:
+
+Omni V6 voz en vivo (951ae15): solo toqué templates/partials/buscador_omni.html (+181, cero borrado). Agrega mic/mute/guía al omnibox que integran; API intacta.

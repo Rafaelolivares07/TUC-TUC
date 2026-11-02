@@ -162,6 +162,7 @@
   let omniScrollPrevio = null;
   let omniSpacer = null;
   let omniSubeHasta = 0;
+  let omniRepinT = 0;
   let omniSuave = 'smooth';
   try { if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) omniSuave = 'auto'; } catch (e) {}
   let omniDbgHist = [];
@@ -243,6 +244,18 @@
   if (window.visualViewport) {
     visualViewport.addEventListener('resize', function() {
       if (!dropdown.classList.contains('hidden')) ajustarDropdownViewport(false);
+      try {
+        if (document.body && document.body.dataset && document.body.dataset.page === 'portal' && document.activeElement === input) {
+          clearTimeout(omniRepinT);
+          omniRepinT = setTimeout(function() {
+            try {
+              var rr = input.getBoundingClientRect();
+              var vhh = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+              if (rr.top < 60 || rr.bottom > vhh - 8) { omniDbgPinta('repin', Math.round(rr.top), vhh, 0, Math.round(window.scrollY)); window.scrollTo({ top: 0 }); }
+            } catch (eR) {}
+          }, 350);
+        }
+      } catch (eR0) {}
     });
   }
 

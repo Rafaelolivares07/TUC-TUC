@@ -10342,6 +10342,8 @@ def admin_inventario(negocio_id, tab_name=None):
                 return "Negocio no encontrado", 404
             _qs = ('?' + request.query_string.decode('utf-8')) if request.query_string else ''
             return redirect(f'https://{_slug}.tuc-tuc.co/kardex{_qs}')
+        if (tab_name or '').lower() in ('ventas_costos', 'ventas-costos'):
+            return redirect(f'/ventas-costos/{negocio_id}')
         if 'usuario_id' not in session:
             return redirect(url_for('auth.admin_login'))
         _crear_tablas(conn)

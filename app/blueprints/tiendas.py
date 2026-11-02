@@ -930,7 +930,7 @@ def tienda_caja(slug):
         negocio = _obtener_negocio_por_slug(conn, slug)
         if not negocio:
             return "Negocio no encontrado", 404
-        return render_template('caja.html', tienda=negocio, slug=slug)
+        return render_template('caja.html', tienda=negocio, slug=slug, modo_admin='usuario_id' in session)
     except Exception as e:
         return str(e), 500
     finally:

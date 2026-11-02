@@ -502,6 +502,7 @@
   window.omniElegirProducto = function(i) {
     const p = datosProductos[i];
     if (!p) return;
+    input.value = p.nombre;
     itemsColeccion = [];
     let h = `
       <div>

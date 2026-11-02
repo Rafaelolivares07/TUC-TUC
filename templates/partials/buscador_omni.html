@@ -138,6 +138,7 @@
     dropdown.classList.add('hidden');
     selectedIndex = -1;
     vistaDetalle = false;
+    if (omniSpacer) { try { omniSpacer.remove(); } catch (e) {} omniSpacer = null; }
     if (omniScrollPrevio !== null) {
       try { window.scrollTo({ top: omniScrollPrevio, behavior: omniSuave }); } catch (e) {}
       omniScrollPrevio = null;
@@ -147,6 +148,7 @@
   // -- Encajar dropdown al viewport (mide contenido; si no cabe, sube suave
   // la pagina hasta dejar el input al 25% de arriba y la lista toma el resto)
   let omniScrollPrevio = null;
+  let omniSpacer = null;
   let omniSuave = 'smooth';
   try { if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) omniSuave = 'auto'; } catch (e) {}
   function ajustarDropdownViewport(desplazar) {
@@ -170,7 +172,19 @@
       const metaTop = vh * 0.25;
       if (r.top <= metaTop + 4) return;
       if (omniScrollPrevio === null) omniScrollPrevio = window.scrollY;
-      window.scrollBy({ top: Math.ceil(r.top - metaTop), behavior: omniSuave });
+      try {
+        const falta = Math.ceil(r.top - metaTop);
+        const docH = Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0);
+        const libre = docH - window.scrollY - window.innerHeight;
+        if (libre < falta) {
+          const alto = Math.min(falta - libre + vh, Math.ceil(vh * 1.2));
+          if (!omniSpacer) { omniSpacer = document.createElement('div'); omniSpacer.setAttribute('aria-hidden', 'true'); omniSpacer.style.cssText = 'position:absolute;top:100%;left:0;width:1px;pointer-events:none;'; document.body.appendChild(omniSpacer); }
+          omniSpacer.style.height = Math.max(alto, 0) + 'px';
+        }
+      } catch (e3) {}
+      const rPost = input.getBoundingClientRect();
+      if (rPost.top <= metaTop + 4) return;
+      window.scrollBy({ top: Math.ceil(rPost.top - metaTop), behavior: omniSuave });
       setTimeout(function() {
         try {
           const r2 = input.getBoundingClientRect();

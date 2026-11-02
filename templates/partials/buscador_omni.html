@@ -38,8 +38,7 @@
       <!-- Se llena por JavaScript -->
     </div>
     
-    <!-- V5-QUITAR depuracion temporal: se quita al cerrar el caso -->
-    <div id="omni-dbgline" class="px-3 py-0.5 text-[10px] text-gray-300 font-mono"></div>
+    <!-- V5-QUITAR insignia fija temporal (creada por JS): se quita al cerrar el caso -->
     <!-- Footer de atajos rápidos -->
     <div class="px-3 py-2 bg-gray-50/80 flex items-center justify-between text-[11px] text-gray-400">
       <div class="flex items-center gap-3">
@@ -155,10 +154,19 @@
   let omniSubeHasta = 0;
   let omniSuave = 'smooth';
   try { if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) omniSuave = 'auto'; } catch (e) {}
+  let omniDbgHist = [];
   function omniDbgPinta(ev, a, b, c, d) {
     try {
-      const _dl = document.getElementById('omni-dbgline');
-      if (_dl) _dl.textContent = 'dbg ' + ev + ' top=' + a + ' vh=' + b + ' x=' + c + ' y=' + d;
+      let _dl = document.getElementById('omni-dbgline');
+      if (!_dl) {
+        _dl = document.createElement('div');
+        _dl.id = 'omni-dbgline';
+        _dl.style.cssText = 'position:fixed;top:8px;right:8px;z-index:9999;background:#111;color:#0f0;font:12px monospace;padding:6px 8px;border-radius:6px;opacity:0.92;pointer-events:none;';
+        document.body.appendChild(_dl);
+      }
+      omniDbgHist.unshift(ev + ' t=' + a + ' v=' + b + ' x=' + c + ' y=' + d);
+      omniDbgHist = omniDbgHist.slice(0, 3);
+      _dl.innerHTML = omniDbgHist.join('<br>');
     } catch (e9) {}
   }
   function ajustarDropdownViewport(desplazar) {
@@ -169,7 +177,7 @@
       const tope = vh * 0.75;
       const espacio = vh - r.bottom - 28;
       const contenido = resultsBody ? resultsBody.scrollHeight : 0;
-      omniDbgPinta('in', Math.round(r.top), vh, Math.round(espacio), contenido);
+      /* V5g: sin pintura 'in' (parpadeaba); solo decisiones fijas */
       if (contenido > 0 && contenido <= espacio) {
         dropdown.style.maxHeight = Math.floor(Math.min(espacio, tope)) + 'px';
         return;

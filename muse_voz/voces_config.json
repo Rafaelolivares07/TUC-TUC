@@ -1,0 +1,17 @@
+{
+  "anti": {
+    "voz": "es-CO-GonzaloNeural",
+    "volumen": "+50%",
+    "descripcion": "Colombiana Masculina (Gonzalo)"
+  },
+  "muse": {
+    "voz": "es-CO-SalomeNeural",
+    "volumen": "+50%",
+    "descripcion": "Colombiana Femenina (Salomé)"
+  },
+  "merlin": {
+    "voz": "es-MX-JorgeNeural",
+    "volumen": "+50%",
+    "descripcion": "Mexicana Masculina (Jorge)"
+  }
+}

@@ -29,12 +29,12 @@ try {
             Start-Sleep -Milliseconds 100
             $timeout++
         }
+        $played = ($wmp.playState -eq 3)
         while ($wmp.playState -eq 3) {
             Start-Sleep -Milliseconds 150
         }
         $wmp.close()
         [System.Runtime.InteropServices.Marshal]::ReleaseComObject($wmp) | Out-Null
-        $played = $true
     } catch {
         $played = $false
     }

@@ -97,7 +97,7 @@ C:\Tools\Python313\python.exe "%V2%\muse_cuota.py" 2>nul
 set "CUOTATAG="
 set /p CUOTATAG=<"%TEMP%\muse_cuota_tag.txt" 2>nul
 del "%TEMP%\muse_cuota_tag.txt" 2>nul
-if defined CUOTATAG set "ETIQUETA=!ETIQUETA! !CUOTATAG!"
+if defined CUOTATAG set "ETIQUETA=!CUOTATAG! !ETIQUETA!"
 echo   Titulo: !ETIQUETA!
 echo !ETIQUETA!>%TEMP%\muse_tab_title.txt
 where wt >nul 2>nul

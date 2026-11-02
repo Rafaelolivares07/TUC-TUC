@@ -1974,7 +1974,7 @@
 
       <button class="tab-btn" onclick="mostrarTab('tarjetas')">Tarjetas Estándar</button>
 
-      <button class="tab-btn" onclick="mostrarTab('entradas')">Entradas</button>
+      <a href="/entradas/{{ negocio_id }}" class="tab-btn" title="Entradas de Almacén (Compras y Facturas)">Entradas &nearr;</a>
 
       <button class="tab-btn" onclick="mostrarTab('produccion')">Producción</button>
 
@@ -1989,7 +1989,7 @@
 
       <button class="tab-btn" onclick="mostrarTab('ensambles_historicos')">Ensambles Históricos</button>
 
-      <button class="tab-btn" onclick="window.open('/ventas-costos/' + NEGOCIO_ID, '_blank')" title="Abre el nuevo módulo corporativo independiente de Ventas y Costos">Ventas/Costos &nearr;</button>
+      <a href="/ventas-costos/{{ negocio_id }}" class="tab-btn" title="Ventas, Costos y Margen de Contribución">Ventas/Costos &nearr;</a>
 
       <button class="tab-btn" onclick="mostrarTab('desembolsos')">💸 Desembolsos</button>
 
@@ -4975,6 +4975,14 @@ function filtrarLibroActas() {
 const TABS = ['productos', 'tarjetas', 'entradas', 'produccion', 'compras_sugerencias', 'cotizaciones', 'kardex', 'traslados', 'ensambles', 'ensambles_historicos', 'ventas_costos', 'desembolsos', 'estado_resultados', 'recosteo', 'actas_inventario'];
 
 function mostrarTab(t) {
+  if (t === 'entradas') {
+    window.location.href = '/entradas/' + NEGOCIO_ID;
+    return;
+  }
+  if (t === 'ventas_costos') {
+    window.location.href = '/ventas-costos/' + NEGOCIO_ID;
+    return;
+  }
   if (t === 'gastos') t = 'desembolsos';
   if (t === 'actas_inventario') cargarLibroActas();
 

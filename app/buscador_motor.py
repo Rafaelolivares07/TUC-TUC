@@ -282,7 +282,7 @@ def _obtener_catalogo_base(negocio_id=None, slug=None):
             'titulo': 'Entradas de Almacén (Compras y Facturas)',
             'modulo': 'Inventario > Movimientos',
             'icono': '📥',
-            'url': f'/inventario/{nid}?tab=entradas',
+            'url': f'/entradas/{nid}',
             'keywords': ['entradas de almacen', 'compras', 'factura de compra', 'recepcion insumos', 'remision', 'ingreso stock']
         },
         {

@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full bg-slate-50">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ventas y Costos — {{ negocio_nombre }} | TUC TUC</title>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <style>
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      text-rendering: optimizeLegibility;
+      font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    }
+    .font-mono {
+      font-family: 'JetBrains Mono', monospace;
+      font-feature-settings: "tnum" 1;
+    }
+    .num { text-align: right; }
+    /* Estilo limpio para inputs numericos sin spinners */
+    .no-spinners::-webkit-inner-spin-button,
+    .no-spinners::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    .no-spinners {
+      -moz-appearance: textfield;
+    }
+    .sticky-th {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+  </style>
+</head>
+<body class="min-h-full flex flex-col text-slate-800 bg-slate-50 selection:bg-rose-100 selection:text-rose-900">
+
+  <!-- ================= TOPBAR CORPORATIVA ================= -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-2xs">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+      
+      <!-- Identidad Corporativa -->
+      <div class="flex items-center gap-3">
+        <a href="/inicio" class="group flex items-center gap-2.5 text-slate-900 hover:text-rose-600 transition-colors" title="Regresar al Lienzo Principal">
+          <span class="w-8 h-8 rounded-xl bg-slate-900 text-white flex items-center justify-center font-bold text-xs group-hover:bg-rose-600 transition-colors shadow-2xs">
+            TT
+          </span>
+          <span class="text-sm font-semibold tracking-wider text-slate-400">|</span>
+          <span class="text-sm sm:text-base font-bold tracking-tight text-slate-900 group-hover:text-rose-600 transition-colors">
+            {{ negocio_nombre }}
+          </span>
+        </a>
+
+        {% if centro_activo %}
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+          {{ centro_activo.nombre }}
+        </span>
+        {% endif %}
+      </div>
+
+      <!-- Navegacion y Contexto -->
+      <div class="flex items-center gap-2.5">
+        <span class="hidden md:inline-flex px-3 py-1 bg-slate-100 text-slate-600 font-semibold text-xs rounded-xl border border-slate-200">
+          Reporte de Margen y Costos
+        </span>
+        <a href="/inicio" class="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all border border-slate-200 flex items-center gap-1.5">
+          <span>&larr;</span> <span>Inicio</span>
+        </a>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- ================= CONTENEDOR PRINCIPAL ================= -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+    <!-- Card Principal de Controles y Filtros -->
+    <div class="bg-white rounded-2xl border border-slate-200/80 shadow-2xs p-5 sm:p-6 mb-6">
+      
+      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-150 pb-5 mb-5">
+        <div>
+          <h1 class="text-xl font-bold tracking-tight text-slate-900">Ventas, Costos y Margen de Contribución</h1>
+          <p class="text-xs text-slate-500 mt-1 font-medium">Analiza en tiempo real las ventas facturadas, el costo directo de insumos, la mano de obra estimada y el margen por cada producto.</p>
+        </div>
+
+        <!-- Filtros de Fecha y Centro de Utilidad -->
+        <div class="flex items-end gap-3 flex-wrap text-xs">
+          <div class="flex flex-col">
+            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Desde</label>
+            <input type="date" id="vc-desde" class="border border-slate-200 rounded-xl px-3 py-2 bg-slate-50/80 focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500 font-semibold text-slate-700 shadow-2xs">
+          </div>
+
+          <div class="flex flex-col">
+            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Hasta</label>
+            <input type="date" id="vc-hasta" class="border border-slate-200 rounded-xl px-3 py-2 bg-slate-50/80 focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500 font-semibold text-slate-700 shadow-2xs">
+          </div>
+
+          <div class="flex flex-col">
+            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Centro de Utilidad</label>
+            <select id="vc-centro-utilidad" onchange="consultarVentasCostos()" class="border border-slate-200 rounded-xl px-3 py-2 bg-white font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-rose-500 shadow-2xs">
+              <option value="">&bull; Todos (Consolidado)</option>
+              {% for cu in centros_utilidad %}
+              <option value="{{ cu.id }}" {% if centro_activo and centro_activo.id == cu.id %}selected{% endif %}>{{ cu.codigo }} - {{ cu.nombre }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <!-- Botones de Accion -->
+          <button id="btn-consultar-vc" onclick="consultarVentasCostos()" class="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl transition-all shadow-2xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-rose-500">
+            Filtrar
+          </button>
+
+          <button onclick="generarPdfVentasCostos()" class="px-4 py-2 bg-slate-900 hover:bg-black text-white font-bold rounded-xl transition-all shadow-2xs cursor-pointer">
+            Exportar PDF
+          </button>
+
+          <button id="btn-toggle-mod" onclick="toggleModVC()" type="button" title="Incluir o excluir la mano de obra en el reporte"
+                  class="px-3.5 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer">
+            <span id="btn-toggle-mod-txt">MOD: ON</span>
+          </button>
+
+          <button id="btn-toggle-tiempos" onclick="toggleDesgloseVC()" type="button"
+                  class="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 font-bold rounded-xl border border-slate-200 shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer">
+            <span id="btn-toggle-tiempos-txt">Ver Desglose MOD / Insumos</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Banner de Auditoria Comparativa con Kardex -->
+      <div id="vc-banner-auditoria" class="hidden mb-5 bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center justify-between flex-wrap gap-3">
+        <div class="flex items-center gap-3 flex-wrap text-xs">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-200 text-amber-900 font-extrabold rounded-lg text-[10px] uppercase tracking-wide">
+            Auditoría de Costos
+          </span>
+          <span id="vc-auditoria-desc" class="text-slate-700 font-medium"></span>
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="btn-filtro-alertas-vc" onclick="toggleFiltroAlertasVC()" type="button"
+                  class="px-3 py-1.5 bg-white hover:bg-amber-100 text-amber-900 font-bold text-xs rounded-xl border border-amber-300 shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer">
+            <span id="btn-filtro-alertas-txt">Ver solo productos con alertas</span>
+          </button>
+          <a href="/inventario/{{ negocio_id }}/ensambles_historicos" target="_blank"
+             class="px-3 py-1.5 bg-slate-900 hover:bg-black text-white font-bold text-xs rounded-xl shadow-2xs transition-all flex items-center gap-1.5">
+            <span>Ir a Ensambles Históricos &rarr;</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- KPI Summary Cards -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div class="bg-emerald-50/60 border border-emerald-100 p-4 rounded-2xl">
+          <span class="block text-emerald-700 font-bold uppercase tracking-wider text-[10px] mb-1">Ventas Totales</span>
+          <span id="vc-kpi-ventas" class="text-2xl font-bold text-emerald-900 font-mono">$0</span>
+        </div>
+
+        <div class="bg-rose-50/60 border border-rose-100 p-4 rounded-2xl">
+          <span class="block text-rose-700 font-bold uppercase tracking-wider text-[10px] mb-1">Costo Total</span>
+          <span id="vc-kpi-costos" class="text-2xl font-bold text-rose-900 font-mono">$0</span>
+          <span id="vc-kpi-costos-sub" class="block text-[10px] text-rose-600/80 mt-1 font-mono">Insumos: $0 | MOD: $0</span>
+        </div>
+
+        <div class="bg-indigo-50/60 border border-indigo-100 p-4 rounded-2xl">
+          <span class="block text-indigo-700 font-bold uppercase tracking-wider text-[10px] mb-1">Margen de Contribución</span>
+          <span id="vc-kpi-margen" class="text-2xl font-bold text-indigo-900 font-mono">$0</span>
+        </div>
+
+        <div class="bg-slate-50 border border-slate-200 p-4 rounded-2xl">
+          <span class="block text-slate-500 font-bold uppercase tracking-wider text-[10px] mb-1">% Margen Global</span>
+          <span id="vc-kpi-pct" class="text-2xl font-bold text-slate-900 font-mono">0%</span>
+        </div>
+      </div>
+
+      <!-- Tabla Ejecutiva de Ventas y Costos -->
+      <div class="overflow-x-auto rounded-xl border border-slate-200">
+        <table class="w-full text-left border-collapse text-xs">
+          <thead class="bg-slate-100/80 text-slate-600 text-[11px] font-bold border-b border-slate-200 uppercase tracking-wider">
+            <tr>
+              <th onclick="ordenarVC('nombre_producto')" class="px-3 py-3 text-left cursor-pointer hover:bg-slate-200/60 transition-colors align-bottom min-w-[200px]">
+                <div>Producto <span id="sort-vc-nombre" class="text-slate-400 text-[9px]">&uarr;&darr;</span></div>
+                <div class="text-[9px] font-normal normal-case text-slate-400 font-sans">(clic para ver detalle)</div>
+              </th>
+              <th onclick="ordenarVC('cantidad')" class="px-2.5 py-3 text-right num cursor-pointer hover:bg-slate-200/60 transition-colors whitespace-nowrap align-bottom">
+                <div>Cant.</div>
+                <div>Vendida <span id="sort-vc-cantidad" class="text-slate-400 text-[9px]">&uarr;&darr;</span></div>
+              </th>
+              <th onclick="ordenarVC('precio_unitario')" class="px-2.5 py-3 text-right num cursor-pointer hover:bg-slate-200/60 transition-colors whitespace-nowrap align-bottom">
+                <div>Precio</div>
+                <div>Promedio <span id="sort-vc-precio" class="text-slate-400 text-[9px]">&uarr;&darr;</span></div>
+              </th>
+
+              <!-- Desglose unitario colapsado por defecto -->
+              <th onclick="ordenarVC('costo_insumos_unitario')" class="vc-col-desglose hidden px-2.5 py-3 text-right num cursor-pointer hover:bg-slate-200/60 transition-colors whitespace-nowrap align-bottom bg-slate-50 text-slate-700">
+                <div>Insumos</div>
+                <div>Unit. <span id="sort-vc-cuinsumos" class="text-slate-400 text-[9px]">&uarr;&darr;</span></div>
+              </th>
+              <th onclick="ordenarVC('mod_unitario')" class="vc-col-desglose hidden px-2.5 py-3 text-right num cursor-pointer hover:bg-slate-200/60 transition-colors whitespace-nowrap align-bottom text-amber-900 bg-amber-50/50">
+                <div>MOD <span id="vc-mod-xn-u">(&times;1)</span></div>
+                <div>Unit. <span id="sort-vc-cumod" class="text-slate-400 text-[9px]">&uarr;&darr;</span></div>
+              </th>
+              <th class="vc-col-desglose hidden px-2 py-3 text-center transition-all align-bottom max-w-[110px]">
+                <div title="Tiempos estimados en minutos">Tiempos</div>
+                <div class="text-[9px] whitespace-normal leading-tight font-sans text-slate-400">Prep / Ens</div>
+              </th>
+
+              <th onclick="ordenarVC('costo_unitario')" class="px-2.5 py-3 text-right num cursor-pointer hover:bg-slate-200/60 transition-colors whitespace-nowrap align-bottom text-rose-900 bg-rose-50/40">
+                <div>Costo</div>
+                <div>Promedio <span id="sort-vc-costo" class="text-slate-400 text-[9px]">&uarr;&darr;</span></div>
+              </th>
+              <th onclick="ordenarVC('margen_unitario')" class="px-2.5 py-3 text-right num cursor-pointer hover:bg-slate-200/60 transition-colors whitespace-nowrap align-bottom text-indigo-900 bg-indigo-50/40">
+                <div>Margen</div>
+                <div>Unitario <span id="sort-vc-munit" class="text-slate-400 text-[9px]">&uarr;&darr;</span></div>
+              </th>
+
+              <!-- Totales -->
+              <th onclick="ordenarVC('total_venta')" class="px-2.5 py-3 text-right num cursor-pointer hover:bg-slate-200/60 transition-colors whitespace-nowrap align-bottom text-emerald-900 bg-emerald-50/40">
+                <div>Venta</div>
+                <div>Total <span id="sort-vc-tventa" class="text-slate-400 text-[9px]">&uarr;&darr;</span></div>
+              </th>
+
+              <!-- Desglose total colapsado por defecto -->
+              <th onclick="ordenarVC('total_costo_insumos')" class="vc-col-desglose hidden px-2.5 py-3 text-right num cursor-pointer hover:bg-slate-200/60 transition-colors whitespace-nowrap align-bottom bg-slate-50 text-slate-700">
+                <div>Insumos</div>
+                <div>Total <span id="sort-vc-cinsumos" class="text-slate-400 text-[9px]">&uarr;&darr;</span></div>
+              </th>
+              <th onclick="ordenarVC('total_mod')" class="vc-col-desglose hidden px-2.5 py-3 text-right num cursor-pointer hover:bg-slate-200/60 transition-colors text-amber-900 bg-amber-50/40 whitespace-nowrap align-bottom">
+                <div>MOD Total <span id="vc-mod-xn-t">(&times;1)</span></div>
+                <div>(Est.) <span id="sort-vc-mod" class="text-slate-400 text-[9px]">&uarr;&darr;</span></div>
+              </th>
+
+              <th onclick="ordenarVC('total_costo')" class="px-2.5 py-3 text-right num cursor-pointer hover:bg-slate-200/60 transition-colors font-bold text-rose-800 whitespace-nowrap align-bottom">
+                <div>Costo</div>
+                <div>Total <span id="sort-vc-tcosto" class="text-slate-400 text-[9px]">&uarr;&darr;</span></div>
+              </th>
+              <th onclick="ordenarVC('margen_total')" class="px-2.5 py-3 text-right num cursor-pointer hover:bg-slate-200/60 transition-colors whitespace-nowrap align-bottom font-bold text-indigo-900">
+                <div>Margen</div>
+                <div>Total <span id="sort-vc-mtot" class="text-slate-400 text-[9px]">&uarr;&darr;</span></div>
+              </th>
+              <th onclick="ordenarVC('margen_porcentual')" class="px-2.5 py-3 text-right num cursor-pointer hover:bg-slate-200/60 transition-colors whitespace-nowrap align-bottom font-bold text-slate-900">
+                <div>%</div>
+                <div>Margen <span id="sort-vc-mpct" class="text-slate-400 text-[9px]">&uarr;&darr;</span></div>
+              </th>
+            </tr>
+          </thead>
+
+          <tbody id="tabla-ventas-costos" class="divide-y divide-slate-150">
+            <tr><td colspan="9" class="text-center text-slate-400 py-12 font-medium">Selecciona el rango de fechas y presiona "Filtrar"</td></tr>
+          </tbody>
+
+          <tfoot id="tabla-ventas-costos-foot" class="bg-slate-50 font-bold border-t-2 border-slate-200 font-mono">
+            <!-- Totales calculados dinamicamente -->
+          </tfoot>
+        </table>
+      </div>
+
+      <!-- Bloque Unificado de Parametros MOD -->
+      <div id="vc-bloque-mod" class="mt-6 bg-slate-50 border border-slate-200 rounded-2xl p-4 sm:p-5">
+        <div class="flex items-center gap-3 flex-wrap pb-3 mb-3 border-b border-slate-200">
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-bold rounded-lg uppercase tracking-wider">
+            Mano de Obra Directa (MOD)
+          </span>
+
+          <div class="flex items-center gap-1.5 text-xs">
+            <span class="text-slate-500 font-semibold">Costo Hora:</span>
+            <input type="number" id="vc-costo-hora-mod" placeholder="0" class="w-20 px-2.5 py-1 border border-slate-200 rounded-lg text-right font-mono font-bold text-slate-800 bg-white">
+          </div>
+
+          <div class="flex items-center gap-1.5 text-xs">
+            <span class="text-slate-500 font-semibold">Horas/Semana:</span>
+            <input type="number" id="vc-horas-semana-mod" placeholder="42" class="w-16 px-2.5 py-1 border border-slate-200 rounded-lg text-right font-mono font-bold text-slate-800 bg-white">
+          </div>
+
+          <div class="flex items-center gap-1.5 text-xs">
+            <span class="text-slate-500 font-semibold">Días/Semana:</span>
+            <input type="number" id="vc-dias-semana-mod" placeholder="6" class="w-14 px-2.5 py-1 border border-slate-200 rounded-lg text-right font-mono font-bold text-slate-800 bg-white">
+          </div>
+
+          <div class="flex items-center gap-1.5 text-xs">
+            <span class="text-slate-500 font-semibold">Personas:</span>
+            <input type="number" id="vc-personas-mod" placeholder="1" class="w-14 px-2.5 py-1 border border-slate-200 rounded-lg text-right font-mono font-bold text-slate-800 bg-white">
+          </div>
+
+          <button onclick="guardarParametrosMOD()" class="px-3.5 py-1.5 bg-slate-900 hover:bg-black text-white font-bold text-xs rounded-xl shadow-2xs transition-all cursor-pointer">
+            Guardar Parámetros
+          </button>
+        </div>
+
+        <p class="text-[11px] text-slate-400">
+          Los parámetros de MOD permiten proyectar el costo de nómina de producción directa en base a los tiempos de preparación y ensamble por unidad vendida.
+        </p>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- ================= NOTIFICACIONES TOAST ================= -->
+  <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- ================= JAVASCRIPT REACTIVO ================= -->
+  <script>
+    const NEGOCIO_ID = {{ negocio_id }};
+    let datosVC = [];
+    let alertasVC = {};
+    let desgloseVisibleVC = false;
+    let modActivoVC = true;
+    let filtroSoloAlertasVC = false;
+    let costoHoraModVC = 0;
+    let horasSemanaModVC = 42;
+    let diasSemanaModVC = 6;
+    let personasModVC = 1;
+    let ordenActualVC = { campo: 'total_venta', asc: false };
+
+    // Toast flotante
+    function toast(msg, esExito = true) {
+      const c = document.getElementById('toast-container');
+      const t = document.createElement('div');
+      t.className = `px-4 py-2.5 rounded-xl text-xs font-bold shadow-lg transition-all transform translate-y-2 text-white pointer-events-auto ${esExito ? 'bg-slate-900' : 'bg-rose-600'}`;
+      t.textContent = msg;
+      c.appendChild(t);
+      setTimeout(() => { t.classList.remove('translate-y-2'); }, 10);
+      setTimeout(() => {
+        t.classList.add('opacity-0', 'translate-y-2');
+        setTimeout(() => t.remove(), 300);
+      }, 3000);
+    }
+
+    const fmt = n => (n == null ? '0' : Number(n).toLocaleString('es-CO', {maximumFractionDigits: 1}));
+    const fmtMon = n => (n == null ? '-' : '$' + Number(n).toLocaleString('es-CO', {minimumFractionDigits: 0, maximumFractionDigits: 0}));
+
+    // Fechas por defecto: primer dia del mes en curso hasta hoy
+    function inicializarFechas() {
+      const hoy = new Date();
+      const año = hoy.getFullYear();
+      const mes = String(hoy.getMonth() + 1).padStart(2, '0');
+      const dia = String(hoy.getDate()).padStart(2, '0');
+      
+      const primerDia = `${año}-${mes}-01`;
+      const fechaHoy = `${año}-${mes}-${dia}`;
+
+      document.getElementById('vc-desde').value = primerDia;
+      document.getElementById('vc-hasta').value = fechaHoy;
+    }
+
+    async function consultarVentasCostos() {
+      const desde = document.getElementById('vc-desde').value;
+      const hasta = document.getElementById('vc-hasta').value;
+      const cuInp = document.getElementById('vc-centro-utilidad');
+      const centroId = cuInp ? cuInp.value : '';
+
+      if (!desde || !hasta) {
+        toast('Selecciona el rango de fechas', false);
+        return;
+      }
+
+      const btn = document.getElementById('btn-consultar-vc');
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Cargando...';
+      }
+
+      try {
+        let url = `/api/inventario/${NEGOCIO_ID}/reporte-ventas-costos?desde=${desde}&hasta=${hasta}`;
+        if (centroId) url += `&centro_utilidad_id=${encodeURIComponent(centroId)}`;
+
+        const r = await fetch(url);
+        const d = await r.json();
+
+        if (d.ok) {
+          costoHoraModVC = d.costo_hora_mod || 0;
+          horasSemanaModVC = d.horas_semana_mod || 42.0;
+          diasSemanaModVC = d.dias_semana_mod || 6.0;
+          personasModVC = d.personas_mod || 1.0;
+          if (d.mod_activo_mod === false || d.mod_activo_mod === 0) modActivoVC = false;
+          else if (d.mod_activo_mod === true || d.mod_activo_mod === 1) modActivoVC = true;
+
+          document.getElementById('vc-costo-hora-mod').value = costoHoraModVC > 0 ? costoHoraModVC : '';
+          document.getElementById('vc-horas-semana-mod').value = horasSemanaModVC;
+          document.getElementById('vc-dias-semana-mod').value = diasSemanaModVC;
+          document.getElementById('vc-personas-mod').value = personasModVC;
+
+          datosVC = d.reporte || [];
+          alertasVC = d.alertas || {};
+          actualizarBannerAuditoriaVC(alertasVC);
+          datosVC.sort((a, b) => (b.total_venta || 0) - (a.total_venta || 0));
+          renderTablaVC();
+        } else {
+          toast(d.error || 'Error al cargar reporte', false);
+        }
+      } catch (e) {
+        console.error(e);
+        toast('Error de conexión', false);
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = 'Filtrar';
+        }
+      }
+    }
+
+    function generarPdfVentasCostos() {
+      const desde = document.getElementById('vc-desde').value;
+      const hasta = document.getElementById('vc-hasta').value;
+      const cuInp = document.getElementById('vc-centro-utilidad');
+      const centroId = cuInp ? cuInp.value : '';
+
+      if (!desde || !hasta) {
+        toast('Selecciona el rango de fechas primero', false);
+        return;
+      }
+      let url = `/api/inventario/${NEGOCIO_ID}/reporte-ventas-costos/pdf?desde=${desde}&hasta=${hasta}`;
+      if (centroId) url += `&centro_utilidad_id=${encodeURIComponent(centroId)}`;
+      window.open(url, '_blank');
+    }
+
+    function toggleModVC() {
+      modActivoVC = !modActivoVC;
+      const btnTxt = document.getElementById('btn-toggle-mod-txt');
+      if (btnTxt) btnTxt.textContent = `MOD: ${modActivoVC ? 'ON' : 'OFF'}`;
+      consultarVentasCostos();
+    }
+
+    function toggleDesgloseVC() {
+      desgloseVisibleVC = !desgloseVisibleVC;
+      const cols = document.querySelectorAll('.vc-col-desglose');
+      cols.forEach(el => el.classList.toggle('hidden', !desgloseVisibleVC));
+      const btnTxt = document.getElementById('btn-toggle-tiempos-txt');
+      if (btnTxt) btnTxt.textContent = desgloseVisibleVC ? 'Ocultar Desglose' : 'Ver Desglose MOD / Insumos';
+      renderTablaVC();
+    }
+
+    function toggleFiltroAlertasVC() {
+      filtroSoloAlertasVC = !filtroSoloAlertasVC;
+      const btn = document.getElementById('btn-filtro-alertas-vc');
+      const btnTxt = document.getElementById('btn-filtro-alertas-txt');
+      if (btnTxt) btnTxt.textContent = filtroSoloAlertasVC ? 'Mostrar todos los productos' : 'Ver solo productos con alertas';
+      if (btn) {
+        btn.classList.toggle('bg-amber-200', filtroSoloAlertasVC);
+        btn.classList.toggle('bg-white', !filtroSoloAlertasVC);
+      }
+      renderTablaVC();
+    }
+
+    function actualizarBannerAuditoriaVC(a) {
+      const banner = document.getElementById('vc-banner-auditoria');
+      const desc = document.getElementById('vc-auditoria-desc');
+      if (!banner || !desc) return;
+
+      const totalAlertas = (a.total_con_desfase || 0) + (a.total_con_costo_cero || 0) + (a.total_con_margen_neg || 0);
+      if (totalAlertas > 0) {
+        banner.classList.remove('hidden');
+        desc.textContent = `${totalAlertas} producto(s) presentan observaciones (Desfase Kardex: ${a.total_con_desfase || 0}, Costo Cero: ${a.total_con_costo_cero || 0}, Margen Negativo: ${a.total_con_margen_neg || 0}).`;
+      } else {
+        banner.classList.add('hidden');
+      }
+    }
+
+    function renderTablaVC() {
+      const tbody = document.getElementById('tabla-ventas-costos');
+      const tfoot = document.getElementById('tabla-ventas-costos-foot');
+      if (!tbody) return;
+
+      const colsSpan = desgloseVisibleVC ? 14 : 9;
+
+      if (!datosVC.length) {
+        tbody.innerHTML = `<tr><td colspan="${colsSpan}" class="text-center text-slate-400 py-12 font-medium">No se encontraron ventas registradas en este período.</td></tr>`;
+        tfoot.innerHTML = '';
+        document.getElementById('vc-kpi-ventas').textContent = '$0';
+        document.getElementById('vc-kpi-costos').textContent = '$0';
+        document.getElementById('vc-kpi-costos-sub').textContent = 'Insumos: $0 | MOD: $0';
+        document.getElementById('vc-kpi-margen').textContent = '$0';
+        document.getElementById('vc-kpi-pct').textContent = '0%';
+        return;
+      }
+
+      let totalCant = 0;
+      let totalVentas = 0;
+      let totalCostos = 0;
+      let totalInsumos = 0;
+      let totalMod = 0;
+
+      const prodsFiltrados = filtroSoloAlertasVC 
+        ? datosVC.filter(p => p.tiene_desfase || p.tiene_costo_cero || p.tiene_margen_negativo) 
+        : datosVC;
+
+      if (filtroSoloAlertasVC && !prodsFiltrados.length) {
+        tbody.innerHTML = `<tr><td colspan="${colsSpan}" class="text-center text-emerald-600 font-bold py-12">No hay productos con alertas en este período.</td></tr>`;
+        return;
+      }
+
+      const desgCls = desgloseVisibleVC ? '' : 'hidden';
+
+      tbody.innerHTML = prodsFiltrados.map(r => {
+        const cant = r.cantidad || 0;
+        totalCant += cant;
+        totalVentas += (r.total_venta || 0);
+        totalCostos += (r.total_costo || 0);
+        totalInsumos += (r.total_costo_insumos || 0);
+        totalMod += (r.total_mod || 0);
+
+        const pct = r.margen_porcentual || 0;
+        const pctCls = pct >= 30 ? 'text-emerald-700 font-bold' : (pct >= 15 ? 'text-amber-700 font-semibold' : 'text-rose-700 font-bold');
+
+        return `
+          <tr class="hover:bg-slate-50/80 border-b border-slate-150 text-xs cursor-pointer transition-colors" onclick="toggleDetalleVC(this, ${r.producto_id})">
+            <td class="px-3 py-3 font-semibold text-slate-800">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <span class="truncate max-w-[280px]" title="${r.nombre_producto}">${r.nombre_producto}</span>
+                ${r.tiene_desfase ? `
+                  <a href="/inventario/{{ negocio_id }}/ensambles_historicos?producto_id=${r.producto_id}" target="_blank" onclick="event.stopPropagation()"
+                     class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                    Desfase Kardex ${r.desfase_kardex > 0 ? '+' : ''}${fmtMon(r.desfase_kardex)}
+                  </a>
+                ` : ''}
+                ${r.tiene_costo_cero ? `<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300">Costo $0</span>` : ''}
+                ${r.tiene_margen_negativo ? `<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300">Margen Negativo</span>` : ''}
+              </div>
+            </td>
+            <td class="px-2.5 py-3 text-right num text-slate-700 font-mono whitespace-nowrap">${fmt(r.cantidad)}</td>
+            <td class="px-2.5 py-3 text-right num font-mono text-slate-700 whitespace-nowrap">${fmtMon(r.precio_unitario)}</td>
+
+            <!-- Desglose unitario -->
+            <td class="vc-col-desglose ${desgCls} px-2.5 py-3 text-right num font-mono text-slate-700 bg-slate-50/80 whitespace-nowrap">${fmtMon(r.costo_insumos_unitario || 0)}</td>
+            <td class="vc-col-desglose ${desgCls} px-2.5 py-3 text-right num font-mono text-amber-900 bg-amber-50/40 whitespace-nowrap">${fmtMon(r.mod_unitario || 0)}</td>
+            <td class="vc-col-desglose ${desgCls} px-2 py-2 text-center whitespace-nowrap" onclick="event.stopPropagation()">
+              <div class="flex items-center justify-center gap-1">
+                <input type="number" min="0" max="999" step="0.5" value="${r.tiempo_preparacion_min || 0}"
+                       title="Preparación (min)"
+                       onchange="actualizarTiempoProdVC(${r.producto_id}, this.value, null)"
+                       class="w-10 text-center font-mono text-xs font-bold border border-slate-200 rounded-lg py-0.5 bg-white text-slate-800 shadow-2xs no-spinners">
+                <input type="number" min="0" max="999" step="0.5" value="${r.tiempo_ensamble_min || 0}"
+                       title="Ensamble (min)"
+                       onchange="actualizarTiempoProdVC(${r.producto_id}, null, this.value)"
+                       class="w-10 text-center font-mono text-xs font-bold border border-slate-200 rounded-lg py-0.5 bg-white text-slate-800 shadow-2xs no-spinners">
+              </div>
+            </td>
+
+            <td class="px-2.5 py-3 text-right num font-mono font-semibold text-rose-900 bg-rose-50/30 whitespace-nowrap">${fmtMon(r.costo_unitario)}</td>
+            <td class="px-2.5 py-3 text-right num font-mono font-semibold text-indigo-900 bg-indigo-50/30 whitespace-nowrap">${fmtMon(r.margen_unitario)}</td>
+
+            <!-- Totales -->
+            <td class="px-2.5 py-3 text-right num font-mono font-bold text-emerald-900 bg-emerald-50/30 whitespace-nowrap">${fmtMon(r.total_venta)}</td>
+
+            <!-- Desglose total -->
+            <td class="vc-col-desglose ${desgCls} px-2.5 py-3 text-right num font-mono text-slate-700 bg-slate-50/80 whitespace-nowrap">${fmtMon(r.total_costo_insumos || 0)}</td>
+            <td class="vc-col-desglose ${desgCls} px-2.5 py-3 text-right num font-mono text-amber-900 bg-amber-50/40 whitespace-nowrap">${fmtMon(r.total_mod || 0)}</td>
+
+            <td class="px-2.5 py-3 text-right num font-mono font-bold text-rose-800 whitespace-nowrap">${fmtMon(r.total_costo)}</td>
+            <td class="px-2.5 py-3 text-right num font-mono font-bold text-indigo-900 whitespace-nowrap">${fmtMon(r.margen_total)}</td>
+            <td class="px-2.5 py-3 text-right num font-mono whitespace-nowrap ${pctCls}">${fmt(r.margen_porcentual)}%</td>
+          </tr>
+        `;
+      }).join('');
+
+      // Calcular totales
+      const margenGlobal = totalVentas - totalCostos;
+      const pctGlobal = totalVentas > 0 ? (margenGlobal / totalVentas) * 100 : 0;
+
+      document.getElementById('vc-kpi-ventas').textContent = fmtMon(totalVentas);
+      document.getElementById('vc-kpi-costos').textContent = fmtMon(totalCostos);
+      document.getElementById('vc-kpi-costos-sub').textContent = `Insumos: ${fmtMon(totalInsumos)} | MOD: ${fmtMon(totalMod)}`;
+      document.getElementById('vc-kpi-margen').textContent = fmtMon(margenGlobal);
+      document.getElementById('vc-kpi-pct').textContent = `${fmt(pctGlobal)}%`;
+
+      tfoot.innerHTML = `
+        <tr class="text-xs bg-slate-100/90 border-t-2 border-slate-300">
+          <td class="px-3 py-3 text-slate-900 uppercase tracking-wider font-extrabold">Totales Generales</td>
+          <td class="px-2.5 py-3 text-right num">${fmt(totalCant)}</td>
+          <td class="px-2.5 py-3 text-right num">-</td>
+          <td class="vc-col-desglose ${desgCls} px-2.5 py-3 text-right num">-</td>
+          <td class="vc-col-desglose ${desgCls} px-2.5 py-3 text-right num">-</td>
+          <td class="vc-col-desglose ${desgCls} px-2 py-3 text-center">-</td>
+          <td class="px-2.5 py-3 text-right num">-</td>
+          <td class="px-2.5 py-3 text-right num">-</td>
+          <td class="px-2.5 py-3 text-right num text-emerald-900 font-extrabold">${fmtMon(totalVentas)}</td>
+          <td class="vc-col-desglose ${desgCls} px-2.5 py-3 text-right num">${fmtMon(totalInsumos)}</td>
+          <td class="vc-col-desglose ${desgCls} px-2.5 py-3 text-right num">${fmtMon(totalMod)}</td>
+          <td class="px-2.5 py-3 text-right num text-rose-900 font-extrabold">${fmtMon(totalCostos)}</td>
+          <td class="px-2.5 py-3 text-right num text-indigo-900 font-extrabold">${fmtMon(margenGlobal)}</td>
+          <td class="px-2.5 py-3 text-right num font-extrabold text-slate-900">${fmt(pctGlobal)}%</td>
+        </tr>
+      `;
+    }
+
+    async function toggleDetalleVC(tr, productoId) {
+      const nextTr = tr.nextElementSibling;
+      if (nextTr && nextTr.classList.contains('detalle-row')) {
+        nextTr.remove();
+        return;
+      }
+
+      const desde = document.getElementById('vc-desde').value;
+      const hasta = document.getElementById('vc-hasta').value;
+      const cuInp = document.getElementById('vc-centro-utilidad');
+      const centroId = cuInp ? cuInp.value : '';
+
+      const colsSpan = desgloseVisibleVC ? 14 : 9;
+      const dTr = document.createElement('tr');
+      dTr.className = 'detalle-row bg-slate-50/90 border-b border-slate-200';
+      dTr.innerHTML = `<td colspan="${colsSpan}" class="p-4 text-center text-slate-400 font-medium">Cargando desglose de comprobantes...</td>`;
+      tr.parentNode.insertBefore(dTr, tr.nextSibling);
+
+      try {
+        let url = `/api/inventario/${NEGOCIO_ID}/reporte-ventas-costos/detalle?desde=${desde}&hasta=${hasta}&producto_id=${productoId}`;
+        if (centroId) url += `&centro_utilidad_id=${encodeURIComponent(centroId)}`;
+
+        const r = await fetch(url);
+        const d = await r.json();
+
+        if (d.ok && d.detalle && d.detalle.length) {
+          dTr.innerHTML = `
+            <td colspan="${colsSpan}" class="p-4">
+              <div class="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
+                <div class="px-4 py-2.5 bg-slate-100/70 border-b border-slate-200 flex justify-between items-center text-xs font-bold text-slate-700">
+                  <span>Comprobantes y Facturas Asociadas</span>
+                  <span class="text-slate-400 font-normal font-mono">${d.detalle.length} registros</span>
+                </div>
+                <div class="max-h-72 overflow-y-auto">
+                  <table class="w-full text-xs text-left">
+                    <thead class="bg-slate-50 text-[10px] text-slate-500 uppercase font-semibold border-b border-slate-200">
+                      <tr>
+                        <th class="px-3 py-2">Fecha</th>
+                        <th class="px-3 py-2">Documento / Factura</th>
+                        <th class="px-3 py-2 text-right num">Cantidad</th>
+                        <th class="px-3 py-2 text-right num">Precio Unit.</th>
+                        <th class="px-3 py-2 text-right num">Costo Unit.</th>
+                        <th class="px-3 py-2 text-right num">Total Venta</th>
+                        <th class="px-3 py-2 text-right num">Margen</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 font-mono">
+                      ${d.detalle.map(it => `
+                        <tr class="hover:bg-slate-50">
+                          <td class="px-3 py-1.5 text-slate-600 font-sans">${it.fecha || '-'}</td>
+                          <td class="px-3 py-1.5 font-bold text-rose-600">
+                            <a href="/admin/auditoria-facturas?factura=${encodeURIComponent(it.documento || '')}" target="_blank" class="hover:underline">
+                              ${it.documento || 'Venta'} &rarr;
+                            </a>
+                          </td>
+                          <td class="px-3 py-1.5 text-right num text-slate-700">${fmt(it.cantidad)}</td>
+                          <td class="px-3 py-1.5 text-right num text-slate-700">${fmtMon(it.precio_unitario)}</td>
+                          <td class="px-3 py-1.5 text-right num text-rose-700">${fmtMon(it.costo_unitario)}</td>
+                          <td class="px-3 py-1.5 text-right num text-emerald-800 font-bold">${fmtMon(it.total_venta)}</td>
+                          <td class="px-3 py-1.5 text-right num text-indigo-800 font-bold">${fmtMon(it.margen)}</td>
+                        </tr>
+                      `).join('')}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </td>
+          `;
+        } else {
+          dTr.innerHTML = `<td colspan="${colsSpan}" class="p-4 text-center text-slate-400">No se encontraron detalles para este producto.</td>`;
+        }
+      } catch (e) {
+        console.error(e);
+        dTr.innerHTML = `<td colspan="${colsSpan}" class="p-4 text-center text-rose-500 font-semibold">Error al cargar detalle.</td>`;
+      }
+    }
+
+    async function actualizarTiempoProdVC(productoId, prep, ens) {
+      try {
+        const payload = { producto_id: productoId };
+        if (prep !== null && prep !== undefined) payload.tiempo_preparacion_min = parseFloat(prep);
+        if (ens !== null && ens !== undefined) payload.tiempo_ensamble_min = parseFloat(ens);
+
+        const r = await fetch(`/api/inventario/${NEGOCIO_ID}/tiempo-producto`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const d = await r.json();
+        if (d.ok) {
+          toast('Tiempo actualizado', true);
+        } else {
+          toast(d.error || 'Error al guardar tiempo', false);
+        }
+      } catch (e) {
+        toast('Error de red', false);
+      }
+    }
+
+    async function guardarParametrosMOD() {
+      const costoHora = parseFloat(document.getElementById('vc-costo-hora-mod').value) || 0;
+      const horasSem = parseFloat(document.getElementById('vc-horas-semana-mod').value) || 42;
+      const diasSem = parseFloat(document.getElementById('vc-dias-semana-mod').value) || 6;
+      const personas = parseFloat(document.getElementById('vc-personas-mod').value) || 1;
+
+      try {
+        const r = await fetch(`/api/inventario/${NEGOCIO_ID}/config-mod`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            costo_hora_mod: costoHora,
+            horas_semana_mod: horasSem,
+            dias_semana_mod: diasSem,
+            personas_mod: personas,
+            mod_activo_mod: modActivoVC
+          })
+        });
+        const d = await r.json();
+        if (d.ok) {
+          toast('Parámetros MOD guardados', true);
+          consultarVentasCostos();
+        } else {
+          toast(d.error || 'Error al guardar', false);
+        }
+      } catch (e) {
+        toast('Error de red', false);
+      }
+    }
+
+    function ordenarVC(campo) {
+      if (ordenActualVC.campo === campo) {
+        ordenActualVC.asc = !ordenActualVC.asc;
+      } else {
+        ordenActualVC.campo = campo;
+        ordenActualVC.asc = false;
+      }
+      datosVC.sort((a, b) => {
+        let vA = a[campo];
+        let vB = b[campo];
+        if (typeof vA === 'string') {
+          return ordenActualVC.asc ? vA.localeCompare(vB) : vB.localeCompare(vA);
+        }
+        vA = vA || 0;
+        vB = vB || 0;
+        return ordenActualVC.asc ? vA - vB : vB - vA;
+      });
+      renderTablaVC();
+    }
+
+    // Arranque automatico
+    window.addEventListener('DOMContentLoaded', () => {
+      inicializarFechas();
+      consultarVentasCostos();
+    });
+  </script>
+</body>
+</html>

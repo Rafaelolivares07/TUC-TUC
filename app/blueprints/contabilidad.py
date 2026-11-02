@@ -2182,10 +2182,10 @@ def tesoreria_standalone(negocio_id=None):
                     return "No hay negocios registrados", 404
 
         negocio = conn.execute(
-            "SELECT nombre, COALESCE(razon_social, nombre) as nombre_oficial FROM terceros WHERE id=%s LIMIT 1",
+            "SELECT nombre FROM terceros WHERE id=%s LIMIT 1",
             (negocio_id,)
         ).fetchone()
-        negocio_nombre = negocio['nombre_oficial'] if negocio else (negocio['nombre'] if negocio else f"Negocio #{negocio_id}")
+        negocio_nombre = negocio['nombre'] if (negocio and negocio['nombre']) else f"Negocio #{negocio_id}"
 
         centros_rows = conn.execute("""
             SELECT id, codigo, nombre, tipo, color_badge, imagen_url, telefono, direccion

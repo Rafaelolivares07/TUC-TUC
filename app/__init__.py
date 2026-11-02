@@ -200,7 +200,12 @@ def create_app():
             if request.path in ('/', '/portal'):
                 if 'usuario_id' not in session and 'rol' not in session:
                     return redirect('/entrar')
-                return render_template('portal.html', nombre=session.get('nombre', ''))
+                from flask import make_response
+                resp = make_response(render_template('portal.html', nombre=session.get('nombre', '')))
+                resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+                resp.headers['Pragma'] = 'no-cache'
+                resp.headers['Expires'] = '0'
+                return resp
             return
 
         from .dominios_negocio import resolver_negocio_por_host

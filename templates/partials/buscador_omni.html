@@ -139,13 +139,16 @@
     selectedIndex = -1;
     vistaDetalle = false;
     if (omniScrollPrevio !== null) {
-      try { window.scrollTo({ top: omniScrollPrevio, behavior: 'smooth' }); } catch (e) {}
+      try { window.scrollTo({ top: omniScrollPrevio, behavior: omniSuave }); } catch (e) {}
       omniScrollPrevio = null;
     }
   }
 
-  // -- Encajar dropdown al viewport (tope dinamico + subida suave) --
+  // -- Encajar dropdown al viewport (mide contenido; si no cabe, sube suave
+  // la pagina hasta dejar el input al 25% de arriba y la lista toma el resto)
   let omniScrollPrevio = null;
+  let omniSuave = 'smooth';
+  try { if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) omniSuave = 'auto'; } catch (e) {}
   function ajustarDropdownViewport(desplazar) {
     try {
       if (desplazar === undefined) desplazar = true;
@@ -153,21 +156,28 @@
       const vh = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
       const tope = vh * 0.75;
       const espacio = vh - r.bottom - 28;
-      if (espacio >= 220) {
+      const contenido = resultsBody ? resultsBody.scrollHeight : 0;
+      if (contenido > 0 && contenido <= espacio) {
         dropdown.style.maxHeight = Math.floor(Math.min(espacio, tope)) + 'px';
         return;
       }
-      dropdown.style.maxHeight = '220px';
+      if (contenido === 0) {
+        dropdown.style.maxHeight = Math.floor(Math.min(Math.max(espacio, 220), tope)) + 'px';
+        return;
+      }
+      dropdown.style.maxHeight = Math.floor(Math.min(Math.max(espacio, 220), tope)) + 'px';
       if (!desplazar) return;
+      const metaTop = vh * 0.25;
+      if (r.top <= metaTop + 4) return;
       if (omniScrollPrevio === null) omniScrollPrevio = window.scrollY;
-      window.scrollBy({ top: (240 - espacio), behavior: 'smooth' });
+      window.scrollBy({ top: Math.ceil(r.top - metaTop), behavior: omniSuave });
       setTimeout(function() {
         try {
           const r2 = input.getBoundingClientRect();
           const vh2 = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
           dropdown.style.maxHeight = Math.max(220, Math.floor(Math.min(vh2 - r2.bottom - 28, vh2 * 0.75))) + 'px';
         } catch (e2) {}
-      }, 280);
+      }, 300);
     } catch (e) {}
   }
   if (window.visualViewport) {
@@ -379,6 +389,7 @@
       }
 
       resultsBody.innerHTML = html;
+      ajustarDropdownViewport();
       resaltarElemento(0);
     } catch(err) {
       loading.classList.add('hidden');
@@ -503,6 +514,7 @@
     const p = datosProductos[i];
     if (!p) return;
     input.value = p.nombre;
+    try { if (window.matchMedia && matchMedia('(pointer: coarse)').matches) input.blur(); } catch (e) {}
     itemsColeccion = [];
     let h = `
       <div>
@@ -514,6 +526,7 @@
     h += omniFilaDato(backIdx, '\u2190 Ver los ' + datosProductos.length + ' productos', 'volver a la lista', 'Atr\u00e1s');
     h += `</div></div>`;
     resultsBody.innerHTML = h;
+    ajustarDropdownViewport();
     vistaDetalle = true;
     resaltarElemento(0);
   };
@@ -592,7 +605,12 @@
       selectedIndex = index;
       const el = elementos[index];
       el.classList.add('bg-indigo-100', 'ring-2', 'ring-indigo-300');
-      el.scrollIntoView({ block: 'nearest' });
+      try {
+        const cBox = dropdown.getBoundingClientRect();
+        const eBox = el.getBoundingClientRect();
+        if (eBox.top < cBox.top) dropdown.scrollTop -= Math.ceil(cBox.top - eBox.top);
+        else if (eBox.bottom > cBox.bottom) dropdown.scrollTop += Math.ceil(eBox.bottom - cBox.bottom);
+      } catch (e2) {}
     } else {
       selectedIndex = -1;
     }

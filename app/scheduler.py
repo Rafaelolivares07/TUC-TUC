@@ -15,7 +15,7 @@ def init_scheduler(app):
 
     _scheduler = BackgroundScheduler()
 
-    # Importaciones lazy — solo cuando el scheduler arranca
+    # Importaciones lazy â€” solo cuando el scheduler arranca
     with app.app_context():
         try:
             from .blueprints.domotica import job_verificar_switches
@@ -49,9 +49,19 @@ def init_scheduler(app):
             )
         except Exception as e:
             print(f'[SCHEDULER] error registrando contabilidad_programaciones: {e}')
+        try:
+            from .blueprints.facturacion_mensual import job_facturacion_mensual
+            _scheduler.add_job(
+                job_facturacion_mensual,
+                'interval', hours=1,
+                id='facturacion_mensual',
+                replace_existing=True
+            )
+        except Exception as e:
+            print(f'[SCHEDULER] error registrando facturacion_mensual: {e}')
 
     if not _scheduler.running:
         _scheduler.start()
-    print('[SCHEDULER] APScheduler inicializado con éxito')
+    print('[SCHEDULER] APScheduler inicializado con Ã©xito')
     return _scheduler
 

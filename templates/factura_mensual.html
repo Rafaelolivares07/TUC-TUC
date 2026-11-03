@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Factura FC-{{ f.numero }} · {{ f.mes }} {{ f.anio }}</title>
+<meta property="og:title" content="Factura FC-{{ f.numero }} · {{ f.mes }} {{ f.anio }} · {{ total_fmt }}">
+<meta property="og:description" content="LOPEZ REFRIGERACION · ALOJAMIENTO DE DATOS">
+<meta property="og:image" content="{{ imagen }}">
+<meta property="og:image:type" content="image/png">
+<style>
+body{margin:0;background:#f3f4f6;font-family:Arial,sans-serif;color:#111}
+main{max-width:760px;margin:24px auto;padding:0 16px;text-align:center}
+img{max-width:100%;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,.15)}
+.boton{display:inline-block;margin:16px 0;padding:14px 28px;background:#25d366;color:#fff;
+  font-size:18px;font-weight:bold;text-decoration:none;border-radius:10px}
+.dato{color:#555;font-size:15px}
+</style>
+</head>
+<body>
+<main>
+<img src="{{ imagen }}" alt="Factura FC-{{ f.numero }}">
+<p class="dato">Factura FC-{{ f.numero }} · {{ f.mes }} {{ f.anio }} · {{ total_fmt }}</p>
+<p><a class="boton" href="{{ wa }}">Abrir en WhatsApp</a></p>
+</main>
+</body>
+</html>

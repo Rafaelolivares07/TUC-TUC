@@ -45,6 +45,7 @@ def create_app():
     from .blueprints.backup import bp as backup_bp
     from .blueprints.rockola import bp as rockola_bp
     from .blueprints.reportes_bp import bp as reportes_bp
+    from .blueprints.facturacion_mensual import bp as facturacion_mensual_bp
 
     app.register_blueprint(core_bp)
     app.register_blueprint(auth_bp)
@@ -66,6 +67,7 @@ def create_app():
     app.register_blueprint(backup_bp)
     app.register_blueprint(rockola_bp)
     app.register_blueprint(reportes_bp)
+    app.register_blueprint(facturacion_mensual_bp)
 
     # Crear tabla config_negocio al arrancar (fuera de request handlers)
     try:
@@ -78,7 +80,7 @@ def create_app():
     except Exception as _e:
         print(f'[negocios] init: {_e}')
 
-    # Inicializar APScheduler para tareas en segundo plano (amortizaciones, domótica, crm)
+    # Inicializar APScheduler para tareas en segundo plano (amortizaciones, domÃƒÂ³tica, crm)
     try:
         from .scheduler import init_scheduler
         init_scheduler(app)
@@ -235,7 +237,7 @@ def create_app():
         except Exception:
             es_tienda = None
 
-        # No interceptar llamadas API ni estáticos ni chat — dejar que Flask las enrute normal
+        # No interceptar llamadas API ni estÃƒÂ¡ticos ni chat Ã¢â‚¬â€ dejar que Flask las enrute normal
         if (request.path.startswith('/api/') or request.path.startswith('/static/') or
                 request.path.startswith('/chat') or request.path.startswith('/pagar/') or
                 request.path.startswith('/proyecto/') or request.path.startswith('/solar/proyecto/') or

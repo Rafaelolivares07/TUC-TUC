@@ -10982,8 +10982,7 @@ window.confirmarVinculacionItem = async function() {
           presEquiv = parseFloat(data.equivalencia) || 1.0;
         }
       }
-    } catch(e) {}
-  }
+  } catch(e) {}
 
   // 2. Si no se encontró por proveedor, buscar si el producto tiene presentaciones asociadas
   if (presId === null && prod?.presentaciones && prod.presentaciones.length > 0) {

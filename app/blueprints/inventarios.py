@@ -10528,11 +10528,21 @@ def entradas_standalone(negocio_id=None):
 
         _slug = contexto.get('slug') or session.get('negocio_slug') or ''
 
+        # Consultar tipos de documentos de entrada activos para renderizado inmediato
+        tipos_doc_rows = conn.execute("""
+            SELECT id, codigo, nombre, activo, consecutivo, numero_inicio, predeterminado, mueve_inventario, tipo_movimiento, es_interno
+            FROM tipos_documento_negocio
+            WHERE negocio_id = %s AND activo = TRUE AND mueve_inventario = TRUE AND tipo_movimiento = 'entrada'
+            ORDER BY predeterminado DESC, nombre ASC
+        """, (negocio_id,)).fetchall()
+        tipos_doc = [dict(t) for t in tipos_doc_rows]
+
         return render_template('entradas.html',
                                negocio_id=negocio_id,
                                negocio_nombre=contexto['negocio_nombre'],
                                centros_utilidad=centros,
                                centro_activo=centro_activo,
+                               tipos_documento=tipos_doc,
                                negocio_slug=_slug,
                                volver_url='/inicio')
     except Exception as e:

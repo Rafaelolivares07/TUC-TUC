@@ -255,17 +255,22 @@
           <div class="px-3 py-1.5 text-[11px] text-slate-500 border-t border-slate-100">o pega la imagen con <b>Ctrl+V</b></div>
         </div>
         </span>
-        <button type="button" onclick="abrirModalDiccionarioAlias()"
-                id="btn-memoria-proveedor"
-                class="px-3.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold text-xs rounded-xl border border-amber-200 flex items-center gap-1.5 transition shadow-2xs cursor-pointer"
-                title="Consultar y gestionar las equivalencias y memoria aprendidas para proveedores">
-          <span>📖</span> <span class="hidden sm:inline">Memoria /</span> Equivalencias
-        </button>
         <input type="file" id="input-escanear-factura" accept="image/*" class="hidden" onchange="escanearFacturaConIA(this)">
-        <button type="button" onclick="abrirModalGestionPresentaciones()"
-                class="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-xl border border-indigo-200 flex items-center gap-1.5 transition shadow-2xs cursor-pointer">
-          <span>📦</span> <span class="hidden sm:inline">Unidades de Empaque /</span> Presentaciones
-        </button>
+
+        <!-- Grupo Memoria/Equivalencias y Unidades de Empaque en la misma línea anterior -->
+        <div class="inline-flex items-center gap-1.5">
+          <button type="button" onclick="abrirModalDiccionarioAlias()"
+                  id="btn-memoria-proveedor"
+                  class="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold text-xs rounded-xl border border-amber-200 flex items-center gap-1.5 transition shadow-2xs cursor-pointer"
+                  title="Consultar y gestionar las equivalencias y memoria aprendidas para proveedores">
+            <span>📖</span> <span>Memoria / Equivalencias</span>
+          </button>
+          <button type="button" onclick="abrirModalGestionPresentaciones()"
+                  class="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-xl border border-indigo-200 flex items-center gap-1.5 transition shadow-2xs cursor-pointer"
+                  title="Catálogo de Unidades de Empaque y Presentaciones">
+            <span>📦</span> <span>Empaques / Presentaciones</span>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -360,35 +365,41 @@
       </div>
     </div>
 
-    <div class="grid grid-cols-1 sm:grid-cols-12 gap-x-3 gap-y-3 mb-3">
+    <div class="grid grid-cols-1 sm:grid-cols-12 gap-x-3 gap-y-3 mb-3 items-end">
 
       <div class="sm:col-span-2">
-        <label for="entrada-tipo-doc">Tipo doc.</label>
-        <select id="entrada-tipo-doc" tabindex="1">
-          <option value="">Cargando tipos...</option>
+        <label for="entrada-tipo-doc" class="h-6 flex items-end mb-1 text-[11px] font-bold text-gray-700">Tipo doc.</label>
+        <select id="entrada-tipo-doc" tabindex="1" class="w-full h-[44px]">
+          {% if tipos_documento %}
+            {% for t in tipos_documento %}
+            <option value="{{ t.id }}" {% if t.predeterminado %}selected{% endif %}>{{ t.nombre }}</option>
+            {% endfor %}
+          {% else %}
+            <option value="1" selected>Factura de Compra / Entrada</option>
+          {% endif %}
         </select>
       </div>
 
       <div class="sm:col-span-2">
-        <label for="entrada-num-doc">No. documento</label>
-        <input id="entrada-num-doc" tabindex="2" type="text" placeholder="FAC-0234">
+        <label for="entrada-num-doc" class="h-6 flex items-end mb-1 text-[11px] font-bold text-gray-700">No. documento</label>
+        <input id="entrada-num-doc" tabindex="2" type="text" placeholder="FAC-0234" class="w-full h-[44px]">
       </div>
 
       <div class="sm:col-span-2">
-        <label for="entrada-fecha-doc">Fecha documento</label>
-        <input id="entrada-fecha-doc" tabindex="3" type="date">
+        <label for="entrada-fecha-doc" class="h-6 flex items-end mb-1 text-[11px] font-bold text-gray-700">Fecha documento</label>
+        <input id="entrada-fecha-doc" tabindex="3" type="date" class="w-full h-[44px]">
       </div>
 
       <div class="sm:col-span-3">
-        <div class="flex items-center justify-between mb-1">
-          <label for="entrada-centro-utilidad" class="font-bold text-indigo-900 flex items-center gap-1 mb-0">
-            <span>🏢 Sede / Bodega Destino</span>
+        <div class="h-6 flex items-end justify-between mb-1 gap-1">
+          <label for="entrada-centro-utilidad" class="text-[11px] font-bold text-indigo-900 flex items-center gap-1 mb-0 leading-none whitespace-nowrap">
+            <span>🏢 Sede Destino</span>
             <span class="text-rose-500 font-extrabold">*</span>
           </label>
-          <span id="badge-confirma-sede" class="text-[10px] font-bold px-1.5 py-0.5 rounded border border-amber-300 bg-amber-100 text-amber-800 transition-all">Por confirmar ⚠️</span>
+          <span id="badge-confirma-sede" class="text-[10px] font-bold px-1.5 py-0.2 rounded border border-amber-300 bg-amber-100 text-amber-800 transition-all leading-tight shrink-0">Por confirmar ⚠️</span>
         </div>
         <select id="entrada-centro-utilidad" tabindex="4" onchange="actualizarConfirmacionSede()"
-                class="w-full font-bold text-gray-800 border-2 border-amber-400 bg-amber-50/40 rounded-xl px-2.5 py-2 transition-all focus:ring-2 focus:ring-indigo-500 outline-none">
+                class="w-full h-[44px] font-bold text-gray-800 border-2 border-amber-400 bg-amber-50/40 rounded-xl px-2.5 py-2 transition-all focus:ring-2 focus:ring-indigo-500 outline-none box-border">
           <option value="" disabled {% if not centro_activo or centro_activo.id == 'consolidado' %}selected{% endif %}>-- Seleccione Sede de Destino (Obligatorio) --</option>
           {% for c in centros_utilidad %}
           <option value="{{ c.id }}" {% if centro_activo and c.id|string == centro_activo.id|string %}selected{% endif %}>
@@ -399,16 +410,18 @@
       </div>
 
       <div class="sm:col-span-3">
-        <div class="flex items-center justify-between mb-1">
-          <label for="entrada-metodo-pago" class="font-bold text-indigo-900 flex items-center gap-1 mb-0">
-            <span>💳 Método de Pago</span>
+        <div class="h-6 flex items-end justify-between mb-1 gap-1">
+          <label for="entrada-metodo-pago" class="text-[11px] font-bold text-indigo-900 flex items-center gap-1 mb-0 leading-none whitespace-nowrap">
+            <span>💳 Método Pago</span>
             <span class="text-rose-500 font-extrabold">*</span>
           </label>
-          <span id="badge-metodo-sugerido-ocr" class="hidden text-[10px] font-bold px-1.5 py-0.5 rounded border border-indigo-200 bg-indigo-50 text-indigo-700 transition-all"></span>
-          <span id="badge-confirma-metodo" class="text-[10px] font-bold px-1.5 py-0.5 rounded border border-amber-300 bg-amber-100 text-amber-800 transition-all">Por confirmar ⚠️</span>
+          <div class="flex items-center gap-1 shrink-0">
+            <span id="badge-metodo-sugerido-ocr" class="hidden text-[10px] font-bold px-1.5 py-0.2 rounded border border-indigo-200 bg-indigo-50 text-indigo-700 transition-all leading-tight"></span>
+            <span id="badge-confirma-metodo" class="text-[10px] font-bold px-1.5 py-0.2 rounded border border-amber-300 bg-amber-100 text-amber-800 transition-all leading-tight">Por confirmar ⚠️</span>
+          </div>
         </div>
         <select id="entrada-metodo-pago" tabindex="5" onchange="actualizarConfirmacionMetodoPago()"
-                class="w-full font-bold text-gray-800 border-2 border-amber-400 bg-amber-50/40 rounded-xl px-2.5 py-2 transition-all focus:ring-2 focus:ring-indigo-500 outline-none">
+                class="w-full h-[44px] font-bold text-gray-800 border-2 border-amber-400 bg-amber-50/40 rounded-xl px-2.5 py-2 transition-all focus:ring-2 focus:ring-indigo-500 outline-none box-border">
           <!-- Cargado dinámicamente -->
         </select>
       </div>
@@ -1213,7 +1226,7 @@
     let defaultPresentacionId = null;
     let esModificacionDoc = false;
     let metodosPagoEntrada = [];
-    let tiposDocEntrada = [];
+    let tiposDocEntrada = {{ tipos_documento|tojson if tipos_documento else '[]' }};
     let activeACInputId = null;
     let activeACHiddenId = null;
     let tarjetaLineas = [];
@@ -6382,8 +6395,7 @@ window.confirmarVinculacionItem = async function() {
           presEquiv = parseFloat(data.equivalencia) || 1.0;
         }
       }
-    } catch(e) {}
-  }
+  } catch(e) {}
 
   // 2. Si no se encontró por proveedor, buscar si el producto tiene presentaciones asociadas
   if (presId === null && prod?.presentaciones && prod.presentaciones.length > 0) {

@@ -488,6 +488,7 @@ def api_estado():
 
 
 def _pedido_por_token(conn, token):
+    _asegurar_columnas(conn)
     row = conn.execute(
         """SELECT id, numero, token_publico, total, created_at FROM pedidos
            WHERE token_publico = %s LIMIT 1""", (token,)).fetchone()

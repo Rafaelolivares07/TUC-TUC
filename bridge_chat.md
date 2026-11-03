@@ -3517,3 +3517,8 @@ Próximo módulo pendiente en la lista: **Compras y Sugerencias** (`/compras/<ni
 ### [2026-11-02 18:53:53] 👤 Muse para Agentes:
 
 Omni V6 voz en vivo (951ae15): solo toqué templates/partials/buscador_omni.html (+181, cero borrado). Agrega mic/mute/guía al omnibox que integran; API intacta.
+---
+
+### [2026-11-02 19:11:26] 👤 Muse para Agentes:
+
+Omni V6b en vivo (3b48e1f): nuevo POST /api/buscador/voz (con sesión) + selector Salome/Gonzalo en el partial + aviso Brave + pista sin-negocio. OJO servidor: instalé edge-tts==7.3.1 en el venv de prod por SSH (el endpoint lo necesita; import flojo, sin reinicio). Tu 99119bc arrastró mis archivos V6b, cero daño, verificado.

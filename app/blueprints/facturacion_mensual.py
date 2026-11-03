@@ -10,6 +10,7 @@ pendiente en agenda. Rafa solo da Enviar.
 Sin tablas nuevas: terceros, tipos_documento_negocio, productos,
 precios, pedidos, pedido_items, agenda_items (+ 5 columnas _asegurar).
 """
+import os
 import random
 import secrets
 import urllib.parse
@@ -61,9 +62,9 @@ def _mes_vencido(ahora=None):
 
 
 def _saludo(hora=None):
-    """dias antes de las 12, tardes despues (hora Bogota)."""
+    """buenos dias antes de las 12, buenas tardes despues (hora Bogota)."""
     h = hora if hora is not None else _ahora_bogota().hour
-    return 'días' if h < 12 else 'tardes'
+    return 'buenos días' if h < 12 else 'buenas tardes'
 
 
 def _telefono_wa():
@@ -74,7 +75,7 @@ def _mensaje_whatsapp(link_factura, ahora=None):
     ahora = ahora or _ahora_bogota()
     mes, anio = _mes_vencido(ahora)
     return (
-        "Don %s muy buenos %s, aquí le envío la factura de %s %d:\n%s"
+        "Don %s muy %s, aquí le envío la factura de %s %d:\n%s"
         % (CLIENTE['contacto'], _saludo(ahora.hour), MESES[mes - 1], anio, link_factura)
     )
 
@@ -279,10 +280,20 @@ def _render_imagen(factura):
     img = Image.new('RGB', (W, 1600), 'white')
     d = ImageDraw.Draw(img)
     y = 24
-    d.rectangle([(0, 0), (W, 150)], fill=ROJO)
-    d.text((M + 8, 62), 'a', font=f_a, fill='white', anchor='lm')
-    d.text((150, 62), 'administrator', font=f_marca, fill='white', anchor='lm')
-    y = 185
+    try:
+        _base = os.path.dirname(os.path.abspath(__file__))
+        _logo = Image.open(os.path.join(_base, '..', '..', 'static',
+                                        'facturacion_logo_administrator.png')).convert('RGB')
+        _lw = 360
+        _lh = int(_logo.size[1] * _lw / _logo.size[0])
+        _logo = _logo.resize((_lw, _lh), Image.LANCZOS)
+        img.paste(_logo, ((W - _lw) // 2, y))
+        y += _lh + 24
+    except Exception:
+        d.rectangle([(0, 0), (W, 150)], fill=ROJO)
+        d.text((M + 8, 62), 'a', font=f_a, fill='white', anchor='lm')
+        d.text((150, 62), 'administrator', font=f_marca, fill='white', anchor='lm')
+        y = 185
     for txt, fnt in ((EMPRESA['nombre'], f_tit), (EMPRESA['documento'], f_txt),
                      ('%s - %s' % (EMPRESA['nombre'], EMPRESA['rol']), f_txt)):
         d.text((W // 2, y), txt, font=fnt, fill=NEGRO, anchor='ma')
@@ -416,10 +427,53 @@ def _emitir_aviso(conn, factura):
     return {'telegram': ok_tg, 'agenda_id': item_id, 'link': link, 'wa': wa}
 
 
+def _festivos_usa(anio):
+    """Festivos federales USA con corrimiento observado. Retorna set de date."""
+    from datetime import date, timedelta
+
+    def nth_weekday(mes, dow, n):
+        d = date(anio, mes, 1) + timedelta(days=(dow - date(anio, mes, 1).weekday()) % 7)
+        return d + timedelta(days=7 * (n - 1))
+
+    def last_weekday(mes, dow):
+        d = date(anio + 1, 1, 1) if mes == 12 else date(anio, mes + 1, 1)
+        d -= timedelta(days=1)
+        while d.weekday() != dow:
+            d -= timedelta(days=1)
+        return d
+
+    out = set()
+    for mes, dia in ((1, 1), (6, 19), (7, 4), (11, 11), (12, 25)):
+        d = date(anio, mes, dia)
+        if d.weekday() == 5:
+            d -= timedelta(days=1)
+        elif d.weekday() == 6:
+            d += timedelta(days=1)
+        out.add(d)
+    out.add(nth_weekday(1, 0, 3))
+    out.add(nth_weekday(2, 0, 3))
+    out.add(last_weekday(5, 0))
+    out.add(nth_weekday(9, 0, 1))
+    out.add(nth_weekday(10, 0, 2))
+    out.add(nth_weekday(11, 3, 4))
+    return out
+
+
+def _fecha_generacion_mes(anio, mes):
+    """Dia 1 corrido al siguiente dia habil USA (salta domingo y festivo)."""
+    from datetime import date, timedelta
+    d = date(anio, mes, 1)
+    fests = _festivos_usa(anio)
+    while d.weekday() == 6 or d in fests:
+        d += timedelta(days=1)
+    return d
+
+
 def job_facturacion_mensual():
     conn = None
     try:
-        if _ahora_bogota().day != 1:
+        hoy = _ahora_bogota().date()
+        if hoy < _fecha_generacion_mes(hoy.year, hoy.month):
             return
         conn = get_db_connection()
         res = _generar_factura(conn)

@@ -1,0 +1,4687 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full bg-slate-50">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Catálogo de Productos — {{ negocio_nombre }} | TUC TUC</title>
+
+  <script src="/static/js/tailwind.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #f8fafc;
+    }
+    .font-mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .no-spinners::-webkit-inner-spin-button,
+    .no-spinners::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    .no-spinners {
+      -moz-appearance: textfield;
+      appearance: textfield;
+    }
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+    /* Overlays base styles */
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(2px);
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+    .overlay.hidden {
+      display: none !important;
+    }
+    .modal {
+      background: white;
+      border-radius: 1.25rem;
+      max-width: 100%;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+      border: 1px solid #e2e8f0;
+      overflow: hidden;
+      padding: 1.5rem;
+    }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      background: #1e293b;
+      color: white;
+      padding: 0.75rem 1.25rem;
+      border-radius: 0.75rem;
+      font-size: 0.875rem;
+      font-weight: 600;
+      box-shadow: 0 10px 25px -5px rgba(0,0,0,0.3);
+      z-index: 99999;
+      transform: translateY(100px);
+      opacity: 0;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      pointer-events: none;
+    }
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .toast-ok { background: #059669 !important; }
+    .toast-err { background: #dc2626 !important; }
+    .toast-warn { background: #d97706 !important; }
+
+    /* Autocomplete list */
+    .ac-list {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 0.75rem;
+      box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1);
+      max-height: 240px;
+      overflow-y: auto;
+      z-index: 60;
+    }
+    .ac-item {
+      padding: 0.5rem 0.75rem;
+      cursor: pointer;
+      font-size: 0.8125rem;
+    }
+    .ac-item:hover, .ac-focus {
+      background-color: #f1f5f9;
+    }
+    .sticky-table-header th {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+  </style>
+</head>
+<body class="min-h-full flex flex-col text-slate-800 bg-slate-50 selection:bg-rose-100 selection:text-rose-900">
+
+  <!-- ================= TOPBAR CORPORATIVA OFICIAL ================= -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-2xs">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+      
+      <!-- Identidad Corporativa Oficial: TUC TUC | Negocio | Sede -->
+      <div class="flex items-center gap-3">
+        <a href="/inicio" class="group flex items-center gap-2.5 text-slate-900 hover:text-rose-600 transition-colors" title="Regresar al Menú Principal">
+          <span class="font-extrabold text-sm sm:text-base tracking-wider text-slate-900 group-hover:text-rose-600 transition-colors">
+            TUC TUC
+          </span>
+          <span class="text-sm font-semibold tracking-wider text-slate-300">|</span>
+          <span class="text-sm sm:text-base font-bold tracking-tight text-slate-900 group-hover:text-rose-600 transition-colors uppercase">
+            {{ negocio_nombre }}
+          </span>
+        </a>
+
+        {% if centro_activo %}
+        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+          {{ centro_activo.nombre | upper }}
+        </span>
+        {% endif %}
+      </div>
+
+      <!-- Contexto y Navegación -->
+      <div class="flex items-center gap-2.5">
+        <span class="hidden md:inline-flex px-3 py-1 bg-slate-100 text-slate-600 font-semibold text-xs rounded-xl border border-slate-200">
+          📦 Catálogo Maestro de Productos e Insumos
+        </span>
+        <a href="/inventario/{{ negocio_id }}" class="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all border border-slate-200 flex items-center gap-1.5">
+          <span>&larr;</span> <span>Inventario</span>
+        </a>
+        <a href="/inicio" class="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all border border-slate-200 flex items-center gap-1.5">
+          <span>&larr;</span> <span>Inicio</span>
+        </a>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- ================= CONTENEDOR PRINCIPAL ================= -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+  <div id="tab-productos" class="bg-white rounded-2xl shadow p-5">
+
+    <!-- ── SELECTOR PRINCIPAL DE VISTA: CATÁLOGO vs COSTOS UNITARIOS ── -->
+    <div class="flex items-center justify-between gap-3 mb-4 pb-3 border-b border-gray-100 flex-wrap">
+      <div class="flex items-center gap-2">
+        <button type="button" id="btn-vista-catalogo" onclick="cambiarSubVistaProductos('catalogo')"
+                class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-900 text-white shadow-xs transition flex items-center gap-1.5 cursor-pointer">
+          <span>📋</span> Catálogo de Productos
+        </button>
+        <button type="button" id="btn-vista-costos" onclick="cambiarSubVistaProductos('costos')"
+                class="px-4 py-2 rounded-xl text-xs font-bold bg-gray-100 hover:bg-gray-200 text-gray-700 transition flex items-center gap-1.5 cursor-pointer">
+          <span>📊</span> Reporte de Costos Unitarios & Proveedores
+        </button>
+      </div>
+    </div>
+
+    <!-- ═══ VISTA 1: CATÁLOGO ESTÁNDAR ═══ -->
+    <div id="seccion-vista-catalogo">
+
+    <!-- ── SECCIÓN DE AUDITORÍA INTEGRAL: TABLA vs KARDEX vs CONTABILIDAD (COLAPSADA POR DEFECTO) ── -->
+    <div class="mb-5">
+      <div class="bg-gradient-to-r from-slate-900 to-slate-800 rounded-2xl p-4 text-white shadow-lg">
+        <div class="flex items-center justify-between cursor-pointer select-none" onclick="toggleSeccionAuditoria()">
+          <div class="flex items-center gap-3">
+            <span class="text-xl">🔍</span>
+            <div>
+              <h4 class="text-sm font-bold flex items-center gap-2">
+                AUDITORÍA DE INTEGRIDAD: TABLA vs KARDEX vs CONTABILIDAD
+                <span id="audit-badge-status" class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-700 text-slate-300">Colapsado</span>
+              </h4>
+              <p class="text-xs text-slate-400">Reconstruye el inventario movimiento a movimiento y coteja la tabla resumen con las cuentas 14 contables.</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-3">
+            <span id="audit-chevron" class="text-lg text-slate-400 transform transition-transform duration-200">▼</span>
+          </div>
+        </div>
+
+        <!-- Contenedor desplegable -->
+        <div id="audit-container" class="hidden mt-5 pt-4 border-t border-slate-700 space-y-4">
+          <!-- Barra de controles y contadores -->
+          <div class="flex flex-wrap items-center justify-between gap-3 bg-slate-800/80 p-3 rounded-xl border border-slate-700">
+            <div class="flex flex-wrap items-center gap-2 text-xs">
+              <span class="px-2.5 py-1 bg-slate-700 rounded-lg text-slate-200 font-semibold" id="audit-stat-total">Total: 0</span>
+              <span class="px-2.5 py-1 bg-emerald-900/60 text-emerald-300 border border-emerald-700/50 rounded-lg font-semibold" id="audit-stat-ok">✅ Cuadrados: 0</span>
+              <span class="px-2.5 py-1 bg-amber-900/60 text-amber-300 border border-amber-700/50 rounded-lg font-semibold" id="audit-stat-huerfanos">🔗 Sin ID: 0</span>
+              <span class="px-2.5 py-1 bg-rose-900/60 text-rose-300 border border-rose-700/50 rounded-lg font-semibold" id="audit-stat-dif-stock">⚠️ Dif Stock: 0</span>
+              <span class="px-2.5 py-1 bg-purple-900/60 text-purple-300 border border-purple-700/50 rounded-lg font-semibold" id="audit-stat-dif-valor">⚠️ Dif Contab: 0</span>
+              <span class="px-2.5 py-1 bg-orange-900/60 text-orange-300 border border-orange-700/50 rounded-lg font-semibold" id="audit-stat-sin-asiento">📄 Sin Asiento: 0</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="vincularIdsAuditoria(null)" id="btn-vincular-todos-ids" class="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold rounded-lg text-xs transition flex items-center gap-1.5 shadow-sm">
+                🔗 Vincular Todos los IDs (Fase 1)
+              </button>
+              <button onclick="cargarAuditoriaProductos()" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg text-xs transition flex items-center gap-1.5 shadow-sm">
+                ⚡ Ejecutar / Actualizar Auditoría
+              </button>
+            </div>
+          </div>
+
+          <!-- Filtros internos de auditoría -->
+          <div class="flex items-center gap-3 flex-wrap">
+            <input id="filtro-auditoria-txt" type="text" placeholder="Buscar en auditoría..." oninput="filtrarTablaAuditoria()"
+                   class="text-xs bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rose-500" style="max-width:240px">
+            <select id="filtro-auditoria-estado" onchange="filtrarTablaAuditoria()"
+                    class="text-xs bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 font-semibold focus:outline-none focus:ring-2 focus:ring-rose-500">
+              <option value="todos" selected>Todos los estados</option>
+              <option value="con_problemas">Solo con Diferencias / Sin ID ⚠️</option>
+              <option value="sin_id">Solo con Líneas sin ID 🔗</option>
+              <option value="dif_stock">Solo con Diferencia en Stock 📦</option>
+              <option value="dif_valor">Solo con Diferencia Contable 🏛️</option>
+              <option value="ok">Solo Cuadrados / Sanos ✅</option>
+            </select>
+            <label class="flex items-center gap-2 text-xs text-slate-200 cursor-pointer select-none bg-slate-900/90 border border-slate-700 rounded-xl px-3 py-2 font-medium hover:bg-slate-800 transition">
+              <input type="checkbox" id="check-auditoria-sanos" checked onchange="filtrarTablaAuditoria()" class="w-3.5 h-3.5 rounded text-rose-600 focus:ring-0 cursor-pointer">
+              <span>Mostrar productos sanos (OK)</span>
+            </label>
+          </div>
+
+          <!-- Tabla de Auditoría -->
+          <div class="overflow-x-auto max-h-[75vh] overflow-y-auto bg-white rounded-xl text-gray-800 shadow-inner border border-gray-200">
+            <table class="w-full text-xs border-collapse">
+              <thead class="bg-gray-100 text-gray-700 font-bold uppercase border-b border-gray-200 select-none sticky top-0 z-10 shadow-xs">
+                <tr>
+                  <th class="px-3 py-2.5 text-left bg-gray-100 sticky top-0 z-10">Producto</th>
+                  <th class="px-3 py-2.5 text-right bg-gray-100 sticky top-0 z-10">Stock Tabla</th>
+                  <th class="px-3 py-2.5 text-right bg-gray-100 sticky top-0 z-10">Stock Kardex</th>
+                  <th class="px-3 py-2.5 text-right bg-gray-100 sticky top-0 z-10">Dif Stock</th>
+                  <th class="px-3 py-2.5 text-right bg-gray-100 sticky top-0 z-10">Valor Tabla ($)</th>
+                  <th class="px-3 py-2.5 text-right bg-gray-100 sticky top-0 z-10">Valor Kardex ($)</th>
+                  <th class="px-3 py-2.5 text-right bg-gray-100 sticky top-0 z-10">Saldo Cta 14 ($)</th>
+                  <th class="px-3 py-2.5 text-right bg-gray-100 sticky top-0 z-10">Dif Valor ($)</th>
+                  <th class="px-3 py-2.5 text-center bg-gray-100 sticky top-0 z-10">Fases de Reparación</th>
+                </tr>
+              </thead>
+              <tbody id="tabla-auditoria-body">
+                <tr><td colspan="9" class="text-center py-6 text-gray-400">Haz clic en "Ejecutar / Actualizar Auditoría" para iniciar el diagnóstico.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── BARRA DE CONTROLES: FILTROS, TOTAL Y NUEVO PRODUCTO ── -->
+    <div class="flex flex-wrap items-center justify-between gap-2.5 mb-3 w-full">
+      <!-- Filtros a la izquierda -->
+      <div class="flex items-center gap-2 flex-wrap shrink-0">
+        <input id="filtro-productos" type="text" placeholder="🔍 Buscar producto o categoría…"
+               oninput="filtrarTablaProductos()"
+               class="text-xs border border-gray-200 rounded-xl px-2.5 py-1.5 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-rose-500 w-48 sm:w-56">
+
+        <select id="filtro-estado-productos" onchange="filtrarTablaProductos()"
+                class="w-28 text-xs border border-gray-200 rounded-xl px-2 py-1.5 bg-gray-50 font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-rose-500 truncate"
+                title="Filtrar por estado del producto">
+          <option value="activos" selected>🟢 Activos</option>
+          <option value="inactivos">🔴 Inactivos</option>
+          <option value="todos">Todos</option>
+        </select>
+
+        <!-- Selector interactivo de decimales para Productos -->
+        <div class="flex items-center gap-1 bg-slate-50 border border-slate-200 px-2 py-1 rounded-xl shadow-2xs">
+          <label for="prod-decimales-input" class="text-[11px] font-extrabold text-slate-600 uppercase tracking-wide select-none flex items-center gap-0.5" title="Número de decimales visibles para precios y costos en Productos (0 a 6)">
+            <span>🔢</span><span>Dec:</span>
+          </label>
+          <input id="prod-decimales-input" type="number" min="0" max="6" step="1" value="2"
+                 oninput="cambiarDecimalesProductos(this.value)" onchange="cambiarDecimalesProductos(this.value)" onblur="validarDecimalesProductosInput(this)"
+                 class="w-10 text-center font-mono font-bold text-xs bg-white border border-slate-300 rounded-lg px-1 py-0.5 outline-none text-slate-800 focus:border-rose-500 focus:ring-1 focus:ring-rose-400"
+                 title="Número de decimales visibles para precios, costos y totales en Productos (0 a 6)">
+        </div>
+      </div>
+
+      <!-- A la derecha: Valor Total de Inventario y Botones de Acción -->
+      <div class="flex items-center gap-2 flex-wrap shrink-0 ml-auto">
+        <div class="px-2.5 py-1 bg-rose-50 border border-rose-100 rounded-xl flex items-center gap-1.5 text-xs font-semibold text-rose-700 shadow-2xs whitespace-nowrap">
+          <span>Total Inv:</span>
+          <span id="prod-total-inventario-val" class="font-mono font-bold text-xs md:text-sm text-rose-700">$0.00</span>
+        </div>
+
+        <button type="button" onclick="abrirModalCategoriasAdiciones()"
+                class="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold text-xs rounded-xl border border-amber-300 transition shadow-2xs flex items-center gap-1 whitespace-nowrap"
+                title="Configurar qué categorías de productos se comportan como adiciones/extras en la caja POS">
+          <span>🍔</span> Cat. Adiciones
+        </button>
+
+        <button type="button" onclick="abrirModalGestionPresentaciones()"
+                class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 transition shadow-2xs flex items-center gap-1 whitespace-nowrap"
+                title="Catálogo de unidades de empaque / presentaciones">
+          <span>📦</span> Empaques
+        </button>
+
+        <button type="button" onclick="abrirModalGestionUnidades()"
+                class="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs rounded-xl border border-emerald-200 transition shadow-2xs flex items-center gap-1 whitespace-nowrap cursor-pointer"
+                title="Gestionar unidades de medida base (g, mg, ml, l) y factores de conversión visual">
+          <span>⚖️</span> Unidades y Equivalencias
+        </button>
+
+        <button onclick="abrirModalProducto()"
+                class="px-3.5 py-1.5 bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold rounded-xl transition shadow-xs flex items-center gap-1 whitespace-nowrap">
+          <span>+</span> Producto
+        </button>
+      </div>
+    </div>
+
+    <div class="overflow-x-auto max-h-[75vh] overflow-y-auto custom-scrollbar border border-gray-100 rounded-xl">
+
+      <table class="w-full">
+
+        <thead class="sticky-table-header">
+
+          <tr class="bg-gray-50 text-xs uppercase text-gray-500 border-b border-gray-100 select-none">
+
+            <th onclick="ordenarProductos('nombre')" class="px-3 py-3 text-left cursor-pointer hover:bg-gray-100 transition-colors">
+
+              Producto <span id="sort-prod-nombre" class="text-gray-400">↕</span>
+
+            </th>
+
+            <th onclick="ordenarProductos('categoria')" class="px-3 py-3 text-left cursor-pointer hover:bg-gray-100 transition-colors">
+
+              Categoría <span id="sort-prod-categoria" class="text-gray-400">↕</span>
+
+            </th>
+
+            <th onclick="ordenarProductos('precio')" class="px-3 py-3 text-right num cursor-pointer hover:bg-gray-100 transition-colors">
+
+              Precio <span id="sort-prod-precio" class="text-gray-400">↕</span>
+
+            </th>
+
+            <th onclick="ordenarProductos('costo')" class="px-3 py-3 text-right num cursor-pointer hover:bg-gray-100 transition-colors">
+
+              Costo <span id="sort-prod-costo" class="text-gray-400">↕</span>
+
+            </th>
+
+            <th onclick="ordenarProductos('stock')" class="px-3 py-3 text-right num cursor-pointer hover:bg-gray-100 transition-colors">
+
+              Stock <span id="sort-prod-stock" class="text-gray-400">↕</span>
+
+            </th>
+
+            <th onclick="ordenarProductos('costo_total')" class="px-3 py-3 text-right num cursor-pointer hover:bg-gray-100 transition-colors">
+
+              Costo Total <span id="sort-prod-costo_total" class="text-gray-400">↕</span>
+
+            </th>
+
+            <th class="px-3 py-3 text-right">Acciones</th>
+
+          </tr>
+
+        </thead>
+
+        <tbody id="tabla-productos">
+
+          <tr><td colspan="7" class="text-center text-gray-400 py-8">Cargando…</td></tr>
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+    </div>
+    <!-- ═══ FIN VISTA 1: CATÁLOGO ESTÁNDAR ═══ -->
+
+    <!-- ═══ VISTA 2: REPORTE DE COSTOS UNITARIOS & PROVEEDORES ═══ -->
+    <div id="seccion-vista-costos-unitarios" class="hidden">
+      <!-- Barra superior de filtros de costos y acciones -->
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-4 w-full">
+        <!-- Filtros píldora por tipología -->
+        <div class="flex items-center gap-1.5 flex-wrap">
+          <button type="button" id="btn-costos-filtro-todos" onclick="filtrarTipoCostos('todos')"
+                  class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-slate-900 text-white shadow-2xs transition cursor-pointer">
+            Todo el Catálogo (<span id="cnt-costos-todos">0</span>)
+          </button>
+          <button type="button" id="btn-costos-filtro-mp" onclick="filtrarTipoCostos('materia_prima')"
+                  class="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-gray-100 hover:bg-gray-200 text-gray-700 transition cursor-pointer">
+            🌾 Materias Primas (<span id="cnt-costos-mp">0</span>)
+          </button>
+          <button type="button" id="btn-costos-filtro-inter" onclick="filtrarTipoCostos('intermedio')"
+                  class="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-gray-100 hover:bg-gray-200 text-gray-700 transition cursor-pointer">
+            🥣 Intermedios Producidos (<span id="cnt-costos-inter">0</span>)
+          </button>
+          <button type="button" id="btn-costos-filtro-venta" onclick="filtrarTipoCostos('venta')"
+                  class="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-gray-100 hover:bg-gray-200 text-gray-700 transition cursor-pointer">
+            🥪 Platos de Venta (<span id="cnt-costos-venta">0</span>)
+          </button>
+        </div>
+
+        <!-- Buscador y botones de exportación -->
+        <div class="flex items-center gap-2 flex-wrap ml-auto">
+          <input id="filtro-costos-txt" type="text" placeholder="🔍 Buscar por nombre..." oninput="filtrarTablaCostosUnitarios()"
+                 class="text-xs border border-gray-200 rounded-xl px-3 py-1.5 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-slate-900 w-48 sm:w-56">
+
+          <button type="button" onclick="exportarCostosUnitariosCSV()"
+                  class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                  title="Exportar matriz de costos a formato Excel / CSV">
+            <span>📥</span> Excel (CSV)
+          </button>
+
+          <button type="button" onclick="imprimirCostosUnitariosPDF()"
+                  class="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-xl transition shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                  title="Imprimir o descargar informe en PDF corporativo limpio">
+            <span>📄</span> Imprimir PDF
+          </button>
+
+          <button type="button" onclick="cargarReporteCostosUnitarios()"
+                  class="px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl border border-gray-200 transition shadow-2xs flex items-center gap-1 cursor-pointer"
+                  title="Actualizar datos">
+            <span>⚡</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Tabla Limpia de Costos Unitarios (Fuentes grandes, líneas sutiles) -->
+      <div class="overflow-x-auto max-h-[75vh] overflow-y-auto custom-scrollbar border border-gray-100 rounded-xl">
+        <table class="w-full text-left">
+          <thead class="sticky-table-header">
+            <tr class="bg-slate-50 text-xs uppercase font-bold text-slate-700 border-b border-slate-200 select-none">
+              <th class="px-4 py-3 text-left">Tipo</th>
+              <th class="px-4 py-3 text-left">Producto / Descripción</th>
+              <th class="px-4 py-3 text-right">Costo Base (Receta)</th>
+              <th class="px-3 py-3 text-left">Empaque / Compra</th>
+              <th class="px-4 py-3 text-left">Última Compra (Empaque | Proveedor)</th>
+              <th class="px-4 py-3 text-left">Mejor Compra (Récord | Proveedor)</th>
+            </tr>
+          </thead>
+          <tbody id="tabla-costos-unitarios">
+            <tr><td colspan="6" class="text-center text-gray-400 py-10 text-sm">Cargando reporte de costos unitarios…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <!-- ═══ FIN VISTA 2: REPORTE DE COSTOS UNITARIOS ═══ -->
+
+  </div>
+
+
+
+
+  <!-- ── TAB TARJETAS ESTÁNDAR ───────────────────────────────────── -->
+
+  </main>
+
+  <!-- ================= MODALES DE PRODUCTOS Y AUDITORÍA ================= -->
+<div id="overlay-producto" class="overlay hidden" onclick="if(event.target===this)cerrarModalProducto()">
+
+  <div class="modal">
+
+    <h3 class="text-lg font-bold mb-5" id="modal-producto-titulo">Nuevo producto</h3>
+
+    <input type="hidden" id="mp-id">
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+
+      <div class="sm:col-span-2">
+
+        <label>Nombre *</label>
+
+        <input id="mp-nombre" type="text" placeholder="Nombre del producto">
+
+      </div>
+
+      <div class="relative">
+
+        <label>Categoría *</label>
+
+        <input id="mp-categoria" type="text" placeholder="Ej: bebida, proteina…" autocomplete="off" class="w-full">
+
+        <div id="mp-categoria-list" class="ac-list hidden"></div>
+
+      </div>
+
+      <div>
+
+        <label>Código de barras</label>
+
+        <input id="mp-codigo" type="text" placeholder="">
+
+      </div>
+
+      <div>
+
+        <label>Precio de venta</label>
+
+        <input id="mp-precio" type="number" min="0" step="0.01" placeholder="0">
+
+      </div>
+
+      <div>
+
+        <label>Costo</label>
+
+        <input id="mp-costo" type="number" min="0" step="0.01" placeholder="0">
+
+      </div>
+
+      <div>
+
+        <label>IVA %</label>
+
+        <input id="mp-iva" type="number" min="0" step="0.01" placeholder="0">
+
+      </div>
+
+      <div>
+
+        <label class="flex items-center gap-1">
+          Tolerancia Costo %
+          <span class="text-gray-400 cursor-help" title="Margen de tolerancia para detectar variaciones atípicas de costo en compras vs costo promedio ponderado (por defecto 15%).">ℹ️</span>
+        </label>
+
+        <input id="mp-tolerancia-costo" type="number" min="0" max="1000" step="0.1" placeholder="15.0">
+
+      </div>
+
+      <!-- Unidades de Medida y Proyeccion Visual -->
+      <div class="sm:col-span-2 bg-indigo-50/40 border border-indigo-200/80 p-3.5 rounded-xl flex flex-col gap-2.5">
+        <div class="flex items-center justify-between flex-wrap gap-2">
+          <div class="flex items-center gap-1.5 text-xs font-bold text-indigo-950">
+            <span>⚖️</span> Unidades de Medida y Presentación Visual
+          </div>
+          <button type="button" onclick="abrirModalGestionUnidades()" class="text-[11px] text-indigo-700 hover:text-indigo-900 font-bold underline flex items-center gap-1 cursor-pointer">
+            <span>⚙️</span> Gestionar o crear unidades y equivalencias
+          </button>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[10px] font-bold text-indigo-900 uppercase mb-1">Unidad Base del Sistema *</label>
+            <select id="mp-unidad-medida" class="w-full border border-indigo-200 rounded-lg px-2.5 py-2 text-xs font-semibold bg-white outline-none focus:ring-2 focus:ring-indigo-500">
+              <option value="">-- Seleccionar unidad base (ej: mg, g, und) --</option>
+            </select>
+            <span class="text-[9px] text-gray-500 mt-0.5 block">Unidad real donde se guardan saldos y movimientos.</span>
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold text-indigo-900 uppercase mb-1">Unidad Visual / Presentación (Opcional)</label>
+            <select id="mp-unidad-visual" class="w-full border border-indigo-200 rounded-lg px-2.5 py-2 text-xs font-semibold bg-white outline-none focus:ring-2 focus:ring-indigo-500">
+              <option value="">-- Sin conversión (Misma que base) --</option>
+            </select>
+            <span class="text-[9px] text-gray-500 mt-0.5 block">Cómo se proyecta en recetas y conteos físicos (ej: g).</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="sm:col-span-2 bg-gray-50 border border-gray-200 p-3 rounded-xl flex flex-col gap-1">
+
+        <label class="flex items-center gap-2 cursor-pointer select-none">
+
+          <input type="checkbox" id="mp-disponible" class="w-4 h-4 accent-rose-500 rounded cursor-pointer">
+
+          <span class="text-xs font-bold text-gray-800">🟢 Producto Activo / Disponible en ventas</span>
+
+        </label>
+
+        <p class="text-[11px] text-gray-500 italic ml-6">
+
+          Desmarca esta casilla para inactivar el producto. Se ocultará de la carta/POS y de las consultas de ventas sin borrar su historial.
+
+        </p>
+
+      </div>
+
+      <div class="sm:col-span-2 bg-indigo-50/50 border border-indigo-150 p-3 rounded-xl flex flex-col gap-2">
+        <div class="flex items-center gap-1.5 text-xs font-bold text-indigo-900">
+          <span>📦</span> Parámetros de Stock y Alerta de Compra (Compras Sugeridas)
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-[10px] font-bold text-slate-600 uppercase mb-0.5">Días Stock Mínimo (Alerta)</label>
+            <input id="mp-dias-min-stock" type="number" min="0" max="180" placeholder="Global (~3 d)" class="w-full text-xs border rounded px-2 py-1 outline-none">
+            <span class="text-[9px] text-slate-400">Si cobertura &lt; este valor, entra en agotado y avisa.</span>
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold text-slate-600 uppercase mb-0.5">Días Stock Máximo (Meta)</label>
+            <input id="mp-dias-max-stock" type="number" min="0" max="180" placeholder="Global (~15 d)" class="w-full text-xs border rounded px-2 py-1 outline-none">
+            <span class="text-[9px] text-slate-400">Días deseados a tener cubiertos en bodega.</span>
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold text-slate-600 uppercase mb-0.5">Stock Mínimo Fijo (Und)</label>
+            <input id="mp-stock-minimo" type="number" min="0" step="0.01" placeholder="Opcional (fijo)" class="w-full text-xs border rounded px-2 py-1 outline-none">
+            <span class="text-[9px] text-slate-400">Umbral fijo en unidades (opcional).</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tolerancia / Variación de Peso en Despacho (Catch Weight) -->
+      <div class="sm:col-span-2 bg-amber-50/60 border border-amber-200/80 p-3 rounded-xl flex flex-col gap-2">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-1.5 text-xs font-bold text-amber-950">
+            <span>⚖️</span> Tolerancia de Peso Variable en Despacho (Catch Weight)
+          </div>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <span class="text-xs text-amber-900 font-semibold">Permitir variación:</span>
+            <input type="checkbox" id="mp-peso-variable" class="w-4 h-4 accent-amber-600 rounded" onchange="toggleToleranciaPeso(this.checked)">
+          </label>
+        </div>
+        <p class="text-[11px] text-amber-800/90 leading-tight">
+          Actívalo para carnes, pollo, quesos o verduras que no se despachan con peso exacto. El proveedor podrá ajustar el despacho dentro del margen pactado.
+        </p>
+        <div id="cont-tolerancia-peso" class="hidden flex items-center gap-2 pt-1 border-t border-amber-200/60">
+          <label class="text-[10px] font-bold text-amber-900 uppercase">Tolerancia permitida (± %):</label>
+          <input id="mp-tolerancia-peso" type="number" min="1" max="50" step="1" value="10" class="w-20 text-xs border border-amber-300 rounded px-2 py-1 outline-none bg-white font-bold text-amber-950">
+          <span class="text-[10px] text-amber-700 italic">Ej: 10% permite despachar entre 18 Kg y 22 Kg para un pedido de 20 Kg.</span>
+        </div>
+      </div>
+
+      <div class="sm:col-span-2">
+
+        <label>Descripción</label>
+
+        <textarea id="mp-descripcion" rows="2" placeholder="Opcional"></textarea>
+
+      </div>
+
+    </div>
+
+    <div class="flex gap-3 justify-end">
+
+      <button onclick="cerrarModalProducto()" class="px-4 py-2 rounded-xl border text-sm font-semibold text-gray-600 hover:bg-gray-50">Cancelar</button>
+
+      <button onclick="guardarProducto()" class="px-5 py-2 rounded-xl bg-rose-500 text-white font-bold text-sm hover:bg-rose-600">Guardar</button>
+
+    </div>
+
+  </div>
+
+</div>
+
+<!-- ── OVERLAY CONFIGURAR CATEGORÍAS DE ADICIONES / EXTRAS POS ────────── -->
+
+
+<!-- Modal Gestión de Unidades de Medida y Equivalencias -->
+
+<div id="overlay-unidades-medida" class="overlay hidden" style="z-index: 60;" onclick="if(event.target===this) cerrarModalGestionUnidades()">
+  <div class="modal max-w-2xl w-full bg-white rounded-2xl shadow-2xl p-6">
+    <div class="flex items-center justify-between pb-3 border-b border-gray-200">
+      <div class="flex items-center gap-2">
+        <span class="text-xl">⚖️</span>
+        <h3 class="text-lg font-black text-gray-900">Unidades de Medida y Equivalencias</h3>
+      </div>
+      <button onclick="cerrarModalGestionUnidades()" class="text-gray-400 hover:text-gray-600 font-black text-2xl leading-none cursor-pointer">&times;</button>
+    </div>
+
+    <!-- Pestañas del Modal -->
+    <div class="flex gap-2 my-4 border-b border-gray-100 pb-2">
+      <button id="tab-btn-unidades" onclick="cambiarSubtabUnidades('unidades')" class="px-4 py-1.5 text-xs font-extrabold rounded-xl bg-indigo-600 text-white shadow-xs cursor-pointer">
+        1. Unidades de Medida
+      </button>
+      <button id="tab-btn-equivalencias" onclick="cambiarSubtabUnidades('equivalencias')" class="px-4 py-1.5 text-xs font-extrabold rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 cursor-pointer">
+        2. Factores de Conversión (Equivalencias)
+      </button>
+    </div>
+
+    <!-- Contenido Pestaña 1: Unidades -->
+    <div id="subtab-cont-unidades" class="space-y-4">
+      <div class="bg-gray-50 p-3.5 rounded-xl border border-gray-200">
+        <input type="hidden" id="edit-u-id" value="">
+        <span id="titulo-form-unidad" class="text-xs font-black text-gray-700 uppercase tracking-wide block mb-2">+ Crear Nueva Unidad de Medida</span>
+        <div class="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+          <div>
+            <label class="block text-[10px] font-bold text-gray-500 uppercase mb-0.5">Código / Símbolo *</label>
+            <input type="text" id="nueva-u-codigo" placeholder="ej: oz, lb" class="w-full border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs font-bold uppercase outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
+          </div>
+          <div class="sm:col-span-2">
+            <label class="block text-[10px] font-bold text-gray-500 uppercase mb-0.5">Nombre Descriptivo *</label>
+            <input type="text" id="nueva-u-nombre" placeholder="ej: Onza, Libra" class="w-full border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold text-gray-500 uppercase mb-0.5">Magnitud</label>
+            <select id="nueva-u-magnitud" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-xs font-semibold outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
+              <option value="peso">Peso (masa)</option>
+              <option value="volumen">Volumen (líquido)</option>
+              <option value="unidad">Unidad (conteo)</option>
+            </select>
+          </div>
+        </div>
+        <div class="flex justify-end items-center gap-2 mt-2.5">
+          <button type="button" id="btn-cancelar-edit-unidad" onclick="cancelarEdicionUnidad()" class="hidden bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold text-xs px-3 py-1.5 rounded-lg transition cursor-pointer">
+            Cancelar
+          </button>
+          <button type="button" id="btn-guardar-unidad" onclick="guardarNuevaUnidad()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-1.5 rounded-lg shadow-xs transition cursor-pointer">
+            Guardar Unidad
+          </button>
+        </div>
+      </div>
+
+      <div class="max-h-60 overflow-y-auto border border-gray-200 rounded-xl custom-scrollbar">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-gray-100 text-gray-600 font-bold sticky top-0">
+            <tr>
+              <th class="py-2 px-3">Código</th>
+              <th class="py-2 px-3">Nombre</th>
+              <th class="py-2 px-3">Magnitud</th>
+              <th class="py-2 px-3 text-center">Tipo</th>
+              <th class="py-2 px-3 text-right">Acción</th>
+            </tr>
+          </thead>
+          <tbody id="tabla-unidades-body" class="divide-y divide-gray-100">
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Contenido Pestaña 2: Equivalencias -->
+    <div id="subtab-cont-equivalencias" class="hidden space-y-4">
+      <div class="bg-indigo-50/50 p-3.5 rounded-xl border border-indigo-200">
+        <span class="text-xs font-black text-indigo-950 uppercase tracking-wide block mb-2">+ Crear Nueva Relación / Factor de Conversión</span>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          <div>
+            <label class="block text-[10px] font-bold text-indigo-900 uppercase mb-0.5">1 Unidad Origen</label>
+            <select id="nueva-eq-origen" onchange="actualizarPreviewFormulaEquiv()" class="w-full border border-indigo-200 rounded-lg px-2 py-1.5 text-xs font-bold bg-white outline-none focus:ring-2 focus:ring-indigo-500"></select>
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold text-indigo-900 uppercase mb-0.5">Factor Multiplicador (=)</label>
+            <input type="number" step="any" min="0.00000001" id="nueva-eq-factor" oninput="actualizarPreviewFormulaEquiv()" placeholder="ej: 0.001" class="w-full border border-indigo-200 rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold bg-white outline-none focus:ring-2 focus:ring-indigo-500">
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold text-indigo-900 uppercase mb-0.5">Unidad Destino</label>
+            <select id="nueva-eq-destino" onchange="actualizarPreviewFormulaEquiv()" class="w-full border border-indigo-200 rounded-lg px-2 py-1.5 text-xs font-bold bg-white outline-none focus:ring-2 focus:ring-indigo-500"></select>
+          </div>
+        </div>
+        <p class="text-[11px] text-indigo-700 mt-2 font-mono" id="preview-conversion-texto">
+          Ejemplo: 1 mg * 0.001 = 1 g
+        </p>
+        <div class="flex items-center justify-between mt-2.5 pt-2 border-t border-indigo-200/60 flex-wrap gap-2">
+          <label class="flex items-center gap-1.5 text-xs text-indigo-900 font-semibold cursor-pointer select-none">
+            <input type="checkbox" id="nueva-eq-bidireccional" checked class="accent-indigo-600 rounded">
+            Crear también la conversión inversa recíproca (1 / factor)
+          </label>
+          <button type="button" onclick="guardarNuevaEquivalencia()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-1.5 rounded-lg shadow-xs transition cursor-pointer">
+            Guardar Conversión
+          </button>
+        </div>
+      </div>
+
+      <div class="max-h-60 overflow-y-auto border border-gray-200 rounded-xl custom-scrollbar">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-gray-100 text-gray-600 font-bold sticky top-0">
+            <tr>
+              <th class="py-2 px-3">Conversión</th>
+              <th class="py-2 px-3 font-mono">Factor</th>
+              <th class="py-2 px-3">Fórmula Visual</th>
+              <th class="py-2 px-3 text-right">Acción</th>
+            </tr>
+          </thead>
+          <tbody id="tabla-equivalencias-body" class="divide-y divide-gray-100 font-mono">
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="mt-4 pt-3 border-t border-gray-200 flex justify-end">
+      <button type="button" onclick="cerrarModalGestionUnidades()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl transition cursor-pointer">
+        Cerrar
+      </button>
+    </div>
+  </div>
+</div>
+
+
+<div id="overlay-categorias-adiciones" class="overlay hidden" style="z-index: 55;" onclick="if(event.target===this)cerrarModalCategoriasAdiciones()">
+  <div class="modal shadow-2xl border border-gray-100 flex flex-col" style="max-width:580px; width:95%; max-height:90vh; padding:22px; overflow:hidden; position:relative; box-sizing:border-box;">
+    <!-- Header -->
+    <div class="flex-shrink-0 flex items-center justify-between pb-3 mb-3 border-b border-gray-100">
+      <div class="flex items-center gap-2.5">
+        <div class="w-10 h-10 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center font-bold text-xl shadow-inner shrink-0">🍔</div>
+        <div>
+          <h3 class="text-base sm:text-lg font-extrabold text-gray-800">Categorías de Adiciones / Extras</h3>
+          <p class="text-xs text-gray-500">Define qué categorías se comportarán como adiciones en la caja POS.</p>
+        </div>
+      </div>
+      <button onclick="cerrarModalCategoriasAdiciones()" class="text-gray-400 hover:text-gray-600 font-bold text-xl leading-none">&times;</button>
+    </div>
+
+    <!-- Informational Note -->
+    <div class="flex-shrink-0 bg-amber-50/80 border border-amber-200 rounded-xl p-3 mb-3 text-xs text-amber-900 leading-relaxed">
+      <span>💡</span> <strong>¿Cómo funciona?</strong> Al personalizar un producto en la caja POS, la pestaña <strong>"➕ Agregar Adiciones"</strong> mostrará <em>únicamente</em> los productos de las categorías marcadas aquí (ej. Salsas, Quesos, Toppings), evitando que se mezclen platos principales.
+    </div>
+
+    <!-- Search / Filter -->
+    <div class="flex-shrink-0 mb-3">
+      <input type="text" id="filtro-modal-cat-adiciones" placeholder="🔍 Buscar categoría..."
+             oninput="filtrarModalCategoriasAdiciones(this.value)"
+             class="text-xs border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-amber-500 w-full">
+    </div>
+
+    <!-- Category Checkbox List -->
+    <div class="flex-1 overflow-y-auto custom-scrollbar border border-gray-100 rounded-xl bg-gray-50/50 p-2 space-y-1.5 mb-3" style="min-height:180px; max-height:45vh;" id="modal-cat-adiciones-list">
+      <p class="text-center text-gray-400 py-8 text-xs">Cargando categorías...</p>
+    </div>
+
+    <!-- Footer -->
+    <div class="flex-shrink-0 flex items-center justify-between pt-3 border-t border-gray-100 mt-auto">
+      <span id="modal-cat-adiciones-count" class="text-xs font-bold text-amber-800">0 seleccionadas</span>
+      <div class="flex gap-2">
+        <button onclick="cerrarModalCategoriasAdiciones()" class="px-4 py-2 rounded-xl border border-gray-200 text-xs font-semibold text-gray-600 hover:bg-gray-50">Cancelar</button>
+        <button onclick="guardarCategoriasAdiciones()" class="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-sm transition">Guardar Configuración</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── OVERLAY GESTOR UNIDADES DE EMPAQUE / PRESENTACIONES ────────── -->
+
+<div id="overlay-presentaciones" class="overlay hidden" onclick="if(event.target===this)cerrarModalGestionPresentaciones()">
+  <div class="modal shadow-2xl border border-gray-100 flex flex-col" style="max-width:760px; width:95%; max-height:90vh; padding:22px; overflow:hidden; position:relative; box-sizing:border-box;">
+    <!-- Header -->
+    <div class="flex-shrink-0 flex items-center justify-between pb-3 mb-3 border-b border-gray-100">
+      <div class="flex items-center gap-2">
+        <span class="text-xl">📦</span>
+        <div>
+          <h3 class="text-base sm:text-lg font-bold text-gray-800">Catálogo de Unidades de Empaque / Presentaciones</h3>
+          <p class="text-xs text-gray-400">Administra factores de conversión para tarros, bolsas, paquetes y embalajes.</p>
+        </div>
+      </div>
+      <button onclick="cerrarModalGestionPresentaciones()" class="text-gray-400 hover:text-gray-600 font-bold text-xl leading-none">&times;</button>
+    </div>
+
+    <!-- Barra de búsqueda y botón nuevo -->
+    <div class="flex-shrink-0 flex items-center justify-between gap-3 mb-3">
+      <input id="filtro-presentaciones-txt" type="text" placeholder="Buscar presentación o equivalencia..."
+             oninput="filtrarTablaPresentaciones()"
+             class="text-xs border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 w-64">
+      <button type="button" onclick="abrirModalCrearPresentacion()"
+              class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 shrink-0">
+        <span>+</span> Nueva Presentación
+      </button>
+    </div>
+
+    <!-- Tabla de presentaciones -->
+    <div class="flex-1 overflow-y-auto custom-scrollbar border border-gray-100 rounded-xl bg-gray-50/50 p-1 mb-3" style="min-height:160px; max-height:50vh;">
+      <table class="w-full text-xs">
+        <thead class="sticky top-0 bg-gray-100/90 backdrop-blur-xs text-gray-600 uppercase text-[10px] select-none border-b border-gray-200 z-10">
+          <tr>
+            <th class="py-2 px-3 text-left">Presentación / Nombre</th>
+            <th class="py-2 px-3 text-right">Equivalencia (Unidades Base)</th>
+            <th class="py-2 px-3 text-center">Usos</th>
+            <th class="py-2 px-3 text-center" style="width:110px;">Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="tabla-presentaciones-body">
+          <tr><td colspan="4" class="text-center py-6 text-gray-400">Cargando catálogo...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Footer -->
+    <div class="flex-shrink-0 flex justify-end pt-2 border-t border-gray-100 mt-auto">
+      <button onclick="cerrarModalGestionPresentaciones()" class="px-4 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── OVERLAY CREAR / EDITAR PRESENTACIÓN INTELIGENTE ────────────── -->
+
+<div id="overlay-crear-presentacion" class="overlay hidden" style="z-index: 60;" onclick="if(event.target===this)cerrarModalCrearPresentacion()">
+  <div class="modal shadow-2xl border border-gray-100 flex flex-col" style="max-width:500px; width:95%; padding:22px; position:relative; box-sizing:border-box;">
+    <!-- Header -->
+    <div class="flex items-center justify-between pb-2 mb-3 border-b border-gray-100">
+      <h3 class="text-base font-bold text-gray-800 flex items-center gap-1.5" id="modal-pres-form-titulo">
+        <span>📦 Nueva Unidad de Empaque</span>
+      </h3>
+      <button onclick="cerrarModalCrearPresentacion()" class="text-gray-400 hover:text-gray-600 font-bold text-xl leading-none">&times;</button>
+    </div>
+
+    <input type="hidden" id="modal-pres-id">
+    <input type="hidden" id="modal-pres-target-idx">
+
+    <div class="space-y-3 mb-4">
+      <div>
+        <label class="text-xs font-bold text-gray-700 block mb-1">Nombre o Descripción del Empaque *</label>
+        <input id="modal-pres-nombre" type="text" placeholder="Ej: Tarro x 1810 grs, Bolsa x 500, Paquete x 24"
+               oninput="onInputNombrePresentacion(this.value)"
+               class="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-indigo-500">
+        <p class="text-[11px] text-gray-400 mt-1">Tip: Si incluyes el número (ej: <code>x 1810</code> o <code>x 500</code>), el sistema lo extraerá automáticamente.</p>
+      </div>
+
+      <div>
+        <label class="text-xs font-bold text-gray-700 block mb-1">Equivalencia / Contenido en Unidades Base *</label>
+        <div class="flex items-center gap-2">
+          <input id="modal-pres-equiv" type="number" min="0.0001" step="any" placeholder="1810"
+                 oninput="onInputEquivPresentacion()"
+                 class="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm font-bold text-indigo-700 focus:ring-2 focus:ring-indigo-500">
+          <span class="text-xs font-semibold text-gray-500 shrink-0">unidades base (g, ml, u)</span>
+        </div>
+      </div>
+
+      <!-- Tarjeta de vista previa matemática -->
+      <div id="modal-pres-preview-box" class="bg-indigo-50/60 border border-indigo-100 rounded-xl p-3 text-xs text-indigo-900 flex items-start gap-2">
+        <span class="text-base leading-none">⚖️</span>
+        <div>
+          <div class="font-bold mb-0.5">Fórmula de Conversión:</div>
+          <div id="modal-pres-preview-txt" class="font-mono text-indigo-800">1 Tarro x 1810 grs = 1.810 unidades base en inventario</div>
+        </div>
+      </div>
+
+      <!-- Alerta dinámica de equivalencia = 1 -->
+      <div id="modal-pres-alerta-uno" class="hidden bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 flex items-start gap-2">
+        <span class="text-base leading-none">⚠️</span>
+        <div>
+          <span class="font-bold">¿Seguro que equivale a 1?</span> Estás asignando equivalencia 1. Si este tarro o paquete contiene varios gramos o unidades, ingresa el contenido real para que el costo y stock no se distorsionen.
+        </div>
+      </div>
+
+      <!-- Alerta si el nombre tiene un número que difiere -->
+      <div id="modal-pres-alerta-discrepancia" class="hidden bg-rose-50 border border-rose-200 rounded-xl p-3 text-xs text-rose-800 flex items-start justify-between gap-2">
+        <div class="flex items-start gap-2">
+          <span class="text-base leading-none">💡</span>
+          <div>
+            <span>El nombre menciona <b id="modal-pres-num-detectado">1810</b> pero la equivalencia dice <b id="modal-pres-num-ingresado">1</b>.</span>
+          </div>
+        </div>
+        <button type="button" onclick="aplicarNumeroDetectadoPresentacion()" class="px-2 py-1 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg text-[10px] shrink-0">
+          Usar valor detectado
+        </button>
+      </div>
+
+      <!-- Opción de recálculo si está editando una presentación con movimientos -->
+      <div id="modal-pres-recalc-box" class="hidden bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs text-emerald-900">
+        <label class="flex items-start gap-2 cursor-pointer select-none">
+          <input type="checkbox" id="modal-pres-recalcular-check" class="w-4 h-4 accent-emerald-600 rounded cursor-pointer mt-0.5" checked>
+          <div>
+            <span class="font-bold">Recalcular automáticamente compras y saldos históricos:</span>
+            <p class="text-[11px] text-emerald-700 mt-0.5">Ajusta las cantidades de entrada, Kardex y costo promedio de los productos que hayan utilizado esta presentación.</p>
+          </div>
+        </label>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="flex gap-3 justify-end pt-2 border-t border-gray-100">
+      <button onclick="cerrarModalCrearPresentacion()" class="px-4 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50">Cancelar</button>
+      <button onclick="guardarModalPresentacion()" id="btn-guardar-modal-pres" class="px-5 py-2 rounded-xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-700 shadow-xs">Guardar Presentación</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── OVERLAY ASIGNAR ÍTEM A GASTO / COSTO OPERATIVO ────────────── -->
+<div id="overlay-asignar-gasto" class="overlay hidden" style="z-index: 60;" onclick="if(event.target===this)cerrarModalAsignarGasto()">
+  <div class="modal shadow-2xl border border-gray-100 flex flex-col" style="max-width:540px; width:95%; padding:22px; position:relative; box-sizing:border-box;">
+    <!-- Header -->
+    <div class="flex items-center justify-between pb-2 mb-3 border-b border-gray-100">
+      <h3 class="text-base font-bold text-gray-800 flex items-center gap-1.5">
+        <span>💸 Enviar a Gasto / Costo Operativo</span>
+      </h3>
+      <button onclick="cerrarModalAsignarGasto()" class="text-gray-400 hover:text-gray-600 font-bold text-xl leading-none cursor-pointer">&times;</button>
+    </div>
+
+    <!-- Info del ítem detectado -->
+    <div class="bg-purple-50/70 border border-purple-200 rounded-xl p-3 mb-3 text-xs flex items-center justify-between">
+      <div>
+        <span class="text-[10px] font-bold uppercase tracking-wider text-purple-700 block">Ítem en factura:</span>
+        <span id="modal-gasto-texto-item" class="font-extrabold text-purple-950 text-sm"></span>
+      </div>
+      <span id="modal-gasto-monto-item" class="font-mono font-black text-purple-900 text-base">$0</span>
+    </div>
+
+    <input type="hidden" id="modal-gasto-item-idx">
+    <input type="hidden" id="modal-gasto-cuenta-id">
+
+    <!-- Buscador de cuenta -->
+    <div class="mb-2">
+      <label class="text-xs font-bold text-gray-700 block mb-1">Selecciona la Cuenta de Costo o Gasto (Clase 5 o 6):</label>
+      <input type="text" id="modal-gasto-buscar-cuenta" placeholder="Escribe para buscar (ej: aseo, empaque, papelería, servicios...)"
+             oninput="filtrarCuentasGastos(this.value)"
+             class="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-purple-500">
+    </div>
+
+    <!-- Lista de cuentas con scroll -->
+    <div id="modal-gasto-lista-cuentas" class="border border-gray-200 rounded-xl max-h-56 overflow-y-auto divide-y divide-gray-100 bg-white mb-3 shadow-2xs">
+      <div class="p-4 text-center text-xs text-gray-400">Cargando cuentas contables de costos y gastos...</div>
+    </div>
+
+    <!-- Checkbox de memoria -->
+    <div class="bg-gray-50 border border-gray-200 rounded-xl p-2.5 mb-4 text-xs">
+      <label class="flex items-center gap-2 cursor-pointer select-none">
+        <input type="checkbox" id="modal-gasto-recordar-alias" class="w-4 h-4 accent-purple-600 rounded cursor-pointer" checked>
+        <span class="font-semibold text-gray-700">Recordar para futuras facturas de este proveedor</span>
+      </label>
+    </div>
+
+    <!-- Footer -->
+    <div class="flex gap-2 justify-end pt-2 border-t border-gray-100">
+      <button onclick="cerrarModalAsignarGasto()" class="px-4 py-2 rounded-xl border border-gray-200 text-xs font-semibold text-gray-600 hover:bg-gray-50 cursor-pointer">Cancelar</button>
+      <button onclick="confirmarAsignacionGasto()" id="btn-confirmar-asignacion-gasto" disabled class="px-5 py-2 rounded-xl bg-purple-600 text-white font-bold text-xs hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-xs cursor-pointer">
+        Confirmar como Gasto
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── OVERLAY VINCULAR ÍTEM A INSUMO EXISTENTE ────────────── -->
+
+<div id="overlay-tarjeta" class="overlay hidden" onclick="if(event.target===this)cerrarModalTarjeta()">
+
+  <div class="modal shadow-2xl border border-gray-100 flex flex-col bg-white rounded-2xl" style="max-width:840px; width:96%; max-height:92vh; height:auto; padding:18px 24px; overflow:hidden; position:relative; box-sizing:border-box;">
+
+    <!-- Fixed Header -->
+    <div class="flex-shrink-0 mb-3 border-b border-gray-100 pb-2.5">
+      <div class="flex items-center justify-between mb-1.5">
+        <h3 class="text-lg sm:text-xl font-extrabold text-gray-900 flex items-center gap-2">
+          <span>📋</span> Tarjeta Estándar (Ficha Técnica)
+        </h3>
+        <span id="tarjeta-items-count" class="text-xs bg-rose-50 text-rose-700 px-3 py-1 rounded-full font-bold">0 componentes</span>
+      </div>
+
+      <div class="flex items-center justify-between mt-1 pt-2 border-t border-gray-50 flex-wrap gap-2">
+        <div class="flex items-center gap-2 truncate max-w-[360px]">
+          <span class="text-xs font-bold text-gray-500 uppercase">Producto:</span>
+          <p id="tarjeta-nombre-prod" class="text-base font-extrabold text-gray-900 truncate"></p>
+        </div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <!-- Selectores interactivos de decimales para la Ficha Técnica -->
+          <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg text-xs shadow-2xs">
+            <div class="flex items-center gap-1.5">
+              <label for="modal-tarjetas-dec-cant" class="text-[10px] font-extrabold text-slate-600 uppercase tracking-wide select-none">
+                🔢 Cant:
+              </label>
+              <input id="modal-tarjetas-dec-cant" type="number" min="0" max="4" step="1" value="2"
+                     oninput="cambiarDecimalesTarjetasCantidad(this.value)"
+                     onchange="cambiarDecimalesTarjetasCantidad(this.value)"
+                     onblur="validarDecimalesTarjetasCantidadInput(this)"
+                     onfocus="setTimeout(() => this.select(), 50)"
+                     class="no-spinners w-10 text-center font-mono font-black text-xs bg-white border border-slate-300 rounded px-1 py-0.5 outline-none text-slate-800 focus:bg-blue-50 focus:text-blue-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-400 selection:bg-blue-600 selection:text-white transition-all"
+                     style="-moz-appearance: textfield; appearance: textfield;"
+                     title="Decimales para cantidades de componentes en esta ficha">
+            </div>
+            <div class="h-3.5 w-px bg-slate-300"></div>
+            <div class="flex items-center gap-1.5">
+              <label for="modal-tarjetas-dec-mon" class="text-[10px] font-extrabold text-slate-600 uppercase tracking-wide select-none">
+                💲 Costo:
+              </label>
+              <input id="modal-tarjetas-dec-mon" type="number" min="0" max="6" step="1" value="2"
+                     oninput="cambiarDecimalesTarjetasMoneda(this.value)"
+                     onchange="cambiarDecimalesTarjetasMoneda(this.value)"
+                     onblur="validarDecimalesTarjetasMonedaInput(this)"
+                     onfocus="setTimeout(() => this.select(), 50)"
+                     class="no-spinners w-10 text-center font-mono font-black text-xs bg-white border border-slate-300 rounded px-1 py-0.5 outline-none text-slate-800 focus:bg-blue-50 focus:text-blue-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-400 selection:bg-blue-600 selection:text-white transition-all"
+                     style="-moz-appearance: textfield; appearance: textfield;"
+                     title="Decimales para costos unitarios y subtotales en esta ficha">
+            </div>
+          </div>
+
+          <button type="button" onclick="toggleClonarEscalarPanel()" id="btn-toggle-clonar" class="text-xs font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 px-3 py-1.5 rounded-lg border border-amber-200 transition-colors flex items-center gap-1.5">
+            📋 Clonar / Multiplicar
+          </button>
+          <button type="button" onclick="mostrarProcedimiento()" class="text-xs font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg border border-indigo-100 transition-colors flex items-center gap-1.5">
+            🧪 Calcular desde Lote
+          </button>
+        </div>
+      </div>
+      <input type="hidden" id="tarjeta-prod-id">
+    </div>
+
+    <!-- Scrollable Middle Body Area -->
+    <div class="flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-1 space-y-3">
+
+      <!-- Panel Clonar / Multiplicar / Escalar -->
+      <div id="panel-clonar-escalar" class="hidden bg-gradient-to-br from-amber-50/90 to-amber-100/40 border border-amber-200 rounded-xl p-3 text-xs shadow-xs">
+        <div class="flex items-center justify-between mb-2">
+          <span class="font-bold text-amber-900 flex items-center gap-1.5 text-sm">
+            <span>📋</span> Clonar / Escalar Receta con Multiplicador
+          </span>
+          <button type="button" onclick="toggleClonarEscalarPanel(false)" class="text-amber-700 hover:text-amber-900 font-bold text-base leading-none px-1.5">✕</button>
+        </div>
+        
+        <!-- Selector de Destino (Clonar a otro producto) -->
+        <div class="mb-2.5 bg-white/95 p-2.5 rounded-xl border border-amber-200/80">
+          <label class="text-xs font-bold text-gray-700 block mb-1">
+            🎯 Producto Destino (opcional, para guardar como copia en otro producto):
+          </label>
+          <div class="relative">
+            <input id="clonar-dest-input" type="text" placeholder="Buscar nuevo producto destino (ej: Porción 50g)…" autocomplete="off" class="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm">
+            <div id="clonar-dest-list" class="ac-list hidden shadow-xl border border-gray-200 rounded-xl" style="max-height:180px; z-index: 60;"></div>
+            <input type="hidden" id="clonar-dest-id">
+            
+            <div id="clonar-dest-chip" class="hidden absolute inset-0 bg-emerald-50 border border-emerald-300 rounded-lg px-3 py-1.5 text-sm flex items-center justify-between text-emerald-800 font-semibold z-10">
+              <div class="flex items-center gap-1.5 truncate">
+                <span class="text-emerald-600 font-bold">✓ Destino:</span>
+                <span id="clonar-dest-name" class="truncate font-bold"></span>
+              </div>
+              <button type="button" onclick="clearSelectedClonarDest()" class="text-emerald-700 hover:text-emerald-900 font-bold ml-2">✕</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Multiplicador / Factor de Escala -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-white/95 p-2.5 rounded-xl border border-amber-200/80 items-end">
+          <div>
+            <label class="text-xs font-bold text-gray-700 block mb-1">
+              ✖ Multiplicador / Factor (ej: 0.05 ó 2.0):
+            </label>
+            <div class="flex items-center gap-1.5">
+              <input id="tarjeta-multiplicador-factor" type="number" step="any" min="0.00001" placeholder="Ej: 0.05" class="w-full bg-white border border-amber-300 rounded-lg px-2.5 py-1.5 text-sm font-mono font-bold text-amber-900">
+              <button type="button" onclick="aplicarMultiplicadorTarjeta()" class="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg transition-colors whitespace-nowrap shadow-xs text-xs">
+                Aplicar ✖
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label class="text-xs font-bold text-gray-700 block mb-1">
+              ⚖️ Calculadora rápida (Gramos Base ➔ Porción):
+            </label>
+            <div class="flex items-center gap-1.5">
+              <input id="calc-gramos-base" type="number" step="any" placeholder="Base (ej: 1000)" class="w-1/2 bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-xs font-mono text-center" oninput="calcularFactorDesdeGramos()">
+              <span class="text-gray-400 font-bold">➔</span>
+              <input id="calc-gramos-target" type="number" step="any" placeholder="Porción (ej: 50)" class="w-1/2 bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-xs font-mono text-center" oninput="calcularFactorDesdeGramos()">
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick Action Buttons -->
+        <div class="flex items-center justify-between mt-2 pt-1.5 border-t border-amber-200/70 flex-wrap gap-1">
+          <div class="flex gap-1.5 flex-wrap">
+            <button type="button" onclick="setMultiplicadorRapido(0.05)" class="text-xs px-2.5 py-1 bg-white border border-amber-200 rounded-md text-amber-800 hover:bg-amber-50 font-mono">x0.05 (50g/1kg)</button>
+            <button type="button" onclick="setMultiplicadorRapido(0.07)" class="text-xs px-2.5 py-1 bg-white border border-amber-200 rounded-md text-amber-800 hover:bg-amber-50 font-mono">x0.07 (70g/1kg)</button>
+            <button type="button" onclick="setMultiplicadorRapido(0.5)" class="text-xs px-2.5 py-1 bg-white border border-amber-200 rounded-md text-amber-800 hover:bg-amber-50 font-mono">x0.5</button>
+            <button type="button" onclick="setMultiplicadorRapido(2)" class="text-xs px-2.5 py-1 bg-white border border-amber-200 rounded-md text-amber-800 hover:bg-amber-50 font-mono">x2.0</button>
+          </div>
+          <button type="button" onclick="restaurarLineasOriginalesTarjeta()" id="btn-restaurar-tarjeta" class="text-xs text-gray-500 hover:text-gray-800 underline font-semibold hidden ml-auto">
+            ↺ Restaurar originales
+          </button>
+        </div>
+      </div>
+
+      <!-- Compact Add Component Form -->
+      <div class="flex gap-2.5 items-end bg-gray-50 p-2.5 rounded-xl border border-gray-200 relative z-20">
+        <div class="flex-1 relative">
+          <label class="text-xs font-bold text-gray-700 mb-1 block">Agregar componente / insumo</label>
+          <input id="tarjeta-ac-input" type="text" placeholder="Buscar producto…" autocomplete="off" class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm">
+          <div id="tarjeta-ac-list" class="ac-list hidden shadow-xl border border-gray-200 rounded-xl" style="max-height:200px; z-index: 50;"></div>
+          <input type="hidden" id="tarjeta-ac-id">
+
+          <!-- Visual selection chip -->
+          <div id="tarjeta-selected-chip" class="hidden absolute inset-0 bg-emerald-50 border border-emerald-300 rounded-lg px-3 py-1.5 text-sm flex items-center justify-between text-emerald-800 font-semibold z-10">
+            <div class="flex items-center gap-1.5 truncate">
+              <span class="text-emerald-500 font-bold">✓</span>
+              <span id="tarjeta-selected-name" class="truncate text-sm font-bold">Producto seleccionado</span>
+            </div>
+            <button type="button" onclick="clearSelectedComponent()" class="text-emerald-600 hover:text-emerald-800 font-bold ml-2 focus:outline-none">✕</button>
+          </div>
+        </div>
+
+        <div style="width:100px">
+          <label class="text-xs font-bold text-gray-700 mb-1 block text-center">Cant.</label>
+          <input id="tarjeta-ac-cant" type="number" min="0.0001" step="any" value="1" class="w-full bg-white border border-gray-300 rounded-lg px-2 py-2 text-sm text-center font-mono font-bold">
+        </div>
+
+        <button onclick="agregarLineaTarjeta()" class="px-4 py-2 rounded-lg bg-rose-500 text-white font-black text-base hover:bg-rose-600 transition-colors shadow-xs" title="Agregar a la receta">+</button>
+      </div>
+
+      <!-- Table of added components (scrolls inside body area) -->
+      <div id="tarjeta-lineas" class="space-y-1.5 border border-gray-200 rounded-xl p-1 bg-white min-h-[160px]"></div>
+
+    </div>
+
+    <!-- Fixed Bottom Sticky Area (Totals & Actions - Always Visible) -->
+    <div class="flex-shrink-0 mt-3 pt-3 border-t border-gray-200 bg-white">
+      
+      <!-- Summary Total Box -->
+      <div id="tarjeta-total-box" class="flex justify-between items-center bg-rose-50 border border-rose-200 rounded-xl px-4 py-2.5 mb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-sm font-bold text-rose-900">Costo total de receta:</span>
+          <span class="text-xs text-gray-500 font-normal hidden sm:inline">(Se actualiza al guardar)</span>
+        </div>
+        <span id="tarjeta-total-val" class="text-lg sm:text-2xl font-black text-rose-600 font-mono">$0.00</span>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="flex gap-2 justify-between items-center">
+        <button id="btn-eliminar-tarjeta" onclick="eliminarTarjetaDesdeModal()" class="px-3.5 py-2 rounded-xl bg-red-50 text-red-600 border border-red-200 text-xs font-bold hover:bg-red-100 hover:text-red-700 transition-colors hidden">
+          🗑️ Eliminar receta
+        </button>
+        <div class="flex gap-2.5 ml-auto">
+          <button onclick="cerrarModalTarjeta()" class="px-5 py-2.5 rounded-xl border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-100 transition-colors">
+            Cancelar
+          </button>
+          <button onclick="guardarTarjeta()" class="px-6 py-2.5 rounded-xl bg-rose-500 text-white font-extrabold text-sm sm:text-base hover:bg-rose-600 shadow-xs transition-colors flex items-center gap-1.5">
+            <span>💾</span> Guardar tarjeta
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 🧪 Seccion Lote / Procedimiento (Calculadora Overlay) -->
+
+    <div id="seccion-procedimiento" class="hidden absolute inset-0 bg-white z-20 rounded-2xl p-5 flex flex-col overflow-hidden">
+
+      <div class="flex-shrink-0 flex items-center justify-between border-b border-gray-100 pb-2 mb-2.5">
+
+        <h3 class="text-base font-bold text-gray-800 flex items-center gap-1.5">
+
+          <span>🧪 Calcular desde Lote / Procedimiento</span>
+
+        </h3>
+
+        <button onclick="ocultarProcedimiento()" class="text-gray-400 hover:text-gray-600 font-bold text-lg leading-none">✕</button>
+
+      </div>
+
+      
+
+      <p class="flex-shrink-0 text-xs text-gray-500 mb-2.5 leading-relaxed">
+
+        Ingresa la cantidad total producida y agrega los componentes con sus cantidades totales usadas. El sistema calculará automáticamente la proporción por unidad.
+
+      </p>
+
+
+
+      <!-- Rendimiento input -->
+
+      <div class="flex-shrink-0 bg-indigo-50/50 border border-indigo-100 rounded-xl p-2.5 mb-2.5">
+
+        <label class="text-xs font-bold text-indigo-900 block mb-1">Cantidad total de producto obtenido (Rendimiento):</label>
+
+        <div class="flex gap-2 items-center">
+
+          <input id="proc-rendimiento" type="number" min="0.0001" step="any" value="10" class="w-full bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-sm font-semibold">
+
+          <span class="text-xs text-indigo-800 font-medium mr-2">unidades</span>
+
+          <button type="button" onclick="escalarCantidadesProcedimiento()" class="flex-shrink-0 text-[10px] font-bold bg-indigo-100 hover:bg-indigo-200 text-indigo-800 px-2 py-1 rounded-lg transition-colors border border-indigo-200">
+
+            🔄 Escalar sugeridos
+
+          </button>
+
+        </div>
+
+      </div>
+
+
+
+      <!-- Add component form for procedure -->
+
+      <div class="flex-shrink-0 flex gap-2 items-end mb-2.5 bg-gray-50 p-2.5 rounded-xl border border-gray-100">
+
+        <div class="flex-1 relative">
+
+          <label class="text-xs font-semibold text-gray-600 mb-1 block">Componente usado</label>
+
+          <input id="proc-ac-input" type="text" placeholder="Buscar producto…" autocomplete="off" class="w-full bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-sm">
+
+          <div id="proc-ac-list" class="ac-list hidden"></div>
+
+          <input type="hidden" id="proc-ac-id">
+
+          <!-- Selection chip for procedure -->
+
+          <div id="proc-selected-chip" class="hidden absolute left-0 right-0 bottom-0 top-6 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-1.5 text-sm flex items-center justify-between text-emerald-800 font-semibold">
+
+            <div class="flex items-center gap-1.5 truncate">
+
+              <span class="text-emerald-500 font-bold">✓</span>
+
+              <span id="proc-selected-name" class="truncate text-xs">Componente seleccionado</span>
+
+            </div>
+
+            <button type="button" onclick="clearSelectedProcComponent()" class="text-emerald-600 hover:text-emerald-800 font-bold ml-2 focus:outline-none">✕</button>
+
+          </div>
+
+        </div>
+
+        <div style="width:100px">
+
+          <label class="text-xs font-semibold text-gray-600 mb-1 block">Cant. Total Usada</label>
+
+          <input id="proc-ac-cant" type="number" min="0.0001" step="any" value="1" class="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-center">
+
+        </div>
+
+        <button onclick="agregarLineaProcedimiento()" class="px-3 py-1.5 rounded-lg bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-700 transition-colors">+</button>
+
+      </div>
+
+
+
+      <!-- List of batch components -->
+
+      <div class="flex-1 overflow-y-auto custom-scrollbar border border-gray-100 rounded-xl bg-gray-50/50 p-2 mb-2.5" style="min-height:100px; max-height:38vh;">
+
+        <table class="w-full text-xs">
+
+          <thead>
+
+            <tr class="text-gray-500 border-b border-gray-200 uppercase text-[10px] text-left">
+
+              <th class="py-1.5 px-2">Insumo</th>
+
+              <th class="py-1.5 px-2 text-right" style="width:120px;">Cantidad Total</th>
+
+              <th class="py-1.5 w-8"></th>
+
+            </tr>
+
+          </thead>
+
+          <tbody id="proc-lineas">
+
+            <!-- Dynamic rows -->
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+
+
+      <!-- Footer of calculator overlay -->
+
+      <div class="flex-shrink-0 flex gap-3 justify-end pt-2.5 border-t border-gray-100 mt-auto">
+
+        <button onclick="ocultarProcedimiento()" class="px-4 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50">Atrás</button>
+
+        <button onclick="calcularYAplicarProcedimiento()" class="px-5 py-2 rounded-xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-700 shadow-xs">Calcular y Cargar Receta</button>
+
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ── OVERLAY MODAL AJUSTE O REEMPLAZO DE INSUMO EN RECETAS ──────────────────── -->
+
+    <!-- Modales de Previsualización de Auditoría -->
+    <div id="modal-preview-vincular" class="fixed inset-0 bg-black/70 backdrop-blur-xs hidden items-center justify-center p-4" style="z-index: 99999;">
+      <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-6 space-y-4 max-h-[90vh] flex flex-col">
+        <div class="flex items-center justify-between border-b pb-3">
+          <div>
+            <h3 class="text-base font-bold text-gray-900 flex items-center gap-2">
+              <span>🔗</span> Previsualizar Vinculación de Asientos (Fase 1)
+            </h3>
+            <p id="modal-vincular-subtitulo" class="text-xs text-gray-500 mt-0.5"></p>
+          </div>
+          <button onclick="cerrarModalVincular()" class="text-gray-400 hover:text-gray-700 text-lg font-bold">&times;</button>
+        </div>
+        
+        <div class="text-xs text-gray-600 bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-1">
+          <div class="font-bold text-amber-800">ℹ️ ¿Qué hará esta acción?</div>
+          <div>Asignará el <code class="font-mono font-bold text-amber-900">producto_id</code> a los siguientes asientos contables de cuentas 14 que actualmente están huérfanos (<code class="font-mono">producto_id IS NULL</code>), guiándose estrictamente por el concepto del asiento.</div>
+        </div>
+
+        <div class="overflow-y-auto flex-1 border rounded-xl">
+          <table class="w-full text-xs">
+            <thead class="bg-gray-100 text-gray-700 font-semibold border-b">
+              <tr>
+                <th class="px-3 py-2 text-left">Asiento #</th>
+                <th class="px-3 py-2 text-left">Concepto Contable</th>
+                <th class="px-3 py-2 text-left">Documento</th>
+                <th class="px-3 py-2 text-left">Fecha</th>
+                <th class="px-3 py-2 text-right">Monto ($)</th>
+              </tr>
+            </thead>
+            <tbody id="modal-vincular-tbody" class="divide-y divide-gray-100 font-mono"></tbody>
+          </table>
+        </div>
+
+        <div class="flex items-center justify-between border-t pt-3">
+          <span id="modal-vincular-total" class="text-xs font-bold text-gray-700"></span>
+          <div class="flex gap-2">
+            <button onclick="cerrarModalVincular()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition">
+              Cancelar
+            </button>
+            <button id="btn-confirmar-vincular" class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl transition shadow-sm flex items-center gap-1.5">
+              <span>🔗</span> Confirmar Vinculación
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="modal-preview-reparar" class="fixed inset-0 bg-black/70 backdrop-blur-xs hidden items-center justify-center p-4" style="z-index: 99999;">
+      <div class="bg-white rounded-2xl shadow-2xl max-w-3xl w-full p-6 space-y-4 max-h-[90vh] flex flex-col">
+        <div class="flex items-center justify-between border-b pb-3">
+          <div>
+            <h3 class="text-base font-bold text-gray-900 flex items-center gap-2">
+              <span>⚡</span> Previsualizar Reparación de Valores (Fase 2)
+            </h3>
+            <p id="modal-reparar-subtitulo" class="text-xs text-gray-500 mt-0.5"></p>
+          </div>
+          <button onclick="cerrarModalReparar()" class="text-gray-400 hover:text-gray-700 text-lg font-bold">&times;</button>
+        </div>
+
+        <div class="overflow-y-auto flex-1 space-y-4">
+          <!-- Sección 1: Tabla Resumen -->
+          <div class="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2">
+            <div class="text-xs font-bold text-slate-800 uppercase flex items-center gap-1.5">
+              <span>📊</span> 1. Sincronización de Tabla Resumen (<code class="font-mono">saldos_inventario</code>)
+            </div>
+            <div class="grid grid-cols-3 gap-3 text-xs">
+              <div class="bg-white p-2.5 rounded-lg border border-slate-200">
+                <span class="text-gray-500 block text-[11px]">Stock</span>
+                <div id="modal-reparar-stock" class="font-mono font-bold mt-1"></div>
+              </div>
+              <div class="bg-white p-2.5 rounded-lg border border-slate-200">
+                <span class="text-gray-500 block text-[11px]">Costo Unitario</span>
+                <div id="modal-reparar-costo" class="font-mono font-bold mt-1"></div>
+              </div>
+              <div class="bg-white p-2.5 rounded-lg border border-slate-200">
+                <span class="text-gray-500 block text-[11px]">Valor de Existencia</span>
+                <div id="modal-reparar-valor" class="font-mono font-bold mt-1"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sección 2: Asientos Contables a Corregir -->
+          <div class="space-y-2">
+            <div class="text-xs font-bold text-slate-800 uppercase flex items-center justify-between">
+              <span class="flex items-center gap-1.5">
+                <span>🏛️</span> 2. Corrección de Asientos Contables Desfasados (Cuentas 14 y Contrapartidas)
+              </span>
+              <span id="modal-reparar-count-asientos" class="text-[11px] font-semibold text-gray-500"></span>
+            </div>
+            <div id="modal-reparar-asientos-container" class="border rounded-xl overflow-hidden">
+              <table class="w-full text-xs">
+                <thead class="bg-gray-100 text-gray-700 font-semibold border-b">
+                  <tr>
+                    <th class="px-2.5 py-2 text-left">Documento</th>
+                    <th class="px-2.5 py-2 text-left">Asiento #</th>
+                    <th class="px-2.5 py-2 text-left">Concepto</th>
+                    <th class="px-2.5 py-2 text-right">Monto Actual ($)</th>
+                    <th class="px-2.5 py-2 text-right">Monto Nuevo ($)</th>
+                    <th class="px-2.5 py-2 text-right">Diferencia ($)</th>
+                  </tr>
+                </thead>
+                <tbody id="modal-reparar-tbody" class="divide-y divide-gray-100 font-mono"></tbody>
+              </table>
+            </div>
+            <div id="modal-reparar-sin-asientos" class="hidden text-xs text-gray-500 bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-center font-semibold">
+              ✅ No hay asientos contables desfasados por corregir. Solo se actualizará la tabla resumen de saldos.
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 border-t pt-3">
+          <button onclick="cerrarModalReparar()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition">
+            Cancelar
+          </button>
+          <button id="btn-confirmar-reparar" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition shadow-sm flex items-center gap-1.5">
+            <span>⚡</span> Confirmar y Aplicar Reparación
+          </button>
+        </div>
+      </div>
+    </div>
+
+
+
+  <!-- Toast flotante -->
+  <div id="toast" class="toast"></div>
+
+  <!-- ================= LÓGICA JAVASCRIPT ================= -->
+  <script>
+    // ── Variables Globales Inyectadas ──
+    const NEGOCIO_ID = {{ negocio_id }};
+    const NEGOCIO_SLUG = '{{ negocio_slug or "" }}';
+    const CENTRO_ACTIVO = {{ centro_activo | tojson if centro_activo else 'null' }};
+    const CENTROS_UTILIDAD = {{ centros_utilidad | tojson if centros_utilidad else '[]' }};
+
+    // ── Estado Global de Productos ──
+    let productos = [];
+    let _ultimoFetchProductosTimestamp = 0;
+    let prodSortCol = 'nombre';
+    let prodSortAsc = true;
+    let _prodDecimales = parseInt(localStorage.getItem('prod_decimales_moneda') ?? '2', 10);
+    if (isNaN(_prodDecimales) || _prodDecimales < 0) _prodDecimales = 2;
+    if (_prodDecimales > 6) _prodDecimales = 6;
+
+    let auditData = [];
+    let auditOpenCotejos = new Set();
+    let costosUnitariosData = [];
+    let costosUnitariosFiltroTipo = 'todos';
+
+    // ── Funciones Toast y Autocompletes ──
+function toast(msg, ok = true, duracion = 3200) {
+
+  const el = document.getElementById('toast');
+  if (!el) return;
+
+  el.textContent = msg;
+
+  let cls = 'toast-ok';
+  if (ok === false || ok === 'error') cls = 'toast-err';
+  else if (ok === 'warning' || ok === 'warn' || ok === 'info') cls = 'toast-warn';
+
+  el.className = `toast show ${cls}`;
+
+  clearTimeout(el._t);
+
+  el._t = setTimeout(() => el.classList.remove('show'), duracion);
+
+}
+
+
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+
+let datosLibroActas = [];
+
+const MODULO_ACTA_LABEL = {
+  inventario_fisico: 'Físico General',
+  inventario_distribuido: 'Distribuido',
+  caja_pos_tienda: 'Caja POS Tienda',
+  pos_restaurante: 'Caja POS Rest.'
+
+function setupAC(inputId, listId, hiddenId, data, onSelect) {
+
+  const inp = document.getElementById(inputId);
+
+  const list = document.getElementById(listId);
+
+  if (!inp || !list) return;
+
+  let idx = -1, timer = null;
+
+
+
+  const normalizeStr = str => {
+
+    if (!str) return '';
+
+    try {
+
+      return str.toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+
+    } catch (e) {
+
+      return str.toString().toLowerCase().trim();
+
+    }
+
+  };
+
+
+
+  inp.addEventListener('input', () => {
+
+    clearTimeout(timer);
+
+    timer = setTimeout(() => renderAC(), 150);
+
+  });
+
+
+
+  inp.addEventListener('focus', () => {
+
+    if (typeof cargarProductosSilencioso === 'function') {
+      cargarProductosSilencioso().then(() => {
+        if (inp === document.activeElement && inp.value.trim().length >= 1) {
+          renderAC();
+        }
+      });
+    } else if (typeof cargarProductos === 'function' && (!productos || !productos.length)) {
+
+      cargarProductos();
+
+    }
+
+    if (inp.value.trim().length >= 1) {
+
+      renderAC();
+
+    }
+
+  });
+
+
+
+  inp.addEventListener('keydown', e => {
+
+    const items = list.querySelectorAll('.ac-item');
+
+    if (e.key === 'ArrowDown') {
+
+      if (list.classList.contains('hidden')) {
+
+        renderAC();
+
+      } else {
+
+        idx = Math.min(idx + 1, items.length - 1);
+
+        highlightAC(items);
+
+      }
+
+      e.preventDefault();
+
+    }
+
+    else if (e.key === 'ArrowUp') {
+
+      idx = Math.max(idx - 1, 0);
+
+      highlightAC(items);
+
+      e.preventDefault();
+
+    }
+
+    else if (e.key === 'Enter') {
+
+      if (idx >= 0 && items[idx]) {
+
+        items[idx].dispatchEvent(new Event('mousedown'));
+
+        e.preventDefault();
+
+      }
+
+    }
+
+    else if (e.key === 'Escape') {
+
+      list.classList.add('hidden');
+
+      inp.focus();
+
+      e.preventDefault();
+
+    }
+
+  });
+
+
+
+  inp.addEventListener('blur', () => setTimeout(() => list.classList.add('hidden'), 220));
+
+
+
+  function renderAC() {
+
+    const rawQ = inp.value;
+
+    const qNorm = normalizeStr(rawQ);
+
+    if (!qNorm) { list.classList.add('hidden'); return; }
+
+    const itemsList = typeof data === 'function' ? data() : (data || []);
+
+    if (!itemsList || !itemsList.length) {
+      if (typeof cargarProductosSilencioso === 'function' && !inp._buscandoEnServidor) {
+        inp._buscandoEnServidor = true;
+        cargarProductosSilencioso(true).then(() => {
+          inp._buscandoEnServidor = false;
+          if (inp === document.activeElement && inp.value === rawQ) {
+            renderAC();
+          }
+        });
+      }
+    }
+
+    const matches = (itemsList || []).filter(p => {
+
+      if (!p || !p.nombre) return false;
+
+      const nameNorm = normalizeStr(p.nombre);
+
+      const catNorm = normalizeStr(p.categoria);
+
+      return nameNorm.includes(qNorm) || catNorm.includes(qNorm);
+
+    }).slice(0, 20);
+
+    // Si no hubo matches locales pero el usuario escribió 2+ caracteres, consultar al servidor como máximo UNA vez por texto
+    const qClean = rawQ.trim().toLowerCase();
+    if (matches.length === 0 && qClean.length >= 2 && !inp._buscandoEnServidor && inp._ultimoQServidor !== qClean) {
+      inp._buscandoEnServidor = true;
+      inp._ultimoQServidor = qClean;
+      if (typeof cargarProductosSilencioso === 'function') {
+        cargarProductosSilencioso(true).then(() => {
+          inp._buscandoEnServidor = false;
+          // Si el usuario sigue en este campo, reconstruir la lista con los productos recién traídos sin re-consultar al servidor
+          if (inp === document.activeElement && inp.value.trim().toLowerCase() === qClean) {
+            const freshItems = typeof data === 'function' ? data() : (data || []);
+            renderAC();
+          }
+        }).catch(() => {
+          inp._buscandoEnServidor = false;
+        });
+      }
+    }
+
+    idx = -1;
+
+    let html = matches.map(p =>
+
+      `<div class="ac-item text-left px-3 py-2 hover:bg-gray-100 cursor-pointer" data-id="${p.id}" data-nombre="${(p.nombre || '').replace(/"/g,'&quot;')}">
+
+        <span class="font-semibold text-gray-800">${p.nombre}</span>${p.categoria ? ` <span class="text-xs text-gray-400">(${p.categoria})</span>` : ''}
+
+       </div>`
+
+    ).join('');
+
+    // Opción para recargar productos si se creó en otra pestaña
+    if (rawQ.trim().length >= 1) {
+      html += `
+        <div class="ac-item text-left px-3 py-1.5 hover:bg-indigo-50 cursor-pointer text-indigo-700 font-bold border-t border-gray-100 text-xs flex items-center justify-between gap-1" data-recargar="true">
+          <span>🔄 ¿Lo creaste en otra pestaña? Recargar catálogo</span>
+          <span class="text-[10px] text-indigo-500 bg-indigo-100/70 px-1.5 py-0.5 rounded font-mono">Actualizar</span>
+        </div>
+      `;
+    }
+
+    if (rawQ.trim().length >= 2) {
+
+      html += `
+
+        <div class="ac-item text-left px-3 py-2 hover:bg-rose-50 cursor-pointer text-rose-600 font-bold border-t border-gray-100 text-xs flex items-center gap-1" data-crear="true" data-nombre="${rawQ.replace(/"/g,'&quot;')}">
+
+          <span>➕ Crear nuevo producto:</span> <span class="italic text-gray-700">"${rawQ}"</span>
+
+        </div>
+
+      `;
+
+    }
+
+    list.innerHTML = html;
+
+    list.querySelectorAll('.ac-item').forEach(el => {
+
+      el.addEventListener('mousedown', (e) => {
+
+        e.preventDefault();
+
+        if (el.dataset.recargar) {
+          el.innerHTML = '<span class="text-indigo-600 font-bold">⏳ Actualizando productos desde el servidor...</span>';
+          if (typeof cargarProductosSilencioso === 'function') {
+            cargarProductosSilencioso(true).then(() => {
+              renderAC();
+              toast('Catálogo de productos actualizado', true);
+            });
+          }
+          return;
+        }
+
+        if (el.dataset.crear) {
+
+          list.classList.add('hidden');
+
+          abrirModalCrearDesdeAC(inputId, hiddenId, el.dataset.nombre);
+
+          return;
+
+        }
+
+        document.getElementById(hiddenId).value = el.dataset.id;
+
+        inp.value = el.dataset.nombre;
+
+        list.classList.add('hidden');
+
+        if (onSelect) onSelect({id: +el.dataset.id, nombre: el.dataset.nombre});
+
+      });
+
+    });
+
+    list.classList.remove('hidden');
+
+  }
+
+
+
+  function highlightAC(items) {
+
+    items.forEach((el, i) => el.classList.toggle('ac-focus', i === idx));
+
+    if (idx >= 0) items[idx].scrollIntoView({block: 'nearest'});
+
+  }
+
+}
+
+
+
+// Autocomplete específico para categorías
+
+function setupCategoriasAC(inputId, listId) {
+
+  const inp = document.getElementById(inputId);
+
+  const list = document.getElementById(listId);
+
+  if (!inp || !list) return;
+
+  let idx = -1, timer = null;
+
+
+
+  const normalizeStr = str => {
+
+    if (!str) return '';
+
+    try {
+
+      return str.toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+
+    } catch (e) {
+
+      return str.toString().toLowerCase().trim();
+
+    }
+
+  };
+
+
+
+  inp.addEventListener('input', () => {
+
+    clearTimeout(timer);
+
+    timer = setTimeout(() => render(), 150);
+
+  });
+
+
+
+  inp.addEventListener('focus', () => {
+
+    render();
+
+  });
+
+
+
+  inp.addEventListener('keydown', e => {
+
+    const items = list.querySelectorAll('.ac-item');
+
+    if (e.key === 'ArrowDown') {
+
+      if (list.classList.contains('hidden')) {
+
+        render();
+
+      } else {
+
+        idx = Math.min(idx + 1, items.length - 1);
+
+        highlight(items);
+
+      }
+
+      e.preventDefault();
+
+    }
+
+    else if (e.key === 'ArrowUp') {
+
+      idx = Math.max(idx - 1, 0);
+
+      highlight(items);
+
+      e.preventDefault();
+
+    }
+
+    else if (e.key === 'Enter') {
+
+      if (idx >= 0 && items[idx]) {
+
+        items[idx].dispatchEvent(new Event('mousedown'));
+
+        e.preventDefault();
+
+      }
+
+    }
+
+    else if (e.key === 'Escape') {
+
+      list.classList.add('hidden');
+
+      inp.focus();
+
+      e.preventDefault();
+
+    }
+
+  });
+
+
+
+  inp.addEventListener('blur', () => setTimeout(() => list.classList.add('hidden'), 220));
+
+
+
+  function render() {
+
+    const rawQ = inp.value;
+
+    const qNorm = normalizeStr(rawQ);
+
+    
+
+    // Obtenemos categorías únicas de la variable global "productos"
+
+    const itemsList = [...new Set((productos || []).map(p => p.categoria).filter(Boolean))].sort();
+
+    
+
+    if (!itemsList.length) {
+
+      list.classList.add('hidden');
+
+
+
+    // ── Gestión de Unidades de Empaque / Presentaciones ──
+// ── GESTIÓN DE UNIDADES DE EMPAQUE / PRESENTACIONES ─────────────────────────
+
+let catalogoPresentaciones = [];
+
+let detectedNumberInPresentation = null;
+
+
+
+async function abrirModalGestionPresentaciones() {
+
+  document.getElementById('overlay-presentaciones')?.classList.remove('hidden');
+
+  await cargarCatalogoPresentaciones();
+
+}
+
+
+
+function cerrarModalGestionPresentaciones() {
+
+  document.getElementById('overlay-presentaciones')?.classList.add('hidden');
+
+}
+
+
+
+async function cargarCatalogoPresentaciones() {
+
+  const tbody = document.getElementById('tabla-presentaciones-body');
+
+  if (tbody) tbody.innerHTML = '<tr><td colspan="4" class="text-center py-6 text-gray-400">Cargando presentaciones...</td></tr>';
+
+  try {
+
+    const r = await fetch('/api/inventario/presentaciones/todas');
+
+    const d = await r.json();
+
+    if (!d.ok) {
+
+      if (tbody) tbody.innerHTML = `<tr><td colspan="4" class="text-center py-6 text-rose-500">${d.error || 'Error al cargar'}</td></tr>`;
+
+      return;
+
+    }
+
+    catalogoPresentaciones = d.presentaciones || [];
+
+    renderTablaPresentaciones(catalogoPresentaciones);
+
+  } catch(e) {
+
+    console.error(e);
+
+    if (tbody) tbody.innerHTML = '<tr><td colspan="4" class="text-center py-6 text-rose-500">Error de red al cargar presentaciones</td></tr>';
+
+  }
+
+}
+
+
+
+function renderTablaPresentaciones(lista) {
+
+  const tbody = document.getElementById('tabla-presentaciones-body');
+
+  if (!tbody) return;
+
+  if (!lista.length) {
+
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center py-6 text-gray-400">No se encontraron unidades de empaque.</td></tr>';
+
+    return;
+
+  }
+
+
+
+  tbody.innerHTML = lista.map(p => {
+
+    const isUnidad = p.nombre.toLowerCase() === 'unidad';
+
+    const usosBadge = p.total_usos > 0 
+
+      ? `<span class="px-2.5 py-0.5 bg-blue-50 border border-blue-200 text-blue-700 font-semibold rounded-full text-[11px]" title="${p.uso_movimientos} movimientos, ${p.uso_cotizaciones} cotizaciones">${p.total_usos} uso${p.total_usos === 1 ? '' : 's'}</span>`
+
+      : `<span class="px-2.5 py-0.5 bg-gray-100 text-gray-400 rounded-full text-[11px]">Sin uso</span>`;
+
+
+
+    const equivFmt = Number(p.equivalencia).toLocaleString('es-CO', {maximumFractionDigits: 4});
+
+
+
+    return `
+
+      <tr class="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+
+        <td class="py-2.5 px-3 text-left">
+
+          <div class="font-bold text-gray-800">${p.nombre}</div>
+
+          ${isUnidad ? '<span class="text-[10px] text-emerald-600 font-bold">Unidad Base del Sistema</span>' : ''}
+
+        </td>
+
+        <td class="py-2.5 px-3 text-right font-mono font-bold text-indigo-700">
+
+          ${equivFmt}
+
+        </td>
+
+        <td class="py-2.5 px-3 text-center">
+
+          ${usosBadge}
+
+        </td>
+
+        <td class="py-2.5 px-3 text-center">
+
+          <div class="flex items-center justify-center gap-1.5">
+
+            <button type="button" onclick="editarPresentacionDesdeModal(${p.id}, '${p.nombre.replace(/'/g, "\\'")}', ${p.equivalencia}, ${p.uso_movimientos})"
+
+                    class="p-1.5 hover:bg-indigo-50 text-indigo-600 rounded-lg transition" title="Editar presentación">
+
+              ✏️
+
+            </button>
+
+            ${!isUnidad ? `
+
+              <button type="button" onclick="eliminarPresentacion(${p.id}, '${p.nombre.replace(/'/g, "\\'")}', ${p.total_usos})"
+
+                      class="p-1.5 hover:bg-rose-50 text-rose-600 rounded-lg transition" title="Eliminar presentación">
+
+                🗑️
+
+              </button>
+
+            ` : ''}
+
+          </div>
+
+        </td>
+
+      </tr>
+
+    `;
+
+  }).join('');
+
+}
+
+
+
+function filtrarTablaPresentaciones() {
+
+  const q = (document.getElementById('filtro-presentaciones-txt')?.value || '').toLowerCase().trim();
+
+  if (!q) {
+
+    renderTablaPresentaciones(catalogoPresentaciones);
+
+    return;
+
+  }
+
+  const filtradas = catalogoPresentaciones.filter(p => 
+
+    p.nombre.toLowerCase().includes(q) || p.equivalencia.toString().includes(q)
+
+  );
+
+  renderTablaPresentaciones(filtradas);
+
+}
+
+
+
+function parseNumeroPresentacion(nombre) {
+
+  if (!nombre) return null;
+
+  const m = nombre.match(/(?:x|\*|por|de|\/)?\s*([0-9]+(?:[\.,][0-9]+)?)\s*(?:grs?|g|kg|kilos?|ml|lts?|litros?|mg|mlgrs?|unid|und|u|unidades)?/i);
+
+  if (m && m[1]) {
+
+    const numStr = m[1].replace(',', '.');
+
+    const val = parseFloat(numStr);
+
+    if (!isNaN(val) && val > 0) return val;
+
+  }
+
+  const m2 = nombre.match(/([0-9]+(?:[\.,][0-9]+)?)/);
+
+  if (m2 && m2[1]) {
+
+
+
+    // ── Funciones de Productos y Costos Unitarios ──
+async function cargarProductos(silencioso = false) {
+  const bodParam = (CENTRO_ACTIVO && CENTRO_ACTIVO.id) ? `?bodega=${CENTRO_ACTIVO.id}` : '';
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/productos${bodParam}`);
+    const d = await r.json();
+    if (!d.ok) {
+      if (!silencioso) toast(d.error, false);
+      return [];
+    }
+    productos = d.productos || [];
+    _ultimoFetchProductosTimestamp = Date.now();
+    
+    // Solo actualizamos la tabla si el usuario está físicamente viendo la pestaña de productos
+    const tabProd = document.getElementById('tab-productos');
+    if (tabProd && !tabProd.classList.contains('hidden') && typeof filtrarTablaProductos === 'function') {
+      filtrarTablaProductos();
+    }
+    return productos;
+  } catch(e) {
+    if (!silencioso) toast('Error al cargar productos', false);
+    return [];
+  }
+}
+
+async function cargarProductosSilencioso(force = false) {
+  const ahora = Date.now();
+  if (_isFetchingProductosSilencioso) return productos;
+  if (!force && ahora - _ultimoFetchProductosTimestamp < 1200) return productos;
+  
+  _isFetchingProductosSilencioso = true;
+  try {
+    await cargarProductos(true);
+  } catch(e) {
+    console.warn('Error silencioso cargando productos:', e);
+  } finally {
+    _isFetchingProductosSilencioso = false;
+  }
+  return productos;
+}
+
+function notificarCambioProductos() {
+  try {
+    localStorage.setItem('tuctuc_producto_cambiado', Date.now().toString());
+  } catch(e) {}
+  try {
+    if (window.BroadcastChannel) {
+      const bc = new BroadcastChannel('tuctuc_productos_channel');
+      bc.postMessage({ action: 'reload_productos', timestamp: Date.now() });
+      bc.close();
+    }
+  } catch(e) {}
+}
+
+async function recargarCatalogoEntrada(btn) {
+  if (btn) {
+    btn.disabled = true;
+    const icon = btn.querySelector('.sync-icon');
+    if (icon) icon.classList.add('animate-spin');
+  }
+  try {
+    await cargarProductosSilencioso(true);
+    toast(`Catálogo actualizado: ${productos.length} productos disponibles`, true);
+  } catch(e) {
+    toast('Error actualizando productos', false);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      const icon = btn.querySelector('.sync-icon');
+      if (icon) icon.classList.remove('animate-spin');
+    }
+  }
+}
+
+// Sincronización entre pestañas y al volver a enfocar la ventana
+window.addEventListener('storage', (e) => {
+  if (e.key === 'tuctuc_producto_cambiado') {
+    cargarProductosSilencioso(true);
+  }
+});
+
+try {
+  if (window.BroadcastChannel) {
+    const bc = new BroadcastChannel('tuctuc_productos_channel');
+    bc.onmessage = (ev) => {
+      if (ev.data && ev.data.action === 'reload_productos') {
+        cargarProductosSilencioso(true);
+      }
+    };
+  }
+} catch(e) {}
+
+let _ultimoSyncWindowFocus = 0;
+window.addEventListener('focus', () => {
+  const ahora = Date.now();
+  if (ahora - _ultimoSyncWindowFocus > 1500) {
+    _ultimoSyncWindowFocus = ahora;
+    cargarProductosSilencioso();
+  }
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    const ahora = Date.now();
+    if (ahora - _ultimoSyncWindowFocus > 1500) {
+      _ultimoSyncWindowFocus = ahora;
+      cargarProductosSilencioso();
+    }
+  }
+});
+
+
+
+function abrirTarjetaInicialDesdeUrl() {
+
+  const params = new URLSearchParams(window.location.search);
+
+  if (params.get('tarjeta') !== '1') return;
+
+  const productoId = Number(params.get('producto_id') || 0);
+
+  if (!productoId) return;
+
+
+
+  const producto = productos.find(p => Number(p.id) === productoId);
+
+  if (producto) {
+
+    abrirModalTarjeta(producto.id, producto.nombre);
+
+  }
+
+}
+
+
+
+function ordenarProductos(columna) {
+
+  if (prodSortCol === columna) {
+
+    prodSortAsc = !prodSortAsc;
+
+  } else {
+
+    prodSortCol = columna;
+
+    prodSortAsc = true;
+
+  }
+
+  filtrarTablaProductos();
+
+}
+
+
+
+function filtrarTablaProductos() {
+
+  const term = (document.getElementById('filtro-productos')?.value || '').toLowerCase().trim();
+
+  const estadoFiltro = document.getElementById('filtro-estado-productos')?.value || 'todos';
+
+
+
+  let lista = productos.filter(p => {
+
+    const matchTerm = (p.nombre || '').toLowerCase().includes(term) || (p.categoria || '').toLowerCase().includes(term);
+
+    if (!matchTerm) return false;
+
+    if (estadoFiltro === 'activos') return !!p.disponible;
+
+    if (estadoFiltro === 'inactivos') return !p.disponible;
+
+    return true;
+
+  });
+
+
+
+  lista.sort((a, b) => {
+
+    let valA, valB;
+
+    if (prodSortCol === 'nombre') {
+
+      valA = a.nombre || '';
+
+      valB = b.nombre || '';
+
+      return prodSortAsc ? valA.localeCompare(valB, 'es') : valB.localeCompare(valA, 'es');
+
+    } else if (prodSortCol === 'categoria') {
+
+      valA = a.categoria || '';
+
+      valB = b.categoria || '';
+
+      return prodSortAsc ? valA.localeCompare(valB, 'es') : valB.localeCompare(valA, 'es');
+
+    } else if (prodSortCol === 'precio') {
+
+      valA = parseFloat(a.precio || 0);
+
+      valB = parseFloat(b.precio || 0);
+
+    } else if (prodSortCol === 'costo') {
+
+      valA = parseFloat(a.costo || 0);
+
+      valB = parseFloat(b.costo || 0);
+
+    } else if (prodSortCol === 'stock') {
+
+      valA = parseFloat(a.stock || 0);
+
+      valB = parseFloat(b.stock || 0);
+
+    } else if (prodSortCol === 'costo_total') {
+
+      valA = parseFloat(a.costo || 0) * parseFloat(a.stock || 0);
+
+      valB = parseFloat(b.costo || 0) * parseFloat(b.stock || 0);
+
+    }
+
+    return prodSortAsc ? (valA - valB) : (valB - valA);
+
+  });
+
+
+
+  renderTablaProductos(lista);
+
+}
+
+
+
+let _prodDecimales = parseInt(localStorage.getItem('prod_decimales_moneda') ?? '2', 10);
+if (isNaN(_prodDecimales) || _prodDecimales < 0) _prodDecimales = 2;
+if (_prodDecimales > 6) _prodDecimales = 6;
+
+function _fmtProdMon(n) {
+  if (n == null || isNaN(n)) return '—';
+  const val = Number(n);
+  return '$' + val.toLocaleString('es-CO', { 
+    minimumFractionDigits: _prodDecimales, 
+    maximumFractionDigits: _prodDecimales 
+  });
+}
+
+function _fmtProdNum(n) {
+  if (n == null || isNaN(n)) return '0';
+  const val = Number(n);
+  return val.toLocaleString('es-CO', { 
+    minimumFractionDigits: _prodDecimales, 
+    maximumFractionDigits: _prodDecimales 
+  });
+}
+
+function cambiarDecimalesProductos(val) {
+  let d = parseInt(val, 10);
+  if (isNaN(d)) return;
+  d = Math.max(0, Math.min(6, d));
+  _prodDecimales = d;
+  try { localStorage.setItem('prod_decimales_moneda', d); } catch(e) {}
+  const inp = document.getElementById('prod-decimales-input');
+  if (inp && parseInt(inp.value, 10) !== d) inp.value = d;
+  filtrarTablaProductos();
+}
+
+function validarDecimalesProductosInput(inputEl) {
+  let d = parseInt(inputEl.value, 10);
+  if (isNaN(d) || d < 0) d = 2;
+  if (d > 6) d = 6;
+  inputEl.value = d;
+  cambiarDecimalesProductos(d);
+}
+
+function inicializarDecimalesProductos() {
+  const inp = document.getElementById('prod-decimales-input');
+  if (inp) inp.value = _prodDecimales;
+}
+
+function renderTablaProductos(lista) {
+  const tb = document.getElementById('tabla-productos');
+  
+  // Calcular el valor total de la lista actual de productos
+  let totalVal = 0;
+  lista.forEach(p => {
+    totalVal += Number(p.costo || 0) * Number(p.stock || 0);
+  });
+  const totalValEl = document.getElementById('prod-total-inventario-val');
+  if (totalValEl) {
+    totalValEl.textContent = _fmtProdMon(totalVal);
+  }
+  
+  // Update sort icons
+  ['nombre', 'categoria', 'precio', 'costo', 'stock', 'costo_total'].forEach(col => {
+    const el = document.getElementById(`sort-prod-${col}`);
+    if (el) {
+      if (prodSortCol === col) {
+        el.textContent = prodSortAsc ? '▲' : '▼';
+        el.className = 'text-rose-500 font-bold';
+      } else {
+        el.textContent = '↕';
+        el.className = 'text-gray-400';
+      }
+    }
+  });
+
+  if (!lista.length) {
+    tb.innerHTML = '<tr><td colspan="7" class="text-center text-gray-400 py-8">Sin productos</td></tr>';
+    return;
+  }
+  
+  tb.innerHTML = lista.map(p => {
+    const safeNombre = (p.nombre || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    const estadoBtn = p.disponible 
+      ? `<button onclick="toggleEstadoProducto(${p.id}, false)" title="Haz clic para inactivar producto" class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition">🟢 Activo</button>`
+      : `<button onclick="toggleEstadoProducto(${p.id}, true)" title="Haz clic para activar producto" class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 transition">🔴 Inactivo</button>`;
+
+    return `
+      <tr class="hover:bg-gray-50 border-b border-gray-100 transition-colors ${!p.disponible ? 'bg-gray-50/70' : ''}">
+        <td class="px-3 py-2.5 font-semibold text-gray-800 flex items-center gap-2">
+          <span>${p.nombre}</span>
+          ${estadoBtn}
+        </td>
+        <td class="px-3 py-2.5 text-gray-500 text-xs">${p.categoria || '—'}</td>
+        <td class="px-3 py-2.5 text-right num font-mono text-gray-700">${_fmtProdMon(p.precio)}</td>
+        <td class="px-3 py-2.5 text-right num font-mono text-gray-700">${_fmtProdMon(p.costo)}</td>
+        <td class="px-3 py-2.5 text-right num font-mono font-bold ${Number(p.stock) <= 0 ? 'text-red-400' : 'text-green-600'}">${_fmtProdNum(p.stock)}</td>
+        <td class="px-3 py-2.5 text-right num font-mono font-semibold text-gray-700">${_fmtProdMon(Number(p.costo || 0) * Number(p.stock || 0))}</td>
+
+        <td class="px-3 py-2.5">
+
+          <div class="flex gap-1.5 justify-end">
+
+            <button onclick="abrirModalProducto(${p.id})" title="Editar producto"
+
+                    class="text-xs px-2 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 font-semibold transition-colors">✏️</button>
+
+            <button onclick="abrirModalTarjeta(${p.id}, '${safeNombre}')" title="Tarjeta estándar"
+
+                    class="text-xs px-2 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 font-semibold text-blue-600 transition-colors">🧩</button>
+
+            <button onclick="verKardex(${p.id}, '${safeNombre}')" title="Kardex"
+
+                    class="text-xs px-2 py-1 rounded-lg bg-yellow-50 hover:bg-yellow-100 font-semibold text-yellow-600 transition-colors">📊</button>
+
+            <button onclick="eliminarProducto(${p.id}, '${safeNombre}')" title="Eliminar producto"
+
+                    class="text-xs px-2 py-1 rounded-lg bg-red-50 hover:bg-red-100 font-semibold text-red-600 transition-colors">🗑️</button>
+
+          </div>
+
+        </td>
+
+      </tr>
+
+    `;
+
+  }).join('');
+
+}
+
+
+
+async function toggleEstadoProducto(id, nuevoEstado) {
+
+  const p = productos.find(x => Number(x.id) === Number(id));
+
+  if (!p) return;
+
+  try {
+
+    const r = await fetch(`/api/inventario/producto/${id}`, {
+
+      method: 'POST',
+
+      headers: {'Content-Type': 'application/json'},
+
+      body: JSON.stringify({
+
+        nombre: p.nombre,
+
+        categoria: p.categoria,
+
+        codigo_barra: p.codigo_barra,
+
+        precio: p.precio,
+
+        costo: p.costo,
+
+        iva_pct: p.iva_pct,
+
+        disponible: nuevoEstado,
+
+        descripcion: p.descripcion
+
+      })
+
+    });
+
+    const d = await r.json();
+
+    if (d.ok) {
+
+      p.disponible = nuevoEstado;
+
+      toast(nuevoEstado ? '🟢 Producto activado (disponible para venta)' : '🔴 Producto inactivado (oculto de ventas)');
+
+      filtrarTablaProductos();
+
+    } else {
+
+      toast(d.error || 'No se pudo cambiar el estado', false);
+
+    }
+
+  } catch(e) {
+
+    console.error(e);
+
+    toast('Error de red al cambiar estado del producto', false);
+
+  }
+
+}
+
+
+
+async function eliminarProducto(id, nombre) {
+
+  if (!confirm(`¿Estás seguro de eliminar el producto "${nombre}"?\n\nEl sistema verificará que no posea movimientos de inventario, recetas o ventas asociadas.`)) {
+
+    return;
+
+  }
+
+  try {
+
+    const r = await fetch(`/api/inventario/producto/${id}`, { method: 'DELETE' });
+
+    const d = await r.json();
+
+    if (d.ok) {
+
+      toast('Producto eliminado correctamente');
+
+      notificarCambioProductos();
+
+      cargarProductos();
+
+    } else {
+
+      // Reemplazado toast por alert para que sea persistente y visible
+
+      alert(d.error || 'No se pudo eliminar el producto');
+
+    }
+
+  } catch(e) {
+
+    console.error(e);
+
+    alert('Error de red al eliminar el producto');
+
+  }
+
+}
+
+// ═══ GESTIÓN Y REPORTE DE COSTOS UNITARIOS & PROVEEDORES ═══
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+let _costosUnitariosData = [];
+let _costosUnitariosFiltrados = [];
+let _costosTipoActivo = 'todos';
+let _subVistaProductosActiva = 'catalogo';
+
+function cambiarSubVistaProductos(vista) {
+  _subVistaProductosActiva = vista;
+  const btnCat = document.getElementById('btn-vista-catalogo');
+  const btnCos = document.getElementById('btn-vista-costos');
+  const secCat = document.getElementById('seccion-vista-catalogo');
+  const secCos = document.getElementById('seccion-vista-costos-unitarios');
+  
+  if (vista === 'costos') {
+    if (btnCat) {
+      btnCat.className = 'px-4 py-2 rounded-xl text-xs font-bold bg-gray-100 hover:bg-gray-200 text-gray-700 transition flex items-center gap-1.5 cursor-pointer';
+    }
+    if (btnCos) {
+      btnCos.className = 'px-4 py-2 rounded-xl text-xs font-bold bg-slate-900 text-white shadow-xs transition flex items-center gap-1.5 cursor-pointer';
+    }
+    if (secCat) secCat.classList.add('hidden');
+    if (secCos) secCos.classList.remove('hidden');
+    
+    cargarReporteCostosUnitarios();
+  } else {
+    if (btnCat) {
+      btnCat.className = 'px-4 py-2 rounded-xl text-xs font-bold bg-slate-900 text-white shadow-xs transition flex items-center gap-1.5 cursor-pointer';
+    }
+    if (btnCos) {
+      btnCos.className = 'px-4 py-2 rounded-xl text-xs font-bold bg-gray-100 hover:bg-gray-200 text-gray-700 transition flex items-center gap-1.5 cursor-pointer';
+    }
+    if (secCat) secCat.classList.remove('hidden');
+    if (secCos) secCos.classList.add('hidden');
+  }
+}
+
+async function cargarReporteCostosUnitarios() {
+  const tbody = document.getElementById('tabla-costos-unitarios');
+  if (tbody) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-slate-500 py-10 text-sm font-semibold"><span class="inline-block animate-spin mr-2">⏳</span> Cargando matriz de costos unitarios...</td></tr>';
+  }
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/reporte-costos-unitarios?_t=` + Date.now());
+    if (!r.ok) {
+      const errText = await r.text();
+      let msg = `Error ${r.status}`;
+      try { const j = JSON.parse(errText); msg = j.error || msg; } catch(_) { msg = errText || msg; }
+      if (tbody) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-rose-500 py-8 text-sm font-semibold">⚠️ ${escapeHtml(msg)}</td></tr>`;
+      }
+      return;
+    }
+    const d = await r.json();
+    if (d.ok) {
+      _costosUnitariosData = d.productos || [];
+      const tot = d.totales || {};
+      const elTodos = document.getElementById('cnt-costos-todos');
+      const elMp = document.getElementById('cnt-costos-mp');
+      const elInter = document.getElementById('cnt-costos-inter');
+      const elVenta = document.getElementById('cnt-costos-venta');
+      if (elTodos) elTodos.textContent = tot.total || 0;
+      if (elMp) elMp.textContent = tot.materias_primas || 0;
+      if (elInter) elInter.textContent = tot.intermedios || 0;
+      if (elVenta) elVenta.textContent = tot.platos_venta || 0;
+      
+      filtrarTablaCostosUnitarios();
+    } else {
+      if (tbody) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-rose-500 py-8 text-sm font-semibold">⚠️ ${escapeHtml(d.error || 'Error al cargar reporte de costos')}</td></tr>`;
+      }
+    }
+  } catch (e) {
+    console.error('Error al cargar reporte de costos unitarios:', e);
+    if (tbody) {
+      tbody.innerHTML = `<tr><td colspan="6" class="text-center text-rose-500 py-8 text-sm font-semibold">⚠️ Error de red o script: ${escapeHtml(e.message || String(e))}</td></tr>`;
+    }
+  }
+}
+
+function filtrarTipoCostos(tipo) {
+  _costosTipoActivo = tipo;
+  ['todos', 'mp', 'inter', 'venta'].forEach(k => {
+    const btn = document.getElementById(`btn-costos-filtro-${k}`);
+    if (!btn) return;
+    const match = (k === 'todos' && tipo === 'todos') ||
+                  (k === 'mp' && tipo === 'materia_prima') ||
+                  (k === 'inter' && tipo === 'intermedio') ||
+                  (k === 'venta' && tipo === 'venta');
+    if (match) {
+      btn.className = 'px-3.5 py-1.5 rounded-xl text-xs font-bold bg-slate-900 text-white shadow-2xs transition cursor-pointer';
+    } else {
+      btn.className = 'px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-gray-100 hover:bg-gray-200 text-gray-700 transition cursor-pointer';
+    }
+  });
+  filtrarTablaCostosUnitarios();
+}
+
+function filtrarTablaCostosUnitarios() {
+  const q = (document.getElementById('filtro-costos-txt')?.value || '').toLowerCase().trim();
+  let lista = _costosUnitariosData;
+  
+  if (_costosTipoActivo !== 'todos') {
+    lista = lista.filter(p => p.tipo === _costosTipoActivo);
+  }
+  
+  if (q) {
+    lista = lista.filter(p => (p.nombre || '').toLowerCase().includes(q) || (p.codigo || '').toLowerCase().includes(q) || (p.categoria || '').toLowerCase().includes(q));
+  }
+  
+  _costosUnitariosFiltrados = lista;
+  renderTablaCostosUnitarios(lista);
+}
+
+function renderTablaCostosUnitarios(items) {
+  const tbody = document.getElementById('tabla-costos-unitarios');
+  if (!tbody) return;
+  
+  if (!items || !items.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-gray-400 py-10 text-sm font-semibold">No se encontraron productos activos con los filtros aplicados.</td></tr>';
+    return;
+  }
+  
+  let html = '';
+  let ultimoTipo = null;
+  
+  const grupoNombres = {
+    'materia_prima': { icon: '🌾', label: 'MATERIAS PRIMAS / INSUMOS BASE', badge: 'bg-amber-50 text-amber-800 border-amber-200' },
+    'intermedio': { icon: '🥣', label: 'PRODUCTOS INTERMEDIOS / PRODUCCIÓN PROPIA', badge: 'bg-purple-50 text-purple-800 border-purple-200' },
+    'venta': { icon: '🥪', label: 'PLATOS DE VENTA / ENSAMBLES', badge: 'bg-emerald-50 text-emerald-800 border-emerald-200' }
+  };
+  
+  items.forEach((p, idx) => {
+    if (_costosTipoActivo === 'todos' && p.tipo !== ultimoTipo) {
+      const gInfo = grupoNombres[p.tipo] || { icon: '📦', label: 'PRODUCTOS' };
+      html += `
+        <tr class="bg-slate-100/70 border-t border-b border-slate-200">
+          <td colspan="6" class="px-4 py-2 text-xs font-extrabold text-slate-800 uppercase tracking-wide">
+            <span>${gInfo.icon}</span> <span class="ml-1">${gInfo.label}</span>
+          </td>
+        </tr>
+      `;
+      ultimoTipo = p.tipo;
+    }
+    
+    const gInfo = grupoNombres[p.tipo] || { icon: '📦', label: p.tipo_label, badge: 'bg-gray-50 text-gray-800 border-gray-200' };
+    const costActual = Number(p.costo_actual || 0);
+    const costActualFormatted = costActual >= 1 ? '$' + costActual.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '$' + costActual.toFixed(4);
+    
+    // Empaque / Presentación
+    let empaqueHtml = `<div class="text-xs font-bold text-slate-800">${escapeHtml(p.empaque_label || 'Unidad (Und)')}</div>`;
+    if (p.costo_empaque && Number(p.factor_empaque || 1) > 1) {
+      const cEmp = Number(p.costo_empaque);
+      const cEmpFmt = cEmp >= 1 ? '$' + cEmp.toLocaleString('es-CO', {minimumFractionDigits: 0, maximumFractionDigits: 0}) : '$' + cEmp.toFixed(2);
+      empaqueHtml += `<div class="text-[11px] font-semibold text-gray-500 font-mono">${cEmpFmt} / empaque</div>`;
+    }
+
+    // Última Compra
+    let ultCompraHtml = '<span class="text-gray-400 text-xs">—</span>';
+    if (p.ultima_compra && p.ultima_compra.costo) {
+      const ucC = Number(p.ultima_compra.costo);
+      const ucFmt = ucC >= 1 ? '$' + ucC.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '$' + ucC.toFixed(4);
+      const ucEmp = Number(p.ultima_compra.costo_empaque || 0);
+      const ucEmpFmt = ucEmp >= 1 ? '$' + ucEmp.toLocaleString('es-CO', {minimumFractionDigits: 0, maximumFractionDigits: 0}) : '';
+      
+      ultCompraHtml = `
+        <div>
+          ${ucEmpFmt && Number(p.factor_empaque || 1) > 1 ? `<span class="font-mono font-bold text-slate-800 text-xs">${ucEmpFmt} <span class="text-[10px] text-gray-500 font-normal">(${ucFmt}/${p.unidad})</span></span>` : `<span class="font-mono font-bold text-slate-800 text-xs">${ucFmt}/${p.unidad}</span>`}
+          <div class="text-[11px] text-gray-600 truncate max-w-[220px]" title="${escapeHtml(p.ultima_compra.proveedor || '')}">${escapeHtml(p.ultima_compra.proveedor || '')}</div>
+          ${p.ultima_compra.fecha ? `<span class="text-[10px] text-gray-400 font-mono">${p.ultima_compra.fecha}</span>` : ''}
+        </div>
+      `;
+    } else if (p.tipo === 'intermedio') {
+      ultCompraHtml = '<span class="text-[11px] font-semibold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-100">Producción Propia</span>';
+    } else if (p.tipo === 'venta') {
+      ultCompraHtml = '<span class="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">Ensamble Receta</span>';
+    }
+
+    // Mejor Compra
+    let mejCompraHtml = '<span class="text-gray-400 text-xs">—</span>';
+    if (p.mejor_compra && p.mejor_compra.costo) {
+      const mcC = Number(p.mejor_compra.costo);
+      const mcFmt = mcC >= 1 ? '$' + mcC.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '$' + mcC.toFixed(4);
+      const mcEmp = Number(p.mejor_compra.costo_empaque || 0);
+      const mcEmpFmt = mcEmp >= 1 ? '$' + mcEmp.toLocaleString('es-CO', {minimumFractionDigits: 0, maximumFractionDigits: 0}) : '';
+
+      mejCompraHtml = `
+        <div>
+          ${mcEmpFmt && Number(p.factor_empaque || 1) > 1 ? `<span class="font-mono font-bold text-emerald-700 text-xs">${mcEmpFmt} <span class="text-[10px] text-emerald-600 font-normal">(${mcFmt}/${p.unidad})</span></span>` : `<span class="font-mono font-bold text-emerald-700 text-xs">${mcFmt}/${p.unidad}</span>`}
+          <div class="text-[11px] text-gray-600 truncate max-w-[220px]" title="${escapeHtml(p.mejor_compra.proveedor || '')}">${escapeHtml(p.mejor_compra.proveedor || '')}</div>
+          ${p.mejor_compra.fecha ? `<span class="text-[10px] text-gray-400 font-mono">${p.mejor_compra.fecha}</span>` : ''}
+        </div>
+      `;
+    } else if (p.tipo === 'intermedio') {
+      mejCompraHtml = '<span class="text-[11px] font-semibold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-100">Producción Propia</span>';
+    } else if (p.tipo === 'venta') {
+      mejCompraHtml = '<span class="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">Ensamble Receta</span>';
+    }
+
+    html += `
+      <tr class="hover:bg-slate-50/80 transition-colors border-b border-gray-100">
+        <td class="px-4 py-3 whitespace-nowrap">
+          <span class="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-lg border ${gInfo.badge}">
+            <span>${gInfo.icon}</span> <span>${p.tipo_label}</span>
+          </span>
+        </td>
+        <td class="px-4 py-3">
+          <div class="font-bold text-slate-800 text-sm md:text-base">${escapeHtml(p.nombre)}</div>
+          ${p.codigo ? `<span class="text-[10px] text-gray-400 font-mono">Cód: ${escapeHtml(p.codigo)}</span>` : ''}
+        </td>
+        <td class="px-4 py-3 text-right whitespace-nowrap">
+          <span class="font-mono font-bold text-slate-900 text-sm md:text-base">${costActualFormatted}</span>
+          <span class="text-xs font-semibold text-slate-500 ml-0.5">/${p.unidad}</span>
+        </td>
+        <td class="px-3 py-3 text-left">
+          ${empaqueHtml}
+        </td>
+        <td class="px-4 py-3">
+          ${ultCompraHtml}
+        </td>
+        <td class="px-4 py-3">
+          ${mejCompraHtml}
+        </td>
+      </tr>
+    `;
+  });
+  
+  tbody.innerHTML = html;
+}
+
+function exportarCostosUnitariosCSV() {
+  if (!_costosUnitariosFiltrados || !_costosUnitariosFiltrados.length) {
+    toast('No hay datos para exportar', false);
+    return;
+  }
+  
+  const headers = ['Tipo', 'Producto', 'Unidad Base Receta', 'Costo Base Receta', 'Presentacion / Empaque', 'Costo Empaque', 'Ultima Compra Valor Empaque', 'Ultima Compra Costo Base', 'Ultima Compra Proveedor', 'Ultima Compra Fecha', 'Mejor Compra Valor Empaque', 'Mejor Compra Costo Base', 'Mejor Compra Proveedor', 'Mejor Compra Fecha'];
+  const rows = _costosUnitariosFiltrados.map(p => [
+    p.tipo_label || p.tipo,
+    p.nombre,
+    p.unidad,
+    p.costo_actual,
+    p.empaque_label || '',
+    p.costo_empaque || '',
+    p.ultima_compra ? (p.ultima_compra.costo_empaque || '') : '',
+    p.ultima_compra ? p.ultima_compra.costo : '',
+    p.ultima_compra ? (p.ultima_compra.proveedor || '') : '',
+    p.ultima_compra ? (p.ultima_compra.fecha || '') : '',
+    p.mejor_compra ? (p.mejor_compra.costo_empaque || '') : '',
+    p.mejor_compra ? p.mejor_compra.costo : '',
+    p.mejor_compra ? (p.mejor_compra.proveedor || '') : '',
+    p.mejor_compra ? (p.mejor_compra.fecha || '') : ''
+  ]);
+  
+  let csvContent = '\uFEFF' + [headers, ...rows].map(e => e.map(val => `"${String(val || '').replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', `reporte_costos_unitarios_${new Date().toISOString().slice(0,10)}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+function imprimirCostosUnitariosPDF() {
+  window.open(`/api/inventario/${NEGOCIO_ID}/reporte-costos-unitarios/pdf`, '_blank');
+}
+
+// ── Configuración de Categorías de Adición / Extras POS ─────────────────────
+
+let _catAdicionesData = [];
+
+async function abrirModalCategoriasAdiciones() {
+  const overlay = document.getElementById('overlay-categorias-adiciones');
+  if (!overlay) return;
+  overlay.classList.remove('hidden');
+  
+  const listEl = document.getElementById('modal-cat-adiciones-list');
+  listEl.innerHTML = '<p class="text-center text-gray-400 py-8 text-xs font-semibold">Cargando categorías...</p>';
+  document.getElementById('filtro-modal-cat-adiciones').value = '';
+
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/categorias-adiciones?_=${Date.now()}`);
+    const d = await r.json();
+    if (d.ok) {
+      _catAdicionesData = d.categorias || [];
+      renderModalCategoriasAdiciones('');
+    } else {
+      listEl.innerHTML = `<p class="text-center text-rose-500 py-6 text-xs font-semibold">${d.error || 'Error al cargar categorías'}</p>`;
+    }
+  } catch (err) {
+    listEl.innerHTML = '<p class="text-center text-rose-500 py-6 text-xs font-semibold">Error de conexión al cargar categorías</p>';
+  }
+}
+
+function cerrarModalCategoriasAdiciones() {
+  const overlay = document.getElementById('overlay-categorias-adiciones');
+  if (overlay) overlay.classList.add('hidden');
+}
+
+function renderModalCategoriasAdiciones(filtro = '') {
+  const listEl = document.getElementById('modal-cat-adiciones-list');
+  const countEl = document.getElementById('modal-cat-adiciones-count');
+  
+  const totalSelected = _catAdicionesData.filter(c => c.es_adicion).length;
+  if (countEl) countEl.textContent = `${totalSelected} categoría${totalSelected === 1 ? '' : 's'} de adición seleccionada${totalSelected === 1 ? '' : 's'}`;
+
+  let list = _catAdicionesData;
+  if (filtro && filtro.trim()) {
+    const ql = filtro.trim().toLowerCase();
+    list = list.filter(c => c.categoria.toLowerCase().includes(ql));
+  }
+
+  if (!list.length) {
+    listEl.innerHTML = '<p class="text-center text-gray-400 py-8 text-xs font-semibold">No se encontraron categorías</p>';
+    return;
+  }
+
+  listEl.innerHTML = list.map((c, idx) => {
+    const safeCat = c.categoria.replace(/"/g, '&quot;');
+    const jsCat = c.categoria.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    return `
+      <label class="flex items-center justify-between p-2.5 rounded-xl border ${c.es_adicion ? 'border-amber-400 bg-amber-50/80 shadow-2xs' : 'border-gray-200 bg-white'} hover:border-amber-400 transition cursor-pointer select-none">
+        <div class="flex items-center gap-2.5 min-w-0 flex-1">
+          <input type="checkbox" ${c.es_adicion ? 'checked' : ''} 
+                 id="chk-cat-adicion-${idx}"
+                 onchange="toggleCategoriaAdicion('${jsCat}', this.checked)"
+                 class="w-4 h-4 accent-amber-600 rounded cursor-pointer shrink-0">
+          <span class="text-xs font-bold ${c.es_adicion ? 'text-amber-900' : 'text-gray-700'} truncate">${safeCat}</span>
+        </div>
+        <span class="text-[10px] font-black uppercase px-2 py-0.5 rounded-md shrink-0 ml-2 ${c.es_adicion ? 'bg-amber-200 text-amber-900' : 'bg-gray-100 text-gray-400'}">
+          ${c.es_adicion ? '🍔 Adición POS' : 'Normal'}
+        </span>
+      </label>
+    `;
+  }).join('');
+}
+
+function toggleCategoriaAdicion(catName, checked) {
+  const item = _catAdicionesData.find(c => c.categoria === catName);
+  if (item) {
+    item.es_adicion = checked;
+    const q = document.getElementById('filtro-modal-cat-adiciones')?.value || '';
+    renderModalCategoriasAdiciones(q);
+  }
+}
+
+function filtrarModalCategoriasAdiciones(q) {
+  renderModalCategoriasAdiciones(q);
+}
+
+async function guardarCategoriasAdiciones() {
+  const seleccionadas = _catAdicionesData.filter(c => c.es_adicion).map(c => c.categoria);
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/categorias-adiciones`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ categorias_adiciones: seleccionadas })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast('Categorías de adiciones guardadas correctamente');
+      cerrarModalCategoriasAdiciones();
+    } else {
+      toast(d.error || 'Error al guardar categorías', false);
+    }
+  } catch (err) {
+    toast('Error de conexión al guardar', false);
+  }
+}
+
+// ── Modal producto ────────────────────────────────────────────────────────────
+
+function abrirModalProducto(pOrId = null) {
+
+  let p = null;
+
+  if (typeof pOrId === 'object' && pOrId !== null) {
+
+    p = pOrId;
+
+  } else if (pOrId) {
+
+    p = productos.find(x => Number(x.id) === Number(pOrId)) || null;
+
+  }
+
+
+
+  document.getElementById('modal-producto-titulo').textContent = p ? 'Editar producto' : 'Nuevo producto';
+
+  document.getElementById('mp-id').value       = p ? p.id : '';
+
+  document.getElementById('mp-nombre').value   = p ? (p.nombre || '') : '';
+
+  document.getElementById('mp-categoria').value = p ? (p.categoria || '') : '';
+
+  document.getElementById('mp-codigo').value   = p ? (p.codigo_barra || '') : '';
+
+  document.getElementById('mp-precio').value   = p ? p.precio : '0';
+
+  document.getElementById('mp-costo').value    = p ? p.costo : '0';
+
+  document.getElementById('mp-iva').value      = p ? (p.iva_pct || '0') : '0';
+  document.getElementById('mp-tolerancia-costo').value = (p && p.tolerancia_costo_pct !== null && p.tolerancia_costo_pct !== undefined) ? p.tolerancia_costo_pct : '15.0';
+
+  document.getElementById('mp-disponible').checked = p ? !!p.disponible : true;
+  document.getElementById('mp-descripcion').value  = p ? (p.descripcion || '') : '';
+  document.getElementById('mp-dias-min-stock').value = (p && p.dias_min_stock !== null && p.dias_min_stock !== undefined) ? p.dias_min_stock : '';
+  document.getElementById('mp-dias-max-stock').value = (p && p.dias_max_stock !== null && p.dias_max_stock !== undefined) ? p.dias_max_stock : '';
+  document.getElementById('mp-stock-minimo').value   = (p && p.stock_minimo !== null && p.stock_minimo !== undefined) ? p.stock_minimo : '';
+  const selBase = document.getElementById('mp-unidad-medida');
+  const selVis = document.getElementById('mp-unidad-visual');
+  if (selBase) selBase.value = (p && p.unidad_medida_id) ? p.unidad_medida_id : '';
+  if (selVis) selVis.value = (p && p.unidad_visual_id) ? p.unidad_visual_id : '';
+
+  document.getElementById('overlay-producto').classList.remove('hidden');
+
+  setTimeout(() => document.getElementById('mp-nombre').focus(), 50);
+
+}
+
+function cerrarModalProducto() {
+
+  document.getElementById('overlay-producto').classList.add('hidden');
+
+}
+
+async function guardarProducto() {
+
+  const id = document.getElementById('mp-id').value;
+
+  const nombre    = document.getElementById('mp-nombre').value.trim();
+
+  const categoria = document.getElementById('mp-categoria').value.trim();
+
+  if (!nombre)    { toast('Nombre requerido', false); return; }
+
+  if (!categoria) { toast('Categoría requerida', false); return; }
+
+  const body = {
+
+    nombre,
+
+    categoria,
+
+    codigo_barra: document.getElementById('mp-codigo').value.trim() || null,
+
+    precio:       parseFloat(document.getElementById('mp-precio').value) || 0,
+
+    costo:        parseFloat(document.getElementById('mp-costo').value) || 0,
+
+    iva_pct:      parseFloat(document.getElementById('mp-iva').value) || 0,
+    tolerancia_costo_pct: parseFloat(document.getElementById('mp-tolerancia-costo')?.value) || 15.0,
+
+    disponible:   document.getElementById('mp-disponible').checked,
+
+    descripcion:  document.getElementById('mp-descripcion').value.trim() || null,
+
+    dias_min_stock: document.getElementById('mp-dias-min-stock')?.value.trim() ? parseInt(document.getElementById('mp-dias-min-stock').value) : null,
+
+    dias_max_stock: document.getElementById('mp-dias-max-stock')?.value.trim() ? parseInt(document.getElementById('mp-dias-max-stock').value) : null,
+
+    stock_minimo:   document.getElementById('mp-stock-minimo')?.value.trim() ? parseFloat(document.getElementById('mp-stock-minimo').value) : null,
+
+    unidad_medida_id: document.getElementById('mp-unidad-medida')?.value ? parseInt(document.getElementById('mp-unidad-medida').value) : null,
+
+    unidad_visual_id: document.getElementById('mp-unidad-visual')?.value ? parseInt(document.getElementById('mp-unidad-visual').value) : null,
+
+  };
+
+  let url, method;
+
+  if (id) {
+
+    url = `/api/inventario/producto/${id}`;
+
+  } else {
+
+    body.negocio_id = NEGOCIO_ID;
+
+    url = '/api/inventario/producto';
+
+  }
+
+  const r = await fetch(url, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
+
+  const d = await r.json();
+
+  if (d.ok) {
+
+    toast(id ? 'Producto actualizado' : 'Producto creado');
+
+    cerrarModalProducto();
+
+    notificarCambioProductos();
+
+    if (!id && typeof window.verificarHookPostCrearProducto === 'function') {
+      window.verificarHookPostCrearProducto(d.id, nombre);
+    }
+
+    
+
+    if (!id && activeACInputId && activeACHiddenId) {
+
+      const inputId = activeACInputId;
+
+      const hiddenId = activeACHiddenId;
+
+      document.getElementById(hiddenId).value = d.id;
+
+      document.getElementById(inputId).value = nombre;
+
+      
+
+      if (inputId.startsWith('ent-ac-')) {
+
+        autoGrowEntProd(document.getElementById(inputId));
+
+        const idx = inputId.replace('ent-ac-', '');
+
+        const select = document.getElementById(`ent-iva-pct-${idx}`);
+
+        cargarProductos().then(() => {
+
+          const prod = productos.find(p => p.id === d.id);
+
+          if (prod) {
+
+            document.getElementById(`ent-vu-${idx}`).value = prod.costo || '';
+
+            const pct = Math.round(prod.iva_pct || 0);
+
+            if (select) {
+
+              if ([0, 5, 19].includes(pct)) select.value = pct.toString();
+
+              else select.value = '0';
+
+            }
+
+            calcularCostoFila(idx, 'vu');
+
+          }
+
+        });
+
+      } else {
+
+        cargarProductos();
+
+      }
+
+      activeACInputId = null;
+
+      activeACHiddenId = null;
+
+    } else {
+
+      cargarProductos();
+
+    }
+
+  } else {
+
+    toast(d.error, false);
+
+  }
+
+}
+
+
+
+// ── Modal tarjeta estándar ────────────────────────────────────────────────────
+let tarjetaLineasOriginales = [];
+
+
+
+    // ── Funciones de Tarjeta Estándar / Recetas ──
+function toggleClonarEscalarPanel(forzar) {
+  const p = document.getElementById('panel-clonar-escalar');
+  if (!p) return;
+  if (forzar !== undefined) {
+    if (forzar) p.classList.remove('hidden');
+    else p.classList.add('hidden');
+  } else {
+    p.classList.toggle('hidden');
+  }
+  if (!p.classList.contains('hidden')) {
+    if (!tarjetaLineasOriginales.length && tarjetaLineas.length) {
+      tarjetaLineasOriginales = JSON.parse(JSON.stringify(tarjetaLineas));
+    }
+  }
+}
+
+function clearSelectedClonarDest() {
+  const idEl = document.getElementById('clonar-dest-id');
+  const inputEl = document.getElementById('clonar-dest-input');
+  const chipEl = document.getElementById('clonar-dest-chip');
+  if (idEl) idEl.value = '';
+  if (inputEl) {
+    inputEl.value = '';
+    inputEl.classList.remove('hidden');
+  }
+  if (chipEl) chipEl.classList.add('hidden');
+}
+
+function calcularFactorDesdeGramos() {
+  const base = parseFloat(document.getElementById('calc-gramos-base')?.value);
+  const target = parseFloat(document.getElementById('calc-gramos-target')?.value);
+  if (!isNaN(base) && base > 0 && !isNaN(target) && target > 0) {
+    const factor = target / base;
+    const factorInput = document.getElementById('tarjeta-multiplicador-factor');
+    if (factorInput) {
+      factorInput.value = Number(factor.toFixed(6));
+    }
+  }
+}
+
+function setMultiplicadorRapido(factor) {
+  const factorInput = document.getElementById('tarjeta-multiplicador-factor');
+  if (factorInput) {
+    factorInput.value = factor;
+    aplicarMultiplicadorTarjeta();
+  }
+}
+
+function aplicarMultiplicadorTarjeta() {
+  const factorVal = parseFloat(document.getElementById('tarjeta-multiplicador-factor')?.value);
+  if (isNaN(factorVal) || factorVal <= 0) {
+    toast('Ingresa un factor multiplicador válido mayor a 0', false);
+    return;
+  }
+  if (!tarjetaLineas.length) {
+    toast('No hay componentes en la tarjeta para multiplicar', false);
+    return;
+  }
+  if (!tarjetaLineasOriginales.length) {
+    tarjetaLineasOriginales = JSON.parse(JSON.stringify(tarjetaLineas));
+  }
+
+  tarjetaLineas = tarjetaLineasOriginales.map(ln => ({
+    componente_id: ln.componente_id,
+    nombre: ln.nombre,
+    cantidad: Number((ln.cantidad * factorVal).toFixed(6)),
+    costo_und: ln.costo_und
+  }));
+
+  renderLineasTarjeta();
+  document.getElementById('btn-restaurar-tarjeta')?.classList.remove('hidden');
+  toast(`Factor x${factorVal} aplicado a todos los insumos`);
+}
+
+function restaurarLineasOriginalesTarjeta() {
+  if (tarjetaLineasOriginales && tarjetaLineasOriginales.length) {
+    tarjetaLineas = JSON.parse(JSON.stringify(tarjetaLineasOriginales));
+    renderLineasTarjeta();
+    const facInput = document.getElementById('tarjeta-multiplicador-factor');
+    if (facInput) facInput.value = '';
+    document.getElementById('btn-restaurar-tarjeta')?.classList.add('hidden');
+    toast('Cantidades originales restauradas');
+  }
+}
+
+function abrirModalClonarTarjeta(productoId, nombre) {
+  abrirModalTarjeta(productoId, nombre);
+  toggleClonarEscalarPanel(true);
+}
+
+function abrirModalTarjeta(productoId, nombre) {
+  tarjetaLineas = [];
+  tarjetaLineasOriginales = [];
+  document.getElementById('tarjeta-prod-id').value = productoId;
+  document.getElementById('tarjeta-nombre-prod').textContent = nombre;
+  document.getElementById('tarjeta-ac-input').value = '';
+  document.getElementById('tarjeta-ac-id').value = '';
+  document.getElementById('tarjeta-ac-cant').value = '1';
+  document.getElementById('tarjeta-ac-list').classList.add('hidden');
+  document.getElementById('tarjeta-ac-input').classList.remove('hidden');
+  document.getElementById('tarjeta-selected-chip').classList.add('hidden');
+  
+  toggleClonarEscalarPanel(false);
+  clearSelectedClonarDest();
+  const facInput = document.getElementById('tarjeta-multiplicador-factor');
+  if (facInput) facInput.value = '';
+  const baseInput = document.getElementById('calc-gramos-base');
+  if (baseInput) baseInput.value = '';
+  const tgtInput = document.getElementById('calc-gramos-target');
+  if (tgtInput) tgtInput.value = '';
+  document.getElementById('btn-restaurar-tarjeta')?.classList.add('hidden');
+
+  const btnEliminar = document.getElementById('btn-eliminar-tarjeta');
+  if (btnEliminar) btnEliminar.classList.add('hidden');
+
+  document.getElementById('overlay-tarjeta').classList.remove('hidden');
+  cargarTarjeta(productoId);
+}
+
+function cerrarModalTarjeta() {
+  document.getElementById('overlay-tarjeta').classList.add('hidden');
+}
+
+async function cargarTarjeta(productoId) {
+  const r = await fetch(`/api/inventario/producto/${productoId}/tarjeta`);
+  const d = await r.json();
+  if (!d.ok) return;
+  tarjetaLineas = d.componentes.map(c => {
+    const fv = parseFloat(c.factor_visual) || 1.0;
+    return {
+      componente_id: c.componente_id, 
+      nombre: c.nombre, 
+      cantidad: parseFloat(c.cantidad) || 0,
+      costo_und: parseFloat(c.costo_und) || 0,
+      unidad_base: c.unidad_base || '',
+      unidad_visual: c.unidad_visual || '',
+      factor_visual: fv
+    };
+  });
+  tarjetaLineasOriginales = JSON.parse(JSON.stringify(tarjetaLineas));
+  renderLineasTarjeta();
+
+  const btnEliminar = document.getElementById('btn-eliminar-tarjeta');
+  if (btnEliminar) {
+    if (tarjetaLineas.length > 0) {
+      btnEliminar.classList.remove('hidden');
+    } else {
+      btnEliminar.classList.add('hidden');
+    }
+  }
+}
+
+let modalSortCol = 'nombre';
+
+let modalSortAsc = true;
+
+
+
+function ordenarComponentesModal(columna) {
+
+  if (modalSortCol === columna) {
+
+    modalSortAsc = !modalSortAsc;
+
+  } else {
+
+    modalSortCol = columna;
+
+    modalSortAsc = true;
+
+  }
+
+  renderLineasTarjeta();
+
+}
+
+
+
+function actualizarCantidadComponente(index, valStr) {
+
+  let val = parseFloat(valStr);
+
+  if (isNaN(val) || val <= 0) val = 0.000001;
+
+  const fv = parseFloat(tarjetaLineas[index].factor_visual) || 1.0;
+  tarjetaLineas[index].cantidad = val / fv;
+
+  
+
+  const costoUnd = parseFloat(tarjetaLineas[index].costo_und || 0);
+
+  const subtotal = val * costoUnd;
+
+  const subEl = document.getElementById(`modal-subtotal-${index}`);
+
+  if (subEl) {
+
+    subEl.textContent = '$' + subtotal.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+  }
+
+  recalcularTotalRecetaModal();
+
+}
+
+
+
+function recalcularTotalRecetaModal() {
+
+  let totalReceta = 0;
+
+  tarjetaLineas.forEach(ln => {
+
+    const c = parseFloat(ln.costo_und || 0);
+
+    const q = parseFloat(ln.cantidad) || 0;
+
+    totalReceta += (c * q);
+
+  });
+
+  const totalValEl = document.getElementById('tarjeta-total-val');
+
+  if (totalValEl) {
+
+    totalValEl.textContent = _fmtTarjetasMon(totalReceta);
+
+  }
+
+}
+
+
+
+function renderLineasTarjeta() {
+
+  const cont = document.getElementById('tarjeta-lineas');
+
+  const countEl = document.getElementById('tarjeta-items-count');
+
+  const totalValEl = document.getElementById('tarjeta-total-val');
+
+  
+
+  if (countEl) {
+
+    countEl.textContent = `${tarjetaLineas.length} componente${tarjetaLineas.length === 1 ? '' : 's'}`;
+
+  }
+
+
+
+  if (!tarjetaLineas.length) {
+
+    cont.innerHTML = '<p class="text-sm text-gray-400 text-center py-6">Sin componentes (se tratará como producto simple)</p>';
+
+    if (totalValEl) totalValEl.textContent = '$ 0,00';
+
+    return;
+
+  }
+
+  
+
+  // Sort modal components
+
+  tarjetaLineas.sort((a, b) => {
+
+    let valA, valB;
+
+    if (modalSortCol === 'nombre') {
+
+      valA = a.nombre || '';
+
+      valB = b.nombre || '';
+
+      return modalSortAsc ? valA.localeCompare(valB, 'es') : valB.localeCompare(valA, 'es');
+
+    } else if (modalSortCol === 'cantidad') {
+
+      valA = parseFloat(a.cantidad || 0);
+
+      valB = parseFloat(b.cantidad || 0);
+
+    } else if (modalSortCol === 'costo_und') {
+
+      valA = parseFloat(a.costo_und || 0);
+
+      valB = parseFloat(b.costo_und || 0);
+
+    } else if (modalSortCol === 'subtotal') {
+
+      valA = (parseFloat(a.cantidad || 0)) * parseFloat(a.costo_und || 0);
+
+      valB = (parseFloat(b.cantidad || 0)) * parseFloat(b.costo_und || 0);
+
+    }
+
+    return modalSortAsc ? (valA - valB) : (valB - valA);
+
+  });
+
+
+
+  let totalReceta = 0;
+
+  
+
+  const getSortIcon = col => (modalSortCol === col ? (modalSortAsc ? '▲' : '▼') : '↕');
+
+  const getSortClass = col => (modalSortCol === col ? 'text-rose-500 font-bold' : 'text-gray-400');
+
+
+
+  let rowsHtml = tarjetaLineas.map((ln, i) => {
+
+    const costoUnd = parseFloat(ln.costo_und || 0);
+
+    const cantidad = parseFloat(ln.cantidad || 0);
+
+    const subtotal = cantidad * costoUnd;
+
+    totalReceta += subtotal;
+
+    
+
+    const fv = parseFloat(ln.factor_visual) || 1.0;
+    const hasVisual = Boolean(ln.unidad_visual && fv !== 1.0);
+    const visualQty = hasVisual ? (cantidad * fv) : cantidad;
+    const visualCost = hasVisual ? (costoUnd / fv) : costoUnd;
+
+    const qtyFormatted = Number(visualQty.toFixed(_tarjetasDecimalesCantidad));
+    const unitBadge = hasVisual ? `<span class="inline-flex items-center text-[11px] font-black text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded shadow-2xs" title="Visual: ${ln.unidad_visual} (Base: ${Number(cantidad.toFixed(4))} ${ln.unidad_base})">${ln.unidad_visual}</span>` : '';
+
+    return `
+
+      <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+
+        <td class="py-2.5 px-3 text-left font-bold text-gray-800 text-sm sm:text-base truncate max-w-[240px] sm:max-w-[340px]" title="${ln.nombre}">
+          ${ln.nombre}
+          ${hasVisual ? `<span class="block text-[11px] font-mono text-gray-400 font-normal">Base: ${Number(cantidad.toFixed(4))} ${ln.unidad_base}</span>` : ''}
+        </td>
+
+        <td class="py-2.5 px-1 text-center">
+
+          <div class="flex items-center justify-center gap-1">
+            <input type="number" value="${qtyFormatted}" min="0.000001" step="any"
+
+                   oninput="actualizarCantidadComponente(${i}, this.value)"
+
+                   onblur="if(!this.value || parseFloat(this.value)<=0) { this.value=1; actualizarCantidadComponente(${i}, 1); }"
+
+                   class="w-24 text-center px-2 py-1.5 border border-gray-300 rounded-lg text-sm font-mono font-bold bg-white focus:ring-2 focus:ring-rose-500 outline-none"
+
+                   style="height: 36px;">
+            ${unitBadge}
+          </div>
+
+        </td>
+
+        <td class="py-2.5 px-3 text-right num font-mono text-sm text-gray-600">
+
+          ${_fmtTarjetasMon(visualCost)}
+          ${hasVisual ? `<span class="block text-[10px] text-gray-400 font-mono">/ ${ln.unidad_visual}</span>` : ''}
+
+        </td>
+
+        <td id="modal-subtotal-${i}" class="py-2.5 px-3 text-right num font-mono text-sm font-black text-gray-900">
+
+          ${_fmtTarjetasMon(subtotal)}
+
+        </td>
+
+        <td class="py-2.5 px-2 text-center">
+
+          <button onclick="tarjetaLineas.splice(${i},1); renderLineasTarjeta();"
+
+                  class="text-red-500 hover:text-red-700 font-bold text-xl leading-none px-2 py-1">×</button>
+
+        </td>
+
+      </tr>
+
+    `;
+
+  }).join('');
+
+  
+
+  let html = `
+
+    <table class="w-full text-sm">
+
+      <thead class="sticky top-0 bg-gray-100 shadow-xs border-b border-gray-200 z-10 select-none">
+
+        <tr class="text-gray-600 uppercase text-xs font-black">
+
+          <th onclick="ordenarComponentesModal('nombre')" class="py-2.5 px-3 text-left font-black cursor-pointer hover:bg-gray-200 transition-colors">
+
+            Insumo / Materia Prima <span class="${getSortClass('nombre')}">${getSortIcon('nombre')}</span>
+
+          </th>
+
+          <th onclick="ordenarComponentesModal('cantidad')" class="py-2.5 px-1 text-center font-black cursor-pointer hover:bg-gray-200 transition-colors" style="width:110px;">
+
+            Cant. <span class="${getSortClass('cantidad')}">${getSortIcon('cantidad')}</span>
+
+          </th>
+
+          <th onclick="ordenarComponentesModal('costo_und')" class="py-2.5 px-3 text-right font-black cursor-pointer hover:bg-gray-200 transition-colors">
+
+            Costo Unit. <span class="${getSortClass('costo_und')}">${getSortIcon('costo_und')}</span>
+
+          </th>
+
+          <th onclick="ordenarComponentesModal('subtotal')" class="py-2.5 px-3 text-right font-black cursor-pointer hover:bg-gray-200 transition-colors">
+
+            Subtotal <span class="${getSortClass('subtotal')}">${getSortIcon('subtotal')}</span>
+
+          </th>
+
+          <th class="py-2.5 px-1 w-8"></th>
+
+        </tr>
+
+      </thead>
+
+      <tbody>
+
+        ${rowsHtml}
+
+      </tbody>
+
+    </table>
+
+  `;
+
+
+
+  cont.innerHTML = html;
+
+  if (totalValEl) {
+
+    totalValEl.textContent = _fmtTarjetasMon(totalReceta);
+
+  }
+
+}
+
+function agregarLineaTarjeta() {
+
+  const id = parseInt(document.getElementById('tarjeta-ac-id').value);
+
+  const chipNombre = document.getElementById('tarjeta-selected-name')?.textContent.trim();
+
+  const inputNombre = document.getElementById('tarjeta-ac-input')?.value.trim();
+
+  const prod = (typeof productos !== 'undefined' && productos) ? productos.find(p => p.id === id) : null;
+
+  const nombre = (prod ? prod.nombre : (chipNombre || inputNombre)) || '';
+
+  const cant = parseFloat(document.getElementById('tarjeta-ac-cant').value);
+
+  const prodPadreId = parseInt(document.getElementById('tarjeta-prod-id').value);
+
+
+
+  if (!id || !nombre || isNaN(cant) || cant <= 0) { 
+
+    toast('Selecciona un producto del buscador y define una cantidad válida', false); 
+
+    return; 
+
+  }
+
+  if (id === prodPadreId) { 
+
+    toast('Un producto no puede ser componente de sí mismo', false); 
+
+    return; 
+
+  }
+
+  if (tarjetaLineas.find(l => l.componente_id === id)) { 
+
+    toast('Ya está en la tarjeta', false); 
+
+    return; 
+
+  }
+
+  
+
+  const costo = prod ? (parseFloat(prod.costo) || 0) : 0;
+  const fv = prod ? (parseFloat(prod.factor_visual) || 1.0) : 1.0;
+  const cantBase = cant / fv;
+
+  tarjetaLineas.push({
+    componente_id: id, 
+    nombre, 
+    cantidad: cantBase, 
+    costo_und: costo,
+    unidad_base: prod?.unidad_base_codigo || '',
+    unidad_visual: prod?.unidad_visual_codigo || '',
+    factor_visual: fv
+  });
+
+  renderLineasTarjeta();
+
+  clearSelectedComponent();
+
+}
+
+async function guardarTarjeta() {
+  const prodOrigenId = document.getElementById('tarjeta-prod-id').value;
+  const prodDestinoId = document.getElementById('clonar-dest-id')?.value;
+  const targetId = prodDestinoId ? prodDestinoId : prodOrigenId;
+  const esClonado = Boolean(prodDestinoId && prodDestinoId !== prodOrigenId);
+  const nombreDestino = document.getElementById('clonar-dest-name')?.textContent || '';
+
+  const lineas = tarjetaLineas.map(l => ({componente_id: l.componente_id, cantidad: l.cantidad}));
+
+  if (!lineas.length) {
+    if (confirm('Al guardar la tarjeta sin componentes, se eliminará la receta por completo y el producto volverá a ser Directo (sin receta). ¿Deseas continuar?')) {
+      await ejecutarEliminacionTarjeta(targetId, true);
+    }
+    return;
+  }
+
+  const r = await fetch(`/api/inventario/producto/${targetId}/tarjeta`, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({lineas})
+  });
+
+  const d = await r.json();
+  if (d.ok) {
+    if (esClonado) {
+      toast(`¡Receta clonada y guardada exitosamente para "${nombreDestino}"!`);
+    } else {
+      toast('Tarjeta guardada');
+    }
+    cerrarModalTarjeta();
+    cargarProductos();
+    cargarTarjetasResumen();
+  } else {
+    toast(d.error || 'Error al guardar tarjeta', false);
+  }
+}
+
+
+
+// Desde el reporte de Tarjetas Estándar
+
+async function eliminarTarjetaDirecta(productoId, nombre) {
+
+  if (!confirm(`¿Estás seguro de eliminar por completo la tarjeta estándar (receta) del producto "${nombre}"?\n\nEsta acción no se puede deshacer.`)) {
+
+    return;
+
+  }
+
+  await ejecutarEliminacionTarjeta(productoId, false);
+
+}
+
+
+
+// Desde el modal de receta
+
+async function eliminarTarjetaDesdeModal() {
+
+  const productoId = document.getElementById('tarjeta-prod-id').value;
+
+  const nombre = document.getElementById('tarjeta-nombre-prod').textContent;
+
+  if (!productoId) return;
+
+
+
+  if (!confirm(`¿Estás seguro de eliminar por completo la tarjeta estándar (receta) del producto "${nombre}"?\n\nEsta acción no se puede deshacer.`)) {
+
+    return;
+
+  }
+
+  await ejecutarEliminacionTarjeta(productoId, true);
+
+}
+
+
+
+// Helper común para realizar el fetch DELETE y recargar los reportes
+
+async function ejecutarEliminacionTarjeta(productoId, cerrarModal) {
+
+  try {
+
+    const r = await fetch(`/api/inventario/producto/${productoId}/tarjeta`, { method: 'DELETE' });
+
+    const d = await r.json();
+
+    if (d.ok) {
+
+      toast('Tarjeta estándar eliminada correctamente');
+
+      if (cerrarModal) {
+
+        cerrarModalTarjeta();
+
+      }
+
+      cargarProductos();
+
+      if (typeof cargarTarjetasResumen === 'function') {
+
+        cargarTarjetasResumen();
+
+      }
+
+    } else {
+
+      alert(d.error || 'No se pudo eliminar la tarjeta estándar');
+
+    }
+
+  } catch(e) {
+
+    console.error(e);
+
+    alert('Error de red al eliminar la tarjeta estándar');
+
+  }
+
+}
+
+
+
+// ── Gestión de selección y lote (Calculadora) ──────────────────────────────
+
+function clearSelectedComponent() {
+
+  document.getElementById('tarjeta-ac-id').value = '';
+
+  document.getElementById('tarjeta-ac-input').value = '';
+
+  document.getElementById('tarjeta-ac-cant').value = '1';
+
+  document.getElementById('tarjeta-ac-input').classList.remove('hidden');
+
+  document.getElementById('tarjeta-selected-chip').classList.add('hidden');
+
+  document.getElementById('tarjeta-ac-input').focus();
+
+}
+
+
+
+let procLineas = []; // {componente_id, nombre, cantidad_total, costo_und}
+
+
+
+
+    // ── Funciones de Kardex ──
+function verKardex(id, nombre, movimientoId = null) {
+  let url = 'https://' + NEGOCIO_SLUG + '.tuc-tuc.co/kardex?producto_id=' + encodeURIComponent(id);
+  if (movimientoId) url += '&movimiento_id=' + encodeURIComponent(movimientoId);
+  window.open(url, '_blank');
+}
+
+
+
+
+
+    // ── Funciones de Auditoría Integral ──
+      }
+    }
+
+    async function cargarAuditoriaProductos(preserveScroll = true) {
+      const prevScrollY = preserveScroll ? (window.scrollY || window.pageYOffset) : 0;
+      const tb = document.getElementById('tabla-auditoria-body');
+      
+      // Guardar IDs de cotejos abiertos
+      document.querySelectorAll('[id^="row-cotejo-"]').forEach(el => {
+        if (!el.classList.contains('hidden')) {
+          const pid = el.id.replace('row-cotejo-', '');
+          auditOpenCotejos.add(pid);
+        }
+      });
+
+      // Si no hay datos previos, mostrar spinner completo. Si ya hay datos, aplicar opacidad para no mover el scroll
+      if (tb && !auditProductosData.length) {
+        tb.innerHTML = `<tr><td colspan="9" class="text-center py-6 text-gray-500 font-semibold"><span class="animate-spin inline-block mr-2">⏳</span> Reconstruyendo Kardex y auditando cuentas 14 contables...</td></tr>`;
+      } else if (tb) {
+        tb.style.opacity = '0.6';
+        tb.style.pointerEvents = 'none';
+      }
+
+      try {
+        const r = await fetch(`/api/inventario/${NEGOCIO_ID}/auditoria-productos`);
+        const d = await r.json();
+        if (!d.ok) {
+          if (tb) {
+            tb.style.opacity = '1';
+            tb.style.pointerEvents = 'auto';
+            tb.innerHTML = `<tr><td colspan="9" class="text-center py-4 text-red-500 font-bold">Error: ${d.error}</td></tr>`;
+          }
+          return;
+        }
+
+        auditProductosData = d.productos || [];
+
+        const t = d.totales || {};
+        const elTotal = document.getElementById('audit-stat-total');
+        if (elTotal) elTotal.textContent = `Total: ${t.total_productos || 0}`;
+        const elOk = document.getElementById('audit-stat-ok');
+        if (elOk) elOk.textContent = `✅ Cuadrados: ${t.productos_ok || 0}`;
+        const elHuerf = document.getElementById('audit-stat-huerfanos');
+        if (elHuerf) elHuerf.textContent = `🔗 Sin ID: ${t.productos_con_huerfanos || 0} (${t.total_huerfanos || 0} líneas)`;
+        const elDifStock = document.getElementById('audit-stat-dif-stock');
+        if (elDifStock) elDifStock.textContent = `⚠️ Dif Stock: ${t.productos_con_dif_stock || 0}`;
+        const elDifValor = document.getElementById('audit-stat-dif-valor');
+        if (elDifValor) elDifValor.textContent = `⚠️ Dif Contab: ${t.productos_con_dif_valor || 0}`;
+        const elSinAsiento = document.getElementById('audit-stat-sin-asiento');
+        if (elSinAsiento) elSinAsiento.textContent = `📄 Sin Asiento: ${t.productos_con_docs_sin_asiento || 0} (${t.total_docs_sin_asiento || 0} docs)`;
+
+        const btnVincularTodos = document.getElementById('btn-vincular-todos-ids');
+        if (btnVincularTodos) {
+          btnVincularTodos.style.display = (t.total_huerfanos > 0) ? 'inline-flex' : 'none';
+          btnVincularTodos.textContent = `🔗 Vincular Todos los IDs (${t.total_huerfanos} líneas)`;
+        }
+
+        if (tb) {
+          tb.style.opacity = '1';
+          tb.style.pointerEvents = 'auto';
+        }
+
+        filtrarTablaAuditoria();
+
+        // Reabrir cotejos que estaban desplegados
+        if (openCotejos.size > 0) {
+          openCotejos.forEach(pid => {
+            toggleCotejoDoc(pid, true);
+          });
+        }
+
+        // Restaurar posición exacta del scroll
+        if (prevScrollY > 0) {
+          window.scrollTo({ top: prevScrollY, behavior: 'instant' });
+          requestAnimationFrame(() => {
+            window.scrollTo({ top: prevScrollY, behavior: 'instant' });
+          });
+        }
+      } catch (err) {
+        if (tb) {
+          tb.style.opacity = '1';
+          tb.style.pointerEvents = 'auto';
+          tb.innerHTML = `<tr><td colspan="9" class="text-center py-4 text-red-500 font-bold">Error de conexión: ${err.message}</td></tr>`;
+        }
+      }
+    }
+
+    function filtrarTablaAuditoria() {
+      const term = (document.getElementById('filtro-auditoria-txt')?.value || '').toLowerCase().trim();
+      const estadoFiltro = document.getElementById('filtro-auditoria-estado')?.value || 'todos';
+
+      let lista = auditProductosData.filter(p => {
+        const matchTerm = (p.nombre || '').toLowerCase().includes(term) || (p.categoria || '').toLowerCase().includes(term) || String(p.id).includes(term);
+        if (!matchTerm) return false;
+
+        const hasDifStock = Math.abs(p.dif_stock) >= 0.001;
+        const hasDifValor = Math.abs(p.dif_valor) >= 1.0;
+        const hasSinId = p.lineas_sin_id > 0;
+        const mostrarSanos = document.getElementById('check-auditoria-sanos')?.checked ?? true;
+        const esSano = !hasDifStock && !hasDifValor && !hasSinId;
+
+        if (!mostrarSanos && esSano) return false;
+
+        if (estadoFiltro === 'con_problemas') return hasDifStock || hasDifValor || hasSinId;
+        if (estadoFiltro === 'sin_id') return hasSinId;
+        if (estadoFiltro === 'dif_stock') return hasDifStock;
+        if (estadoFiltro === 'dif_valor') return hasDifValor;
+        if (estadoFiltro === 'ok') return esSano;
+        return true;
+      });
+
+      renderTablaAuditoria(lista);
+    }
+
+    function renderTablaAuditoria(lista) {
+      const tb = document.getElementById('tabla-auditoria-body');
+      if (!tb) return;
+
+      if (!lista.length) {
+        tb.innerHTML = `<tr><td colspan="9" class="text-center py-8 text-gray-400 font-semibold">No se encontraron productos con el filtro seleccionado.</td></tr>`;
+        return;
+      }
+
+      tb.innerHTML = lista.map(p => {
+        const difStock = p.dif_stock;
+        const difValor = p.dif_valor;
+        const difTablaKardex = p.dif_tabla_kardex !== undefined ? p.dif_tabla_kardex : 0;
+        const hasDifStock = Math.abs(difStock) >= 0.001;
+        const hasDifKc = Math.abs(difValor) >= 1.0;
+        const hasDifTk = Math.abs(difTablaKardex) >= 1.0;
+        const hasDifValor = hasDifKc || hasDifTk;
+        const hasSinId = p.lineas_sin_id > 0;
+
+        const badgeStock = hasDifStock 
+          ? `<span class="px-1.5 py-0.5 rounded font-mono font-bold bg-rose-100 text-rose-700 text-[11px]">${difStock > 0 ? '+' : ''}${fmt(difStock)}</span>`
+          : `<span class="text-emerald-600 font-mono font-bold text-[11px]">✅ 0</span>`;
+
+        let badgeValor = '';
+        if (hasDifKc && hasDifTk) {
+          badgeValor = `<div class="flex flex-col items-end gap-0.5"><span class="px-1.5 py-0.5 rounded font-mono font-bold bg-purple-100 text-purple-700 text-[10px]" title="Diferencia Kardex vs Contabilidad">K-C: ${fmtMon(difValor)}</span><span class="px-1.5 py-0.5 rounded font-mono font-bold bg-amber-100 text-amber-800 text-[10px]" title="Diferencia Tabla vs Kardex">T-K: ${fmtMon(difTablaKardex)}</span></div>`;
+        } else if (hasDifTk) {
+          badgeValor = `<span class="px-1.5 py-0.5 rounded font-mono font-bold bg-amber-100 text-amber-800 text-[11px]" title="Diferencia Tabla de Existencias vs Kardex">${fmtMon(difTablaKardex)} (T-K)</span>`;
+        } else if (hasDifKc) {
+          badgeValor = `<span class="px-1.5 py-0.5 rounded font-mono font-bold bg-purple-100 text-purple-700 text-[11px]" title="Diferencia Kardex vs Contabilidad">${fmtMon(difValor)} (K-C)</span>`;
+        } else {
+          badgeValor = `<span class="text-emerald-600 font-mono font-bold text-[11px]">✅ $0</span>`;
+        }
+        // Fase 1: Identidad / Vinculación
+        let fase1Html = '';
+        if (hasSinId) {
+          fase1Html = `
+            <button onclick="abrirModalVincularIds(${p.id}, event)" title="Fase 1 requerida: Vincular ${p.lineas_sin_id} asiento(s) huérfano(s)"
+                    class="px-2.5 py-1 bg-amber-100 hover:bg-amber-200 border border-amber-400 text-amber-900 text-[11px] font-bold rounded-lg transition flex items-center gap-1 shadow-xs cursor-pointer">
+              🔗 1. Vincular ID (${p.lineas_sin_id})
+            </button>
+          `;
+        } else {
+          fase1Html = `<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">✅ 1. IDs OK</span>`;
+        }
+
+        // Fase 2: Reparación / Valores / Asientos Faltantes
+        let fase3Html = '';
+        if (hasSinId) {
+          fase3Html = `
+            <button disabled title="Bloqueado: Primero debes completar la Fase 1 (Vincular IDs) para que el balance contable esté completo"
+                    class="px-2.5 py-1 bg-gray-100 border border-gray-300 text-gray-400 text-[11px] font-bold rounded-lg cursor-not-allowed opacity-60 flex items-center gap-1 shadow-none select-none">
+              🔒 2. Reparar (Bloqueado)
+            </button>
+          `;
+        } else if (p.docs_sin_asiento > 0) {
+          fase3Html = `
+            <button onclick="abrirModalCotejoDocumental(${p.id}, event)" title="Tiene ${p.docs_sin_asiento} documento(s) en Kardex sin asiento contable. Abre el cotejo para asentar."
+                    class="px-2.5 py-1 bg-orange-100 hover:bg-orange-200 border border-orange-400 text-orange-950 text-[11px] font-bold rounded-lg transition flex items-center gap-1 shadow-xs cursor-pointer">
+              <span>⚡</span> 2. Asentar (${p.docs_sin_asiento})
+            </button>
+          `;
+        } else if (hasDifStock || hasDifValor) {
+          fase3Html = `
+            <button onclick="abrirModalRepararValores(${p.id}, event)" title="Fase 2: Previsualizar y reparar valores"
+                    class="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-700 text-[11px] font-bold rounded-lg transition flex items-center gap-1 shadow-xs cursor-pointer">
+              ⚡ 2. Reparar
+            </button>
+          `;
+        } else {
+          fase3Html = `<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">✅ 2. Valores OK</span>`;
+        }
+
+        return `
+          <tr class="hover:bg-gray-50 border-b border-gray-100 transition-colors">
+            <td class="px-3 py-2 text-left">
+              <div class="flex items-center gap-2">
+                <button onclick="abrirModalCotejoDocumental(${p.id}, event)" id="btn-toggle-${p.id}" title="Ver cotejo documental de este producto"
+                        class="w-7 h-7 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 flex items-center justify-center text-xs font-bold shrink-0 cursor-pointer shadow-2xs transition">
+                  <span>📋</span>
+                </button>
+                <div class="cursor-pointer select-none" onclick="abrirModalCotejoDocumental(${p.id}, event)">
+                  <div class="font-bold text-gray-900 hover:text-indigo-600 transition-colors flex items-center gap-1.5">
+                    <span>${p.nombre}</span>
+                    ${p.total_movimientos_kardex > 0 ? `<span class="text-[9px] text-gray-400 font-normal">(${p.total_movimientos_kardex} movs)</span>` : ''}
+                  </div>
+                  <div class="text-[10px] text-gray-400">
+                    ID #${p.id} &bull; ${p.categoria}
+                    ${p.docs_sin_asiento > 0 ? `<span class="ml-1 px-1.5 py-0.2 rounded font-bold bg-orange-100 text-orange-900 border border-orange-200">📄 ${p.docs_sin_asiento} sin asiento</span>` : ''}
+                    &bull; <span class="text-indigo-600 font-semibold hover:underline">Ver documentos 📋</span>
+                  </div>
+                </div>
+              </div>
+            </td>
+            <td class="px-3 py-2 text-right font-mono text-gray-700">${fmt(p.stock_tabla)}</td>
+            <td class="px-3 py-2 text-right font-mono text-gray-900 font-bold">${fmt(p.stock_kardex)}</td>
+            <td class="px-3 py-2 text-right font-mono">${badgeStock}</td>
+            <td class="px-3 py-2 text-right font-mono text-gray-600">${fmtMon(p.valor_tabla)}</td>
+            <td class="px-3 py-2 text-right font-mono font-bold text-gray-900">${fmtMon(p.valor_kardex)}</td>
+            <td class="px-3 py-2 text-right font-mono ${p.saldo_contab < 0 ? 'text-rose-600' : 'text-gray-800'}">${fmtMon(p.saldo_contab)}</td>
+            <td class="px-3 py-2 text-right font-mono">${badgeValor}</td>
+            <td class="px-3 py-2 text-center">
+              <div class="flex items-center justify-center gap-2 flex-wrap">
+                ${fase1Html}
+                ${fase3Html}
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // Modal Fase 1: Previsualizar y Confirmar Vinculación de IDs
+    let productoVincularIdActual = null;
+    function abrirModalVincularIds(productoId, ev) {
+      if (ev) ev.stopPropagation();
+      productoVincularIdActual = productoId;
+      const p = auditProductosData.find(x => x.id === productoId);
+      if (!p) return;
+
+      const sub = document.getElementById('modal-vincular-subtitulo');
+      if (sub) sub.textContent = `${p.nombre} (ID #${p.id}) • Categoría: ${p.categoria}`;
+
+      const tbody = document.getElementById('modal-vincular-tbody');
+      const huerfanos = p.huerfanos || [];
+      if (tbody) {
+        tbody.innerHTML = huerfanos.map(h => `
+          <tr class="hover:bg-amber-50/50">
+            <td class="px-3 py-2 font-bold text-gray-800">#${h.id}</td>
+            <td class="px-3 py-2 text-gray-700 font-sans">${h.concepto}</td>
+            <td class="px-3 py-2 text-gray-600 font-sans">${h.documento || '—'}</td>
+            <td class="px-3 py-2 text-gray-500 font-sans">${h.fecha || '—'}</td>
+            <td class="px-3 py-2 text-right font-bold text-gray-900">${fmtMon(h.monto)}</td>
+          </tr>
+        `).join('') || `<tr><td colspan="5" class="text-center py-3 text-gray-400">Sin asientos huérfanos detectados.</td></tr>`;
+      }
+
+      const totalEl = document.getElementById('modal-vincular-total');
+      if (totalEl) totalEl.textContent = `Total: ${huerfanos.length} asiento(s) contable(s) por vincular`;
+
+      const btn = document.getElementById('btn-confirmar-vincular');
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = `<span>🔗</span> Confirmar Vinculación (${huerfanos.length})`;
+        btn.onclick = () => confirmarVincularIds(productoId);
+      }
+
+      const m = document.getElementById('modal-preview-vincular');
+      if (m) {
+        m.classList.remove('hidden');
+        m.classList.add('flex');
+      }
+    }
+
+    function cerrarModalVincular() {
+      const m = document.getElementById('modal-preview-vincular');
+      if (m) {
+        m.classList.add('hidden');
+        m.classList.remove('flex');
+      }
+      productoVincularIdActual = null;
+    }
+
+    async function confirmarVincularIds(productoId) {
+      const btn = document.getElementById('btn-confirmar-vincular');
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<span class="animate-spin inline-block">⏳</span> Vinculando...`;
+      }
+      const prevScrollY = window.scrollY || window.pageYOffset;
+
+      try {
+        const r = await fetch(`/api/inventario/${NEGOCIO_ID}/auditoria-productos/vincular-ids`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ producto_id: productoId })
+        });
+        const d = await r.json();
+        cerrarModalVincular();
+        if (!d.ok) {
+          toast(d.error || 'Error al vincular IDs', false);
+          return;
+        }
+
+        toast(d.mensaje || `Se vincularon ${d.vinculadas} línea(s) exitosamente`, true);
+        await cargarAuditoriaProductos(true);
+
+        if (prevScrollY > 0) {
+          window.scrollTo({ top: prevScrollY, behavior: 'instant' });
+        }
+      } catch (err) {
+        cerrarModalVincular();
+        toast(`Error: ${err.message}`, false);
+      }
+    }
+
+    // Modal Fase 2: Previsualizar y Confirmar Reparación de Valores
+    let productoRepararIdActual = null;
+    async function abrirModalRepararValores(productoId, ev) {
+      if (ev) ev.stopPropagation();
+      productoRepararIdActual = productoId;
+      const p = auditProductosData.find(x => x.id === productoId);
+      const sub = document.getElementById('modal-reparar-subtitulo');
+      if (sub && p) sub.textContent = `${p.nombre} (ID #${p.id}) • Categoría: ${p.categoria}`;
+
+      const stockEl = document.getElementById('modal-reparar-stock');
+      const costoEl = document.getElementById('modal-reparar-costo');
+      const valorEl = document.getElementById('modal-reparar-valor');
+      const tbody = document.getElementById('modal-reparar-tbody');
+      const countEl = document.getElementById('modal-reparar-count-asientos');
+      const sinAsientosEl = document.getElementById('modal-reparar-sin-asientos');
+      const asientosContainer = document.getElementById('modal-reparar-asientos-container');
+      const btn = document.getElementById('btn-confirmar-reparar');
+
+      if (stockEl) stockEl.textContent = 'Calculando...';
+      if (costoEl) costoEl.textContent = 'Calculando...';
+      if (valorEl) valorEl.textContent = 'Calculando...';
+      if (tbody) tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-gray-500 font-semibold">Cargando diagnóstico...</td></tr>`;
+
+      const m = document.getElementById('modal-preview-reparar');
+      if (m) {
+        m.classList.remove('hidden');
+        m.classList.add('flex');
+      }
+
+      try {
+        const r = await fetch(`/api/inventario/${NEGOCIO_ID}/auditoria-productos/${productoId}/reparar-valores`);
+        const d = await r.json();
+        if (!d.ok) {
+          if (tbody) tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-red-500 font-bold">Error: ${d.error}</td></tr>`;
+          return;
+        }
+
+        const tr = d.tabla_resumen || {};
+        if (stockEl) {
+          const difStk = tr.stock_nuevo - tr.stock_actual;
+          stockEl.innerHTML = `${fmt(tr.stock_actual)} ➔ <span class="${Math.abs(difStk) >= 0.001 ? 'text-emerald-700' : 'text-gray-900'} font-bold">${fmt(tr.stock_nuevo)}</span>`;
+        }
+        if (costoEl) {
+          costoEl.innerHTML = `${fmtMon(tr.costo_actual)} ➔ <span class="text-gray-900 font-bold">${fmtMon(tr.costo_nuevo)}</span>`;
+        }
+        if (valorEl) {
+          const difVal = tr.valor_nuevo - tr.valor_actual;
+          valorEl.innerHTML = `${fmtMon(tr.valor_actual)} ➔ <span class="${Math.abs(difVal) >= 0.01 ? 'text-purple-700' : 'text-gray-900'} font-bold">${fmtMon(tr.valor_nuevo)}</span>`;
+        }
+
+        const asientos = d.asientos_a_modificar || [];
+        if (countEl) countEl.textContent = `${asientos.length} asiento(s) a ajustar`;
+
+        if (asientos.length === 0) {
+          if (asientosContainer) asientosContainer.classList.add('hidden');
+          if (sinAsientosEl) sinAsientosEl.classList.remove('hidden');
+        } else {
+          if (asientosContainer) asientosContainer.classList.remove('hidden');
+          if (sinAsientosEl) sinAsientosEl.classList.add('hidden');
+          if (tbody) {
+            tbody.innerHTML = asientos.map(a => `
+              <tr class="hover:bg-rose-50/40">
+                <td class="px-2.5 py-2 font-sans font-bold text-gray-800">${a.tipo_documento_nombre || 'Doc'} #${a.documento}</td>
+                <td class="px-2.5 py-2 font-bold text-gray-700">#${a.asiento_id}</td>
+                <td class="px-2.5 py-2 text-gray-600 font-sans truncate max-w-[200px]" title="${a.concepto}">${a.concepto}</td>
+                <td class="px-2.5 py-2 text-right text-gray-600 font-bold">${fmtMon(a.monto_actual)}</td>
+                <td class="px-2.5 py-2 text-right text-emerald-700 font-bold">${fmtMon(a.monto_nuevo)}</td>
+                <td class="px-2.5 py-2 text-right text-rose-600 font-bold">${fmtMon(a.diferencia)}</td>
+              </tr>
+            `).join('');
+          }
+        }
+
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = `<span>⚡</span> Confirmar y Aplicar Reparación`;
+          btn.onclick = () => confirmarRepararValores(productoId);
+        }
+      } catch (err) {
+        if (tbody) tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-red-500 font-bold">Error de conexión: ${err.message}</td></tr>`;
+      }
+    }
+
+    function cerrarModalReparar() {
+      const m = document.getElementById('modal-preview-reparar');
+      if (m) {
+        m.classList.add('hidden');
+        m.classList.remove('flex');
+      }
+      productoRepararIdActual = null;
+    }
+
+    async function confirmarRepararValores(productoId) {
+      const btn = document.getElementById('btn-confirmar-reparar');
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<span class="animate-spin inline-block">⏳</span> Reparando...`;
+      }
+      const prevScrollY = window.scrollY || window.pageYOffset;
+
+      try {
+        const r = await fetch(`/api/inventario/${NEGOCIO_ID}/auditoria-productos/${productoId}/reparar-valores`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const d = await r.json();
+        cerrarModalReparar();
+        if (!d.ok) {
+          toast(d.error || 'Error al reparar valores', false);
+          return;
+        }
+
+        toast(d.mensaje || 'Valores reparados exitosamente', true);
+        await cargarAuditoriaProductos(true);
+        if (typeof cargarProductos === 'function') {
+          cargarProductos();
+        }
+
+        if (prevScrollY > 0) {
+          window.scrollTo({ top: prevScrollY, behavior: 'instant' });
+        }
+      } catch (err) {
+        cerrarModalReparar();
+        toast(`Error: ${err.message}`, false);
+      }
+    }
+
+    let productoCotejoIdActual = null;
+
+    function cerrarModalCotejo() {
+      const modal = document.getElementById('modal-auditoria-cotejo');
+      if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      }
+      productoCotejoIdActual = null;
+    }
+
+    async function abrirModalCotejoDocumental(productoId, ev = null) {
+      if (ev && ev.stopPropagation) {
+        try { ev.stopPropagation(); } catch (_) {}
+      }
+      productoCotejoIdActual = productoId;
+      const modal = document.getElementById('modal-auditoria-cotejo');
+      const subtitulo = document.getElementById('modal-cotejo-subtitulo');
+      const badgeEstado = document.getElementById('modal-cotejo-badge-estado');
+      const bannerHuerfanos = document.getElementById('modal-cotejo-banner-huerfanos');
+      const tbody = document.getElementById('modal-cotejo-tbody');
+      const totalesContainer = document.getElementById('modal-cotejo-totales');
+      const accionesContainer = document.getElementById('modal-cotejo-acciones');
+
+      if (!modal) return;
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+
+      const prodInfo = (auditProductosData || []).find(x => x.id === productoId);
+      if (subtitulo) {
+        subtitulo.textContent = prodInfo 
+          ? `${prodInfo.nombre} (ID #${prodInfo.id}) • Categoría: ${prodInfo.categoria || 'Sin categoría'}`
+          : `Producto #${productoId}`;
+      }
+      if (badgeEstado && prodInfo) {
+        if (prodInfo.estado === 'OK') {
+          badgeEstado.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300';
+          badgeEstado.textContent = '✅ Cuadrado / Sano';
+
+
+    // ── Funciones de Gestión de Unidades de Medida y Equivalencias ──
+
+// ── GESTIÓN DE UNIDADES DE MEDIDA Y EQUIVALENCIAS ──────────────────────────────
+let catalogoUnidades = [];
+let catalogoEquivalencias = [];
+
+async function cargarUnidadesYEquivalencias() {
+  try {
+    const res = await fetch('/api/inventario/unidades-medida');
+    const data = await res.json();
+    if (data.ok) {
+      catalogoUnidades = data.unidades || [];
+      catalogoEquivalencias = data.equivalencias || [];
+      poblarSelectsUnidadesProducto();
+    }
+  } catch(e) {
+    console.error('Error cargando unidades:', e);
+  }
+}
+
+function poblarSelectsUnidadesProducto() {
+  const selBase = document.getElementById('mp-unidad-medida');
+  const selVis = document.getElementById('mp-unidad-visual');
+  if (!selBase || !selVis) return;
+  const valBase = selBase.value;
+  const valVis = selVis.value;
+
+  let optsBase = '<option value="">-- Sin especificar (Und) --</option>';
+  let optsVis = '<option value="">-- Sin conversión (Misma que base) --</option>';
+
+  catalogoUnidades.forEach(u => {
+    const label = `${u.nombre} (${u.codigo}) [${u.magnitud}]`;
+    optsBase += `<option value="${u.id}">${label}</option>`;
+    optsVis += `<option value="${u.id}">${label}</option>`;
+  });
+
+  selBase.innerHTML = optsBase;
+  selVis.innerHTML = optsVis;
+  if (valBase) selBase.value = valBase;
+  if (valVis) selVis.value = valVis;
+}
+
+function abrirModalGestionUnidades() {
+  document.getElementById('overlay-unidades-medida').classList.remove('hidden');
+  cambiarSubtabUnidades('unidades');
+  renderTablaUnidades();
+  renderTablaEquivalencias();
+  poblarSelectsNuevaEquivalencia();
+}
+
+function cerrarModalGestionUnidades() {
+  document.getElementById('overlay-unidades-medida').classList.add('hidden');
+  cancelarEdicionUnidad();
+  poblarSelectsUnidadesProducto();
+}
+
+function cambiarSubtabUnidades(tab) {
+  const btnU = document.getElementById('tab-btn-unidades');
+  const btnE = document.getElementById('tab-btn-equivalencias');
+  const contU = document.getElementById('subtab-cont-unidades');
+  const contE = document.getElementById('subtab-cont-equivalencias');
+  if (tab === 'unidades') {
+    btnU.className = 'px-4 py-1.5 text-xs font-extrabold rounded-xl bg-indigo-600 text-white shadow-xs cursor-pointer';
+    btnE.className = 'px-4 py-1.5 text-xs font-extrabold rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 cursor-pointer';
+    contU.classList.remove('hidden');
+    contE.classList.add('hidden');
+    renderTablaUnidades();
+  } else {
+    btnE.className = 'px-4 py-1.5 text-xs font-extrabold rounded-xl bg-indigo-600 text-white shadow-xs cursor-pointer';
+    btnU.className = 'px-4 py-1.5 text-xs font-extrabold rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 cursor-pointer';
+    contE.classList.remove('hidden');
+    contU.classList.add('hidden');
+    poblarSelectsNuevaEquivalencia();
+    renderTablaEquivalencias();
+    actualizarPreviewFormulaEquiv();
+  }
+}
+
+function renderTablaUnidades() {
+  const tb = document.getElementById('tabla-unidades-body');
+  if (!tb) return;
+  if (!catalogoUnidades.length) {
+    tb.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-gray-400">No hay unidades registradas.</td></tr>';
+    return;
+  }
+  const editandoId = document.getElementById('edit-u-id')?.value;
+  tb.innerHTML = catalogoUnidades.map(u => {
+    const isEditing = String(u.id) === String(editandoId);
+    return `
+    <tr class="hover:bg-gray-50 ${isEditing ? 'bg-amber-50 font-semibold' : ''}">
+      <td class="py-2 px-3 font-bold text-gray-900 font-mono">${u.codigo}</td>
+      <td class="py-2 px-3 text-gray-700">${u.nombre}</td>
+      <td class="py-2 px-3 capitalize text-gray-500">${u.magnitud}</td>
+      <td class="py-2 px-3 text-center">
+        ${u.es_base_sistema ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">Base Sistema</span>' : '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-600">Secundaria</span>'}
+      </td>
+      <td class="py-2 px-3 text-right">
+        <button type="button" onclick="editarUnidad(${u.id})" class="text-indigo-600 hover:text-indigo-800 font-bold px-2 py-1 rounded-lg hover:bg-indigo-50 border border-indigo-200 transition text-[11px] cursor-pointer inline-flex items-center gap-1">
+          ✏️ Editar
+        </button>
+      </td>
+    </tr>
+  `;}).join('');
+}
+
+function editarUnidad(id) {
+  const u = catalogoUnidades.find(x => Number(x.id) === Number(id));
+  if (!u) return;
+  document.getElementById('edit-u-id').value = u.id;
+  document.getElementById('nueva-u-codigo').value = u.codigo;
+  document.getElementById('nueva-u-nombre').value = u.nombre;
+  document.getElementById('nueva-u-magnitud').value = u.magnitud;
+  
+  const titulo = document.getElementById('titulo-form-unidad');
+  const btnGuardar = document.getElementById('btn-guardar-unidad');
+  const btnCancel = document.getElementById('btn-cancelar-edit-unidad');
+  if (titulo) titulo.innerHTML = `✏️ Editando Unidad: <span class="text-indigo-600 font-mono font-bold">${u.codigo}</span> - ${u.nombre}`;
+  if (btnGuardar) btnGuardar.textContent = 'Actualizar Unidad';
+  if (btnCancel) btnCancel.classList.remove('hidden');
+  
+  renderTablaUnidades();
+  const inpNombre = document.getElementById('nueva-u-nombre');
+  if (inpNombre) {
+    inpNombre.focus();
+    inpNombre.select();
+  }
+}
+
+function cancelarEdicionUnidad() {
+  const idEl = document.getElementById('edit-u-id');
+  if (idEl) idEl.value = '';
+  const cEl = document.getElementById('nueva-u-codigo');
+  if (cEl) cEl.value = '';
+  const nEl = document.getElementById('nueva-u-nombre');
+  if (nEl) nEl.value = '';
+  const mEl = document.getElementById('nueva-u-magnitud');
+  if (mEl) mEl.value = 'peso';
+  
+  const titulo = document.getElementById('titulo-form-unidad');
+  const btnGuardar = document.getElementById('btn-guardar-unidad');
+  const btnCancel = document.getElementById('btn-cancelar-edit-unidad');
+  if (titulo) titulo.textContent = '+ Crear Nueva Unidad de Medida';
+  if (btnGuardar) btnGuardar.textContent = 'Guardar Unidad';
+  if (btnCancel) btnCancel.classList.add('hidden');
+  
+  renderTablaUnidades();
+}
+
+function renderTablaEquivalencias() {
+  const tb = document.getElementById('tabla-equivalencias-body');
+  if (!tb) return;
+  if (!catalogoEquivalencias.length) {
+    tb.innerHTML = '<tr><td colspan="4" class="py-4 text-center text-gray-400">No hay equivalencias registradas.</td></tr>';
+    return;
+  }
+  tb.innerHTML = catalogoEquivalencias.map(eq => {
+    const uO = catalogoUnidades.find(u => Number(u.id) === Number(eq.unidad_origen_id));
+    const uD = catalogoUnidades.find(u => Number(u.id) === Number(eq.unidad_destino_id));
+    const origCod = uO ? uO.codigo : (eq.origen_codigo || '');
+    const origNom = uO ? uO.nombre : (eq.origen_nombre || '');
+    const destCod = uD ? uD.codigo : (eq.destino_codigo || '');
+    const destNom = uD ? uD.nombre : (eq.destino_nombre || '');
+    return `
+    <tr class="hover:bg-indigo-50/40">
+      <td class="py-2 px-3 font-bold text-indigo-950 font-mono">1 ${origCod} ➔ ${destCod}</td>
+      <td class="py-2 px-3 font-bold text-gray-800">${parseFloat(eq.factor)}</td>
+      <td class="py-2 px-3 text-gray-600 text-[11px]">1 ${origNom} = ${parseFloat(eq.factor)} ${destNom}</td>
+      <td class="py-2 px-3 text-right">
+        <button type="button" onclick="eliminarEquivalencia(${eq.id})" class="text-red-500 hover:text-red-700 font-bold px-1.5 py-0.5 hover:bg-red-50 rounded transition cursor-pointer" title="Eliminar relación">🗑️</button>
+      </td>
+    </tr>
+  `;}).join('');
+}
+
+function poblarSelectsNuevaEquivalencia() {
+  const selO = document.getElementById('nueva-eq-origen');
+  const selD = document.getElementById('nueva-eq-destino');
+  if (!selO || !selD) return;
+  let opts = '';
+  catalogoUnidades.forEach(u => {
+    opts += `<option value="${u.id}">${u.codigo} - ${u.nombre} (${u.magnitud})</option>`;
+  });
+  selO.innerHTML = opts;
+  selD.innerHTML = opts;
+  if (catalogoUnidades.length > 1) {
+    selD.selectedIndex = 1;
+  }
+  actualizarPreviewFormulaEquiv();
+}
+
+function actualizarPreviewFormulaEquiv() {
+  const selO = document.getElementById('nueva-eq-origen');
+  const selD = document.getElementById('nueva-eq-destino');
+  const factor = parseFloat(document.getElementById('nueva-eq-factor')?.value) || 1;
+  const prev = document.getElementById('preview-conversion-texto');
+  if (!selO || !selD || !prev) return;
+  const uO = catalogoUnidades.find(u => Number(u.id) === Number(selO.value));
+  const uD = catalogoUnidades.find(u => Number(u.id) === Number(selD.value));
+  if (uO && uD) {
+    prev.textContent = `Fórmula: 1 ${uO.codigo} * ${factor} = 1 ${uD.codigo} (1 ${uO.nombre} equivale a ${factor} ${uD.nombre})`;
+  }
+}
+
+async function guardarNuevaUnidad() {
+  const id = document.getElementById('edit-u-id')?.value;
+  const codigo = document.getElementById('nueva-u-codigo').value.trim();
+  const nombre = document.getElementById('nueva-u-nombre').value.trim();
+  const magnitud = document.getElementById('nueva-u-magnitud').value;
+  if (!codigo || !nombre) {
+    toast('Código y nombre de unidad son obligatorios', false);
+    return;
+  }
+  try {
+    const payload = {
+      id: id ? parseInt(id) : null,
+      codigo,
+      nombre,
+      magnitud
+    };
+    const res = await fetch('/api/inventario/unidades-medida', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const d = await res.json();
+    if (d.ok) {
+      toast(`Unidad "${nombre}" ${id ? 'actualizada' : 'guardada'} exitosamente`);
+      cancelarEdicionUnidad();
+      await cargarUnidadesYEquivalencias();
+      renderTablaUnidades();
+      renderTablaEquivalencias();
+      poblarSelectsNuevaEquivalencia();
+      actualizarPreviewFormulaEquiv();
+    } else {
+      toast(d.error || 'Error al guardar unidad', false);
+    }
+  } catch(e) {
+    toast('Error de red al guardar unidad', false);
+  }
+}
+
+async function guardarNuevaEquivalencia() {
+  const origen_id = document.getElementById('nueva-eq-origen').value;
+  const destino_id = document.getElementById('nueva-eq-destino').value;
+  const factor = parseFloat(document.getElementById('nueva-eq-factor').value);
+  const bidireccional = document.getElementById('nueva-eq-bidireccional').checked;
+  if (!origen_id || !destino_id || isNaN(factor) || factor <= 0) {
+    toast('Define las unidades y un factor mayor a cero', false);
+    return;
+  }
+  if (origen_id === destino_id) {
+    toast('La unidad origen y destino deben ser distintas', false);
+    return;
+  }
+  try {
+    const res = await fetch('/api/inventario/equivalencias-unidades', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({unidad_origen_id: origen_id, unidad_destino_id: destino_id, factor, bidireccional})
+    });
+    const d = await res.json();
+    if (d.ok) {
+      toast('Equivalencia registrada correctamente');
+      document.getElementById('nueva-eq-factor').value = '';
+      await cargarUnidadesYEquivalencias();
+      renderTablaEquivalencias();
+    } else {
+      toast(d.error || 'Error al guardar equivalencia', false);
+    }
+  } catch(e) {
+    toast('Error de red al guardar equivalencia', false);
+  }
+}
+
+async function eliminarEquivalencia(id) {
+  if (!confirm('¿Estás seguro de eliminar este factor de conversión?')) return;
+  try {
+    const res = await fetch('/api/inventario/equivalencias-unidades', {
+      method: 'DELETE',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({id})
+    });
+    const d = await res.json();
+    if (d.ok) {
+      toast('Equivalencia eliminada');
+      await cargarUnidadesYEquivalencias();
+      renderTablaEquivalencias();
+    } else {
+      toast(d.error || 'Error al eliminar', false);
+    }
+  } catch(e) {
+    toast('Error de red', false);
+  }
+}
+
+// Cargar unidades al iniciar la pantalla
+document.addEventListener('DOMContentLoaded', () => {
+  cargarUnidadesYEquivalencias();
+});
+</script>
+
+
+
+    // ── Inicialización Reactiva al Cargar la Página ──
+    document.addEventListener('DOMContentLoaded', async () => {
+      inicializarDecimalesProductos();
+
+      // Cargar Catálogos Iniciales
+      await cargarUnidadesYEquivalencias();
+      await cargarProductos();
+
+      // Configurar Autocompletes
+      setupCategoriasAC('mp-categoria', 'mp-categoria-list');
+      setupAC('tarjeta-ac-input', 'tarjeta-ac-list', 'tarjeta-ac-id', () => productos, (item) => {
+        if (!item || !item.id) return;
+        document.getElementById('tarjeta-ac-id').value = item.id;
+        document.getElementById('tarjeta-ac-input').classList.add('hidden');
+        const chip = document.getElementById('tarjeta-selected-chip');
+        if (chip) {
+          chip.querySelector('#tarjeta-selected-nombre').textContent = item.nombre;
+          chip.classList.remove('hidden');
+        }
+        const cantInp = document.getElementById('tarjeta-ac-cant');
+        if (cantInp) cantInp.focus();
+      });
+
+      // Auto-abrir modal si viene en URL (?editar_producto=X)
+      const urlParams = new URLSearchParams(window.location.search);
+      const qEditarProd = urlParams.get('editar_producto');
+      if (qEditarProd && typeof abrirModalProducto === 'function') {
+        abrirModalProducto(parseInt(qEditarProd, 10));
+      }
+    });
+  </script>
+</body>
+</html>

@@ -42,6 +42,13 @@
       </svg>
     </button>
     
+    <!-- V6b: voz Salome/Gonzalo -->
+    <select id="omni-voz" title="Voz del buscador"
+            class="shrink-0 ms-1 text-[10px] font-bold text-slate-500 bg-transparent border-0 outline-none cursor-pointer">
+      <option value="salome">Salome</option>
+      <option value="gonzalo">Gonzalo</option>
+    </select>
+    
     <!-- Spinner de carga -->
     <div id="omni-loading" class="hidden shrink-0 ms-2 text-indigo-500 animate-spin">
       <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none">
@@ -104,6 +111,7 @@
   // voz) y omni_mudo (guia callada). El texto guia siempre se escribe.
   const OMNI_KEY_MIC = 'omni_mic_on';
   const OMNI_KEY_MUDO = 'omni_mudo';
+  const OMNI_KEY_VOZ = 'omni_voz';
   function omniPref(k, fb) {
     try { const v = localStorage.getItem(k); return v === null ? fb : v; } catch (e) { return fb; }
   }
@@ -113,8 +121,10 @@
   const guiaEl = document.getElementById('omni-guia');
   const micBtn = document.getElementById('omni-mic');
   const muteBtn = document.getElementById('omni-mute');
+  const vozSel = document.getElementById('omni-voz');
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   let omniRec = null;
+  let omniRecReintento = false;
   let omniEscuchando = false;
   let omniMicHoldT = null;
   let omniMicHoldOff = 0;
@@ -136,11 +146,44 @@
       micBtn.classList.toggle('text-slate-400', !omniEscuchando);
     } catch (e) {}
   }
+  let omniAudio = null;
+  let omniVozSeq = 0;
+  function omniPararAudio() {
+    try { if (omniAudio) { omniAudio.pause(); omniAudio.currentTime = 0; } } catch (e) {}
+  }
   function omniCallar() {
+    omniPararAudio();
     try { if (window.speechSynthesis) speechSynthesis.cancel(); } catch (e) {}
   }
   function omniHablar(texto) {
     try { guiaEl.textContent = texto; guiaEl.classList.remove('hidden'); } catch (e) {}
+    if (omniMudo()) return;
+    const seq = ++omniVozSeq;
+    omniCallar();
+    const vozId = omniPref(OMNI_KEY_VOZ, 'salome');
+    try {
+      const ctrl = new AbortController();
+      const to = setTimeout(() => { try { ctrl.abort(); } catch (e) {} }, 9000);
+      fetch('/api/buscador/voz', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ texto: texto, voz: vozId }), signal: ctrl.signal }).then((r) => {
+        if (!r.ok) throw new Error('srv' + r.status);
+        return r.blob();
+      }).then((b) => {
+        clearTimeout(to);
+        if (seq !== omniVozSeq || omniMudo()) return;
+        try {
+          if (!omniAudio) omniAudio = new Audio();
+          omniAudio.src = URL.createObjectURL(b);
+          const pr = omniAudio.play();
+          if (pr && pr.catch) pr.catch(() => { if (seq === omniVozSeq) omniHablarNavegador(texto); });
+        } catch (e) { omniHablarNavegador(texto); }
+      }).catch(() => {
+        clearTimeout(to);
+        if (seq !== omniVozSeq || omniMudo()) return;
+        omniHablarNavegador(texto);
+      });
+    } catch (e) { omniHablarNavegador(texto); }
+  }
+  function omniHablarNavegador(texto) {
     if (omniMudo()) return;
     try {
       if (!window.speechSynthesis) return;
@@ -150,8 +193,10 @@
       u.rate = 1;
       const vs = speechSynthesis.getVoices ? speechSynthesis.getVoices() : [];
       const es = vs.filter((v) => ((v.lang || '').toLowerCase().indexOf('es') === 0));
+      const nat = es.filter((v) => /online|natural/i.test(v.name || ''));
       const co = es.filter((v) => ((v.lang || '').toLowerCase().indexOf('co') > 0));
-      if (co.length) u.voice = co[0];
+      if (nat.length) u.voice = nat[0];
+      else if (co.length) u.voice = co[0];
       else if (es.length) u.voice = es[0];
       speechSynthesis.speak(u);
     } catch (e) {}
@@ -191,6 +236,7 @@
     if (omniEscuchando) { omniPararEscucha(); return; }
     try {
       omniCallar();
+      omniRecReintento = false;
       omniRec = new SR();
       omniRec.lang = 'es-CO';
       omniRec.interimResults = false;
@@ -213,7 +259,10 @@
         const cod = (e && e.error) || '';
         if (cod === 'not-allowed' || cod === 'service-not-allowed') omniHablar('No tengo permiso para usar el micrófono. Revisa el permiso en el navegador.');
         else if (cod === 'no-speech') omniHablar('No te escuché. Toca el micrófono e intenta de nuevo.');
-        else if (cod !== 'aborted') omniHablar('No pude escuchar. Intenta de nuevo.');
+        else if (cod === 'audio-capture') omniHablar('No pude abrir el micrófono. Revisa que otro programa no lo esté usando.');
+        else if (cod === 'network' && !omniRecReintento) { omniRecReintento = true; try { micBtn.click(); } catch (e2) {} }
+        else if (cod === 'network') omniHablar('Perdí la conexión al escucharte. Intenta de nuevo.');
+        else if (cod !== 'aborted') omniHablar('No pude escuchar (código ' + cod + '). Intenta de nuevo.');
       };
       omniRec.onend = () => { omniEscuchando = false; omniRec = null; omniPintarMic(); };
       omniRec.start();
@@ -947,6 +996,17 @@
         cerrarDropdown();
       }
     }, 100);
+  }
+  if (vozSel) {
+    try { vozSel.value = omniPref(OMNI_KEY_VOZ, 'salome'); } catch (e) {}
+    vozSel.addEventListener('wheel', (ev) => { ev.preventDefault(); }, { passive: false });
+    vozSel.addEventListener('change', () => {
+      try {
+        const vv = vozSel.value === 'gonzalo' ? 'gonzalo' : 'salome';
+        omniGuardarPref(OMNI_KEY_VOZ, vv);
+        omniHablar(vv === 'gonzalo' ? 'Voz Gonzalo activada.' : 'Voz Salome activada.');
+      } catch (e) {}
+    });
   }
   omniPintarMute();
   omniPintarMic();

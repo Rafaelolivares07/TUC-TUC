@@ -1863,3 +1863,60 @@ def api_buscador_omni():
     res['datos'] = datos
     res['extras'] = extras
     return jsonify(res)
+
+@bp.route('/api/buscador/voz', methods=['POST'])
+def api_buscador_voz():
+    from flask import Response
+    import hashlib
+    import tempfile
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    d = request.get_json(force=True, silent=True) or {}
+    texto = (d.get('texto') or '').strip()
+    voz_id = (d.get('voz') or 'salome').strip().lower()
+    VOCES = {'salome': ('es-CO-SalomeNeural', '+50%'),
+             'gonzalo': ('es-CO-GonzaloNeural', '+50%')}
+    if voz_id not in VOCES:
+        return jsonify({'ok': False, 'error': 'voz no válida'}), 400
+    if not texto or len(texto) > 400:
+        return jsonify({'ok': False, 'error': 'texto vacío o muy largo'}), 400
+    voz, vol = VOCES[voz_id]
+    key = hashlib.sha1('|'.join((voz, vol, texto)).encode('utf-8')).hexdigest()
+    cdir = os.path.join(tempfile.gettempdir(), 'tuctuc_voz_cache')
+    try:
+        os.makedirs(cdir, exist_ok=True)
+    except OSError:
+        pass
+    path = os.path.join(cdir, key + '.mp3')
+    if not os.path.exists(path):
+        try:
+            import edge_tts
+        except ImportError:
+            return jsonify({'ok': False, 'error': 'voz no disponible en el servidor'}), 503
+        try:
+            import asyncio
+            asyncio.run(edge_tts.Communicate(texto, voz, volume=vol).save(path))
+        except Exception:
+            try:
+                if os.path.exists(path):
+                    os.remove(path)
+            except OSError:
+                pass
+            return jsonify({'ok': False, 'error': 'no se pudo sintetizar'}), 502
+        try:
+            fs = sorted((os.path.join(cdir, f) for f in os.listdir(cdir)
+                         if f.endswith('.mp3')), key=lambda p: os.path.getmtime(p))
+            for viejo in fs[:-200]:
+                try:
+                    os.remove(viejo)
+                except OSError:
+                    pass
+        except OSError:
+            pass
+    try:
+        with open(path, 'rb') as f:
+            data = f.read()
+    except OSError:
+        return jsonify({'ok': False, 'error': 'no se pudo leer el audio'}), 500
+    return Response(data, mimetype='audio/mpeg')
+

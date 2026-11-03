@@ -1970,7 +1970,7 @@
 
     <div id="nav-tabs" class="flex gap-1 overflow-x-auto">
 
-      <button class="tab-btn tab-active" onclick="mostrarTab('productos')">Productos</button>
+      <a href="/catalogo-productos/{{ negocio_id }}" class="tab-btn font-bold text-slate-800" title="Catálogo de Productos e Insumos">📦 Catálogo de Productos &nearr;</a>
 
       <button class="tab-btn" onclick="mostrarTab('tarjetas')">Tarjetas Estándar</button>
 
@@ -4985,6 +4985,10 @@ function mostrarTab(t) {
   }
   if (t === 'ventas_costos') {
     window.location.href = '/ventas-costos/' + NEGOCIO_ID;
+    return;
+  }
+  if (t === 'productos' || t === 'catalogo' || t === 'catalogo-productos' || t === 'catalogo_productos') {
+    window.location.href = '/catalogo-productos/' + NEGOCIO_ID;
     return;
   }
   if (t === 'desembolsos' || t === 'gastos' || t === 'tesoreria') {

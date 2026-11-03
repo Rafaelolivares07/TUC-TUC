@@ -268,8 +268,8 @@ def _obtener_catalogo_base(negocio_id=None, slug=None):
             'titulo': 'Catálogo de Productos e Insumos',
             'modulo': 'Inventario > Catálogo',
             'icono': '📋',
-            'url': f'/inventario/{nid}?tab=productos',
-            'keywords': ['productos', 'insumos', 'precios', 'categorias', 'codigo de barras', 'barcode', 'costo unitario', 'catalogo']
+            'url': f'/catalogo-productos/{nid}',
+            'keywords': ['productos', 'insumos', 'catalogo', 'catálogo', 'catalogo de productos', 'precios', 'categorias', 'codigo de barras', 'barcode', 'costo unitario', 'recetas', 'ficha tecnica']
         },
         {
             'titulo': 'Tarjetas Estándar (Fórmulas y Recetas)',
@@ -697,8 +697,8 @@ def buscar_datos_producto(conn, q, negocio_id, slug=None, limite=20):
             'ult_mov': movs.get(pid),
             'urls': {
                 'kardex': kurl,
-                'productos': f'/inventario/{nid}?tab=productos',
-                'editar': f'/inventario/{nid}?tab=productos&editar_producto={pid}',
+                'productos': f'/catalogo-productos/{nid}',
+                'editar': f'/catalogo-productos/{nid}?editar_producto={pid}',
                 'compras': f'/inventario/{nid}?tab=compras_sugerencias',
                 'fisico': f'/admin/inventario-fisico/{nid}',
                 'vcosto': f'/ventas-costos/{nid}',

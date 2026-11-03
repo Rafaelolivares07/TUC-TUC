@@ -300,7 +300,12 @@
         </div>
         <select id="entrada-centro-utilidad" tabindex="4" onchange="actualizarConfirmacionSede()"
                 class="w-full font-bold text-gray-800 border-2 border-amber-400 bg-amber-50/40 rounded-xl px-2.5 py-2 transition-all focus:ring-2 focus:ring-indigo-500 outline-none">
-          <option value="">Cargando sedes...</option>
+          <option value="" disabled {% if not centro_activo or centro_activo.id == 'consolidado' %}selected{% endif %}>-- Seleccione Sede de Destino (Obligatorio) --</option>
+          {% for c in centros_utilidad %}
+          <option value="{{ c.id }}" {% if centro_activo and c.id|string == centro_activo.id|string %}selected{% endif %}>
+            {% if c.tipo == 'movil' %}🛵{% else %}🏪{% endif %} {{ c.codigo }} — {{ c.nombre }}
+          </option>
+          {% endfor %}
         </select>
       </div>
 
@@ -1568,6 +1573,46 @@ async function cargarCatalogoPresentaciones() {
   }
 
 }
+async function cargarSedesEntrada() {
+  const select = document.getElementById('entrada-centro-utilidad');
+  if (!select) return;
+
+  if (!CENTROS_UTILIDAD || !CENTROS_UTILIDAD.length) {
+    try {
+      const r = await fetch(`/api/centros_utilidad/${NEGOCIO_ID}`);
+      const d = await r.json();
+      if (d.ok && d.centros) {
+        CENTROS_UTILIDAD = d.centros;
+        if (d.centro_activo && !CENTRO_ACTIVO) CENTRO_ACTIVO = d.centro_activo;
+      }
+    } catch (e) {
+      console.warn("Error cargando centros de utilidad:", e);
+    }
+  }
+
+  if (select.options.length <= 1 || (select.options[0] && select.options[0].textContent.includes('Cargando'))) {
+    if (CENTROS_UTILIDAD && CENTROS_UTILIDAD.length) {
+      const valActual = select.value;
+      let opts = '<option value="" disabled>-- Seleccione Sede de Destino (Obligatorio) --</option>';
+      opts += CENTROS_UTILIDAD.map(c => `
+        <option value="${c.id}">${c.tipo === 'movil' ? '🛵' : '🏪'} ${c.codigo} — ${c.nombre}</option>
+      `).join('');
+      select.innerHTML = opts;
+
+      if (valActual && CENTROS_UTILIDAD.some(c => String(c.id) === String(valActual))) {
+        select.value = valActual;
+      } else if (CENTRO_ACTIVO && CENTRO_ACTIVO.id !== 'consolidado' && CENTROS_UTILIDAD.some(c => String(c.id) === String(CENTRO_ACTIVO.id))) {
+        select.value = String(CENTRO_ACTIVO.id);
+      } else {
+        select.value = '';
+      }
+    } else {
+      select.innerHTML = '<option value="" disabled selected>No hay sedes configuradas</option>';
+    }
+  }
+  actualizarConfirmacionSede();
+}
+
 async function cargarMetodosPagoEntrada() {
   try {
     const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/config-metodos`);
@@ -7037,6 +7082,7 @@ async function validarFechaEntrada(fecha) {
     // ── Inicialización en DOMContentLoaded ──
     document.addEventListener('DOMContentLoaded', async () => {
       cargarToleranciasEntrada();
+      await cargarSedesEntrada();
       await fetchDefaultPresentacion();
       await cargarProductos();
       await cargarTiposDocEntrada();

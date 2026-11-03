@@ -33,9 +33,63 @@
         .toast.show { opacity: 1; pointer-events: auto; }
         .toast-ok { background: #059669; }
         .toast-err { background: #b91c1c; border: 1px solid #7f1d1d; }
-        #lista-productos { max-height: 65vh; overflow-y: auto; overscroll-behavior: auto; -webkit-overflow-scrolling: touch; }
-        #carrito-items { max-height: 38vh; overflow-y: auto; overscroll-behavior: auto; -webkit-overflow-scrolling: touch; }
-        .prod-btn { transition: transform 0.1s, box-shadow 0.15s; }
+        #lista-productos {
+            max-height: calc(100dvh - 225px);
+            max-height: calc(100vh - 225px);
+            overflow-y: auto !important;
+            overscroll-behavior-y: contain;
+            -webkit-overflow-scrolling: touch;
+            touch-action: pan-y;
+            scrollbar-width: thin;
+            scrollbar-color: #94a3b8 #f1f5f9;
+            padding-bottom: 4rem;
+        }
+        #lista-productos::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+            display: block !important;
+        }
+        #lista-productos::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 8px;
+        }
+        #lista-productos::-webkit-scrollbar-thumb {
+            background: #94a3b8;
+            border-radius: 8px;
+            border: 2px solid #f1f5f9;
+        }
+        #lista-productos::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+
+        #carrito-items {
+            max-height: 38vh;
+            overflow-y: auto;
+            overscroll-behavior: auto;
+            -webkit-overflow-scrolling: touch;
+            touch-action: pan-y;
+            scrollbar-width: thin;
+            scrollbar-color: #94a3b8 #f1f5f9;
+        }
+        #carrito-items::-webkit-scrollbar {
+            width: 6px;
+            display: block !important;
+        }
+        #carrito-items::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 6px;
+        }
+        #carrito-items::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 6px;
+        }
+
+        .prod-btn {
+            transition: transform 0.1s, box-shadow 0.15s;
+            touch-action: pan-y;
+            -webkit-user-select: none;
+            user-select: none;
+        }
         .prod-btn:active { transform: scale(0.96); }
         
         /* ── Utilidades Venta Rápida / Flash ── */
@@ -95,7 +149,11 @@
 
         @media (min-width: 768px) {
             #layout { display: grid; grid-template-columns: 1fr 390px; gap: 0.75rem; }
-            #lista-productos { max-height: 78vh; }
+            #lista-productos {
+                max-height: calc(100dvh - 210px);
+                max-height: calc(100vh - 210px);
+                padding-bottom: 3rem;
+            }
             #carrito-items { max-height: 42vh; }
         }
 
@@ -255,7 +313,7 @@
             <div id="categorias" class="flex gap-2 overflow-x-auto pb-1 mb-2 text-sm"></div>
 
             <!-- Grid productos (2 columnas en celular para que los nombres no se corten) -->
-            <div id="lista-productos" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-2.5"></div>
+            <div id="lista-productos" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-2.5 pb-16"></div>
 
             <!-- Barra Flotante Móvil: Salto Directo a Cobro / Inputs -->
             <div id="mobile-floating-cart-bar" onclick="cambiarTabMovil('carrito')" 
@@ -3928,8 +3986,8 @@ function cambiarVistaCatalogo(vista) {
     }
     if (cont) {
         cont.className = (vista === 'list')
-            ? "grid grid-cols-1 gap-2"
-            : "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-2.5";
+            ? "grid grid-cols-1 gap-2 pb-16"
+            : "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-2.5 pb-16";
     }
     const q = document.getElementById('busqueda') ? document.getElementById('busqueda').value : '';
     filtrarProductos(q);
@@ -3937,6 +3995,8 @@ function cambiarVistaCatalogo(vista) {
 
 function renderProductos(lista) {
     const cont = document.getElementById('lista-productos');
+    if (!cont) return;
+    cont.scrollTop = 0;
     if (!lista.length) {
         cont.innerHTML = '<p class="col-span-full text-center text-gray-400 py-8 text-xs font-semibold">Sin resultados</p>';
         return;

@@ -46,8 +46,9 @@
     .overlay.hidden {
       display: none !important;
     }
-    .modal-box {
-      background: white;
+    .modal, .modal-box {
+      background: #ffffff !important;
+      background-color: #ffffff !important;
       border-radius: 1rem;
       max-width: 100%;
       box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
@@ -261,9 +262,10 @@
         <div class="inline-flex items-center gap-1.5">
           <button type="button" onclick="abrirModalDiccionarioAlias()"
                   id="btn-memoria-proveedor"
-                  class="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold text-xs rounded-xl border border-amber-200 flex items-center gap-1.5 transition shadow-2xs cursor-pointer"
-                  title="Consultar y gestionar las equivalencias y memoria aprendidas para proveedores">
+                  class="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-950 font-bold text-xs rounded-xl border border-amber-300 flex items-center gap-1.5 transition shadow-2xs cursor-pointer"
+                  title="Diccionario de Aprendizaje: Equivalencias entre nombres de productos de facturas de proveedores e insumos de tu inventario">
             <span>📖</span> <span>Memoria / Equivalencias</span>
+            <span class="text-[10px] bg-amber-200 text-amber-900 font-extrabold px-1.5 py-0.2 rounded-full hidden lg:inline">Diccionario IA</span>
           </button>
           <button type="button" onclick="abrirModalGestionPresentaciones()"
                   class="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-xl border border-indigo-200 flex items-center gap-1.5 transition shadow-2xs cursor-pointer"
@@ -599,8 +601,37 @@
   </main>
 
   <!-- ================= OVERLAYS Y MODALES INTEGRADOS ================= -->
+  <!-- OVERLAY ESCÁNER CÁMARA DIRECTA WEBRTC -->
+  <div id="overlay-camara-factura" class="overlay hidden" style="z-index: 70;">
+    <div class="modal bg-white rounded-2xl shadow-2xl border border-gray-200 flex flex-col p-4 w-full max-w-lg mx-auto" style="max-height: 90vh;">
+      <div class="flex items-center justify-between pb-2 mb-2 border-b border-gray-100">
+        <div class="flex items-center gap-2">
+          <span class="text-xl">📷</span>
+          <h3 class="text-sm font-extrabold text-gray-900">Escanear factura con cámara</h3>
+        </div>
+        <button type="button" onclick="cerrarCamaraFactura()" class="text-gray-400 hover:text-gray-600 font-bold text-xl leading-none cursor-pointer">&times;</button>
+      </div>
+      
+      <div class="relative bg-black rounded-xl overflow-hidden flex items-center justify-center min-h-[260px] max-h-[55vh]">
+        <div id="camara-factura-loading" class="absolute inset-0 flex items-center justify-center text-white text-xs font-semibold gap-2">
+          <span class="animate-spin">⚙️</span> Iniciando cámara...
+        </div>
+        <video id="video-camara-factura" autoplay playsinline muted class="w-full h-full object-contain"></video>
+      </div>
+
+      <div class="mt-3 flex items-center justify-between gap-2">
+        <button type="button" onclick="cerrarCamaraFactura()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl transition cursor-pointer">
+          Cancelar
+        </button>
+        <button type="button" onclick="capturarFotoCamaraFactura()" id="btn-capturar-camara-factura" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-extrabold text-xs rounded-xl shadow transition flex items-center gap-2 cursor-pointer">
+          <span>📸</span> Tomar foto y escanear
+        </button>
+      </div>
+    </div>
+  </div>
+
   <div id="overlay-presentaciones" class="overlay hidden" onclick="if(event.target===this)cerrarModalGestionPresentaciones()">
-  <div class="modal shadow-2xl border border-gray-100 flex flex-col" style="max-width:760px; width:95%; max-height:90vh; padding:22px; overflow:hidden; position:relative; box-sizing:border-box;">
+  <div class="modal bg-white shadow-2xl border border-gray-100 flex flex-col" style="max-width:760px; width:95%; max-height:90vh; padding:22px; overflow:hidden; position:relative; box-sizing:border-box;">
     <!-- Header -->
     <div class="flex-shrink-0 flex items-center justify-between pb-3 mb-3 border-b border-gray-100">
       <div class="flex items-center gap-2">
@@ -650,7 +681,7 @@
 
 <!-- ── OVERLAY CREAR / EDITAR PRESENTACIÓN INTELIGENTE ────────────── -->
 <div id="overlay-crear-presentacion" class="overlay hidden" style="z-index: 60;" onclick="if(event.target===this)cerrarModalCrearPresentacion()">
-  <div class="modal shadow-2xl border border-gray-100 flex flex-col" style="max-width:500px; width:95%; padding:22px; position:relative; box-sizing:border-box;">
+  <div class="modal bg-white shadow-2xl border border-gray-100 flex flex-col" style="max-width:500px; width:95%; padding:22px; position:relative; box-sizing:border-box;">
     <!-- Header -->
     <div class="flex items-center justify-between pb-2 mb-3 border-b border-gray-100">
       <h3 class="text-base font-bold text-gray-800 flex items-center gap-1.5" id="modal-pres-form-titulo">
@@ -733,7 +764,7 @@
 
 <!-- ── OVERLAY ASIGNAR ÍTEM A GASTO / COSTO OPERATIVO ────────────── -->
 <div id="overlay-asignar-gasto" class="overlay hidden" style="z-index: 60;" onclick="if(event.target===this)cerrarModalAsignarGasto()">
-  <div class="modal shadow-2xl border border-gray-100 flex flex-col" style="max-width:540px; width:95%; padding:22px; position:relative; box-sizing:border-box;">
+  <div class="modal bg-white shadow-2xl border border-gray-100 flex flex-col" style="max-width:540px; width:95%; padding:22px; position:relative; box-sizing:border-box;">
     <!-- Header -->
     <div class="flex items-center justify-between pb-2 mb-3 border-b border-gray-100">
       <h3 class="text-base font-bold text-gray-800 flex items-center gap-1.5">
@@ -787,7 +818,7 @@
 
 <!-- ── OVERLAY VINCULAR ÍTEM A INSUMO EXISTENTE ────────────── -->
 <div id="overlay-vincular-item" class="overlay hidden" style="z-index: 60;" onclick="if(event.target===this)cerrarModalVincularItem()">
-  <div class="modal shadow-2xl border border-gray-100 flex flex-col" style="max-width:540px; width:95%; padding:22px; position:relative; box-sizing:border-box;">
+  <div class="modal bg-white shadow-2xl border border-gray-100 flex flex-col" style="max-width:540px; width:95%; padding:22px; position:relative; box-sizing:border-box;">
     <!-- Header -->
     <div class="flex items-center justify-between pb-2 mb-3 border-b border-gray-100">
       <h3 class="text-base font-bold text-gray-800 flex items-center gap-1.5">
@@ -841,16 +872,24 @@
 
 <!-- ── OVERLAY DICCIONARIO DE EQUIVALENCIAS Y MEMORIA DE PROVEEDOR ────────────── -->
 <div id="overlay-diccionario-alias" class="overlay hidden" style="z-index: 60;" onclick="if(event.target===this)cerrarModalDiccionarioAlias()">
-  <div class="modal shadow-2xl border border-gray-100 flex flex-col" style="max-width:850px; width:95%; max-height:85vh; padding:22px; position:relative; box-sizing:border-box;">
+  <div class="modal bg-white shadow-2xl border border-gray-100 flex flex-col" style="max-width:850px; width:95%; max-height:85vh; padding:22px; position:relative; box-sizing:border-box;">
     <!-- Header -->
-    <div class="flex items-center justify-between pb-2 mb-3 border-b border-gray-100">
+    <div class="flex items-center justify-between pb-2 mb-2 border-b border-gray-100">
       <div>
         <h3 class="text-base font-extrabold text-gray-900 flex items-center gap-2">
-          <span>📖 Memoria y Equivalencias de Facturas</span>
+          <span>📖 Diccionario de Memoria y Equivalencias</span>
         </h3>
-        <p class="text-xs text-gray-500 mt-0.5">Mapeos aprendidos para vincular automáticamente ítems escaneados a insumos o gastos.</p>
+        <p class="text-xs text-gray-500 mt-0.5">Mapeos aprendidos para autocompletar automáticamente insumos o cuentas contables cuando escaneas facturas.</p>
       </div>
       <button onclick="cerrarModalDiccionarioAlias()" class="text-gray-400 hover:text-gray-600 font-bold text-xl leading-none cursor-pointer">&times;</button>
+    </div>
+
+    <!-- Banner explicativo -->
+    <div class="mb-3 p-2.5 bg-amber-50/80 border border-amber-200 rounded-xl text-xs text-amber-950 flex items-start gap-2">
+      <span class="text-base shrink-0">💡</span>
+      <div class="leading-relaxed">
+        <b>¿Cómo funciona?</b> Cuando vinculas un producto escaneado de una factura, el sistema recuerda cómo llama el proveedor a ese ítem. En tus próximas compras o facturas escaneadas, el insumo y su empaque se asignan solos.
+      </div>
     </div>
 
     <!-- Filtros -->
@@ -5711,14 +5750,91 @@ function toggleMenuEscanearFactura(ev) {
   const m = document.getElementById('menu-escanear-factura');
   if (m) m.classList.toggle('hidden');
 }
+let _streamCamaraFactura = null;
+
+async function abrirCamaraFactura() {
+  const overlay = document.getElementById('overlay-camara-factura');
+  const video = document.getElementById('video-camara-factura');
+  const loading = document.getElementById('camara-factura-loading');
+  if (overlay) overlay.classList.remove('hidden');
+  if (loading) {
+    loading.style.display = 'flex';
+    loading.innerHTML = '<span class="animate-spin">⚙️</span> Iniciando cámara...';
+  }
+
+  try {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      throw new Error('Navegador sin soporte de cámara WebRTC');
+    }
+    _streamCamaraFactura = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+      audio: false
+    });
+    if (video) {
+      video.srcObject = _streamCamaraFactura;
+      video.onloadedmetadata = () => {
+        video.play().catch(() => {});
+        if (loading) loading.style.display = 'none';
+      };
+    }
+  } catch (err) {
+    console.warn('Error accediendo a cámara directa:', err);
+    if (loading) {
+      loading.innerHTML = `<div class="p-4 text-center text-rose-300 text-xs">
+        No se pudo activar la cámara directa (${err.name || err.message}).<br>
+        Revisa los permisos de cámara en tu navegador o selecciona "Seleccionar imagen".
+      </div>`;
+    }
+    setTimeout(() => {
+      const inp = document.getElementById('input-escanear-factura');
+      if (inp) {
+        inp.setAttribute('capture', 'environment');
+        inp.click();
+      }
+    }, 1200);
+  }
+}
+
+function cerrarCamaraFactura() {
+  const overlay = document.getElementById('overlay-camara-factura');
+  const video = document.getElementById('video-camara-factura');
+  if (overlay) overlay.classList.add('hidden');
+  if (_streamCamaraFactura) {
+    _streamCamaraFactura.getTracks().forEach(t => t.stop());
+    _streamCamaraFactura = null;
+  }
+  if (video) video.srcObject = null;
+}
+
+function capturarFotoCamaraFactura() {
+  const video = document.getElementById('video-camara-factura');
+  if (!video || !_streamCamaraFactura) return;
+  const canvas = document.createElement('canvas');
+  canvas.width = video.videoWidth || 1280;
+  canvas.height = video.videoHeight || 720;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  
+  canvas.toBlob(blob => {
+    cerrarCamaraFactura();
+    if (blob) {
+      toast('📸 Foto capturada. Analizando factura con IA...', true, 4000);
+      escanearFacturaArchivo(blob);
+    }
+  }, 'image/jpeg', 0.92);
+}
+
 function elegirEscanerFactura(modo) {
   const m = document.getElementById('menu-escanear-factura');
   if (m) m.classList.add('hidden');
-  const inp = document.getElementById('input-escanear-factura');
-  if (!inp) return;
-  if (modo === 'camara') inp.setAttribute('capture', 'environment');
-  else inp.removeAttribute('capture');
-  inp.click();
+  if (modo === 'camara') {
+    abrirCamaraFactura();
+  } else {
+    const inp = document.getElementById('input-escanear-factura');
+    if (!inp) return;
+    inp.removeAttribute('capture');
+    inp.click();
+  }
 }
 document.addEventListener('click', function(e) {
   const m = document.getElementById('menu-escanear-factura');
@@ -6585,14 +6701,14 @@ window._cacheListaAlias = [];
 window.abrirModalDiccionarioAlias = function() {
   document.getElementById('overlay-diccionario-alias')?.classList.remove('hidden');
   
-  // Rellenar select de proveedores
+  // Por defecto mostrar TODOS los proveedores para ver todas las equivalencias mapeadas
   const sel = document.getElementById('filtro-proveedor-alias');
   if (sel) {
     const provActualId = document.getElementById('entrada-proveedor-id')?.value;
     const provActualNom = document.getElementById('entrada-proveedor')?.value;
-    let opts = '<option value="">Todos los proveedores</option>';
+    let opts = '<option value="" selected>Todos los proveedores (Ver todas las equivalencias)</option>';
     if (provActualId && provActualNom) {
-      opts += `<option value="${provActualId}" selected>${provActualNom} (Actual)</option>`;
+      opts += `<option value="${provActualId}">Filtrar: ${provActualNom} (Actual)</option>`;
     }
     sel.innerHTML = opts;
   }
@@ -6609,7 +6725,7 @@ window.cargarListaDiccionarioAlias = async function() {
   const selProv = document.getElementById('filtro-proveedor-alias');
   const provId = selProv ? selProv.value : '';
 
-  if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-gray-400">Consultando memoria...</td></tr>';
+  if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-gray-400">Consultando memoria de equivalencias...</td></tr>';
 
   try {
     const url = `/api/inventario/${NEGOCIO_ID}/alias${provId ? `?proveedor_id=${provId}` : ''}`;
@@ -6618,6 +6734,24 @@ window.cargarListaDiccionarioAlias = async function() {
     if (!d.ok) throw new Error(d.error);
 
     window._cacheListaAlias = d.alias || [];
+
+    // Poblar proveedores en el filtro si se consultaron todos
+    if (!provId && selProv && window._cacheListaAlias.length > 0) {
+      const provsMap = new Map();
+      window._cacheListaAlias.forEach(a => {
+        if (a.proveedor_id && a.proveedor_nombre) {
+          provsMap.set(String(a.proveedor_id), a.proveedor_nombre);
+        }
+      });
+      if (provsMap.size > 0) {
+        let opts = '<option value="" selected>Todos los proveedores (Ver todas las equivalencias)</option>';
+        provsMap.forEach((nombre, id) => {
+          opts += `<option value="${id}">${nombre}</option>`;
+        });
+        selProv.innerHTML = opts;
+      }
+    }
+
     filtrarTablaAlias(document.getElementById('filtro-buscar-alias')?.value || '');
   } catch(e) {
     if (tbody) tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-rose-500 font-bold">Error cargando equivalencias: ${e.message}</td></tr>`;

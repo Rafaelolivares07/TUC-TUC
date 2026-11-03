@@ -7346,6 +7346,11 @@ async function registrarEntrada() {
 
     document.getElementById('entrada-notas').value = '';
 
+    const entFechaInp = document.getElementById('entrada-fecha-doc');
+    if (entFechaInp) {
+      entFechaInp.value = typeof getFechaHoyBogota === 'function' ? getFechaHoyBogota() : new Date().toISOString().slice(0, 10);
+    }
+
     initDefaultProveedor();
 
     document.getElementById('btn-crear-proveedor').classList.add('hidden');
@@ -7433,6 +7438,12 @@ async function validarFechaEntrada(fecha) {
         verificarDocumentoExistente();
         if (typeof historialEntradas !== 'undefined') { for (const k in historialEntradas) delete historialEntradas[k]; }
       });
+
+      // Fecha por defecto hoy
+      const inpFechaDoc = document.getElementById('entrada-fecha-doc');
+      if (inpFechaDoc && !inpFechaDoc.value) {
+        inpFechaDoc.value = typeof getFechaHoyBogota === 'function' ? getFechaHoyBogota() : new Date().toISOString().slice(0, 10);
+      }
 
       // Proveedor por defecto (Tercero Ocasional si no viene en URL)
       await initDefaultProveedor();

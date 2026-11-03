@@ -11799,6 +11799,11 @@ async function registrarEntrada() {
 
     document.getElementById('entrada-notas').value = '';
 
+    const entFechaInp = document.getElementById('entrada-fecha-doc');
+    if (entFechaInp) {
+      entFechaInp.value = typeof getFechaHoyBogota === 'function' ? getFechaHoyBogota() : new Date().toISOString().slice(0, 10);
+    }
+
     initDefaultProveedor();
 
     document.getElementById('btn-crear-proveedor').classList.add('hidden');

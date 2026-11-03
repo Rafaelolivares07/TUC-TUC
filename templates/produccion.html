@@ -2081,14 +2081,27 @@ async function sugerenciaCambioGuia() {
   const id = document.getElementById('prod-ac-id').value;
   const guiaId = document.getElementById('prod-sug-guia').value;
   if (!id || !guiaId) return;
+
+  const d = prodSugerenciaData;
+  let stockGuia = null;
+  if (d && d.componentes) {
+    const g = d.componentes.find(c => String(c.id) === String(guiaId));
+    if (g && g.stock > 0) stockGuia = g.stock;
+  }
+
   try {
-    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion/sugerencia?producto_id=${id}&guia_id=${guiaId}${_prodSugBodegaParam()}`);
-    const d = await r.json();
-    if (!d.ok) { toast(d.error, false); return; }
-    prodSugerenciaData = d;
-    document.getElementById('prod-sug-mp-cant').value = '';
-    renderSugerencia();
-  } catch(e) { console.error(e); toast('Error de red al recalcular sugerencia', false); }
+    const modoParam = stockGuia ? `&modo=desde_mp&cantidad_mp=${encodeURIComponent(stockGuia)}` : '';
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion/sugerencia?producto_id=${id}&guia_id=${guiaId}${modoParam}${_prodSugBodegaParam()}`);
+    const dRes = await r.json();
+    if (!dRes.ok) { toast(dRes.error, false); return; }
+    prodSugerenciaData = dRes;
+    const mpInput = document.getElementById('prod-sug-mp-cant');
+    if (mpInput) mpInput.value = stockGuia ? stockGuia : '';
+    renderSugerencia(true);
+  } catch(e) {
+    console.error(e);
+    toast('Error de red al recalcular sugerencia', false);
+  }
 }
 
 async function sugerenciaDesdeMP() {

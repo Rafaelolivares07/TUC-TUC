@@ -263,6 +263,19 @@ def _linea_punteada(draw, x0, x1, y, fill=(150, 150, 150)):
         x += 10
 
 
+def _ajustar_texto(draw, texto, x_ini, x_fin, size_ini=30, bold=True):
+    """Fuente que cabe entre x_ini y x_fin; recorta con … si ni la minima cabe."""
+    tamanos = (size_ini,) + tuple(s for s in (26, 22, 18) if s < size_ini)
+    for sz in tamanos:
+        fnt = _fuente(sz, bold=bold)
+        if draw.textlength(texto, font=fnt) <= x_fin - x_ini:
+            return fnt, texto
+    fnt = _fuente(18, bold=bold)
+    while texto and draw.textlength(texto + '…', font=fnt) > x_fin - x_ini:
+        texto = texto[:-1]
+    return fnt, texto + '…' if texto else texto
+
+
 def _render_imagen(factura):
     """PNG de la factura estilo administrator mejorado. Retorna bytes."""
     from PIL import Image, ImageDraw
@@ -335,8 +348,11 @@ def _render_imagen(factura):
     _linea_punteada(d, M, W - M, y)
     y += 24
     d.text((M + 20, y), '1', font=f_tot, fill=NEGRO)
-    d.text((M + 110, y), 'ALOJAMIENTO DE DATOS', font=f_tot, fill=NEGRO)
-    d.text((W - M, y), _formato_numero(factura['total']), font=f_tot, fill=NEGRO, anchor='ra')
+    _valor_txt = _formato_numero(factura['total'])
+    _x_val = W - M - d.textlength(_valor_txt, font=f_tot)
+    _f_nom, _nom = _ajustar_texto(d, 'ALOJAMIENTO DE DATOS', M + 110, _x_val - 20)
+    d.text((M + 110, y), _nom, font=_f_nom, fill=NEGRO)
+    d.text((W - M, y), _valor_txt, font=f_tot, fill=NEGRO, anchor='ra')
     y += 56
     _linea_punteada(d, M, W - M, y)
     y += 28

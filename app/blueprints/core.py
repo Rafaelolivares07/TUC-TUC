@@ -1299,6 +1299,27 @@ def api_mi_menu_item_delete(item_id):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+def _tercero_de_sesion(conn, ses):
+    """chat_tercero_id, o usuario_id si es un tercero valido.
+
+    Los accesos magic-link/PIN ponen usuario_id=tercero sin chat_tercero_id
+    y el portal quedaba 'Sin Empresa' (Margarita 03/11)."""
+    tid = ses.get('chat_tercero_id')
+    if tid:
+        return tid
+    uid = ses.get('usuario_id')
+    if not uid:
+        return None
+    try:
+        row = conn.execute("SELECT id FROM terceros WHERE id = %s", (uid,)).fetchone()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return None
+    return row['id'] if row else None
+
 @bp.app_context_processor
 def inject_negocios_context():
     if 'usuario_id' not in session:
@@ -1308,7 +1329,10 @@ def inject_negocios_context():
     conn = get_db_connection()
     try:
         role = session.get('rol')
-        tercero_id = session.get('chat_tercero_id')
+        tercero_id = _tercero_de_sesion(conn, session)
+        if tercero_id and not session.get('chat_tercero_id'):
+            session['chat_tercero_id'] = tercero_id
+            session.modified = True
         
         negocios = []
         if role in ('Administrador', 'ClienteVFP'):

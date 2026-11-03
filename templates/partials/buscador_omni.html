@@ -232,6 +232,7 @@
     if (omniMicHoldOff && Date.now() - omniMicHoldOff < 2000) { omniMicHoldOff = 0; return; }
     omniMicHoldOff = 0;
     if (!SR) return;
+    try { if (navigator.brave && navigator.brave.isBrave) { omniHablar('Brave no permite reconocer la voz. Usa Chrome o Edge para hablarle al buscador.'); return; } } catch (e) {}
     if (!omniMicOn()) { omniHablar('Micrófono desactivado. Mantenlo presionado para activarlo.'); return; }
     if (omniEscuchando) { omniPararEscucha(); return; }
     try {
@@ -585,7 +586,9 @@
             <p class="text-[11px] text-gray-400 mt-0.5">Prueba con palabras como "puc", "gasto", "kardex", "receta", "auditor" o "iva".</p>
           </div>
         `;
-        omniHablar(omniGuiaPaisaje(q, rutas, ayuda, datos));
+        let txtVacio = omniGuiaPaisaje(q, rutas, ayuda, datos);
+        if (!obtenerContextoNegocioId()) txtVacio += ' Elige un negocio para buscar sus productos.';
+        omniHablar(txtVacio);
         return;
       }
 

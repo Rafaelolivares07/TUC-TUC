@@ -861,14 +861,9 @@
     let productos = [];
     let prodPuedeRegistrar = false;
     let activePreviewData = null;
-    let prodSugerenciaData = null;
-    let _sugSeq = 0;
     let _prodPreviewDecimales = 2;
-    let _prodPreviewSortCol = 'nombre';
-    let _prodPreviewSortAsc = true;
-    let _prodCantRecalcTimer = null;
-    let _prodRealManualmenteModificada = false;
-    let _historialProduccionPaginaActual = 1;
+    let _ultimoFetchProductosSilencioso = 0;
+    let _isFetchingProductosSilencioso = false;
 
     try {
       const _savedProdDec = localStorage.getItem('prod_preview_decimales');
@@ -898,7 +893,7 @@
       el._t = setTimeout(() => el.classList.remove('show'), duracion);
     }
 
-    // ── Formatters ──
+    // ── Formatters Originales ──
     function fmt(n) {
       if (n == null || isNaN(n)) return '-';
       return Number(n).toLocaleString('es-CO', {
@@ -932,332 +927,1053 @@
       return `${y}-${m}-${d}`;
     }
 
-    // ── Autocomplete Helper Local ──
-    function setupAC(inputId, listId, hiddenId, dataFn, onSelect) {
-      const inp = document.getElementById(inputId);
-      const list = document.getElementById(listId);
-      const hid = document.getElementById(hiddenId);
-      if (!inp || !list) return;
-      let idx = -1;
-
-      inp.addEventListener('input', () => {
-        const q = inp.value.trim().toLowerCase();
-        if (hid) hid.value = '';
-        if (!q) { list.classList.add('hidden'); list.innerHTML = ''; return; }
-        const items = (dataFn() || []).filter(p => (p.nombre || '').toLowerCase().includes(q)).slice(0, 15);
-        if (!items.length) { list.classList.add('hidden'); list.innerHTML = ''; return; }
-        idx = -1;
-        list.innerHTML = items.map(item => `
-          <div class="ac-item" data-id="${item.id}" data-nombre="${(item.nombre || '').replace(/"/g, '&quot;')}">
-            <div class="font-bold text-slate-800">${item.nombre}</div>
-            <div class="text-[11px] text-slate-400 font-mono">Stock: ${_fmtProdNum(item.stock)} | Costo: ${_fmtProdMon(item.costo)}</div>
-          </div>
-        `).join('');
-        list.classList.remove('hidden');
-
-        list.querySelectorAll('.ac-item').forEach(el => {
-          el.addEventListener('mousedown', (e) => {
-            e.preventDefault();
-            const id = el.getAttribute('data-id');
-            const item = (dataFn() || []).find(x => String(x.id) === String(id));
-            if (item) {
-              inp.value = item.nombre;
-              if (hid) hid.value = item.id;
-              list.classList.add('hidden');
-              if (typeof onSelect === 'function') onSelect(item);
-            }
-          });
-        });
-      });
-
-      inp.addEventListener('blur', () => {
-        setTimeout(() => { list.classList.add('hidden'); }, 200);
-      });
-    }
-
-    // ── Autocomplete Helper Remoto (Responsables) ──
-    function setupRemoteAC(inputId, listId, hiddenId, searchUrl, onSelect) {
-      const inp = document.getElementById(inputId);
-      const list = document.getElementById(listId);
-      const hid = document.getElementById(hiddenId);
-      if (!inp || !list) return;
-      let timer = null;
-
-      inp.addEventListener('input', () => {
-        clearTimeout(timer);
-        if (hid) hid.value = '';
-        timer = setTimeout(async () => {
-          const q = inp.value.trim();
-          if (q.length < 2) { list.classList.add('hidden'); list.innerHTML = ''; return; }
-          try {
-            const res = await fetch(`${searchUrl}?q=${encodeURIComponent(q)}&negocio_id=${NEGOCIO_ID}`);
-            const data = await res.json();
-            const items = (data.terceros || data.proveedores || []).slice(0, 12);
-            if (!items.length) { list.classList.add('hidden'); list.innerHTML = ''; return; }
-            list.innerHTML = items.map(t => `
-              <div class="ac-item" data-id="${t.id}" data-nombre="${(t.nombre || '').replace(/"/g, '&quot;')}">
-                <div class="font-bold text-slate-800">${t.nombre}</div>
-                <div class="text-[11px] text-slate-400 font-mono">${t.numero_documento || t.telefono || ''}</div>
-              </div>
-            `).join('');
-            list.classList.remove('hidden');
-
-            list.querySelectorAll('.ac-item').forEach(el => {
-              el.addEventListener('mousedown', (e) => {
-                e.preventDefault();
-                const id = el.getAttribute('data-id');
-                const nombre = el.getAttribute('data-nombre');
-                inp.value = nombre;
-                if (hid) hid.value = id;
-                list.classList.add('hidden');
-                if (typeof onSelect === 'function') onSelect({ id, nombre });
-              });
-            });
-          } catch(e) {
-            console.error('Error en búsqueda remota:', e);
-          }
-        }, 280);
-      });
-
-      inp.addEventListener('blur', () => {
-        setTimeout(() => { list.classList.add('hidden'); }, 200);
-      });
-    }
-
     // ── Cargar Productos Silencioso para Autocomplete ──
-    let _isFetchingProductos = false;
-    let _ultimoFetchProductos = 0;
     async function cargarProductosSilencioso(force = false) {
       const ahora = Date.now();
-      if (_isFetchingProductos) return productos;
-      if (!force && ahora - _ultimoFetchProductos < 1200) return productos;
-      _isFetchingProductos = true;
+      if (_isFetchingProductosSilencioso) return productos;
+      if (!force && ahora - _ultimoFetchProductosSilencioso < 1200) return productos;
+      _isFetchingProductosSilencioso = true;
       const bodParam = (CENTRO_ACTIVO && CENTRO_ACTIVO.id) ? `?bodega=${CENTRO_ACTIVO.id}` : '';
       try {
         const r = await fetch(`/api/inventario/${NEGOCIO_ID}/productos${bodParam}`);
         const d = await r.json();
         if (d.ok) {
           productos = d.productos || [];
-          _ultimoFetchProductos = Date.now();
+          _ultimoFetchProductosSilencioso = Date.now();
         }
       } catch(e) {
         console.warn('Error cargando productos:', e);
       } finally {
-        _isFetchingProductos = false;
+        _isFetchingProductosSilencioso = false;
       }
       return productos;
     }
 
-    // ── Decimales de Previsualización ──
-    function inicializarDecimalesPreviewProduccion() {
-      const inp = document.getElementById('prod-preview-decimales-input');
-      if (inp) inp.value = _prodPreviewDecimales;
+    async function cargarProductos() {
+      await cargarProductosSilencioso(true);
     }
 
-    function cambiarDecimalesPreviewProduccion(val) {
-      let d = parseInt(val, 10);
-      if (isNaN(d)) return;
-      d = Math.max(0, Math.min(6, d));
-      _prodPreviewDecimales = d;
-      try { localStorage.setItem('prod_preview_decimales', d); } catch(e) {}
-      const inp = document.getElementById('prod-preview-decimales-input');
-      if (inp && parseInt(inp.value, 10) !== d) inp.value = d;
-      if (activePreviewData) {
-        renderPreviewData(activePreviewData);
-      }
-    }
-
-    function validarDecimalesPreviewProduccionInput(inp) {
-      let d = parseInt(inp.value, 10);
-      if (isNaN(d) || d < 0) d = 2;
-      if (d > 6) d = 6;
-      inp.value = d;
-      cambiarDecimalesPreviewProduccion(d);
-    }
-
-    // ── Pronóstico de Producción ──
-    function togglePronosticoProduccion() {
-      const body = document.getElementById('pronostico-produccion-body');
-      const icon = document.getElementById('pronostico-toggle-icon');
-      if (!body) return;
-      const isHidden = body.classList.contains('hidden');
-      if (isHidden) {
-        body.classList.remove('hidden');
-        if (icon) icon.textContent = '▼';
-        cargarSugerenciasProduccion();
-      } else {
-        body.classList.add('hidden');
-        if (icon) icon.textContent = '▶';
-      }
-    }
-
-    async function cargarSugerenciasProduccion() {
-      const tb = document.getElementById('sugerencias-tabla-body');
-      if (!tb) return;
-      tb.innerHTML = '<tr><td colspan="9" class="px-3 py-4 text-center text-slate-400 italic">Calculando pronóstico de producción...</td></tr>';
-      
-      const dias = document.getElementById('cfg-dias-historial')?.value || 30;
-      const ciclo = document.getElementById('cfg-dias-defecto')?.value || 7;
-      const windowD = document.getElementById('cfg-growth-window')?.value || 7;
-      const maxG = document.getElementById('cfg-max-growth')?.value || 100;
-      const minG = document.getElementById('cfg-min-growth')?.value || -50;
-      const bodParam = (CENTRO_ACTIVO && CENTRO_ACTIVO.id) ? `&bodega=${CENTRO_ACTIVO.id}` : '';
-
-      try {
-        const res = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion/sugerencias?dias=${dias}&ciclo_defecto=${ciclo}&growth_window=${windowD}&max_growth=${maxG}&min_growth=${minG}${bodParam}`);
-        const data = await res.json();
-        if (!data.ok) {
-          tb.innerHTML = `<tr><td colspan="9" class="px-3 py-4 text-center text-rose-500">${data.error || 'Error calculando pronóstico'}</td></tr>`;
-          return;
-        }
-        const sugerencias = data.sugerencias || [];
-        if (!sugerencias.length) {
-          tb.innerHTML = '<tr><td colspan="9" class="px-3 py-4 text-center text-slate-400 italic">No hay productos que requieran producción inmediata en este ciclo.</td></tr>';
-          return;
-        }
-
-        tb.innerHTML = sugerencias.map(s => {
-          const safeNombre = (s.nombre || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
-          let badgeInsumos = s.insumos_completos 
-            ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">✅ Completos</span>'
-            : `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200" title="Limitante: ${s.limitante_nombre || ''}">⚠️ Escasos (${_fmtProdNum(s.tope_maximo)} max)</span>`;
-
-          return `
-            <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-              <td class="px-3 py-2 font-bold text-slate-800">${s.nombre}</td>
-              <td class="px-3 py-2 text-right font-mono">${_fmtProdNum(s.stock_actual)}</td>
-              <td class="px-3 py-2 text-right font-mono text-slate-600">${_fmtProdNum(s.consumo_diario)}</td>
-              <td class="px-3 py-2 text-center text-slate-500">${s.ciclo_dias || 7}d</td>
-              <td class="px-3 py-2 text-center font-bold ${Number(s.tendencia_pct) >= 0 ? 'text-emerald-600' : 'text-slate-400'}">${s.tendencia_pct ? s.tendencia_pct + '%' : '0%'}</td>
-              <td class="px-3 py-2 text-center text-slate-600">${s.fecha_proxima || 'Inmediata'}</td>
-              <td class="px-3 py-2 text-right font-mono font-bold text-indigo-700">${_fmtProdNum(s.sugerido)}</td>
-              <td class="px-3 py-2 text-center">${badgeInsumos}</td>
-              <td class="px-3 py-2 text-center">
-                <button type="button" onclick="cargarProduccionDirecta(${s.producto_id}, '${safeNombre}', ${s.sugerido})"
-                        class="px-3 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold text-xs transition">
-                  Producir
-                </button>
-              </td>
-            </tr>
-          `;
-        }).join('');
-      } catch(e) {
-        tb.innerHTML = '<tr><td colspan="9" class="px-3 py-4 text-center text-rose-500">Error de red al cargar pronóstico.</td></tr>';
-      }
-    }
-
+    // ── Cargar Producción Directa desde Pronóstico ──
     function cargarProduccionDirecta(prodId, nombre, cantidad) {
       document.getElementById('prod-ac-id').value = prodId;
       document.getElementById('prod-ac-input').value = nombre;
       document.getElementById('prod-cantidad').value = cantidad || 1;
-      sugerirProduccion(prodId);
-      previsualizarProduccion(true, true);
+      sugerirProduccion();
     }
 
-    // ── Consecutivo y Tipos de Documento Parametrizados (Original) ──
-    let tiposDocProduccion = [];
+function setupAC(inputId, listId, hiddenId, data, onSelect) {
 
-    function actualizarAvisoProduccionReemplazo() {
-      const box = document.getElementById('aviso-prod-reemplazo');
-      const spanFecha = document.getElementById('aviso-prod-reemplazo-fecha');
-      if (!box || !spanFecha) return;
-      const raw = sessionStorage.getItem('tuctuc_produccion_reemplazo');
-      if (!raw) {
-        box.classList.add('hidden');
-        return;
-      }
-      try {
-        const data = JSON.parse(raw);
-        if (data && data.fecha) {
-          spanFecha.textContent = data.fecha;
-          box.classList.remove('hidden');
-        } else {
-          box.classList.add('hidden');
-        }
-      } catch(e) {
-        box.classList.add('hidden');
-      }
+  const inp = document.getElementById(inputId);
+
+  const list = document.getElementById(listId);
+
+  if (!inp || !list) return;
+
+  let idx = -1, timer = null;
+
+
+
+  const normalizeStr = str => {
+
+    if (!str) return '';
+
+    try {
+
+      return str.toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+
+    } catch (e) {
+
+      return str.toString().toLowerCase().trim();
+
     }
 
-    async function cargarTiposDocProduccion() {
-      try {
-        const prodFechaEl = document.getElementById('prod-fecha');
-        if (prodFechaEl) {
-          if (!prodFechaEl.value) prodFechaEl.value = getFechaHoyBogota();
-          prodFechaEl.max = getFechaHoyBogota();
+  };
+
+
+
+  inp.addEventListener('input', () => {
+
+    clearTimeout(timer);
+
+    timer = setTimeout(() => renderAC(), 150);
+
+  });
+
+
+
+  inp.addEventListener('focus', () => {
+
+    if (typeof cargarProductosSilencioso === 'function') {
+      cargarProductosSilencioso().then(() => {
+        if (inp === document.activeElement && inp.value.trim().length >= 1) {
+          renderAC();
         }
-        actualizarAvisoProduccionReemplazo();
-        const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/tipos-doc`);
-        const d = await r.json();
-        if (d.ok) {
-          tiposDocProduccion = d.tipos.filter(t => t.activo && t.mueve_inventario && t.tipo_movimiento === 'produccion');
-          const select = document.getElementById('prod-tipo-doc');
-          if (select) {
-            select.innerHTML = tiposDocProduccion.map(t => `<option value="${t.id}" ${t.predeterminado ? 'selected' : ''}>${t.nombre}</option>`).join('');
-            if (!tiposDocProduccion.length) {
-              select.innerHTML = '<option value="">No hay tipos de doc. de producción configurados</option>';
-            }
-            mostrarConsecutivoProduccion();
-            cargarHistorialProduccion();
-          }
-        }
-      } catch(e) {
-        console.error('Error al cargar tipos de documento para producción:', e);
-      }
+      });
+    } else if (typeof cargarProductos === 'function' && (!productos || !productos.length)) {
+
+      cargarProductos();
+
     }
 
-    function mostrarConsecutivoProduccion() {
-      const select = document.getElementById('prod-tipo-doc');
-      const input = document.getElementById('prod-num-doc');
-      if (!select || !input) return;
-      const id = parseInt(select.value);
-      const td = tiposDocProduccion.find(t => t.id === id);
-      if (td) {
-        const nextNum = Math.max((td.consecutivo || 0) + 1, (td.numero_inicio || 1));
-        input.value = nextNum;
+    if (inp.value.trim().length >= 1) {
+
+      renderAC();
+
+    }
+
+  });
+
+
+
+  inp.addEventListener('keydown', e => {
+
+    const items = list.querySelectorAll('.ac-item');
+
+    if (e.key === 'ArrowDown') {
+
+      if (list.classList.contains('hidden')) {
+
+        renderAC();
+
       } else {
-        input.value = '';
+
+        idx = Math.min(idx + 1, items.length - 1);
+
+        highlightAC(items);
+
+      }
+
+      e.preventDefault();
+
+    }
+
+    else if (e.key === 'ArrowUp') {
+
+      idx = Math.max(idx - 1, 0);
+
+      highlightAC(items);
+
+      e.preventDefault();
+
+    }
+
+    else if (e.key === 'Enter') {
+
+      if (idx >= 0 && items[idx]) {
+
+        items[idx].dispatchEvent(new Event('mousedown'));
+
+        e.preventDefault();
+
+      }
+
+    }
+
+    else if (e.key === 'Escape') {
+
+      list.classList.add('hidden');
+
+      inp.focus();
+
+      e.preventDefault();
+
+    }
+
+  });
+
+
+
+  inp.addEventListener('blur', () => setTimeout(() => list.classList.add('hidden'), 220));
+
+
+
+  function renderAC() {
+
+    const rawQ = inp.value;
+
+    const qNorm = normalizeStr(rawQ);
+
+    if (!qNorm) { list.classList.add('hidden'); return; }
+
+    const itemsList = typeof data === 'function' ? data() : (data || []);
+
+    if (!itemsList || !itemsList.length) {
+      if (typeof cargarProductosSilencioso === 'function' && !inp._buscandoEnServidor) {
+        inp._buscandoEnServidor = true;
+        cargarProductosSilencioso(true).then(() => {
+          inp._buscandoEnServidor = false;
+          if (inp === document.activeElement && inp.value === rawQ) {
+            renderAC();
+          }
+        });
       }
     }
 
-    // ── Input de Cantidad a Simular ──
-    function onInputProdCantidad(valStr) {
-      if (_prodCantRecalcTimer) clearTimeout(_prodCantRecalcTimer);
-      const val = parseFloat(valStr);
-      const id = document.getElementById('prod-ac-id')?.value;
-      if (!id || !val || isNaN(val) || val <= 0) {
-        limpiarPreview();
-        return;
+    const matches = (itemsList || []).filter(p => {
+
+      if (!p || !p.nombre) return false;
+
+      const nameNorm = normalizeStr(p.nombre);
+
+      const catNorm = normalizeStr(p.categoria);
+
+      return nameNorm.includes(qNorm) || catNorm.includes(qNorm);
+
+    }).slice(0, 20);
+
+    // Si no hubo matches locales pero el usuario escribió 2+ caracteres, consultar al servidor como máximo UNA vez por texto
+    const qClean = rawQ.trim().toLowerCase();
+    if (matches.length === 0 && qClean.length >= 2 && !inp._buscandoEnServidor && inp._ultimoQServidor !== qClean) {
+      inp._buscandoEnServidor = true;
+      inp._ultimoQServidor = qClean;
+      if (typeof cargarProductosSilencioso === 'function') {
+        cargarProductosSilencioso(true).then(() => {
+          inp._buscandoEnServidor = false;
+          // Si el usuario sigue en este campo, reconstruir la lista con los productos recién traídos sin re-consultar al servidor
+          if (inp === document.activeElement && inp.value.trim().toLowerCase() === qClean) {
+            const freshItems = typeof data === 'function' ? data() : (data || []);
+            renderAC();
+          }
+        }).catch(() => {
+          inp._buscandoEnServidor = false;
+        });
       }
-      _prodCantRecalcTimer = setTimeout(() => {
-        previsualizarProduccion(false, true);
-      }, 300);
     }
 
-    function limpiarPreview() {
-      activePreviewData = null;
-      prodPuedeRegistrar = false;
-      const tb = document.getElementById('prod-preview-tabla');
-      if (tb) tb.innerHTML = '<tr><td colspan="7" class="text-center text-slate-400 py-6 italic">Selecciona un producto y define la cantidad para calcular la receta...</td></tr>';
-      const cantReal = document.getElementById('prod-preview-cant-input');
-      if (cantReal) cantReal.value = '1';
-      const totCost = document.getElementById('prod-preview-costo-total');
-      if (totCost) totCost.textContent = '$0.00';
-      const unitCost = document.getElementById('prod-preview-costo-unitario');
-      if (unitCost) unitCost.textContent = '$0.00';
-      const regBtn = document.getElementById('prod-btn-registrar');
-      if (regBtn) regBtn.disabled = true;
-      const rendBox = document.getElementById('prod-rendimiento-info');
-      if (rendBox) rendBox.classList.add('hidden');
+    idx = -1;
+
+    let html = matches.map(p =>
+
+      `<div class="ac-item text-left px-3 py-2 hover:bg-gray-100 cursor-pointer" data-id="${p.id}" data-nombre="${(p.nombre || '').replace(/"/g,'&quot;')}">
+
+        <span class="font-semibold text-gray-800">${p.nombre}</span>${p.categoria ? ` <span class="text-xs text-gray-400">(${p.categoria})</span>` : ''}
+
+       </div>`
+
+    ).join('');
+
+    // Opción para recargar productos si se creó en otra pestaña
+    if (rawQ.trim().length >= 1) {
+      html += `
+        <div class="ac-item text-left px-3 py-1.5 hover:bg-indigo-50 cursor-pointer text-indigo-700 font-bold border-t border-gray-100 text-xs flex items-center justify-between gap-1" data-recargar="true">
+          <span>🔄 ¿Lo creaste en otra pestaña? Recargar catálogo</span>
+          <span class="text-[10px] text-indigo-500 bg-indigo-100/70 px-1.5 py-0.5 rounded font-mono">Actualizar</span>
+        </div>
+      `;
     }
 
-    function ocultarSugerencia() {
-      const el = document.getElementById('prod-sugerencia');
-      if (el) el.classList.add('hidden');
+    if (rawQ.trim().length >= 2) {
+
+      html += `
+
+        <div class="ac-item text-left px-3 py-2 hover:bg-rose-50 cursor-pointer text-rose-600 font-bold border-t border-gray-100 text-xs flex items-center gap-1" data-crear="true" data-nombre="${rawQ.replace(/"/g,'&quot;')}">
+
+          <span>➕ Crear nuevo producto:</span> <span class="italic text-gray-700">"${rawQ}"</span>
+
+        </div>
+
+      `;
+
     }
 
-    // ── Tira Predictiva y Simulación por Materia Prima (Original Exacto) ──
-    function _prodSugBodegaParam() {
+    list.innerHTML = html;
+
+    list.querySelectorAll('.ac-item').forEach(el => {
+
+      el.addEventListener('mousedown', (e) => {
+
+        e.preventDefault();
+
+        if (el.dataset.recargar) {
+          el.innerHTML = '<span class="text-indigo-600 font-bold">⏳ Actualizando productos desde el servidor...</span>';
+          if (typeof cargarProductosSilencioso === 'function') {
+            cargarProductosSilencioso(true).then(() => {
+              renderAC();
+              toast('Catálogo de productos actualizado', true);
+            });
+          }
+          return;
+        }
+
+        if (el.dataset.crear) {
+
+          list.classList.add('hidden');
+
+          abrirModalCrearDesdeAC(inputId, hiddenId, el.dataset.nombre);
+
+          return;
+
+        }
+
+        document.getElementById(hiddenId).value = el.dataset.id;
+
+        inp.value = el.dataset.nombre;
+
+        list.classList.add('hidden');
+
+        if (onSelect) onSelect({id: +el.dataset.id, nombre: el.dataset.nombre});
+
+      });
+
+    });
+
+    list.classList.remove('hidden');
+
+  }
+
+
+
+  function highlightAC(items) {
+
+    items.forEach((el, i) => el.classList.toggle('ac-focus', i === idx));
+
+    if (idx >= 0) items[idx].scrollIntoView({block: 'nearest'});
+
+  }
+
+}
+
+
+
+// Autocomplete específico para categorías
+
+function setupCategoriasAC(inputId, listId) {
+
+  const inp = document.getElementById(inputId);
+
+  const list = document.getElementById(listId);
+
+  if (!inp || !list) return;
+
+  let idx = -1, timer = null;
+
+
+
+  const normalizeStr = str => {
+
+    if (!str) return '';
+
+    try {
+
+      return str.toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+
+    } catch (e) {
+
+      return str.toString().toLowerCase().trim();
+
+    }
+
+  };
+
+
+
+  inp.addEventListener('input', () => {
+
+    clearTimeout(timer);
+
+    timer = setTimeout(() => render(), 150);
+
+  });
+
+
+
+  inp.addEventListener('focus', () => {
+
+    render();
+
+  });
+
+
+
+  inp.addEventListener('keydown', e => {
+
+    const items = list.querySelectorAll('.ac-item');
+
+    if (e.key === 'ArrowDown') {
+
+      if (list.classList.contains('hidden')) {
+
+        render();
+
+      } else {
+
+        idx = Math.min(idx + 1, items.length - 1);
+
+        highlight(items);
+
+      }
+
+      e.preventDefault();
+
+    }
+
+    else if (e.key === 'ArrowUp') {
+
+      idx = Math.max(idx - 1, 0);
+
+      highlight(items);
+
+      e.preventDefault();
+
+    }
+
+    else if (e.key === 'Enter') {
+
+      if (idx >= 0 && items[idx]) {
+
+        items[idx].dispatchEvent(new Event('mousedown'));
+
+        e.preventDefault();
+
+      }
+
+    }
+
+    else if (e.key === 'Escape') {
+
+      list.classList.add('hidden');
+
+      inp.focus();
+
+      e.preventDefault();
+
+    }
+
+  });
+
+
+
+  inp.addEventListener('blur', () => setTimeout(() => list.classList.add('hidden'), 220));
+
+
+
+  function render() {
+
+    const rawQ = inp.value;
+
+    const qNorm = normalizeStr(rawQ);
+
+    
+
+    // Obtenemos categorías únicas de la variable global "productos"
+
+    const itemsList = [...new Set((productos || []).map(p => p.categoria).filter(Boolean))].sort();
+
+    
+
+    if (!itemsList.length) {
+
+      list.classList.add('hidden');
+
+      return;
+
+    }
+
+
+
+    const matches = itemsList.filter(c => {
+
+      if (!c) return false;
+
+      const cNorm = normalizeStr(c);
+
+      return cNorm.includes(qNorm);
+
+    }).slice(0, 10);
+
+
+
+    idx = -1;
+
+    
+
+    if (matches.length > 0) {
+
+      list.innerHTML = matches.map(c => `
+
+        <div class="ac-item text-left px-3 py-2 hover:bg-gray-100 cursor-pointer" data-val="${c.replace(/"/g,'&quot;')}">
+
+          <span class="font-semibold text-gray-800">${c}</span>
+
+        </div>
+
+      `).join('');
+
+      
+
+      list.querySelectorAll('.ac-item').forEach(el => {
+
+        el.addEventListener('mousedown', (e) => {
+
+          e.preventDefault();
+
+          inp.value = el.dataset.val;
+
+          list.classList.add('hidden');
+
+          inp.dispatchEvent(new Event('input'));
+
+        });
+
+      });
+
+      list.classList.remove('hidden');
+
+    } else {
+
+      list.classList.add('hidden');
+
+    }
+
+  }
+
+
+
+  function highlight(items) {
+
+    items.forEach((el, i) => el.classList.toggle('ac-focus', i === idx));
+
+    if (idx >= 0) items[idx].scrollIntoView({block: 'nearest'});
+
+  }
+
+}
+
+
+
+function abrirModalCrearDesdeAC(inputId, hiddenId, nombre) {
+
+  activeACInputId = inputId;
+
+  activeACHiddenId = hiddenId;
+
+  abrirModalProducto();
+
+  document.getElementById('mp-nombre').value = nombre;
+
+}
+
+
+
+
+function setupRemoteAC(inputId, listId, hiddenId, searchUrl, onSelect) {
+
+  const inp = document.getElementById(inputId);
+
+  const list = document.getElementById(listId);
+
+  const hid = document.getElementById(hiddenId);
+
+  if (!inp || !list) return;
+
+  let idx = -1, timer = null;
+
+
+
+  inp.addEventListener('input', () => {
+
+    clearTimeout(timer);
+
+    hid.value = ''; // Limpiar ID al escribir
+
+    timer = setTimeout(() => search(), 280);
+
+  });
+
+  
+
+  inp.addEventListener('focus', () => {
+
+    if (inp.value.trim().length >= 2) {
+
+      search();
+
+    }
+
+  });
+
+
+
+  inp.addEventListener('keydown', e => {
+
+    const items = list.querySelectorAll('.ac-item');
+
+    if (e.key === 'ArrowDown') {
+
+      if (list.classList.contains('hidden')) {
+
+        search();
+
+      } else {
+
+        idx = Math.min(idx + 1, items.length - 1);
+
+        highlightAC(items);
+
+      }
+
+      e.preventDefault();
+
+    }
+
+    else if (e.key === 'ArrowUp') {
+
+      idx = Math.max(idx - 1, 0);
+
+      highlightAC(items);
+
+      e.preventDefault();
+
+    }
+
+    else if (e.key === 'Enter') {
+
+      if (idx >= 0 && items[idx]) {
+
+        items[idx].dispatchEvent(new Event('mousedown'));
+
+        e.preventDefault();
+
+      }
+
+    }
+
+    else if (e.key === 'Escape') {
+
+      list.classList.add('hidden');
+
+      inp.focus();
+
+      e.preventDefault();
+
+    }
+
+  });
+
+  inp.addEventListener('blur', () => setTimeout(() => list.classList.add('hidden'), 220));
+
+
+
+  async function search() {
+
+    const q = inp.value.trim();
+
+    if (q.length < 2) { list.classList.add('hidden'); return; }
+
+    try {
+
+      const r = await fetch(`${searchUrl}?q=${encodeURIComponent(q)}`);
+
+      const matches = await r.json();
+
+      if (!matches.length) { list.classList.add('hidden'); return; }
+
+      idx = -1;
+
+      list.innerHTML = matches.map(p =>
+
+        `<div class="ac-item text-left px-3 py-2 hover:bg-gray-100 cursor-pointer" data-id="${p.id}" data-nombre="${p.nombre.replace(/"/g,'&quot;')}">
+
+          ${p.nombre}${p.telefono ? ` <span class="text-gray-400">(${p.telefono})</span>` : ''}
+
+         </div>`
+
+      ).join('');
+
+      list.querySelectorAll('.ac-item').forEach(el => {
+
+        el.addEventListener('mousedown', () => {
+
+          hid.value = el.dataset.id;
+
+          inp.value = el.dataset.nombre;
+
+          list.classList.add('hidden');
+
+          if (onSelect) onSelect({id: +el.dataset.id, nombre: el.dataset.nombre});
+
+        });
+
+      });
+
+      list.classList.remove('hidden');
+
+    } catch(e) {
+
+      console.error(e);
+
+    }
+
+  }
+
+  function highlightAC(items) {
+
+    items.forEach((el, i) => el.classList.toggle('ac-focus', i === idx));
+
+    if (idx >= 0) items[idx].scrollIntoView({block: 'nearest'});
+
+  }
+
+}
+
+
+
+
+function togglePronosticoProduccion() {
+
+  const body = document.getElementById('pronostico-produccion-body');
+
+  const icon = document.getElementById('pronostico-toggle-icon');
+
+  const btn = document.querySelector('[aria-controls="pronostico-produccion-body"]');
+
+  if (!body) return;
+
+  const collapsed = body.classList.toggle('hidden');
+
+  if (icon) icon.textContent = collapsed ? '▶' : '▼';
+
+  if (btn) btn.setAttribute('aria-expanded', String(!collapsed));
+
+  if (!collapsed && body.dataset.cargado !== '1') {
+
+    body.dataset.cargado = '1';
+
+    cargarSugerenciasProduccion();
+
+  }
+
+}
+
+
+async function cargarSugerenciasProduccion() {
+
+  const el = document.getElementById('sugerencias-tabla-body');
+
+  if (!el) return;
+
+  
+
+  el.innerHTML = '<tr><td colspan="9" class="px-3 py-4 text-center text-slate-400 italic">Analizando consumos e inventarios...</td></tr>';
+
+  
+
+  // Extraer valores de configuración si existen en el DOM
+
+  const diasHistorial = document.getElementById('cfg-dias-historial')?.value || '30';
+
+  const diasDefecto = document.getElementById('cfg-dias-defecto')?.value || '7';
+
+  const growthWindow = document.getElementById('cfg-growth-window')?.value || '7';
+
+  const maxGrowth = document.getElementById('cfg-max-growth')?.value || '100';
+
+  const minGrowth = document.getElementById('cfg-min-growth')?.value || '-50';
+
+  
+
+  const queryParams = `?dias_historial=${diasHistorial}&dias_defecto=${diasDefecto}&growth_window=${growthWindow}&max_growth=${maxGrowth}&min_growth=${minGrowth}`;
+
+  
+
+  try {
+
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion/sugerencias` + queryParams);
+
+    const d = await r.json();
+
+    
+
+    if (!d.ok) {
+
+      el.innerHTML = `<tr><td colspan="9" class="px-3 py-4 text-center text-red-500 font-bold">Error: ${d.error}</td></tr>`;
+
+      return;
+
+    }
+
+    
+
+    if (!d.sugerencias || d.sugerencias.length === 0) {
+
+      el.innerHTML = `
+
+        <tr>
+
+          <td colspan="9" class="px-3 py-4 text-center text-slate-500 font-medium">
+
+            ✅ Todos los productos producidos están al día y no tienen consumos o inconsistencias.
+
+          </td>
+
+        </tr>
+
+      `;
+
+      return;
+
+    }
+
+    
+
+    el.innerHTML = d.sugerencias.map(s => {
+
+      const classFactible = s.factible 
+
+        ? 'bg-emerald-50 border-emerald-100 text-emerald-800' 
+
+        : 'bg-amber-50 border-amber-100 text-amber-800';
+
+      const labelFactible = s.factible 
+
+        ? '✓ OK' 
+
+        : '✗ Incompleto';
+
+        
+
+      const growthLabel = s.growth_rate_pct > 0 
+
+        ? `<span class="text-emerald-600 font-bold">↑ ${s.growth_rate_pct}%</span>`
+
+        : s.growth_rate_pct < 0 
+
+          ? `<span class="text-red-500 font-bold">↓ ${Math.abs(s.growth_rate_pct)}%</span>`
+
+          : '<span class="text-slate-400">0%</span>';
+
+
+
+      // Estilo y texto de la fecha de producción
+
+      let fechaBadge = '';
+
+      if (s.fecha_probable === 'Inmediato') {
+
+        fechaBadge = '<span class="text-red-600 font-extrabold uppercase bg-red-50 border border-red-200 px-2 py-0.5 rounded-lg text-[10px]">Urgente</span>';
+
+      } else if (s.fecha_probable === 'Sin consumo') {
+
+        fechaBadge = '<span class="text-slate-400 font-semibold bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-lg text-[10px]">N/A</span>';
+
+      } else {
+
+        fechaBadge = `<span class="text-indigo-600 font-bold bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-lg text-[10px]">${s.fecha_probable}</span>`;
+
+      }
+
+
+
+      return `
+
+        <tr class="hover:bg-slate-50 border-b border-gray-100 transition-colors">
+
+          <td class="px-3 py-2 font-bold text-slate-800 text-left">${s.producto_nombre}</td>
+
+          <td class="px-3 py-2 text-right font-semibold ${s.stock_actual < 0 ? 'text-red-500 font-bold' : 'text-slate-700'}">${fmt(s.stock_actual)}</td>
+
+          <td class="px-3 py-2 text-right num text-slate-600">${fmt(s.demanda_diaria)}</td>
+
+          <td class="px-3 py-2 text-center text-slate-600">${s.frecuencia_dias} días</td>
+
+          <td class="px-3 py-2 text-center">${growthLabel}</td>
+
+          <td class="px-3 py-2 text-center">${fechaBadge}</td>
+
+          <td class="px-3 py-2 text-right font-bold text-slate-700">${fmt(s.cantidad_sugerida)}</td>
+
+          <td class="px-3 py-2 text-center">
+
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full border ${classFactible}">
+
+              ${labelFactible}
+
+            </span>
+
+          </td>
+
+          <td class="px-3 py-2 text-center">
+
+            <button onclick="seleccionarSugerencia(${s.producto_id}, '${s.producto_nombre.replace(/'/g, "\\'")}', ${s.cantidad_sugerida})"
+
+                    class="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold rounded-lg transition text-[10px]">
+
+              Producir
+
+            </button>
+
+          </td>
+
+        </tr>
+
+      `;
+
+    }).join('');
+
+  } catch (err) {
+
+    console.error(err);
+
+    el.innerHTML = '<tr><td colspan="9" class="px-3 py-4 text-center text-red-500 font-bold">Error de conexión al cargar sugerencias.</td></tr>';
+
+  }
+
+}
+
+
+
+async 
+
+function cambiarDecimalesPreviewProduccion(val) {
+  let d = parseInt(val, 10);
+  if (isNaN(d)) return;
+  d = Math.max(0, Math.min(6, d));
+  _prodPreviewDecimales = d;
+  try { localStorage.setItem('prod_preview_decimales', d); } catch(e) {}
+
+  const inp = document.getElementById('prod-preview-decimales');
+  if (inp && parseInt(inp.value, 10) !== d) inp.value = d;
+
+  if (activePreviewData) {
+    const cantBadgeEl = document.getElementById('prod-preview-cant-badge');
+    if (cantBadgeEl) {
+      cantBadgeEl.textContent = `${_fmtProdNum(activePreviewData.cantidad)} Unidades`;
+    }
+    renderInfoRendimientoProduccion();
+    renderTablaPrevisualizacion();
+  }
+}
+
+function validarDecimalesPreviewProduccionInput(inputEl) {
+  let d = parseInt(inputEl.value, 10);
+  if (isNaN(d) || d < 0) d = 2;
+  if (d > 6) d = 6;
+  inputEl.value = d;
+  cambiarDecimalesPreviewProduccion(d);
+}
+
+function inicializarDecimalesPreviewProduccion() {
+  const inp = document.getElementById('prod-preview-decimales');
+  if (inp) inp.value = _prodPreviewDecimales;
+}
+
+function limpiarPreview() {
+  const prevEl = document.getElementById('prod-preview');
+  if (prevEl) prevEl.classList.add('hidden');
+  const btnReg = document.getElementById('prod-btn-registrar');
+  if (btnReg) btnReg.disabled = true;
+  const lockPill = document.getElementById('prod-cantidad-lock-pill');
+  if (lockPill) lockPill.classList.add('hidden');
+  const modoHint = document.getElementById('prod-cantidad-modo-hint');
+  if (modoHint) modoHint.classList.add('hidden');
+  const sugRealEl = document.getElementById('prod-sug-real-cant');
+  if (sugRealEl) sugRealEl.value = '';
+  prodPuedeRegistrar = false;
+  activePreviewData = null;
+  _prodRealManualmenteModificada = false;
+}
+
+let _prodCantRecalcTimer = null;
+function onInputProdCantidad(valStr) {
+  if (_prodCantRecalcTimer) clearTimeout(_prodCantRecalcTimer);
+  const val = parseFloat(valStr);
+  const id = document.getElementById('prod-ac-id')?.value;
+  if (!id || !val || isNaN(val) || val <= 0) {
+    limpiarPreview();
+    return;
+  }
+  // Al digitar en "Cantidad a producir" (arriba), se conserva el flujo original:
+  // recalcular todos los insumos de la receta proporcionalmente a esta cantidad.
+  _prodCantRecalcTimer = setTimeout(() => {
+    previsualizarProduccion(false, true);
+  }, 300);
+}
+
+let _prodRealManualmenteModificada = false;
+
+function ajustarCantidadRealProducida(valStr, origen = 'preview') {
+  if (origen === 'preview') {
+    _prodRealManualmenteModificada = true;
+  } else if (origen === 'restore') {
+    _prodRealManualmenteModificada = false;
+  }
+
+  const prevInp = document.getElementById('prod-preview-cant-input');
+  const sugInp = document.getElementById('prod-sug-real-cant');
+
+  // Solo sincronizar el input de la vista previa si el llamado no vino de él mismo
+  if (origen !== 'preview' && prevInp) prevInp.value = valStr;
+  if (sugInp) sugInp.value = valStr;
+  // NOTA: 'Cantidad Real Obtenida' NO debe modificar 'prod-cantidad' (Cantidad a Simular),
+  // para mantener desacoplada la intención teórica de la producción real obtenida.
+
+  if (!activePreviewData) return;
+
+  const val = parseFloat(valStr);
+  if (!val || isNaN(val) || val <= 0) {
+    activePreviewData.cantidad = 0;
+    const unitEl = document.getElementById('prod-resumen-unitario');
+    if (unitEl) unitEl.textContent = '-';
+    const infoEl = document.getElementById('prod-preview-rendimiento-info');
+    if (infoEl) {
+      infoEl.innerHTML = `<span class="text-rose-600 font-extrabold">⚠️ Digita una cantidad real obtenida &gt; 0</span>`;
+    }
+    prodPuedeRegistrar = false;
+    const btnReg = document.getElementById('prod-btn-registrar');
+    if (btnReg) btnReg.disabled = true;
+    return;
+  }
+
+  activePreviewData.cantidad = val;
+  const cantBadgeEl = document.getElementById('prod-preview-cant-badge');
+  if (cantBadgeEl) cantBadgeEl.textContent = `${_fmtProdNum(val)} Unidades`;
+
+  renderInfoRendimientoProduccion();
+  actualizarTotalesPrevisualizacion();
+}
+
+function restaurarCantidadEsperadaProduccion() {
+  if (!activePreviewData) return;
+  const esp = activePreviewData.cantidad_esperada || activePreviewData.cantidad || 1;
+  ajustarCantidadRealProducida(String(esp), 'restore');
+}
+
+function renderInfoRendimientoProduccion() {
+  const infoEl = document.getElementById('prod-preview-rendimiento-info');
+  if (!infoEl || !activePreviewData) return;
+  const real = Number(activePreviewData.cantidad || 0);
+  const esp = Number(activePreviewData.cantidad_esperada || real);
+  if (real <= 0) return;
+
+  const diff = real - esp;
+  if (Math.abs(diff) < 0.0001 || esp <= 0) {
+    infoEl.innerHTML = `<span class="text-slate-500">Esperado según receta: <b class="text-slate-800 font-mono">${_fmtProdNum(esp)}</b></span>`;
+    return;
+  }
+
+  const pct = (diff / esp) * 100;
+  const sign = diff > 0 ? '+' : '';
+  const badgeClass = diff < 0
+    ? 'bg-amber-100 text-amber-900 border-amber-300'
+    : 'bg-emerald-100 text-emerald-900 border-emerald-300';
+  const labelTipo = diff < 0 ? '📉 Merma' : '📈 Rendimiento';
+
+  infoEl.innerHTML = `
+    <span class="text-slate-500">Esperado: <b class="text-slate-700 font-mono">${_fmtProdNum(esp)}</b></span>
+    <span class="px-1.5 py-0.5 rounded border text-[10px] font-mono font-extrabold ${badgeClass}">
+      ${labelTipo}: ${sign}${_fmtProdNum(diff)} (${sign}${pct.toFixed(1)}%)
+    </span>
+    <button type="button" onclick="restaurarCantidadEsperadaProduccion()" class="text-rose-600 hover:text-rose-800 underline font-extrabold text-[10px] cursor-pointer" title="Restaurar a la cantidad esperada por tarjeta">
+      ↺ Restaurar
+    </button>
+  `;
+}
+
+// ── Sugerencia predictiva de producción ─────────────────────────────
+let prodSugerenciaData = null;
+let _sugSeq = 0;
+
+function _prodSugBodegaParam() {
   return (typeof CENTRO_ACTIVO !== 'undefined' && CENTRO_ACTIVO && CENTRO_ACTIVO.id) ? `&bodega=${encodeURIComponent(CENTRO_ACTIVO.id)}` : '';
 }
 
@@ -1412,506 +2128,894 @@ function ocultarSugerencia() {
   prodSugerenciaData = null;
 }
 
+async function previsualizarProduccion(scrollSmooth = true, forzarDesdeTarjeta = false) {
+  const id  = document.getElementById('prod-ac-id').value;
+  const qty = parseFloat(document.getElementById('prod-cantidad').value);
+  if (!id) { toast('Selecciona un producto', false); return; }
+  if (!qty || qty <= 0) { toast('Cantidad inválida', false); return; }
 
+  const bodParam = (CENTRO_ACTIVO && CENTRO_ACTIVO.id) ? `&bodega=${encodeURIComponent(CENTRO_ACTIVO.id)}` : '';
+  let mpParams = '';
+  if (!forzarDesdeTarjeta && prodSugerenciaData && prodSugerenciaData.modo === 'desde_mp') {
+    const guiaId = document.getElementById('prod-sug-guia')?.value || prodSugerenciaData.guia_id;
+    const cantMP = parseFloat(document.getElementById('prod-sug-mp-cant')?.value || 0);
+    if (guiaId && cantMP > 0) {
+      mpParams = `&guia_id=${encodeURIComponent(guiaId)}&cantidad_mp=${encodeURIComponent(cantMP)}`;
+    }
+  }
 
-    // ── Previsualizar Producción (Cálculo de Insumos y Costos) ──
-    async function previsualizarProduccion(scrollSmooth = true, forzarDesdeTarjeta = true) {
-      const prodId = document.getElementById('prod-ac-id')?.value;
-      const cantStr = document.getElementById('prod-cantidad')?.value;
-      const cant = parseFloat(cantStr);
-      if (!prodId) {
-        toast('Selecciona el producto a preparar', false);
-        return;
-      }
-      if (!cant || isNaN(cant) || cant <= 0) {
-        toast('Ingresa una cantidad válida a simular', false);
-        return;
-      }
+  const r = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion/preview?producto_id=${id}&cantidad=${qty}${bodParam}${mpParams}`);
+  const d = await r.json();
+  if (!d.ok) { toast(d.error, false); return; }
 
-      const bodParam = (CENTRO_ACTIVO && CENTRO_ACTIVO.id) ? `&bodega=${CENTRO_ACTIVO.id}` : '';
-      try {
-        const res = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion/preview?producto_id=${prodId}&cantidad=${cant}${bodParam}`);
-        const d = await res.json();
-        if (!d.ok) {
-          toast(d.error || 'Error al calcular receta estándar', false);
-          limpiarPreview();
-          return;
-        }
+  // Guardar cantidad esperada según receta para poder comparar cuando el usuario ajuste la cantidad real obtenida
+  d.cantidad_esperada = d.cantidad;
+  activePreviewData = d;
 
-        activePreviewData = d;
-        _prodRealManualmenteModificada = false;
-        
-        // Sincronizar campo de cantidad real con la cantidad teórica inicial
-        const realInp = document.getElementById('prod-preview-cant-input');
-        if (realInp) realInp.value = d.cantidad;
+  const centroBadge = document.getElementById('prod-preview-centro-badge');
+  if (centroBadge) {
+    const icon = d.centro_tipo === 'movil' ? '🛵' : '🏪';
+    const bgCol = d.centro_color || '#4f46e5';
+    centroBadge.style.backgroundColor = `${bgCol}18`;
+    centroBadge.style.color = bgCol;
+    centroBadge.style.border = `1px solid ${bgCol}50`;
+    centroBadge.innerHTML = `<span>${icon}</span> <span>${d.centro_nombre || 'Sede'} (${d.centro_codigo || 'LOC'})</span>`;
+  }
 
-        renderPreviewData(d);
+  // Poblar cabecera destacada del producto a producir
+  const prodTitleEl = document.getElementById('prod-preview-nombre-prod');
+  if (prodTitleEl) prodTitleEl.textContent = d.producto || 'Producto';
+  
+  const cantBadgeEl = document.getElementById('prod-preview-cant-badge');
+  if (cantBadgeEl) cantBadgeEl.textContent = `${_fmtProdNum(qty)} Unidades`;
 
-        if (scrollSmooth) {
-          const prevBox = document.getElementById('seccion-preview-produccion');
-          if (prevBox) prevBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }
-      } catch(e) {
-        toast('Error de red al previsualizar producción', false);
+  const prevCantInput = document.getElementById('prod-preview-cant-input');
+  if (prevCantInput) {
+    if (!_prodRealManualmenteModificada) {
+      prevCantInput.value = qty;
+    } else {
+      const valManual = parseFloat(prevCantInput.value);
+      if (valManual && !isNaN(valManual) && valManual > 0) {
+        d.cantidad = valManual;
       }
     }
+  }
 
-    function renderPreviewData(d) {
-      const tb = document.getElementById('prod-preview-tabla');
-      if (!tb || !d) return;
+  const sugRealEl = document.getElementById('prod-sug-real-cant');
+  if (sugRealEl) sugRealEl.value = qty;
 
-      const lineas = d.lineas || [];
-      if (!lineas.length) {
-        tb.innerHTML = '<tr><td colspan="7" class="text-center text-slate-400 py-6 italic">El producto no tiene componentes en su tarjeta estándar.</td></tr>';
-        return;
+  const lockPill = document.getElementById('prod-cantidad-lock-pill');
+  if (lockPill) lockPill.classList.remove('hidden');
+  const modoHint = document.getElementById('prod-cantidad-modo-hint');
+  if (modoHint) modoHint.classList.remove('hidden');
+
+  const countEl = document.getElementById('prod-preview-items-count');
+  const numLineas = (d.lineas || []).length;
+  if (countEl) {
+    countEl.textContent = `${numLineas} ingrediente${numLineas === 1 ? '' : 's'} / insumo${numLineas === 1 ? '' : 's'}`;
+  }
+
+  inicializarDecimalesPreviewProduccion();
+  renderInfoRendimientoProduccion();
+  renderTablaPrevisualizacion();
+  const previewEl = document.getElementById('prod-preview');
+  if (previewEl) {
+    previewEl.classList.remove('hidden');
+    if (scrollSmooth) {
+      setTimeout(() => {
+        previewEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 80);
+    }
+  }
+}
+
+function renderTablaPrevisualizacion() {
+  if (!activePreviewData) return;
+  const qty = activePreviewData.cantidad;
+  const tb = document.getElementById('prod-preview-tabla');
+
+  tb.innerHTML = activePreviewData.lineas.map(l => {
+    const suf = l.stock_actual >= l.a_consumir;
+    const aConsumirFmt = Number(l.a_consumir || 0).toFixed(_prodPreviewDecimales);
+    return `
+      <tr id="prod-preview-row-${l.id}" class="border-b border-slate-100 hover:bg-amber-50/40 transition">
+        <td class="px-2.5 py-0.5 text-left font-bold text-slate-800 text-xs leading-tight">${l.nombre}</td>
+        <td id="prod-stock-${l.id}" class="px-2 py-0.5 text-right num text-xs font-mono font-bold ${suf ? 'text-emerald-700' : 'text-rose-600'}">${_fmtProdNum(l.stock_actual)}</td>
+        <td class="px-2 py-0.5 text-right">
+          <input type="number" step="any" min="0" value="${aConsumirFmt}"
+                 oninput="actualizarConsumoPrevisualizacion(${l.id}, this.value)"
+                 onblur="this.value = Number(this.value || 0).toFixed(_prodPreviewDecimales); actualizarConsumoPrevisualizacion(${l.id}, this.value);"
+                 class="w-36 sm:w-40 text-right border border-slate-300 rounded px-2 py-0 h-6 text-xs font-mono font-black focus:outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-400 bg-white shadow-2xs">
+        </td>
+        <td class="px-2 py-0.5 text-right num font-mono text-xs text-slate-600">${_fmtProdMon(l.costo_und)}</td>
+        <td id="prod-subtotal-${l.id}" class="px-2 py-0.5 text-right num font-mono font-black text-xs text-slate-900">${_fmtProdMon(l.costo_total)}</td>
+        <td id="prod-badge-${l.id}" class="px-2 py-0.5 text-center">
+          ${suf
+            ? '<span class="px-1.5 py-0.2 rounded-md text-[10px] font-black bg-emerald-100 text-emerald-800">✓ OK</span>'
+            : '<span class="px-1.5 py-0.2 rounded-md text-[10px] font-black bg-rose-100 text-rose-800">✗ Insuficiente</span>'}
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  actualizarTotalesPrevisualizacion();
+}
+
+function actualizarConsumoPrevisualizacion(componenteId, valStr) {
+  if (!activePreviewData) return;
+  const val = parseFloat(valStr) || 0;
+  const l = activePreviewData.lineas.find(line => line.id === componenteId);
+  if (!l) return;
+
+  l.a_consumir = val;
+  l.costo_total = val * l.costo_und;
+  l.suficiente = l.stock_actual >= l.a_consumir;
+
+  // Actualizar fila in-place
+  const subEl = document.getElementById(`prod-subtotal-${componenteId}`);
+  if (subEl) subEl.textContent = _fmtProdMon(l.costo_total);
+
+  const stockEl = document.getElementById(`prod-stock-${componenteId}`);
+  if (stockEl) {
+    stockEl.className = `px-3 py-1.5 text-right num text-xs sm:text-sm font-mono font-bold ${l.suficiente ? 'text-green-600' : 'text-red-500'}`;
+    stockEl.textContent = _fmtProdNum(l.stock_actual);
+  }
+
+  const badgeEl = document.getElementById(`prod-badge-${componenteId}`);
+  if (badgeEl) {
+    badgeEl.innerHTML = l.suficiente
+      ? '<span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-green-100 text-green-800">✓ OK</span>'
+      : '<span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-red-100 text-red-800">✗ Insuficiente</span>';
+  }
+
+  actualizarTotalesPrevisualizacion();
+}
+
+function actualizarTotalesPrevisualizacion() {
+  if (!activePreviewData) return;
+
+  let costoTotal = 0;
+  activePreviewData.lineas.forEach(l => {
+    costoTotal += l.costo_total;
+  });
+
+  activePreviewData.costo_total_produccion = costoTotal;
+  const qty = Number(activePreviewData.cantidad || 0);
+  activePreviewData.costo_unitario_produccion = qty > 0 ? (costoTotal / qty) : 0;
+
+  document.getElementById('prod-resumen-total').textContent = _fmtProdMon(activePreviewData.costo_total_produccion);
+  document.getElementById('prod-resumen-unitario').textContent = qty > 0 ? _fmtProdMon(activePreviewData.costo_unitario_produccion) : '-';
+
+  // Validar si todos son suficientes y cantidad real > 0
+  activePreviewData.puede_producir = qty > 0 && activePreviewData.lineas.every(l => l.suficiente);
+
+  const alerta = document.getElementById('prod-alerta');
+  if (!activePreviewData.lineas.every(l => l.suficiente)) {
+    alerta.textContent = 'Stock insuficiente en uno o más componentes. No se puede registrar la producción.';
+    alerta.classList.remove('hidden');
+  } else {
+    alerta.classList.add('hidden');
+  }
+
+  prodPuedeRegistrar = activePreviewData.puede_producir;
+  document.getElementById('prod-btn-registrar').disabled = !prodPuedeRegistrar;
+}
+
+async function registrarProduccion() {
+  const idVal = document.getElementById('prod-ac-id').value;
+  if (!idVal) {
+    toast('Selecciona un producto a producir de la lista', false);
+    return;
+  }
+
+  if (!prodPuedeRegistrar || !activePreviewData) {
+    toast('No se puede registrar. Primero genera la vista previa y asegúrate de contar con stock suficiente de componentes.', false);
+    return;
+  }
+
+  const id    = parseInt(idVal);
+  const qty   = (activePreviewData && Number(activePreviewData.cantidad) > 0)
+    ? Number(activePreviewData.cantidad)
+    : parseFloat(document.getElementById('prod-cantidad').value);
+  if (!qty || qty <= 0) {
+    toast('La cantidad real producida debe ser mayor a cero.', false);
+    return;
+  }
+  const fecha = (document.getElementById('prod-fecha')?.value || '').trim() || null;
+  const notas = document.getElementById('prod-notas').value.trim() || null;
+  const tipo_doc_id = parseInt(document.getElementById('prod-tipo-doc').value) || null;
+  const td = tiposDocProduccion.find(t => t.id === tipo_doc_id);
+  const tipo_documento = td ? td.nombre : null;
+  const documento_numero = document.getElementById('prod-num-doc').value || null;
+  const tercero_id = parseInt(document.getElementById('prod-responsable-id').value) || null;
+  const tercero_nombre = document.getElementById('prod-responsable').value.trim() || null;
+
+  const btn = document.getElementById('prod-btn-registrar');
+  if (btn) btn.disabled = true;
+
+  // Extraer componentes reales consumidos
+  const componentes = activePreviewData.lineas.map(l => ({
+    componente_id: l.id,
+    cantidad: l.a_consumir
+  }));
+
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        producto_id: id,
+        cantidad: qty,
+        fecha,
+        notas,
+        tipo_documento_id: tipo_doc_id,
+        tipo_documento,
+        documento_numero,
+        tercero_id,
+        tercero_nombre,
+        componentes
+      })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast(`✅ Producción registrada: ${d.producido} × ${d.producto}`);
+      document.getElementById('prod-ac-input').value = '';
+      document.getElementById('prod-ac-id').value = '';
+      document.getElementById('prod-cantidad').value = '1';
+      document.getElementById('prod-notas').value = '';
+      const prodFechaEl = document.getElementById('prod-fecha');
+      if (prodFechaEl) {
+        prodFechaEl.value = getFechaHoyBogota();
+        prodFechaEl.max = getFechaHoyBogota();
       }
+      document.getElementById('prod-responsable').value = '{{ session.get("nombre", "") }}';
+      document.getElementById('prod-responsable-id').value = '{{ session.get("chat_tercero_id", "") }}';
+      limpiarPreview();
+      ocultarSugerencia();
+      sessionStorage.removeItem('tuctuc_produccion_reemplazo');
+      actualizarAvisoProduccionReemplazo();
+      cargarProductos();
+      cargarTiposDocProduccion();
 
-      let costoTotalInsumos = 0;
-      let stockSuficiente = true;
+    } else {
 
-      tb.innerHTML = lineas.map(l => {
-        const subtotal = Number(l.a_consumir || 0) * Number(l.costo_und || 0);
-        costoTotalInsumos += subtotal;
-        const stockActual = Number(l.stock_actual !== undefined ? l.stock_actual : (l.stock || 0));
-        const faltante = Math.max(0, Number(l.a_consumir || 0) - stockActual);
-        const hayStock = stockActual >= Number(l.a_consumir || 0);
-        if (!hayStock) stockSuficiente = false;
+      toast(d.error || 'Error al registrar la producción', false);
 
-        return `
-          <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="px-3.5 py-2.5 font-bold text-slate-800">
-              ${l.componente_nombre || l.nombre}
-              ${l.codigo_barra ? `<span class="block text-[10px] text-slate-400 font-mono">${l.codigo_barra}</span>` : ''}
-            </td>
-            <td class="px-3 py-2.5 text-right font-mono ${stockActual <= 0 ? 'text-rose-500 font-bold' : 'text-slate-700'}">
-              ${_fmtProdNum(stockActual)}
-            </td>
-            <td class="px-3 py-2.5 text-right font-mono font-black text-slate-900 bg-slate-50/70">
-              ${_fmtProdNum(l.a_consumir)}
-            </td>
-            <td class="px-3 py-2.5 text-center text-xs text-slate-500 font-semibold">
-              ${l.unidad || 'Und'}
-            </td>
-            <td class="px-3 py-2.5 text-right font-mono text-slate-700">
-              ${_fmtProdMon(l.costo_und)}
-            </td>
-            <td class="px-3 py-2.5 text-right font-mono font-bold text-slate-900">
-              ${_fmtProdMon(subtotal)}
-            </td>
-            <td class="px-3 py-2.5 text-center">
-              ${hayStock 
-                ? '<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">✅ Disponible</span>'
-                : `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200" title="Faltan ${_fmtProdNum(faltante)}">❌ Falta ${_fmtProdNum(faltante)}</span>`
-              }
-            </td>
-          </tr>
-        `;
-      }).join('');
+      if (btn) btn.disabled = false;
 
-      // Totales
-      const cantReal = parseFloat(document.getElementById('prod-preview-cant-input')?.value) || Number(d.cantidad || 1);
-      const costoUnitario = cantReal > 0 ? (costoTotalInsumos / cantReal) : 0;
-
-      const totEl = document.getElementById('prod-preview-costo-total');
-      if (totEl) totEl.textContent = _fmtProdMon(costoTotalInsumos);
-
-      const unitEl = document.getElementById('prod-preview-costo-unitario');
-      if (unitEl) unitEl.textContent = _fmtProdMon(costoUnitario);
-
-      // Botón registrar
-      const regBtn = document.getElementById('prod-btn-registrar');
-      if (regBtn) {
-        prodPuedeRegistrar = true;
-        regBtn.disabled = false;
-      }
-
-      renderInfoRendimientoProduccion(Number(d.cantidad || 1), cantReal);
     }
 
-    function ajustarCantidadRealProducida(valStr) {
-      const val = parseFloat(valStr);
-      if (!activePreviewData || isNaN(val) || val <= 0) return;
-      _prodRealManualmenteModificada = true;
-      
-      let costoTotalInsumos = 0;
-      (activePreviewData.lineas || []).forEach(l => {
-        costoTotalInsumos += Number(l.a_consumir || 0) * Number(l.costo_und || 0);
+  } catch(e) {
+
+    console.error(e);
+
+    toast('Error de red al registrar producción', false);
+
+    if (btn) btn.disabled = false;
+
+  }
+
+}
+
+
+
+// Lógica de ajuste de receta estándar (permanente)
+
+function abrirAjusteReceta() {
+
+  if (!activePreviewData) {
+
+    toast('Debe cargar la vista previa de producción antes de ajustar la receta', false);
+
+    return;
+
+  }
+
+  
+
+  const qty = activePreviewData.cantidad;
+
+  document.getElementById('ajuste-cant-producir').textContent = fmt(qty);
+
+  
+
+  let costoActualUnitario = 0;
+
+  let costoNuevoUnitario = 0;
+
+  
+
+  const tb = document.getElementById('ajuste-comparativa-body');
+
+  tb.innerHTML = activePreviewData.lineas.map(l => {
+
+    const cantActual = l.cant_tarjeta;
+
+    const cantNueva = l.a_consumir / qty;
+
+    const dif = cantNueva - cantActual;
+
+    
+
+    costoActualUnitario += cantActual * l.costo_und;
+
+    costoNuevoUnitario += cantNueva * l.costo_und;
+
+    
+
+    let diffClass = 'text-gray-500';
+
+    let diffSign = '';
+
+    if (dif > 0) {
+
+      diffClass = 'text-red-600 font-bold';
+
+      diffSign = '+';
+
+    } else if (dif < 0) {
+
+      diffClass = 'text-emerald-600 font-bold';
+
+    }
+
+    
+
+    return `
+
+      <tr>
+
+        <td class="py-2 text-left font-semibold text-gray-800">${l.nombre}</td>
+
+        <td class="py-2 text-right font-mono">${fmt(cantActual)}</td>
+
+        <td class="py-2 text-right font-mono text-indigo-600 font-bold">${fmt(cantNueva)}</td>
+
+        <td class="py-2 text-right font-mono ${diffClass}">${diffSign}${fmt(dif)}</td>
+
+      </tr>
+
+    `;
+
+  }).join('');
+
+  
+
+  // Actualizar caja de costo e impacto
+
+  document.getElementById('ajuste-costo-actual').textContent = '$ ' + fmt(costoActualUnitario);
+
+  document.getElementById('ajuste-costo-nuevo').textContent = '$ ' + fmt(costoNuevoUnitario);
+
+  
+
+  const diffCosto = costoNuevoUnitario - costoActualUnitario;
+
+  const pctImpacto = costoActualUnitario > 0 ? ((diffCosto / costoActualUnitario) * 100) : 0;
+
+  
+
+  const pctEl = document.getElementById('ajuste-costo-impacto-pct');
+
+  const impactBox = document.getElementById('ajuste-impacto-costo');
+
+  
+
+  if (diffCosto > 0.01) {
+
+    pctEl.textContent = `Aumento de +${pctImpacto.toFixed(2)}%`;
+
+    pctEl.className = 'px-2.5 py-1 rounded-lg text-xs font-extrabold font-mono bg-red-100 text-red-800 border border-red-255';
+
+    impactBox.className = 'flex-shrink-0 p-4 rounded-xl mb-4 border flex flex-col gap-1.5 text-xs bg-red-50/50 border-red-100';
+
+  } else if (diffCosto < -0.01) {
+
+    pctEl.textContent = `Disminución de ${pctImpacto.toFixed(2)}%`;
+
+    pctEl.className = 'px-2.5 py-1 rounded-lg text-xs font-extrabold font-mono bg-emerald-100 text-emerald-800 border border-emerald-255';
+
+    impactBox.className = 'flex-shrink-0 p-4 rounded-xl mb-4 border flex flex-col gap-1.5 text-xs bg-emerald-50/50 border-emerald-100';
+
+  } else {
+
+    pctEl.textContent = 'Sin cambio (0.00%)';
+
+    pctEl.className = 'px-2.5 py-1 rounded-lg text-xs font-semibold font-mono bg-gray-100 text-gray-800 border border-gray-250';
+
+    impactBox.className = 'flex-shrink-0 p-4 rounded-xl mb-4 border flex flex-col gap-1.5 text-xs bg-gray-50 border-gray-150';
+
+  }
+
+  
+
+  document.getElementById('overlay-ajuste-receta').classList.remove('hidden');
+
+}
+
+
+
+function cerrarAjusteReceta() {
+
+  document.getElementById('overlay-ajuste-receta').classList.add('hidden');
+
+}
+
+
+
+async function confirmarAjusteReceta() {
+
+  if (!activePreviewData) return;
+
+  const qty = activePreviewData.cantidad;
+
+  const componentes = activePreviewData.lineas.map(l => ({
+
+    componente_id: l.id,
+
+    cantidad_unidad: l.a_consumir / qty
+
+  }));
+
+  
+
+  try {
+
+    const r = await fetch(`/api/inventario/producto/${activePreviewData.producto_id}/tarjeta/update-proportions`, {
+
+      method: 'POST',
+
+      headers: {'Content-Type': 'application/json'},
+
+      body: JSON.stringify({ componentes })
+
+    });
+
+    const d = await r.json();
+
+    if (d.ok) {
+
+      toast('✅ ¡Receta estándar actualizada permanentemente!');
+
+      cerrarAjusteReceta();
+
+      // Volver a previsualizar para cargar los nuevos estándar de receta
+
+      await previsualizarProduccion();
+
+    } else {
+
+      toast(d.error || 'Error al actualizar receta', false);
+
+    }
+
+  } catch(e) {
+
+    console.error(e);
+
+    toast('Error de red al actualizar receta', false);
+
+  }
+
+}
+
+
+
+let tiposDocEntrada = [];
+
+async function cargarTiposDocEntrada() {
+
+  try {
+
+    const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/tipos-doc`);
+
+    const d = await r.json();
+
+    if (d.ok) {
+
+      tiposDocEntrada = d.tipos.filter(t => t.activo && t.mueve_inventario && t.tipo_movimiento === 'entrada');
+
+      const select = document.getElementById('entrada-tipo-doc');
+
+      if (select) {
+
+        select.innerHTML = tiposDocEntrada.map(t => `<option value="${t.id}" ${t.predeterminado ? 'selected' : ''}>${t.nombre}</option>`).join('');
+
+        if (!tiposDocEntrada.length) {
+
+          select.innerHTML = '<option value="">No hay tipos de doc. de entrada configurados</option>';
+
+        }
+
+        actualizarVisibilidadNumeroEntrada();
+
+      }
+
+    }
+
+  } catch(e) {
+
+    console.error('Error al cargar tipos de documento para entradas:', e);
+
+  }
+
+}
+
+
+
+let tiposDocProduccion = [];
+
+async function cargarTiposDocProduccion() {
+  try {
+    const prodFechaEl = document.getElementById('prod-fecha');
+    if (prodFechaEl) {
+      if (!prodFechaEl.value) prodFechaEl.value = getFechaHoyBogota();
+      prodFechaEl.max = getFechaHoyBogota();
+    }
+    actualizarAvisoProduccionReemplazo();
+    const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/tipos-doc`);
+    const d = await r.json();
+    if (d.ok) {
+      tiposDocProduccion = d.tipos.filter(t => t.activo && t.mueve_inventario && t.tipo_movimiento === 'produccion');
+      const select = document.getElementById('prod-tipo-doc');
+      if (select) {
+        select.innerHTML = tiposDocProduccion.map(t => `<option value="${t.id}" ${t.predeterminado ? 'selected' : ''}>${t.nombre}</option>`).join('');
+        if (!tiposDocProduccion.length) {
+          select.innerHTML = '<option value="">No hay tipos de doc. de producción configurados</option>';
+        }
+        mostrarConsecutivoProduccion();
+        cargarHistorialProduccion();
+      }
+    }
+  } catch(e) {
+    console.error('Error al cargar tipos de documento para producción:', e);
+  }
+}
+
+
+
+let histProdPagina = 1;
+
+let histProdTotalPaginas = 1;
+
+
+
+async function cargarHistorialProduccion(pagina = 1) {
+
+  histProdPagina = Math.max(1, pagina);
+
+  const tbody = document.getElementById('prod-historial-body');
+
+  if (!tbody) return;
+
+  try {
+
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion/historial?pagina=${histProdPagina}`);
+
+    const d = await r.json();
+
+    if (d.ok) {
+
+      histProdTotalPaginas = d.total_paginas || 1;
+
+      actualizarPaginadorHistProd(d.total || 0);
+
+      if (!d.historial.length) {
+
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-gray-400 italic">No hay registros de producción.</td></tr>';
+
+        return;
+
+      }
+
+      renderHistorialProduccion(d.historial);
+
+    } else {
+
+      tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-red-500 italic">Error al cargar historial: ${d.error}</td></tr>`;
+
+    }
+
+  } catch(e) {
+
+    console.error(e);
+
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-red-500 italic">Error de conexión al cargar historial.</td></tr>';
+
+  }
+
+}
+
+
+
+function actualizarPaginadorHistProd(total) {
+
+  const tPagina = document.getElementById('prod-hist-pagina');
+
+  const tTotal = document.getElementById('prod-hist-total');
+
+  const prev = document.getElementById('btn-prod-prev');
+
+  const next = document.getElementById('btn-prod-next');
+
+  if (tPagina) tPagina.textContent = `Página ${histProdPagina} de ${histProdTotalPaginas}`;
+
+  if (tTotal) tTotal.textContent = `${total.toLocaleString('es-CO')} registros`;
+
+  if (prev) prev.disabled = histProdPagina <= 1;
+
+  if (next) next.disabled = histProdPagina >= histProdTotalPaginas;
+
+}
+
+
+
+function renderHistorialProduccion(historial) {
+
+  const tbody = document.getElementById('prod-historial-body');
+
+  tbody.innerHTML = historial.map(h => `
+
+        <tr class="hover:bg-gray-50 border-b border-gray-100">
+
+          <td class="px-4 py-3 font-medium text-gray-900">
+
+            <span class="font-bold text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded">${h.documento_numero || ('PROD-' + h.prod_token)}</span>
+
+          </td>
+
+          <td class="px-4 py-3 text-xs text-gray-500">${h.fecha}</td>
+
+          <td class="px-4 py-3 text-xs text-gray-700 font-medium">${h.responsable || '—'}</td>
+
+          <td class="px-4 py-3 font-semibold text-gray-800 text-xs">${h.producto_nombre}</td>
+
+          <td class="px-4 py-3 text-right text-gray-600 font-medium">${h.cantidad.toLocaleString('es-CO')}</td>
+
+          <td class="px-4 py-3 text-right text-blue-600 font-bold">$${h.valor_total.toLocaleString('es-CO')}</td>
+
+          <td class="px-4 py-3 text-center flex items-center justify-center gap-1.5">
+
+            <button onclick="imprimirProduccion(${h.prod_token})" 
+
+                    class="inline-flex items-center gap-1 text-xs text-rose-500 hover:text-rose-700 font-bold border border-rose-100 hover:border-rose-300 bg-rose-50/50 hover:bg-rose-50 rounded-lg px-2.5 py-1 transition"
+
+                    title="Imprimir Comprobante">
+
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+
+              Imprimir
+
+            </button>
+
+            <button onclick="anularProduccion(${h.prod_token}, '${h.producto_nombre}')" 
+
+                    class="inline-flex items-center gap-1 text-xs text-red-600 hover:text-red-800 font-bold border border-red-100 hover:border-red-300 bg-red-50/50 hover:bg-red-50 rounded-lg px-2.5 py-1 transition"
+
+                    title="Anular Producción">
+
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+
+              Anular
+
+            </button>
+
+          </td>
+
+        </tr>
+
+      `).join('');
+
+}
+
+
+
+function imprimirProduccion(token) {
+
+  window.open(`/api/inventario/${NEGOCIO_ID}/produccion/${token}/imprimir`, '_blank');
+
+}
+
+
+
+async function anularProduccion(token, nombre) {
+  const confirmed = confirm(`¿Estás seguro de que deseas ANULAR la producción de "${nombre}"?\n\nEsta acción eliminará el registro de producción, devolverá los insumos al inventario, borrará el asiento contable y recalculará los costos promedio ponderados de todos los productos afectados.`);
+  if (!confirmed) return;
+
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion/${token}/anular`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ forzar: false })
+    });
+    const d = await r.json();
+
+    if (d.requiere_confirmacion && d.alerta) {
+      const a = d.alerta;
+      let msg = `⚠️ ALERTA DE KARDEX Y CONSISTENCIA DE COSTOS\n`;
+      msg += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+      msg += `Estás a punto de anular la producción de "${nombre}".\n\n`;
+      if (a.motivos && a.motivos.length) {
+        msg += `Detalles detectados:\n`;
+        a.motivos.forEach(m => { msg += `• ${m}\n`; });
+      }
+      msg += `\n🚨 IMPACTO CRUCIAL:\n`;
+      msg += `Si anulas esta producción para afinar mermas o corregir cantidades, es OBLIGATORIO que la nueva producción que registres TENGA LA FECHA ORIGINAL: ${a.fecha_produccion_fmt || a.fecha_produccion}.\n\n`;
+      msg += `De lo contrario, las ventas intermedias se desfasarán en costos y el Kardex entrará en saldo negativo.\n\n`;
+      msg += `¿Deseas continuar y ANULAR esta producción bajo tu confirmación?`;
+
+      if (!confirm(msg)) return;
+
+      const r2 = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion/${token}/anular`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ forzar: true })
       });
-
-      const costoUnitario = costoTotalInsumos / val;
-      const unitEl = document.getElementById('prod-preview-costo-unitario');
-      if (unitEl) unitEl.textContent = _fmtProdMon(costoUnitario);
-
-      renderInfoRendimientoProduccion(Number(activePreviewData.cantidad || 1), val);
-    }
-
-    function restaurarCantidadEsperadaProduccion() {
-      if (!activePreviewData) return;
-      const prevCant = activePreviewData.cantidad || 1;
-      const realInp = document.getElementById('prod-preview-cant-input');
-      if (realInp) realInp.value = prevCant;
-      _prodRealManualmenteModificada = false;
-      ajustarCantidadRealProducida(prevCant);
-      toast('Cantidad real restaurada a la cantidad teórica de la simulación', true);
-    }
-
-    function renderInfoRendimientoProduccion(teorica, real) {
-      const rendBox = document.getElementById('prod-rendimiento-info');
-      const pctEl = document.getElementById('prod-rendimiento-pct');
-      const descEl = document.getElementById('prod-rendimiento-desc');
-      if (!rendBox || !pctEl) return;
-
-      if (!teorica || !real || teorica <= 0 || real <= 0) {
-        rendBox.classList.add('hidden');
-        return;
-      }
-
-      const pct = (real / teorica) * 100;
-      const diff = real - teorica;
-      pctEl.textContent = pct.toFixed(1) + '%';
-
-      if (Math.abs(diff) < 0.0001) {
-        rendBox.className = 'flex items-center gap-2 p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700';
-        pctEl.className = 'font-mono font-bold text-slate-800';
-        if (descEl) descEl.textContent = 'Rendimiento estándar perfecto (100% de lo proyectado en tarjeta).';
-      } else if (diff > 0) {
-        rendBox.className = 'flex items-center gap-2 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800';
-        pctEl.className = 'font-mono font-bold text-emerald-700 text-sm';
-        if (descEl) descEl.textContent = `Sobre-rendimiento: +${_fmtProdNum(diff)} und terminadas adicionales con los mismos insumos. El costo unitario disminuye.`;
-      } else {
-        rendBox.className = 'flex items-center gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800';
-        pctEl.className = 'font-mono font-bold text-amber-700 text-sm';
-        if (descEl) descEl.textContent = `Merma / Bajo rendimiento: ${_fmtProdNum(Math.abs(diff))} und menos de lo esperado. El costo unitario absorbe la merma.`;
-      }
-
-      rendBox.classList.remove('hidden');
-    }
-
-    // ── Registrar Producción (Original Exacto) ──
-    async function cargarProductos() {
-      await cargarProductosSilencioso(true);
-    }
-
-    async function registrarProduccion() {
-      const idVal = document.getElementById('prod-ac-id').value;
-      if (!idVal) {
-        toast('Selecciona un producto a producir de la lista', false);
-        return;
-      }
-
-      if (!prodPuedeRegistrar || !activePreviewData) {
-        toast('No se puede registrar. Primero genera la vista previa y asegúrate de contar con stock suficiente de componentes.', false);
-        return;
-      }
-
-      const id    = parseInt(idVal);
-      const qty   = (activePreviewData && Number(activePreviewData.cantidad) > 0)
-        ? Number(activePreviewData.cantidad)
-        : parseFloat(document.getElementById('prod-cantidad').value);
-      if (!qty || qty <= 0) {
-        toast('La cantidad real producida debe ser mayor a cero.', false);
-        return;
-      }
-      const fecha = (document.getElementById('prod-fecha')?.value || '').trim() || null;
-      const notas = document.getElementById('prod-notas').value.trim() || null;
-      const tipo_doc_id = parseInt(document.getElementById('prod-tipo-doc').value) || null;
-      const td = tiposDocProduccion.find(t => t.id === tipo_doc_id);
-      const tipo_documento = td ? td.nombre : null;
-      const documento_numero = document.getElementById('prod-num-doc').value || null;
-      const tercero_id = parseInt(document.getElementById('prod-responsable-id').value) || null;
-      const tercero_nombre = document.getElementById('prod-responsable').value.trim() || null;
-
-      const btn = document.getElementById('prod-btn-registrar');
-      if (btn) btn.disabled = true;
-
-      // Extraer componentes reales consumidos
-      const componentes = activePreviewData.lineas.map(l => ({
-        componente_id: l.id,
-        cantidad: l.a_consumir
-      }));
-
-      try {
-        const r = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion`, {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({
-            producto_id: id,
-            cantidad: qty,
-            fecha,
-            notas,
-            tipo_documento_id: tipo_doc_id,
-            tipo_documento,
-            documento_numero,
-            tercero_id,
-            tercero_nombre,
-            componentes
-          })
-        });
-        const d = await r.json();
-        if (d.ok) {
-          toast(`✅ Producción registrada: ${d.producido} × ${d.producto}`);
-          document.getElementById('prod-ac-input').value = '';
-          document.getElementById('prod-ac-id').value = '';
-          document.getElementById('prod-cantidad').value = '1';
-          document.getElementById('prod-notas').value = '';
-          const prodFechaEl = document.getElementById('prod-fecha');
-          if (prodFechaEl) {
-            prodFechaEl.value = getFechaHoyBogota();
-            prodFechaEl.max = getFechaHoyBogota();
-          }
-          limpiarPreview();
-          ocultarSugerencia();
-          sessionStorage.removeItem('tuctuc_produccion_reemplazo');
+      const d2 = await r2.json();
+      if (d2.ok) {
+        if (d2.fecha_original) {
+          sessionStorage.setItem('tuctuc_produccion_reemplazo', JSON.stringify({
+            producto_id: d2.producto_id,
+            nombre: nombre,
+            fecha: d2.fecha_original
+          }));
           actualizarAvisoProduccionReemplazo();
-          await cargarProductos();
-          await cargarTiposDocProduccion();
-          await cargarHistorialProduccion(1);
-        } else {
-          toast(d.error || 'Error al registrar la producción', false);
-          if (btn) btn.disabled = false;
         }
-      } catch(e) {
-        console.error(e);
-        toast('Error de red al registrar producción', false);
-        if (btn) btn.disabled = false;
-      }
-    }
-
-    async function cargarHistorialProduccion(pagina = 1) {
-      _historialProduccionPaginaActual = pagina;
-      const tb = document.getElementById('prod-historial-tabla-body');
-      if (!tb) return;
-      tb.innerHTML = '<tr><td colspan="8" class="text-center text-slate-400 py-6 italic">Cargando historial de producciones...</td></tr>';
-
-      const bodParam = (CENTRO_ACTIVO && CENTRO_ACTIVO.id) ? `&bodega=${CENTRO_ACTIVO.id}` : '';
-      try {
-        const res = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion/historial?pagina=${pagina}&por_pagina=15${bodParam}`);
-        const data = await res.json();
-        if (!data.ok) {
-          tb.innerHTML = `<tr><td colspan="8" class="text-center text-rose-500 py-4">${data.error || 'Error al cargar historial'}</td></tr>`;
-          return;
-        }
-
-        renderHistorialProduccion(data.producciones || [], data.total_paginas || 1, pagina);
-      } catch(e) {
-        tb.innerHTML = '<tr><td colspan="8" class="text-center text-rose-500 py-4">Error de red al cargar historial.</td></tr>';
-      }
-    }
-
-    function renderHistorialProduccion(items, totalPags, pagActual) {
-      const tb = document.getElementById('prod-historial-tabla-body');
-      if (!tb) return;
-
-      if (!items.length) {
-        tb.innerHTML = '<tr><td colspan="8" class="text-center text-slate-400 py-6 italic">No hay órdenes de producción registradas en este período.</td></tr>';
-        return;
-      }
-
-      tb.innerHTML = items.map(p => {
-        const safeDoc = (p.numero_documento || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
-        const safeProd = (p.producto_nombre || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
-        const esAnulada = !!p.anulada;
-
-        return `
-          <tr class="hover:bg-slate-50 border-b border-slate-100 transition ${esAnulada ? 'opacity-60 bg-rose-50/30' : ''}">
-            <td class="px-3.5 py-2.5 font-mono text-xs text-slate-600">${p.fecha || ''}</td>
-            <td class="px-3.5 py-2.5 font-mono font-bold text-slate-800">${p.numero_documento || p.id}</td>
-            <td class="px-3.5 py-2.5 font-bold text-slate-900">${p.producto_nombre}</td>
-            <td class="px-3.5 py-2.5 text-right font-mono font-black text-slate-800">${_fmtProdNum(p.cantidad)}</td>
-            <td class="px-3.5 py-2.5 text-right font-mono font-bold text-slate-900">${_fmtProdMon(p.costo_total)}</td>
-            <td class="px-3.5 py-2.5 text-xs text-slate-500">${p.responsable_nombre || '—'}</td>
-            <td class="px-3.5 py-2.5 text-center">
-              ${esAnulada 
-                ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800">❌ Anulada</span>'
-                : '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">🟢 Activa</span>'
-              }
-            </td>
-            <td class="px-3.5 py-2.5 text-right">
-              <div class="flex items-center justify-end gap-1.5">
-                <button type="button" onclick="imprimirProduccion(${p.id})" title="Imprimir Comprobante"
-                        class="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition">
-                  🖨️
-                </button>
-                ${!esAnulada ? `
-                  <button type="button" onclick="anularProduccion(${p.id}, '${safeDoc}', '${safeProd}')" title="Anular Producción"
-                          class="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 transition">
-                    🗑️
-                  </button>
-                ` : ''}
-              </div>
-            </td>
-          </tr>
-        `;
-      }).join('');
-
-      // Paginador
-      const pagEl = document.getElementById('prod-historial-paginacion');
-      if (pagEl) {
-        pagEl.innerHTML = `
-          <button type="button" onclick="cargarHistorialProduccion(${Math.max(1, pagActual - 1)})" ${pagActual <= 1 ? 'disabled' : ''}
-                  class="px-3 py-1 rounded-lg border border-slate-200 text-xs font-bold text-slate-600 disabled:opacity-40 hover:bg-slate-50">
-            &larr; Anterior
-          </button>
-          <span class="text-xs font-bold text-slate-500">Página ${pagActual} de ${totalPags}</span>
-          <button type="button" onclick="cargarHistorialProduccion(${Math.min(totalPags, pagActual + 1)})" ${pagActual >= totalPags ? 'disabled' : ''}
-                  class="px-3 py-1 rounded-lg border border-slate-200 text-xs font-bold text-slate-600 disabled:opacity-40 hover:bg-slate-50">
-            Siguiente &rarr;
-          </button>
-        `;
-      }
-    }
-
-    function toggleHistorialProduccion() {
-      const sec = document.getElementById('seccion-historial-produccion-body');
-      const icon = document.getElementById('historial-produccion-toggle-icon');
-      if (!sec) return;
-      const isHidden = sec.classList.contains('hidden');
-      if (isHidden) {
-        sec.classList.remove('hidden');
-        if (icon) icon.textContent = '▼';
-        cargarHistorialProduccion(1);
+        toast(`Producción anulada. Si vas a rehacerla, usa la fecha original: ${d2.fecha_original || a.fecha_produccion}`, true);
+        cargarHistorialProduccion();
+        cargarProductos();
       } else {
-        sec.classList.add('hidden');
-        if (icon) icon.textContent = '▶';
+        toast(d2.error || 'Error al anular producción', false);
       }
+      return;
     }
 
-    function imprimirProduccion(id) {
-      window.open(`/produccion/${NEGOCIO_ID}/imprimir/${id}`, '_blank');
+    if (d.ok) {
+      if (d.fecha_original) {
+        sessionStorage.setItem('tuctuc_produccion_reemplazo', JSON.stringify({
+          producto_id: d.producto_id,
+          nombre: nombre,
+          fecha: d.fecha_original
+        }));
+        actualizarAvisoProduccionReemplazo();
+      }
+      toast('Producción anulada con éxito y costos recalculados');
+      cargarHistorialProduccion();
+      cargarProductos();
+    } else {
+      toast(d.error || 'Error al anular producción', false);
+    }
+  } catch (e) {
+    console.error(e);
+    toast('Error de red al anular producción', false);
+  }
+}
+
+function actualizarAvisoProduccionReemplazo() {
+  const box = document.getElementById('aviso-prod-reemplazo');
+  const spanFecha = document.getElementById('aviso-prod-reemplazo-fecha');
+  if (!box || !spanFecha) return;
+  const raw = sessionStorage.getItem('tuctuc_produccion_reemplazo');
+  if (!raw) {
+    box.classList.add('hidden');
+    return;
+  }
+  try {
+    const data = JSON.parse(raw);
+    if (data && data.fecha) {
+      spanFecha.textContent = data.fecha;
+      box.classList.remove('hidden');
+    } else {
+      box.classList.add('hidden');
+    }
+  } catch(e) {
+    box.classList.add('hidden');
+  }
+}
+
+function aplicarFechaProduccionReemplazo() {
+  toast('La fecha de producción está bloqueada estrictamente a la fecha actual.', false);
+}
+
+async function cargarHistorialRecosteos() {
+  const tbody = document.getElementById('historial-recosteos-body');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="8" class="text-center py-6 text-gray-400 italic">Cargando historial de recosteos...</td></tr>';
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/recosteo/historial?limite=50`);
+    const d = await r.json();
+    if (!d.ok || !d.historial || !d.historial.length) {
+      tbody.innerHTML = '<tr><td colspan="8" class="text-center py-6 text-gray-400 italic">No hay registros de recosteo recientes.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = d.historial.map(h => {
+      const origLabels = {
+        'manual_kardex': '<span class="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full font-bold text-[10px]">Manual Kardex</span>',
+        'recosteo_global': '<span class="bg-purple-50 text-purple-700 px-2 py-0.5 rounded-full font-bold text-[10px]">Recosteo Global</span>',
+        'produccion': '<span class="bg-amber-50 text-amber-800 px-2 py-0.5 rounded-full font-bold text-[10px]">Producción</span>',
+        'compra': '<span class="bg-emerald-50 text-emerald-800 px-2 py-0.5 rounded-full font-bold text-[10px]">Factura Compra</span>',
+        'ajuste': '<span class="bg-rose-50 text-rose-800 px-2 py-0.5 rounded-full font-bold text-[10px]">Ajuste Inv.</span>',
+        'anulacion_produccion': '<span class="bg-red-50 text-red-800 px-2 py-0.5 rounded-full font-bold text-[10px]">Anulación Prod.</span>'
+      };
+      const origBadge = origLabels[h.origen] || `<span class="bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full font-bold text-[10px]">${h.origen || 'Sistema'}</span>`;
+      const docStr = (h.documento_tipo || h.documento_numero) ? `${h.documento_tipo || ''} #${h.documento_numero || ''}`.trim() : '—';
+      const cantAjust = h.movimientos_afectados > 0 ? `<span class="font-bold text-amber-600">${h.movimientos_afectados}</span>` : '<span class="text-gray-400">0</span>';
+      return `
+        <tr class="hover:bg-slate-50 transition">
+          <td class="px-3 py-2 font-mono text-gray-700 whitespace-nowrap">${h.fecha_hora}</td>
+          <td class="px-3 py-2 font-bold text-gray-900">${h.producto_nombre || 'Producto #' + h.producto_id}</td>
+          <td class="px-3 py-2">${origBadge}</td>
+          <td class="px-3 py-2 font-mono text-gray-600">${docStr}</td>
+          <td class="px-3 py-2 text-gray-700">${h.usuario_nombre || 'Sistema'}</td>
+          <td class="px-3 py-2 text-right font-mono text-gray-500">$${(Number(h.costo_anterior) || 0).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 4})}</td>
+          <td class="px-3 py-2 text-right font-mono font-bold text-gray-800">$${(Number(h.costo_nuevo) || 0).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 4})}</td>
+          <td class="px-3 py-2 text-center">${cantAjust}</td>
+        </tr>
+      `;
+    }).join('');
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="8" class="text-center py-4 text-red-500 font-bold">Error cargando historial: ${e.message}</td></tr>`;
+  }
+}
+
+
+
+function mostrarConsecutivoProduccion() {
+
+  const id = parseInt(document.getElementById('prod-tipo-doc').value);
+
+  const td = tiposDocProduccion.find(t => t.id === id);
+
+  const input = document.getElementById('prod-num-doc');
+
+  if (input) {
+
+    if (td) {
+
+      const nextNum = Math.max((td.consecutivo || 0) + 1, (td.numero_inicio || 1));
+
+      input.value = nextNum;
+
+    } else {
+
+      input.value = '';
+
     }
 
-    async function anularProduccion(id, numDoc, prodNombre) {
-      if (!confirm(`¿Estás seguro de anular la orden de producción #${numDoc} de "${prodNombre}"?\nSe reversarán los consumos de insumos y el stock obtenido.`)) {
-        return;
-      }
-      try {
-        const res = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion/${id}/anular`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' }
-        });
-        const d = await res.json();
-        if (d.ok) {
-          toast(`Orden #${numDoc} anulada correctamente`, true);
-          cargarHistorialProduccion(_historialProduccionPaginaActual);
-        } else {
-          toast(d.error || 'Error al anular producción', false);
-        }
-      } catch(e) {
-        toast('Error de red al anular producción', false);
-      }
-    }
+  }
 
-    // ── Modal de Ajuste de Receta Estándar ──
-    function abrirAjusteReceta() {
-      if (!activePreviewData) {
-        toast('Carga la vista previa de producción antes de ajustar la receta', false);
-        return;
-      }
-      const qty = parseFloat(document.getElementById('prod-preview-cant-input')?.value) || activePreviewData.cantidad;
-      document.getElementById('ajuste-cant-producir').textContent = _fmtProdNum(qty);
+}
 
-      let costoActualUnitario = 0;
-      let costoNuevoUnitario = 0;
 
-      const tb = document.getElementById('ajuste-comparativa-body');
-      tb.innerHTML = (activePreviewData.lineas || []).map(l => {
-        const cantActual = Number(l.cant_tarjeta || 0);
-        const cantNueva = Number(l.a_consumir || 0) / qty;
-        const dif = cantNueva - cantActual;
 
-        costoActualUnitario += cantActual * Number(l.costo_und || 0);
-        costoNuevoUnitario += cantNueva * Number(l.costo_und || 0);
 
-        let diffClass = 'text-slate-400';
-        let diffSign = '';
-        if (dif > 0) { diffClass = 'text-rose-600 font-bold'; diffSign = '+'; }
-        else if (dif < 0) { diffClass = 'text-emerald-600 font-bold'; }
-
-        return `
-          <tr class="py-2 border-b border-slate-100">
-            <td class="py-2 font-bold text-slate-800">${l.componente_nombre || l.nombre}</td>
-            <td class="py-2 text-right font-mono text-slate-600">${_fmtProdNum(cantActual)}</td>
-            <td class="py-2 text-right font-mono font-bold text-indigo-700">${_fmtProdNum(cantNueva)}</td>
-            <td class="py-2 text-right font-mono ${diffClass}">${diffSign}${_fmtProdNum(dif)}</td>
-          </tr>
-        `;
-      }).join('');
-
-      document.getElementById('ajuste-costo-actual').textContent = _fmtProdMon(costoActualUnitario);
-      document.getElementById('ajuste-costo-nuevo').textContent = _fmtProdMon(costoNuevoUnitario);
-
-      const impactEl = document.getElementById('ajuste-costo-impacto-pct');
-      if (impactEl) {
-        const pctDiff = costoActualUnitario > 0 ? ((costoNuevoUnitario - costoActualUnitario) / costoActualUnitario) * 100 : 0;
-        impactEl.textContent = (pctDiff >= 0 ? '+' : '') + pctDiff.toFixed(2) + '%';
-        impactEl.className = `px-2.5 py-1 rounded-lg text-xs font-extrabold font-mono ${pctDiff > 0 ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`;
-      }
-
-      document.getElementById('overlay-ajuste-receta').classList.remove('hidden');
-    }
-
-    function cerrarAjusteReceta() {
-      const el = document.getElementById('overlay-ajuste-receta');
-      if (el) el.classList.add('hidden');
-    }
-
-    async function confirmarAjusteReceta() {
-      if (!activePreviewData) return;
-      const prodId = document.getElementById('prod-ac-id')?.value;
-      const qty = parseFloat(document.getElementById('prod-preview-cant-input')?.value) || activePreviewData.cantidad;
-
-      const nuevasLineas = (activePreviewData.lineas || []).map(l => ({
-        insumo_id: l.componente_id || l.id,
-        cantidad: Number(l.a_consumir || 0) / qty,
-        unidad_id: l.unidad_id || null
-      }));
-
-      try {
-        const res = await fetch(`/api/inventario/${NEGOCIO_ID}/tarjeta/${prodId}/ajustar`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ lineas: nuevasLineas })
-        });
-        const d = await res.json();
-        if (d.ok) {
-          toast('✅ Tarjeta estándar maestra actualizada con éxito', true);
-          cerrarAjusteReceta();
-          await previsualizarProduccion(false, true);
-        } else {
-          toast(d.error || 'Error al actualizar receta', false);
-        }
-      } catch(e) {
-        toast('Error de red al actualizar receta', false);
-      }
-    }
 
     // ── Inicialización al Cargar la Página ──
     document.addEventListener('DOMContentLoaded', async () => {
       // 1. Cargar productos en memoria para autocomplete
       await cargarProductosSilencioso(true);
 
-      // 2. Setup Autocomplete de Producto a Preparar
-      setupAC('prod-ac-input', 'prod-ac-list', 'prod-ac-id', () => productos, (item) => {
-        if (!item || !item.id) return;
-        document.getElementById('prod-ac-id').value = item.id;
-        document.getElementById('prod-ac-input').value = item.nombre;
-        sugerirProduccion(item.id);
-        previsualizarProduccion(true, true);
+      // 2. Setup Autocomplete de Producto a Preparar (Original Exacto)
+      setupAC('prod-ac-input', 'prod-ac-list', 'prod-ac-id', () => productos, () => {
+        limpiarPreview();
+        sugerirProduccion();
       });
+      document.getElementById('prod-ac-input')?.addEventListener('input', ocultarSugerencia);
 
-      // 3. Setup Autocomplete de Responsable
+      // 3. Setup Autocomplete Remoto de Responsable
       setupRemoteAC('prod-responsable', 'prod-responsable-list', 'prod-responsable-id', '/api/inventario/proveedores/buscar');
 
-      // 4. Cargar tipos de documento y consecutivo
+      // 4. Cargar tipos de documento parametrizados y consecutivos reales
       await cargarTiposDocProduccion();
 
-      // 5. Decimales configurados
+      // 5. Inicializar decimales configurados
       inicializarDecimalesPreviewProduccion();
 
       // 6. Fecha actual (Bogotá)
       const fechaEl = document.getElementById('prod-fecha');
       if (fechaEl && !fechaEl.value) {
         fechaEl.value = getFechaHoyBogota();
+        fechaEl.max = getFechaHoyBogota();
       }
 
       // 7. Cargar Historial inicial (página 1)

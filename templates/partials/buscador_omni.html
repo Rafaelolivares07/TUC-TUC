@@ -877,10 +877,27 @@
       input.value = '';
       const win = window.open(url, '_blank');
       if (win) {
-        win.focus();
-      } else {
-        window.location.href = url;
+        try { win.focus(); } catch (e) {}
+        return;
       }
+      // La tablet bloquea window.open pero respeta enlaces reales: navegar como enlace.
+      const aEnlace = document.createElement('a');
+      aEnlace.href = url;
+      aEnlace.target = '_blank';
+      aEnlace.rel = 'noopener';
+      document.body.appendChild(aEnlace);
+      aEnlace.click();
+      aEnlace.remove();
+      // Ultimo recurso: si nada se abrio (sigue visible y enfocada), misma pestana.
+      let omniSalio = false;
+      const omniMarcarSalida = () => { omniSalio = true; };
+      document.addEventListener('visibilitychange', omniMarcarSalida, { once: true });
+      window.addEventListener('blur', omniMarcarSalida, { once: true });
+      setTimeout(() => {
+        document.removeEventListener('visibilitychange', omniMarcarSalida);
+        window.removeEventListener('blur', omniMarcarSalida);
+        if (!omniSalio) window.location.href = url;
+      }, 900);
       return;
     }
 

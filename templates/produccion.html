@@ -1822,7 +1822,6 @@ async function cargarSugerenciasProduccion() {
 
 
 
-async 
 
 function cambiarDecimalesPreviewProduccion(val) {
   let d = parseInt(val, 10);
@@ -2700,7 +2699,8 @@ async function cargarHistorialProduccion(pagina = 1) {
 
       actualizarPaginadorHistProd(d.total || 0);
 
-      if (!d.historial.length) {
+      const histLista = d.historial || [];
+      if (!histLista.length) {
 
         tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-gray-400 italic">No hay registros de producción.</td></tr>';
 
@@ -2708,7 +2708,7 @@ async function cargarHistorialProduccion(pagina = 1) {
 
       }
 
-      renderHistorialProduccion(d.historial);
+      renderHistorialProduccion(histLista);
 
     } else {
 

@@ -107,6 +107,13 @@ def _obtener_catalogo_base(negocio_id=None, slug=None):
             'keywords': ['desk', 'portal', 'portada', 'buscar', 'buscador', 'lanzador']
         },
         {
+            'titulo': 'Agenda',
+            'modulo': 'General',
+            'icono': '\U0001F5D3\U0000FE0F',
+            'url': '/agenda',
+            'keywords': ['agenda', 'tareas', 'pendientes', 'recordatorios', 'por hacer', 'lista de tareas']
+        },
+        {
             'titulo': 'Kardex',
             'modulo': 'Inventario',
             'icono': '\U0001F4E6',

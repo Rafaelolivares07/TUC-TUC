@@ -1,11 +1,45 @@
 import os
 from datetime import datetime
 
-from flask import Blueprint, render_template, request, jsonify, send_from_directory, url_for, redirect
+from functools import wraps
+
+from flask import Blueprint, render_template, request, jsonify, send_from_directory, url_for, redirect, session
 from ..db import get_db_connection
-from .auth import admin_required
 
 bp = Blueprint('agenda', __name__)
+
+def _login_required(f):
+    """Cualquier usuario autenticado (2026-11-02: agenda para todos)."""
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if not session.get('usuario_id'):
+            if (request.is_json or
+                    request.headers.get('X-Requested-With') == 'XMLHttpRequest' or
+                    'application/json' in request.headers.get('Accept', '')):
+                return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+            return redirect(url_for('auth.admin_login'))
+        return f(*args, **kwargs)
+    return wrapper
+
+
+def _uid():
+    try:
+        v = session.get('usuario_id')
+        return int(v) if v else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _es_admin():
+    return session.get('rol') == 'Administrador'
+
+
+def _alcance():
+    """(where, params): no-admin solo ve lo suyo; admin todo."""
+    if _es_admin():
+        return '', []
+    return ' AND usuario_id = %s', [_uid()]
+
 
 _AGENDA_IMG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'agenda_imagenes')
 os.makedirs(_AGENDA_IMG_DIR, exist_ok=True)
@@ -75,6 +109,11 @@ def _asegurar_tabla():
             conn.commit()
         except Exception:
             conn.rollback()
+        try:
+            conn.execute("ALTER TABLE agenda_items ADD COLUMN usuario_id INTEGER")
+            conn.commit()
+        except Exception:
+            conn.rollback()
         conn.execute("""
             CREATE TABLE IF NOT EXISTS agenda_item_imagenes (
                 id SERIAL PRIMARY KEY,
@@ -110,13 +149,21 @@ def _asegurar_tabla():
 
 
 @bp.route('/agenda')
-@admin_required
+@_login_required
 def agenda():
     _asegurar_tabla()
+    _alc, _par = _alcance()
+    _fuid = request.args.get('usuario_id', '').strip()
+    if _es_admin() and _fuid:
+        try:
+            _alc, _par = ' AND usuario_id = %s', [int(_fuid)]
+        except ValueError:
+            pass
     with get_db_connection() as conn:
         cur = conn.execute("""
-            SELECT id, texto, completado, categoria, orden, fecha_limite, completado_en, enviado_a
+            SELECT id, texto, completado, categoria, orden, fecha_limite, completado_en, enviado_a, usuario_id
             FROM agenda_items
+            WHERE 1 = 1""" + _alc + """
             ORDER BY completado ASC,
                      CASE WHEN completado = FALSE AND enviado_a IS NOT NULL AND enviado_a != '' THEN 0 ELSE 1 END ASC,
                      CASE WHEN completado = FALSE THEN
@@ -127,7 +174,7 @@ def agenda():
                      CASE WHEN completado = FALSE THEN id ELSE NULL END ASC,
                      completado_en DESC NULLS LAST,
                      id DESC
-        """)
+        """, _par)
         items = cur.fetchall()
         cur2 = conn.execute("""
             SELECT item_id, id, url, ruta, ocr_texto FROM agenda_item_imagenes ORDER BY id
@@ -163,7 +210,7 @@ def agenda():
 
 
 @bp.route('/agenda/item', methods=['POST'])
-@admin_required
+@_login_required
 def agregar_item():
     _asegurar_tabla()
     data = request.get_json() or {}
@@ -174,8 +221,8 @@ def agregar_item():
         return jsonify({'ok': False, 'error': 'Texto vacío'})
     with get_db_connection() as conn:
         cur = conn.execute(
-            "INSERT INTO agenda_items (texto, categoria, fecha_limite) VALUES (%s, %s, %s) RETURNING id",
-            (texto, categoria, fecha_limite)
+            "INSERT INTO agenda_items (texto, categoria, fecha_limite, usuario_id) VALUES (%s, %s, %s, %s) RETURNING id",
+            (texto, categoria, fecha_limite, _uid())
         )
         item_id = cur.fetchone()[0]
         conn.commit()
@@ -183,41 +230,51 @@ def agregar_item():
 
 
 @bp.route('/agenda/item/<int:item_id>/toggle', methods=['POST'])
-@admin_required
+@_login_required
 def toggle_item(item_id):
     with get_db_connection() as conn:
-        row = conn.execute("SELECT completado FROM agenda_items WHERE id = %s", (item_id,)).fetchone()
+        _w, _p = _alcance()
+        row = conn.execute("SELECT completado FROM agenda_items WHERE id = %s" + _w, (item_id, *_p)).fetchone()
         if not row:
             return jsonify({'ok': False, 'error': 'No encontrado'})
         
         nuevo_estado = not row['completado']
         if nuevo_estado:
             conn.execute(
-                "UPDATE agenda_items SET completado = TRUE, completado_en = CURRENT_TIMESTAMP WHERE id = %s",
-                (item_id,)
+                "UPDATE agenda_items SET completado = TRUE, completado_en = CURRENT_TIMESTAMP WHERE id = %s" + _w,
+                (item_id, *_p)
             )
         else:
             conn.execute(
-                "UPDATE agenda_items SET completado = FALSE, completado_en = NULL WHERE id = %s",
-                (item_id,)
+                "UPDATE agenda_items SET completado = FALSE, completado_en = NULL WHERE id = %s" + _w,
+                (item_id, *_p)
             )
         conn.commit()
     return jsonify({'ok': True, 'completado': nuevo_estado})
 
 
 @bp.route('/agenda/item/<int:item_id>', methods=['DELETE'])
-@admin_required
+@_login_required
 def eliminar_item(item_id):
+    _w, _p = _alcance()
     with get_db_connection() as conn:
+        row = conn.execute("SELECT id FROM agenda_items WHERE id = %s" + _w, (item_id, *_p)).fetchone()
+        if not row:
+            return jsonify({'ok': False, 'error': 'No encontrado'})
         conn.execute("DELETE FROM agenda_items WHERE id = %s", (item_id,))
         conn.commit()
     return jsonify({'ok': True})
 
 
 @bp.route('/agenda/item/<int:item_id>/imagen', methods=['POST'])
-@admin_required
+@_login_required
 def subir_imagen_item(item_id):
     _asegurar_tabla()
+    _w, _p = _alcance()
+    with get_db_connection() as conn:
+        _ok = conn.execute("SELECT id FROM agenda_items WHERE id = %s" + _w, (item_id, *_p)).fetchone()
+    if not _ok:
+        return jsonify({'ok': False, 'error': 'No encontrado'}), 404
     if 'imagen' not in request.files:
         return jsonify({'ok': False, 'error': 'No se recibió archivo'}), 400
     try:
@@ -274,12 +331,14 @@ def subir_imagen_item(item_id):
 
 
 @bp.route('/agenda/imagen/<int:img_id>/archivo')
-@admin_required
+@_login_required
 def servir_imagen_item(img_id):
     with get_db_connection() as conn:
-        cur = conn.execute("SELECT ruta, url FROM agenda_item_imagenes WHERE id = %s", (img_id,))
+        cur = conn.execute("SELECT i.ruta, i.url, a.usuario_id FROM agenda_item_imagenes i JOIN agenda_items a ON a.id = i.item_id WHERE i.id = %s", (img_id,))
         row = cur.fetchone()
     if not row:
+        return 'Not found', 404
+    if not _es_admin() and row['usuario_id'] != _uid():
         return 'Not found', 404
 
     ruta_guardada = row['ruta'] or ''
@@ -303,12 +362,14 @@ def servir_imagen_item(img_id):
 
 
 @bp.route('/agenda/imagen/<int:img_id>', methods=['DELETE'])
-@admin_required
+@_login_required
 def eliminar_imagen_item(img_id):
     with get_db_connection() as conn:
-        cur = conn.execute("SELECT ruta, url FROM agenda_item_imagenes WHERE id = %s", (img_id,))
+        cur = conn.execute("SELECT i.ruta, i.url, a.usuario_id FROM agenda_item_imagenes i JOIN agenda_items a ON a.id = i.item_id WHERE i.id = %s", (img_id,))
         row = cur.fetchone()
         if not row:
+            return jsonify({'ok': False, 'error': 'Imagen no encontrada'})
+        if not _es_admin() and row['usuario_id'] != _uid():
             return jsonify({'ok': False, 'error': 'Imagen no encontrada'})
         conn.execute("DELETE FROM agenda_item_imagenes WHERE id = %s", (img_id,))
         conn.commit()
@@ -329,7 +390,7 @@ def eliminar_imagen_item(img_id):
 
 
 @bp.route('/agenda/item/<int:item_id>/edit', methods=['POST'])
-@admin_required
+@_login_required
 def editar_item(item_id):
     data = request.get_json() or {}
     texto = (data.get('texto') or '').strip()
@@ -339,13 +400,14 @@ def editar_item(item_id):
     if not texto:
         return jsonify({'ok': False, 'error': 'El texto de la tarea no puede estar vacío'})
         
+    _w, _p = _alcance()
     with get_db_connection() as conn:
-        row = conn.execute("SELECT id FROM agenda_items WHERE id = %s", (item_id,)).fetchone()
+        row = conn.execute("SELECT id FROM agenda_items WHERE id = %s" + _w, (item_id, *_p)).fetchone()
         if not row:
             return jsonify({'ok': False, 'error': 'Tarea no encontrada'})
         conn.execute(
-            "UPDATE agenda_items SET texto = %s, categoria = %s, fecha_limite = %s WHERE id = %s",
-            (texto, categoria, fecha_limite, item_id)
+            "UPDATE agenda_items SET texto = %s, categoria = %s, fecha_limite = %s WHERE id = %s" + _w,
+            (texto, categoria, fecha_limite, item_id, *_p)
         )
         conn.commit()
     return jsonify({'ok': True})
@@ -425,8 +487,8 @@ def merlin_agenda():
         return jsonify({'ok': False, 'error': 'Texto vacío'})
     with get_db_connection() as conn:
         cur = conn.execute(
-            "INSERT INTO agenda_items (texto, categoria, fecha_limite) VALUES (%s, %s, %s) RETURNING id",
-            (texto, categoria, fecha_limite)
+            "INSERT INTO agenda_items (texto, categoria, fecha_limite, usuario_id) VALUES (%s, %s, %s, %s) RETURNING id",
+            (texto, categoria, fecha_limite, _uid())
         )
         item_id = cur.fetchone()[0]
         conn.commit()
@@ -434,30 +496,32 @@ def merlin_agenda():
 
 
 @bp.route('/agenda/reordenar', methods=['POST'])
-@admin_required
+@_login_required
 def reordenar_agenda():
     data = request.get_json() or {}
     ids = data.get('ids')
     if not ids or not isinstance(ids, list):
         return jsonify({'ok': False, 'error': 'Lista de IDs inválida'})
     
+    _w, _p = _alcance()
     with get_db_connection() as conn:
         for idx, item_id in enumerate(ids):
             conn.execute(
-                "UPDATE agenda_items SET orden = %s WHERE id = %s",
-                (idx, item_id)
+                "UPDATE agenda_items SET orden = %s WHERE id = %s" + _w,
+                (idx, item_id, *_p)
             )
         conn.commit()
     return jsonify({'ok': True})
 
 
 @bp.route('/agenda/item/<int:item_id>/activar', methods=['POST'])
-@admin_required
+@_login_required
 def activar_item_agenda(item_id):
+    _w, _p = _alcance()
     with get_db_connection() as conn:
         cur = conn.execute(
-            "SELECT texto, categoria FROM agenda_items WHERE id = %s",
-            (item_id,)
+            "SELECT texto, categoria FROM agenda_items WHERE id = %s" + _w,
+            (item_id, *_p)
         )
         row = cur.fetchone()
         if not row:
@@ -485,8 +549,8 @@ def activar_item_agenda(item_id):
             (contenido,)
         )
         conn.execute(
-            "UPDATE agenda_items SET enviado_a = 'ASISTENTES' WHERE id = %s",
-            (item_id,)
+            "UPDATE agenda_items SET enviado_a = 'ASISTENTES' WHERE id = %s" + _w,
+            (item_id, *_p)
         )
         conn.commit()
 
@@ -496,7 +560,7 @@ def activar_item_agenda(item_id):
 
 
 @bp.route('/agenda/item/activar-multi', methods=['POST'])
-@admin_required
+@_login_required
 def activar_multi_agenda():
     data = request.get_json() or {}
     ids = data.get('ids')
@@ -504,11 +568,12 @@ def activar_multi_agenda():
     if not ids or not isinstance(ids, list):
         return jsonify({'ok': False, 'error': 'Lista de IDs inválida'})
     
+    _w, _p = _alcance()
     with get_db_connection() as conn:
         placeholders = ', '.join(['%s'] * len(ids))
         cur = conn.execute(
-            f"SELECT id, texto, categoria FROM agenda_items WHERE id IN ({placeholders})",
-            tuple(ids)
+            f"SELECT id, texto, categoria FROM agenda_items WHERE id IN ({placeholders})" + _w,
+            tuple(ids) + tuple(_p)
         )
         rows = cur.fetchall()
         if not rows:
@@ -558,8 +623,8 @@ def activar_multi_agenda():
         
         placeholders3 = ', '.join(['%s'] * len(ids))
         conn.execute(
-            f"UPDATE agenda_items SET enviado_a = %s WHERE id IN ({placeholders3})",
-            (db_label,) + tuple(ids)
+            f"UPDATE agenda_items SET enviado_a = %s WHERE id IN ({placeholders3})" + _w,
+            (db_label,) + tuple(ids) + tuple(_p)
         )
         conn.commit()
         _escribir_bridge_chat(db_content, prefix)

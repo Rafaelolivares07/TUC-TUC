@@ -147,12 +147,20 @@
             margin: auto !important;
         }
 
+        @media (max-width: 767px) {
+            #lista-productos {
+                max-height: none !important;
+                overflow-y: visible !important;
+                padding-bottom: 8rem !important;
+            }
+        }
+
         @media (min-width: 768px) {
             #layout { display: grid; grid-template-columns: 1fr 390px; gap: 0.75rem; }
             #lista-productos {
                 max-height: calc(100dvh - 210px);
                 max-height: calc(100vh - 210px);
-                padding-bottom: 3rem;
+                padding-bottom: 4.5rem;
             }
             #carrito-items { max-height: 42vh; }
         }
@@ -206,7 +214,7 @@
         {% endif %}
         <h1 class="text-2xl font-bold text-gray-800 mb-1">{{ tienda.nombre }}</h1>
         <p class="text-gray-500 mb-2">Caja — Ingresa tu PIN</p>
-        <span class="inline-block bg-indigo-100 text-indigo-800 text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-full border border-indigo-200 mb-6">{{ APP_VERSION|default('v2.4.2') }}</span>
+        <span class="inline-block bg-indigo-100 text-indigo-800 text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-full border border-indigo-200 mb-6">{{ APP_VERSION|default('v2.4.3') }}</span>
         <div class="flex gap-3 justify-center mb-6">
             <input id="pin-input" type="password" inputmode="numeric" maxlength="10"
                    placeholder="••••"
@@ -229,7 +237,7 @@
         <div class="flex flex-wrap items-center gap-1.5 min-w-0 flex-1">
             <h1 class="font-bold text-gray-800 text-sm sm:text-lg truncate max-w-[130px] sm:max-w-none">{{ tienda.nombre }}</h1>
             <span class="bg-green-100 text-green-700 text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-full shrink-0">Caja</span>
-            <span class="bg-indigo-100 text-indigo-800 text-[9px] sm:text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-full border border-indigo-200 shrink-0">{{ APP_VERSION|default('v2.4.2') }}</span>
+            <span class="bg-indigo-100 text-indigo-800 text-[9px] sm:text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-full border border-indigo-200 shrink-0">{{ APP_VERSION|default('v2.4.3') }}</span>
             <span id="badge-cajero" class="bg-blue-100 text-blue-700 text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-full hidden shrink-0 truncate max-w-[110px]"></span>
             <!-- Centro de Utilidad Selector Directo y Botón Sedes -->
             <div class="inline-flex items-center gap-1 bg-emerald-50 border border-emerald-300 rounded-xl px-2 py-0.5 shadow-xs transition hover:bg-emerald-100/70 shrink-0 max-w-[190px] sm:max-w-none">
@@ -3991,6 +3999,7 @@ function cambiarVistaCatalogo(vista) {
     }
     const q = document.getElementById('busqueda') ? document.getElementById('busqueda').value : '';
     filtrarProductos(q);
+    ajustarAlturaCatalogo();
 }
 
 function renderProductos(lista) {
@@ -4045,7 +4054,28 @@ function renderProductos(lista) {
             </button>
         `).join('');
     }
+    ajustarAlturaCatalogo();
 }
+
+function ajustarAlturaCatalogo() {
+    const cont = document.getElementById('lista-productos');
+    if (!cont) return;
+    if (window.innerWidth < 768) {
+        cont.style.maxHeight = 'none';
+        cont.style.overflowY = 'visible';
+        cont.style.paddingBottom = '8rem';
+    } else {
+        const rect = cont.getBoundingClientRect();
+        const espacioRestante = Math.floor(window.innerHeight - rect.top - 20);
+        if (espacioRestante > 180) {
+            cont.style.maxHeight = espacioRestante + 'px';
+            cont.style.overflowY = 'auto';
+            cont.style.paddingBottom = '4.5rem';
+        }
+    }
+}
+window.addEventListener('resize', ajustarAlturaCatalogo);
+window.addEventListener('orientationchange', ajustarAlturaCatalogo);
 
 // ── Carrito & Personalización de Ingredientes y Adiciones ───────────────────────
 
@@ -4598,6 +4628,7 @@ function cambiarTabMovil(tab) {
     if (isMobile) {
         if (tab === 'catalogo') {
             if (pCat) pCat.classList.remove('hidden');
+            setTimeout(ajustarAlturaCatalogo, 50);
             if (pCar) pCar.classList.add('hidden');
             if (tabCat) tabCat.className = "flex-1 py-2 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all shadow-sm bg-white text-gray-800 cursor-pointer";
             if (tabCar) tabCar.className = "flex-1 py-2 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all text-gray-600 hover:text-gray-900 cursor-pointer";

@@ -2294,6 +2294,8 @@ function abrirModalCrearPresentacion(nombreInicial = '', targetIdx = null, presI
 
     // ── Funciones Principales de Productos y Costos Unitarios ──
 
+let prodSortCol = 'nombre';
+let prodSortAsc = true;
 let _isFetchingProductosSilencioso = false;
 let _ultimoFetchProductosTimestamp = 0;
 
@@ -2309,10 +2311,11 @@ async function cargarProductos(silencioso = false) {
     productos = d.productos || [];
     _ultimoFetchProductosTimestamp = Date.now();
     
-    // Solo actualizamos la tabla si el usuario está físicamente viendo la pestaña de productos
-    const tabProd = document.getElementById('tab-productos');
-    if (tabProd && !tabProd.classList.contains('hidden') && typeof filtrarTablaProductos === 'function') {
+    // Renderizar productos en la tabla
+    if (typeof filtrarTablaProductos === 'function') {
       filtrarTablaProductos();
+    } else if (typeof renderTablaProductos === 'function') {
+      renderTablaProductos(productos);
     }
     return productos;
   } catch(e) {

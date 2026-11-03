@@ -1256,105 +1256,163 @@
       if (el) el.classList.add('hidden');
     }
 
-    // ── Tira Predictiva y Simulación por Materia Prima ──
-    async function sugerirProduccion(productoId = null) {
-      const id = productoId || document.getElementById('prod-ac-id')?.value;
-      if (!id) { ocultarSugerencia(); return; }
-      const seq = ++_sugSeq;
-      const bodParam = (CENTRO_ACTIVO && CENTRO_ACTIVO.id) ? `?bodega=${CENTRO_ACTIVO.id}` : '';
-      try {
-        const res = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion/${id}/sugerencia${bodParam}`);
-        const d = await res.json();
-        if (seq !== _sugSeq) return;
-        if (!d.ok) { ocultarSugerencia(); return; }
-        prodSugerenciaData = d;
-        renderSugerencia(true);
-      } catch(e) {
-        console.error('Error cargando sugerencia:', e);
-      }
+    // ── Tira Predictiva y Simulación por Materia Prima (Original Exacto) ──
+    function _prodSugBodegaParam() {
+  return (typeof CENTRO_ACTIVO !== 'undefined' && CENTRO_ACTIVO && CENTRO_ACTIVO.id) ? `&bodega=${encodeURIComponent(CENTRO_ACTIVO.id)}` : '';
+}
+
+async function sugerirProduccion() {
+  const id = document.getElementById('prod-ac-id').value;
+  const strip = document.getElementById('prod-sugerencia');
+  prodSugerenciaData = null;
+  if (!id) { if (strip) strip.classList.add('hidden'); return; }
+  const seq = ++_sugSeq;
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion/sugerencia?producto_id=${id}${_prodSugBodegaParam()}`);
+    const d = await r.json();
+    if (seq !== _sugSeq) return;
+    if (!d.ok) { if (strip) strip.classList.add('hidden'); toast(d.error || 'Sin sugerencia para este producto', false); return; }
+    prodSugerenciaData = d;
+    document.getElementById('prod-sug-mp-cant').value = '';
+    renderSugerencia(true);
+  } catch(e) { console.error(e); if (seq === _sugSeq) toast('Error de red al cargar sugerencia', false); }
+}
+
+function toggleSimulacionMP() {
+  const body = document.getElementById('prod-sugerencia-body');
+  const icon = document.getElementById('prod-mp-toggle-icon');
+  if (!body) return;
+  const colapsado = body.classList.contains('hidden');
+  if (colapsado) {
+    body.classList.remove('hidden');
+    if (icon) icon.textContent = '▲';
+  } else {
+    body.classList.add('hidden');
+    if (icon) icon.textContent = '▼';
+  }
+}
+
+function renderSugerencia(autoPreview = true) {
+  const d = prodSugerenciaData;
+  if (!d) return;
+  const comps = d.componentes || [];
+  const guia = comps.find(c => c.id === d.guia_id) || comps[0] || {};
+  const lim = comps.find(c => c.id === d.limitante_id) || comps[0] || {};
+  const prodNombre = d.producto || 'producto a fabricar';
+
+  // 1. Cabecera fija: El tope máximo real según el insumo limitante (cuello de botella de inventario)
+  const maxReal = (d.tope_maximo !== undefined && d.tope_maximo !== null) ? d.tope_maximo : (lim.max_qty || 0);
+  const maxRealEl = document.getElementById('prod-sug-max-real');
+  if (maxRealEl) maxRealEl.textContent = _fmtProdNum(maxReal);
+
+  const limNombreEl = document.getElementById('prod-sug-limita-nombre');
+  if (limNombreEl) limNombreEl.textContent = d.limitante_nombre || lim.nombre || '-';
+
+  const limStockEl = document.getElementById('prod-sug-limita-stock');
+  if (limStockEl) limStockEl.textContent = _fmtProdNum(d.limitante_stock !== undefined ? d.limitante_stock : lim.stock);
+
+  // 2. Información de simulación activa (si está en modo desde_mp)
+  const simInfoEl = document.getElementById('prod-sug-sim-info');
+  if (simInfoEl) {
+    if (d.modo === 'desde_mp') {
+      const cantMP = parseFloat(document.getElementById('prod-sug-mp-cant').value) || 0;
+      simInfoEl.innerHTML = `🔬 Simulación: <b>${_fmtProdNum(cantMP)}</b> de <i>${guia.nombre}</i> → Esperado: <b>${_fmtProdNum(d.sugerida)} und</b>`;
+      simInfoEl.classList.remove('hidden');
+    } else {
+      simInfoEl.classList.add('hidden');
     }
+  }
 
-    function toggleSimulacionMP() {
-      const body = document.getElementById('prod-sugerencia-body');
-      const icon = document.getElementById('prod-mp-toggle-icon');
-      if (!body) return;
-      const isHidden = body.classList.contains('hidden');
-      if (isHidden) {
-        body.classList.remove('hidden');
-        if (icon) icon.textContent = '▲';
-      } else {
-        body.classList.add('hidden');
-        if (icon) icon.textContent = '▼';
-      }
+  // 1. Opciones del selector: Mostrar el nombre de la MP y su stock disponible en bodega
+  const sel = document.getElementById('prod-sug-guia');
+  sel.innerHTML = comps.map(c => {
+    const esSel = (c.id === d.guia_id);
+    return `<option value="${c.id}"${esSel ? ' selected' : ''}>${c.nombre} (Stock en bodega: ${_fmtProdNum(c.stock)})</option>`;
+  }).join('');
+
+  // 2. Badge de stock de la materia prima seleccionada
+  const stockBadge = document.getElementById('prod-sug-stock-guia-badge');
+  if (stockBadge) {
+    stockBadge.textContent = `Stock disponible: ${_fmtProdNum(guia.stock)}`;
+  }
+
+  // 3. Explicación clara de rendimiento: cuánto producto final permite fabricar
+  const helperEl = document.getElementById('prod-sug-guia-helper');
+  if (helperEl) {
+    helperEl.innerHTML = `💡 Con tu stock de <b>${guia.nombre}</b> (${_fmtProdNum(guia.stock)}) puedes fabricar hasta: <span class="text-amber-950 font-black">${_fmtProdNum(guia.max_qty)} und</span> de <i>${prodNombre}</i>.`;
+  }
+
+  // 4. Placeholder del input MP
+  const mpCantInput = document.getElementById('prod-sug-mp-cant');
+  if (mpCantInput && !mpCantInput.value) {
+    mpCantInput.placeholder = `Máx: ${_fmtProdNum(guia.stock)}`;
+  }
+  document.getElementById('prod-sug-mp-nombre').textContent = guia.nombre ? `de ${guia.nombre}` : '';
+
+  // 5. Asignar cantidad esperada a producir
+  document.getElementById('prod-cantidad').value = d.sugerida;
+  const sugRealEl = document.getElementById('prod-sug-real-cant');
+  if (sugRealEl) sugRealEl.value = d.sugerida;
+
+  document.getElementById('prod-sugerencia').classList.remove('hidden');
+  if (autoPreview && d.sugerida > 0) {
+    previsualizarProduccion(false, false);
+  } else {
+    limpiarPreview();
+  }
+}
+
+async function sugerenciaCambioGuia() {
+  const id = document.getElementById('prod-ac-id').value;
+  const guiaId = document.getElementById('prod-sug-guia').value;
+  if (!id || !guiaId) return;
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion/sugerencia?producto_id=${id}&guia_id=${guiaId}${_prodSugBodegaParam()}`);
+    const d = await r.json();
+    if (!d.ok) { toast(d.error, false); return; }
+    prodSugerenciaData = d;
+    document.getElementById('prod-sug-mp-cant').value = '';
+    renderSugerencia();
+  } catch(e) { console.error(e); toast('Error de red al recalcular sugerencia', false); }
+}
+
+async function sugerenciaDesdeMP() {
+  const id = document.getElementById('prod-ac-id').value;
+  const guiaId = document.getElementById('prod-sug-guia').value;
+  const val = parseFloat(document.getElementById('prod-sug-mp-cant').value);
+  if (!val || val <= 0) { toast('Digita la cantidad de materia prima a usar', false); return; }
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion/sugerencia?producto_id=${id}&guia_id=${guiaId}&modo=desde_mp&cantidad_mp=${val}${_prodSugBodegaParam()}`);
+    const d = await r.json();
+    if (!d.ok) { toast(d.error, false); return; }
+    prodSugerenciaData = d;
+    renderSugerencia(true);
+    if (d.excede_stock_guia) toast('La cantidad supera el stock de la guía: verifica disponibilidad en la tabla', false);
+  } catch(e) { console.error(e); toast('Error de red al recalcular sugerencia', false); }
+}
+
+function sugerenciaUsarMaximo() {
+  const d = prodSugerenciaData;
+  if (d && d.componentes) {
+    const guia = d.componentes.find(c => c.id === d.guia_id) || d.componentes[0];
+    if (guia && guia.stock > 0) {
+      document.getElementById('prod-sug-mp-cant').value = guia.stock;
+      sugerenciaDesdeMP();
+      return;
     }
+  }
+  document.getElementById('prod-sug-mp-cant').value = '';
+  sugerenciaCambioGuia();
+}
 
-    function renderSugerencia(autoPreview = true) {
-      const d = prodSugerenciaData;
-      if (!d) return;
-      const sugDiv = document.getElementById('prod-sugerencia');
-      if (!sugDiv) return;
+function ocultarSugerencia() {
+  const strip = document.getElementById('prod-sugerencia');
+  if (strip) strip.classList.add('hidden');
+  _sugSeq++;
+  prodSugerenciaData = null;
+}
 
-      const maxRealEl = document.getElementById('prod-sug-max-real');
-      if (maxRealEl) maxRealEl.textContent = _fmtProdNum(d.tope_maximo || d.sugerida || 0);
 
-      const limNombreEl = document.getElementById('prod-sug-limita-nombre');
-      if (limNombreEl) limNombreEl.textContent = d.limitante_nombre || '-';
-
-      const limStockEl = document.getElementById('prod-sug-limita-stock');
-      if (limStockEl) limStockEl.textContent = _fmtProdNum(d.limitante_stock || 0);
-
-      // Selector de Materia Prima Guía
-      const selMP = document.getElementById('prod-sug-mp-select');
-      if (selMP && d.componentes && d.componentes.length) {
-        selMP.innerHTML = d.componentes.map(c => `
-          <option value="${c.id}" data-stock="${c.stock}" data-rendimiento="${c.max_qty || 0}" data-cant="${c.cant_tarjeta}">
-            ${c.nombre} (Stock: ${_fmtProdNum(c.stock)} ${c.unidad || ''} | Rinde max: ${_fmtProdNum(c.max_qty)} und)
-          </option>
-        `).join('');
-        sugerenciaCambioGuia();
-      }
-
-      sugDiv.classList.remove('hidden');
-    }
-
-    function sugerenciaCambioGuia() {
-      const selMP = document.getElementById('prod-sug-mp-select');
-      const cantInp = document.getElementById('prod-sug-mp-cant');
-      if (!selMP || !cantInp) return;
-      const opt = selMP.selectedOptions[0];
-      if (opt) {
-        cantInp.value = opt.getAttribute('data-stock') || '1';
-      }
-    }
-
-    async function sugerenciaDesdeMP() {
-      const prodId = document.getElementById('prod-ac-id')?.value;
-      const selMP = document.getElementById('prod-sug-mp-select');
-      const cantInp = document.getElementById('prod-sug-mp-cant');
-      if (!prodId || !selMP || !cantInp) return;
-      const mpId = selMP.value;
-      const cantMP = parseFloat(cantInp.value) || 0;
-      if (cantMP <= 0) {
-        toast('Digita una cantidad válida de materia prima a procesar', false);
-        return;
-      }
-      const bodParam = (CENTRO_ACTIVO && CENTRO_ACTIVO.id) ? `&bodega=${CENTRO_ACTIVO.id}` : '';
-      try {
-        const res = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion/${prodId}/sugerencia?modo=desde_mp&mp_id=${mpId}&mp_cant=${cantMP}${bodParam}`);
-        const d = await res.json();
-        if (!d.ok) {
-          toast(d.error || 'Error calculando desde materia prima', false);
-          return;
-        }
-        prodSugerenciaData = d;
-        // Asignar cantidad esperada en Cantidad a Simular y previsualizar
-        document.getElementById('prod-cantidad').value = d.sugerida || 1;
-        await previsualizarProduccion(true, false);
-        toast(`Receta ajustada para procesar ${_fmtProdNum(cantMP)} de materia prima (Rinde ${_fmtProdNum(d.sugerida)} und)`, true);
-      } catch(e) {
-        toast('Error al recalcular por materia prima', false);
-      }
-    }
 
     // ── Previsualizar Producción (Cálculo de Insumos y Costos) ──
     async function previsualizarProduccion(scrollSmooth = true, forzarDesdeTarjeta = true) {

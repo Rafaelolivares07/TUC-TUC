@@ -217,11 +217,12 @@ def _generar_factura(conn):
     ped = conn.execute(
         """INSERT INTO pedidos (negocio_id, cliente_id, nombre_cliente, telefono_cliente,
             estado, cartera_estado, total, subtotal_productos, notas, numero,
-            tipo_documento_id, token_publico)
-           VALUES (%s, %s, %s, %s, 'nuevo', 'pendiente', %s, %s, %s, %s, %s, %s)
+            tipo_documento_id, token_publico, created_at)
+           VALUES (%s, %s, %s, %s, 'nuevo', 'pendiente', %s, %s, %s, %s, %s, %s, %s)
            RETURNING id, created_at""",
         (empresa_id, datos['cliente_id'], CLIENTE['nombre'], CLIENTE['telefono'],
-         total, total, notas, numero, tipodoc_id, token)).fetchone()
+         total, total, notas, numero, tipodoc_id, token,
+         ahora.replace(tzinfo=None))).fetchone()
     conn.execute(
         """INSERT INTO pedido_items (pedido_id, producto_id, nombre_producto, cantidad, precio_unitario)
            VALUES (%s, %s, %s, 1, %s)""",

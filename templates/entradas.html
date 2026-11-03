@@ -237,38 +237,39 @@
           </span>
         </div>
 
-        <span class="relative inline-flex">
-        <button type="button" onclick="toggleMenuEscanearFactura(event)"
-                id="btn-escanear-factura-ia"
-                title="Escanear con cámara, cargar imagen, o pegar con Ctrl+V si la factura está en el portapapeles"
-                class="px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-95 text-white font-extrabold text-xs rounded-xl shadow-sm flex items-center gap-1.5 transition cursor-pointer">
-          <span class="text-sm">📷</span> <span>Escanear / Cargar factura</span>
-        </button>
-        <div id="menu-escanear-factura" class="hidden absolute left-0 top-full mt-1 z-50 w-64 rounded-xl border border-slate-200 bg-white shadow-lg py-1 text-left">
-          <button type="button" onclick="elegirEscanerFactura('camara')"
-                  class="w-full px-3 py-2 text-xs font-bold text-slate-700 hover:bg-emerald-50 flex items-center gap-2 cursor-pointer">
-            <span>📷</span> Escanear con cámara
-          </button>
-          <button type="button" onclick="elegirEscanerFactura('imagen')"
-                  class="w-full px-3 py-2 text-xs font-bold text-slate-700 hover:bg-emerald-50 flex items-center gap-2 cursor-pointer">
-            <span>🖼️</span> Seleccionar imagen
-          </button>
-          <div class="px-3 py-1.5 text-[11px] text-slate-500 border-t border-slate-100">o pega la imagen con <b>Ctrl+V</b></div>
-        </div>
-        </span>
         <input type="file" id="input-escanear-factura" accept="image/*" class="hidden" onchange="escanearFacturaConIA(this)">
 
-        <!-- Grupo Memoria/Equivalencias y Unidades de Empaque en la misma línea anterior -->
-        <div class="inline-flex items-center gap-1.5">
+        <!-- Grupo Único: Escanear + Memoria/Equivalencias + Empaques/Presentaciones JUNTOS en una sola línea -->
+        <div class="inline-flex items-center gap-1.5 flex-nowrap shrink-0">
+          <span class="relative inline-flex">
+            <button type="button" onclick="toggleMenuEscanearFactura(event)"
+                    id="btn-escanear-factura-ia"
+                    title="Escanear con cámara, cargar imagen, o pegar con Ctrl+V si la factura está en el portapapeles"
+                    class="px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-95 text-white font-extrabold text-xs rounded-xl shadow-sm flex items-center gap-1.5 transition cursor-pointer whitespace-nowrap">
+              <span class="text-sm">📷</span> <span>Escanear / Cargar factura</span>
+            </button>
+            <div id="menu-escanear-factura" class="hidden absolute left-0 top-full mt-1 z-50 w-64 rounded-xl border border-slate-200 bg-white shadow-lg py-1 text-left">
+              <button type="button" onclick="elegirEscanerFactura('camara')"
+                      class="w-full px-3 py-2 text-xs font-bold text-slate-700 hover:bg-emerald-50 flex items-center gap-2 cursor-pointer">
+                <span>📷</span> Escanear con cámara
+              </button>
+              <button type="button" onclick="elegirEscanerFactura('imagen')"
+                      class="w-full px-3 py-2 text-xs font-bold text-slate-700 hover:bg-emerald-50 flex items-center gap-2 cursor-pointer">
+                <span>🖼️</span> Seleccionar imagen
+              </button>
+              <div class="px-3 py-1.5 text-[11px] text-slate-500 border-t border-slate-100">o pega la imagen con <b>Ctrl+V</b></div>
+            </div>
+          </span>
+
           <button type="button" onclick="abrirModalDiccionarioAlias()"
                   id="btn-memoria-proveedor"
-                  class="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-950 font-bold text-xs rounded-xl border border-amber-300 flex items-center gap-1.5 transition shadow-2xs cursor-pointer"
+                  class="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-950 font-bold text-xs rounded-xl border border-amber-300 flex items-center gap-1.5 transition shadow-2xs cursor-pointer whitespace-nowrap"
                   title="Diccionario de Aprendizaje: Equivalencias entre nombres de productos de facturas de proveedores e insumos de tu inventario">
             <span>📖</span> <span>Memoria / Equivalencias</span>
-            <span class="text-[10px] bg-amber-200 text-amber-900 font-extrabold px-1.5 py-0.2 rounded-full hidden lg:inline">Diccionario IA</span>
           </button>
+
           <button type="button" onclick="abrirModalGestionPresentaciones()"
-                  class="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-xl border border-indigo-200 flex items-center gap-1.5 transition shadow-2xs cursor-pointer"
+                  class="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-xl border border-indigo-200 flex items-center gap-1.5 transition shadow-2xs cursor-pointer whitespace-nowrap"
                   title="Catálogo de Unidades de Empaque y Presentaciones">
             <span>📦</span> <span>Empaques / Presentaciones</span>
           </button>
@@ -429,23 +430,29 @@
       </div>
 
       <div class="sm:col-span-6 relative">
-        <label class="flex justify-between items-center mb-1">
-          <span class="font-bold text-gray-700">Proveedor</span>
-          <button type="button" id="btn-crear-proveedor" onclick="crearProveedorNuevo()" class="hidden text-xs text-rose-500 hover:text-rose-700 font-bold bg-transparent border-0 p-0 cursor-pointer">
-            ➕ Crear proveedor
-          </button>
-          <span id="badge-proveedor-creado" class="hidden text-xs text-green-600 font-bold">
-            ✅ ¡Creado!
-          </span>
-        </label>
-        <input id="entrada-proveedor" tabindex="6" type="text" placeholder="Nombre del proveedor" autocomplete="off" onfocus="this.select()">
+        <div class="h-6 flex items-end justify-between mb-1 gap-1">
+          <label for="entrada-proveedor" class="text-[11px] font-bold text-gray-700 flex items-center gap-1 mb-0 leading-none">
+            <span>👤 Proveedor (Tercero)</span>
+          </label>
+          <div class="flex items-center gap-1">
+            <button type="button" id="btn-crear-proveedor" onclick="crearProveedorNuevo()" class="hidden text-[10px] text-rose-600 hover:text-rose-800 font-extrabold bg-rose-50 px-1.5 py-0.2 rounded border border-rose-200 cursor-pointer leading-tight">
+              ➕ Crear proveedor
+            </button>
+            <span id="badge-proveedor-creado" class="hidden text-[10px] text-green-700 font-extrabold bg-green-50 px-1.5 py-0.2 rounded border border-green-200 leading-tight">
+              ✅ ¡Creado!
+            </span>
+          </div>
+        </div>
+        <input id="entrada-proveedor" tabindex="6" type="text" placeholder="Nombre del proveedor" autocomplete="off" onfocus="this.select()" class="w-full h-[44px]">
         <div id="entrada-proveedor-list" class="ac-list hidden"></div>
         <input type="hidden" id="entrada-proveedor-id">
       </div>
 
-      <div class="sm:col-span-12">
-        <label class="font-bold text-gray-700 mb-1 block">Notas (opcional)</label>
-        <input id="entrada-notas" tabindex="7" type="text" placeholder="Notas u observaciones de la factura...">
+      <div class="sm:col-span-6">
+        <div class="h-6 flex items-end mb-1">
+          <label for="entrada-notas" class="text-[11px] font-bold text-gray-700 mb-0 leading-none">Notas del documento (opcional)</label>
+        </div>
+        <input id="entrada-notas" tabindex="7" type="text" placeholder="Notas u observaciones generales de la factura..." class="w-full h-[44px]">
       </div>
 
     </div>

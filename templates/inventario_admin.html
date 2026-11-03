@@ -8938,24 +8938,27 @@ async function onSelectProductoEntrada(idx, selected) {
     else select.value = '0';
   }
 
-  const provId = document.getElementById('entrada-proveedor-id').value;
+  const provId = document.getElementById('entrada-proveedor-id')?.value;
   let h0 = null;
 
-  if (provId) {
-    try {
-      const r = await fetch(`/api/inventario/${NEGOCIO_ID}/producto/${prod.id}/proveedor/${provId}/historial-presentaciones`);
-      const d = await r.json();
-      if (d.ok && d.historial && d.historial.length) {
-        historialEntradas[idx] = d.historial;
-        h0 = d.historial[0];
-      } else {
-        historialEntradas[idx] = [];
+  try {
+    const urlHist = provId
+      ? `/api/inventario/${NEGOCIO_ID}/producto/${prod.id}/proveedor/${provId}/historial-presentaciones`
+      : `/api/inventario/${NEGOCIO_ID}/producto/${prod.id}/historial-presentaciones`;
+    const r = await fetch(urlHist);
+    const d = await r.json();
+    if (d.ok && d.historial && d.historial.length) {
+      historialEntradas[idx] = d.historial;
+      if (d.referencia_general) {
+        if (typeof historialEntradasRefGen === 'undefined') window.historialEntradasRefGen = {};
+        historialEntradasRefGen[idx] = d.referencia_general;
       }
-    } catch(e) {
-      console.error("Error fetching historial presentaciones:", e);
+      h0 = d.historial[0];
+    } else {
       historialEntradas[idx] = [];
     }
-  } else {
+  } catch(e) {
+    console.error("Error fetching historial presentaciones:", e);
     historialEntradas[idx] = [];
   }
 
@@ -10519,12 +10522,19 @@ async function escanearFacturaArchivo(archivo) {
           l.codigo_detectado || ''
         );
 
-        if (prodId && d.proveedor_id) {
-          fetch(`/api/inventario/${NEGOCIO_ID}/producto/${prodId}/proveedor/${d.proveedor_id}/historial-presentaciones`)
+        if (prodId) {
+          const urlHist = d.proveedor_id
+            ? `/api/inventario/${NEGOCIO_ID}/producto/${prodId}/proveedor/${d.proveedor_id}/historial-presentaciones`
+            : `/api/inventario/${NEGOCIO_ID}/producto/${prodId}/historial-presentaciones`;
+          fetch(urlHist)
             .then(r => r.json())
             .then(data => {
               if (data.ok && data.historial) {
                 historialEntradas[idx] = data.historial;
+                if (data.referencia_general) {
+                  if (typeof historialEntradasRefGen === 'undefined') window.historialEntradasRefGen = {};
+                  historialEntradasRefGen[idx] = data.referencia_general;
+                }
                 if (typeof evaluarToleranciasLinea === 'function') {
                   evaluarToleranciasLinea(idx);
                 }
@@ -10947,13 +10957,19 @@ window.confirmarVinculacionItem = async function() {
   let historial = null;
 
   // 1. Consultar historial de cotizaciones y presentaciones de este proveedor para el producto
-  if (provId) {
-    try {
-      const resp = await fetch(`/api/inventario/${NEGOCIO_ID}/producto/${prodId}/proveedor/${provId}/historial-presentaciones`);
-      const data = await resp.json();
-      if (data.ok) {
-        if (data.historial && data.historial.length > 0) {
-          historial = data.historial;
+  try {
+    const urlHist = provId
+      ? `/api/inventario/${NEGOCIO_ID}/producto/${prodId}/proveedor/${provId}/historial-presentaciones`
+      : `/api/inventario/${NEGOCIO_ID}/producto/${prodId}/historial-presentaciones`;
+    const resp = await fetch(urlHist);
+    const data = await resp.json();
+    if (data.ok) {
+      if (data.historial && data.historial.length > 0) {
+        historial = data.historial;
+        if (data.referencia_general) {
+          if (typeof historialEntradasRefGen === 'undefined') window.historialEntradasRefGen = {};
+          historialEntradasRefGen[targetIdx] = data.referencia_general;
+        }
           const p0 = data.historial[0];
           if (p0.presentacion_id) {
             presId = p0.presentacion_id;
@@ -11441,12 +11457,25 @@ function evaluarToleranciasLinea(idx) {
     fuentePrecio = 'Costo catálogo';
   }
 
-  // 2. CANTIDAD DE REFERENCIA (Última cantidad o promedio histórico en empaques)
+  // 2. CANTIDAD DE REFERENCIA GLOBAL DEL ÍTEM (indiferente del proveedor)
   let cantRef = null;
+  let maxCantRef = null;
   if (hMatch && hMatch.ultima_cantidad != null && parseFloat(hMatch.ultima_cantidad) > 0) {
     cantRef = parseFloat(hMatch.ultima_cantidad);
   } else if (hMatch && hMatch.promedio_cantidad != null && parseFloat(hMatch.promedio_cantidad) > 0) {
     cantRef = parseFloat(hMatch.promedio_cantidad);
+  }
+  if (hMatch && hMatch.max_cantidad != null && parseFloat(hMatch.max_cantidad) > 0) {
+    maxCantRef = parseFloat(hMatch.max_cantidad);
+  }
+
+  // Respaldo de referencia general si la presentación no tiene compras previas registradas
+  const refGen = (typeof historialEntradasRefGen !== 'undefined' && historialEntradasRefGen[idx]) || null;
+  if (!cantRef && refGen && refGen.ultima_cantidad_base) {
+    cantRef = parseFloat(refGen.ultima_cantidad_base) / presEquiv;
+    if (refGen.max_cantidad_base) {
+      maxCantRef = parseFloat(refGen.max_cantidad_base) / presEquiv;
+    }
   }
 
   const avisos = [];
@@ -11467,15 +11496,30 @@ function evaluarToleranciasLinea(idx) {
     }
   }
 
-  // B. Evaluar variación de cantidad: compras inusuales vs histórico habitual
+  // B. Evaluar variación de cantidad: compras inusuales vs histórico global del ítem
+  // El negocio puede estar creciendo y comprando mayores cantidades (incluso a otros proveedores).
+  // Por ende, ante un aumento se compara contra el volumen máximo reciente que ya se haya comprado del ítem.
   if (cantEmp > 0 && cantRef && cantRef > 0) {
-    const diffCant = cantEmp - cantRef;
-    const pctVarCant = (diffCant / cantRef) * 100;
+    const refAumento = (maxCantRef && maxCantRef > cantRef) ? maxCantRef : cantRef;
+    let diffCant = 0;
+    let pctVarCant = 0;
+    let cantBaseComparada = cantRef;
+
+    if (cantEmp >= refAumento) {
+      diffCant = cantEmp - refAumento;
+      pctVarCant = (diffCant / refAumento) * 100;
+      cantBaseComparada = refAumento;
+    } else if (cantEmp < cantRef) {
+      diffCant = cantEmp - cantRef;
+      pctVarCant = (diffCant / cantRef) * 100;
+      cantBaseComparada = cantRef;
+    }
+
     if (Math.abs(pctVarCant) > tolCant) {
       avisos.push({
         tipo: 'cantidad',
         pct: pctVarCant,
-        mensaje: `⚠️ Cantidad inusual: ${pctVarCant > 0 ? '+' : ''}${pctVarCant.toFixed(0)}% (Habitual: ${cantRef} ➔ Facturado: ${cantEmp} emp.)`
+        mensaje: `⚠️ Cantidad inusual: ${pctVarCant > 0 ? '+' : ''}${pctVarCant.toFixed(0)}% (Ref. ítem: ${cantBaseComparada.toFixed(1).replace(/\.0$/, '')} ➔ Facturado: ${cantEmp} emp.)`
       });
       if (cantEmpInput) cantEmpInput.classList.add('border-amber-400', 'bg-amber-50/60', 'text-amber-950');
     }

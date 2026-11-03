@@ -11455,23 +11455,29 @@ def api_ultima_presentacion(negocio_id, producto_id, proveedor_id):
         conn.close()
 
 
+@bp.route('/api/inventario/<int:negocio_id>/producto/<int:producto_id>/historial-presentaciones')
 @bp.route('/api/inventario/<int:negocio_id>/producto/<int:producto_id>/proveedor/<int:proveedor_id>/historial-presentaciones')
-def api_historial_presentaciones(negocio_id, producto_id, proveedor_id):
+def api_historial_presentaciones(negocio_id, producto_id, proveedor_id=None):
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
     conn = get_db_connection()
     try:
-        # 1. Cotizaciones del proveedor para este producto
-        rows = conn.execute("""
-            SELECT c.presentacion_id, p.nombre AS presentacion_nombre, p.equivalencia,
-                   c.precio, c.fecha_cotizacion, c.numero_cotizacion,
-                   CASE WHEN c.fecha_vencimiento >= CURRENT_DATE THEN TRUE ELSE FALSE END AS vigente
-            FROM cotizaciones_compras c
-            JOIN presentaciones p ON p.id = c.presentacion_id
-            WHERE c.negocio_id = %s AND c.tercero_id = %s AND c.item_id = %s
-            ORDER BY c.fecha_cotizacion DESC, c.id DESC
-            LIMIT 8
-        """, (negocio_id, proveedor_id, producto_id)).fetchall()
+        if not proveedor_id:
+            proveedor_id = None
+
+        # 1. Cotizaciones del proveedor para este producto (si hay proveedor)
+        rows = []
+        if proveedor_id:
+            rows = conn.execute("""
+                SELECT c.presentacion_id, p.nombre AS presentacion_nombre, p.equivalencia,
+                       c.precio, c.fecha_cotizacion, c.numero_cotizacion,
+                       CASE WHEN c.fecha_vencimiento >= CURRENT_DATE THEN TRUE ELSE FALSE END AS vigente
+                FROM cotizaciones_compras c
+                JOIN presentaciones p ON p.id = c.presentacion_id
+                WHERE c.negocio_id = %s AND c.tercero_id = %s AND c.item_id = %s
+                ORDER BY c.fecha_cotizacion DESC, c.id DESC
+                LIMIT 8
+            """, (negocio_id, proveedor_id, producto_id)).fetchall()
 
         # Si no hay con este proveedor, buscar cotizaciones de cualquier proveedor
         if not rows:
@@ -11486,25 +11492,38 @@ def api_historial_presentaciones(negocio_id, producto_id, proveedor_id):
                 LIMIT 8
             """, (negocio_id, producto_id)).fetchall()
 
-        # 2. Movimientos de entrada para determinar cantidades y precios habituales
-        mov_rows = []
-        if proveedor_id:
-            mov_rows = conn.execute("""
-                SELECT m.cantidad, m.valor_unitario, m.valor_total, m.presentacion_id, m.created_at
-                FROM movimientos_inventario m
-                WHERE m.negocio_id = %s AND m.proveedor_id = %s AND m.producto_id = %s AND m.tipo = 'entrada'
-                ORDER BY m.id DESC
-                LIMIT 10
-            """, (negocio_id, proveedor_id, producto_id)).fetchall()
-
-        if not mov_rows:
-            mov_rows = conn.execute("""
-                SELECT m.cantidad, m.valor_unitario, m.valor_total, m.presentacion_id, m.created_at
-                FROM movimientos_inventario m
-                WHERE m.negocio_id = %s AND m.producto_id = %s AND m.tipo = 'entrada'
-                ORDER BY m.id DESC
-                LIMIT 10
+        # Si aún no hay cotizaciones, buscar presentaciones activas del producto
+        if not rows:
+            rows = conn.execute("""
+                SELECT p.id AS presentacion_id, p.nombre AS presentacion_nombre, p.equivalencia,
+                       NULL AS precio, NULL AS fecha_cotizacion, NULL AS numero_cotizacion,
+                       FALSE AS vigente
+                FROM presentaciones p
+                WHERE p.negocio_id = %s AND p.producto_id = %s AND p.activo = TRUE
+                ORDER BY p.id ASC
             """, (negocio_id, producto_id)).fetchall()
+
+        # Si aún no hay presentaciones, usar la unidad base
+        if not rows:
+            rows = [{
+                'presentacion_id': None,
+                'presentacion_nombre': 'Unidad',
+                'equivalencia': 1.0,
+                'precio': None,
+                'fecha_cotizacion': None,
+                'numero_cotizacion': None,
+                'vigente': False
+            }]
+
+        # 2. Movimientos de entrada GLOBALES del producto para determinar volumen habitual y crecimiento
+        # Indiferente del proveedor (el negocio puede estar comprando el ítem en mayores cantidades a otros proveedores)
+        mov_rows_global = conn.execute("""
+            SELECT m.cantidad, m.valor_unitario, m.valor_total, m.presentacion_id, m.created_at, m.proveedor_id
+            FROM movimientos_inventario m
+            WHERE m.negocio_id = %s AND m.producto_id = %s AND m.tipo = 'entrada'
+            ORDER BY m.id DESC
+            LIMIT 25
+        """, (negocio_id, producto_id)).fetchall()
 
         # Costo de catálogo por defecto
         prod_row = conn.execute("""
@@ -11517,15 +11536,23 @@ def api_historial_presentaciones(negocio_id, producto_id, proveedor_id):
             pres_id = r['presentacion_id']
             equiv = float(r['equivalencia']) if (r['equivalencia'] and float(r['equivalencia']) > 0) else 1.0
 
-            movs_pres = [m for m in mov_rows if m['presentacion_id'] == pres_id]
-            if not movs_pres and mov_rows:
-                movs_pres = mov_rows
+            # Filtrar movimientos de esta presentación (o todos si no coincide la presentación)
+            movs_pres = [m for m in mov_rows_global if m['presentacion_id'] == pres_id]
+            if not movs_pres and mov_rows_global:
+                movs_pres = mov_rows_global
 
+            # Cantidades habituales globales del ítem (indiferente del proveedor)
             cants_emp = [round(float(m['cantidad']) / equiv, 2) for m in movs_pres if m['cantidad']]
-            precios_emp = [round(float(m['valor_unitario']) * equiv, 2) for m in movs_pres if m['valor_unitario']]
+            
+            # Para precios, si hay proveedor específico, preferir compras a ese proveedor
+            movs_pres_prov = [m for m in movs_pres if proveedor_id and m['proveedor_id'] == proveedor_id]
+            precios_emp = [round(float(m['valor_unitario']) * equiv, 2) for m in (movs_pres_prov or movs_pres) if m['valor_unitario']]
 
             ultima_cant = cants_emp[0] if cants_emp else None
-            prom_cant = round(sum(cants_emp) / len(cants_emp), 2) if cants_emp else None
+            # Promedio reciente de las últimas 5 compras
+            cants_recientes = cants_emp[:5] if cants_emp else []
+            prom_cant = round(sum(cants_recientes) / len(cants_recientes), 2) if cants_recientes else None
+            max_cant = max(cants_recientes) if cants_recientes else None
 
             precio_ref = float(r['precio']) if r['precio'] is not None else (precios_emp[0] if precios_emp else (costo_catalogo * equiv if costo_catalogo > 0 else None))
 
@@ -11538,15 +11565,17 @@ def api_historial_presentaciones(negocio_id, producto_id, proveedor_id):
                 'numero_cotizacion': r['numero_cotizacion'],
                 'vigente': bool(r['vigente']),
                 'ultima_cantidad': ultima_cant,
-                'promedio_cantidad': prom_cant
+                'promedio_cantidad': prom_cant,
+                'max_cantidad': max_cant
             })
 
-        general_cants = [float(m['cantidad']) for m in mov_rows if m['cantidad']]
-        general_costos = [float(m['valor_unitario']) for m in mov_rows if m['valor_unitario']]
+        general_cants = [float(m['cantidad']) for m in mov_rows_global if m['cantidad']]
+        general_costos = [float(m['valor_unitario']) for m in mov_rows_global if m['valor_unitario']]
         referencia_general = {
             'costo_base': general_costos[0] if general_costos else costo_catalogo,
             'ultima_cantidad_base': general_cants[0] if general_cants else None,
-            'promedio_cantidad_base': round(sum(general_cants) / len(general_cants), 2) if general_cants else None
+            'promedio_cantidad_base': round(sum(general_cants[:5]) / len(general_cants[:5]), 2) if general_cants else None,
+            'max_cantidad_base': max(general_cants[:5]) if general_cants else None
         }
 
         return jsonify({

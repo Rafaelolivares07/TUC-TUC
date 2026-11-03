@@ -1348,6 +1348,10 @@
 
 <!-- ── OVERLAY MODAL AJUSTE O REEMPLAZO DE INSUMO EN RECETAS ──────────────────── -->
 
+        </div>
+      </div>
+    </div>
+
     <!-- Modales de Previsualización de Auditoría -->
     <div id="modal-preview-vincular" class="fixed inset-0 bg-black/70 backdrop-blur-xs hidden items-center justify-center p-4" style="z-index: 99999;">
       <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-6 space-y-4 max-h-[90vh] flex flex-col">
@@ -1465,10 +1469,6 @@
           <button id="btn-confirmar-reparar" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition shadow-sm flex items-center gap-1.5">
             <span>⚡</span> Confirmar y Aplicar Reparación
           </button>
-        </div>
-      </div>
-    </div>
-
 
 
   <!-- Toast flotante -->
@@ -1484,19 +1484,12 @@
 
     // ── Estado Global de Productos ──
     let productos = [];
-    let _ultimoFetchProductosTimestamp = 0;
-    let prodSortCol = 'nombre';
-    let prodSortAsc = true;
-    let _prodDecimales = parseInt(localStorage.getItem('prod_decimales_moneda') ?? '2', 10);
-    if (isNaN(_prodDecimales) || _prodDecimales < 0) _prodDecimales = 2;
-    if (_prodDecimales > 6) _prodDecimales = 6;
-
     let auditData = [];
     let auditOpenCotejos = new Set();
     let costosUnitariosData = [];
     let costosUnitariosFiltroTipo = 'todos';
 
-    // ── Funciones Toast y Autocompletes ──
+    // ── Toast Helper ──
 function toast(msg, ok = true, duracion = 3200) {
 
   const el = document.getElementById('toast');
@@ -1517,16 +1510,10 @@ function toast(msg, ok = true, duracion = 3200) {
 }
 
 
+    // ── Autocomplete Helpers ──
 
-// ── Tabs ──────────────────────────────────────────────────────────────────────
 
-let datosLibroActas = [];
-
-const MODULO_ACTA_LABEL = {
-  inventario_fisico: 'Físico General',
-  inventario_distribuido: 'Distribuido',
-  caja_pos_tienda: 'Caja POS Tienda',
-  pos_restaurante: 'Caja POS Rest.'
+// ── Autocomplete genérico ─────────────────────────────────────────────────────
 
 function setupAC(inputId, listId, hiddenId, data, onSelect) {
 
@@ -1932,9 +1919,84 @@ function setupCategoriasAC(inputId, listId) {
 
       list.classList.add('hidden');
 
+      return;
+
+    }
+
+
+
+    const matches = itemsList.filter(c => {
+
+      if (!c) return false;
+
+      const cNorm = normalizeStr(c);
+
+      return cNorm.includes(qNorm);
+
+    }).slice(0, 10);
+
+
+
+    idx = -1;
+
+    
+
+    if (matches.length > 0) {
+
+      list.innerHTML = matches.map(c => `
+
+        <div class="ac-item text-left px-3 py-2 hover:bg-gray-100 cursor-pointer" data-val="${c.replace(/"/g,'&quot;')}">
+
+          <span class="font-semibold text-gray-800">${c}</span>
+
+        </div>
+
+      `).join('');
+
+      
+
+      list.querySelectorAll('.ac-item').forEach(el => {
+
+        el.addEventListener('mousedown', (e) => {
+
+          e.preventDefault();
+
+          inp.value = el.dataset.val;
+
+          list.classList.add('hidden');
+
+          inp.dispatchEvent(new Event('input'));
+
+        });
+
+      });
+
+      list.classList.remove('hidden');
+
+    } else {
+
+      list.classList.add('hidden');
+
+    }
+
+  }
+
+
+
+  function highlight(items) {
+
+    items.forEach((el, i) => el.classList.toggle('ac-focus', i === idx));
+
+    if (idx >= 0) items[idx].scrollIntoView({block: 'nearest'});
+
+  }
 
 
     // ── Gestión de Unidades de Empaque / Presentaciones ──
+}
+
+
+
 // ── GESTIÓN DE UNIDADES DE EMPAQUE / PRESENTACIONES ─────────────────────────
 
 let catalogoPresentaciones = [];
@@ -2135,9 +2197,106 @@ function parseNumeroPresentacion(nombre) {
 
   if (m2 && m2[1]) {
 
+    const val = parseFloat(m2[1].replace(',', '.'));
+
+    if (!isNaN(val) && val > 0) return val;
+
+  }
+
+  return null;
+
+}
 
 
-    // ── Funciones de Productos y Costos Unitarios ──
+
+function abrirModalCrearPresentacion(nombreInicial = '', targetIdx = null, presId = null, equivInicial = null, usoMovimientos = 0) {
+
+  const modal = document.getElementById('overlay-crear-presentacion');
+
+  if (!modal) return;
+
+
+
+  document.getElementById('modal-pres-id').value = presId || '';
+
+  document.getElementById('modal-pres-target-idx').value = targetIdx !== null && targetIdx !== undefined ? targetIdx : '';
+
+  
+
+  const titulo = document.getElementById('modal-pres-form-titulo');
+
+  if (titulo) {
+
+    titulo.innerHTML = presId ? '<span>✏️ Editar Unidad de Empaque</span>' : '<span>📦 Nueva Unidad de Empaque</span>';
+
+  }
+
+
+
+  const nombreEl = document.getElementById('modal-pres-nombre');
+
+  const equivEl = document.getElementById('modal-pres-equiv');
+
+  
+
+  nombreEl.value = nombreInicial || '';
+
+  
+
+  if (equivInicial !== null && equivInicial > 0) {
+
+    equivEl.value = equivInicial;
+
+  } else if (nombreInicial) {
+
+    const autoNum = parseNumeroPresentacion(nombreInicial);
+
+    equivEl.value = autoNum !== null ? autoNum : '1';
+
+  } else {
+
+    equivEl.value = '';
+
+  }
+
+
+
+  const recalcBox = document.getElementById('modal-pres-recalc-box');
+
+  if (recalcBox) {
+
+    if (presId && usoMovimientos > 0) {
+
+      recalcBox.classList.remove('hidden');
+
+      document.getElementById('modal-pres-recalcular-check').checked = true;
+
+    } else {
+
+      recalcBox.classList.add('hidden');
+
+      document.getElementById('modal-pres-recalcular-check').checked = false;
+
+    }
+
+  }
+
+
+
+  actualizarEstadoFormularioPresentacion();
+
+  modal.classList.remove('hidden');
+
+  nombreEl.focus();
+
+}
+
+
+    // ── Funciones Principales de Productos y Costos Unitarios ──
+
+let _isFetchingProductosSilencioso = false;
+let _ultimoFetchProductosTimestamp = 0;
+
 async function cargarProductos(silencioso = false) {
   const bodParam = (CENTRO_ACTIVO && CENTRO_ACTIVO.id) ? `?bodega=${CENTRO_ACTIVO.id}` : '';
   try {
@@ -3197,8 +3356,7 @@ async function guardarProducto() {
 let tarjetaLineasOriginales = [];
 
 
-
-    // ── Funciones de Tarjeta Estándar / Recetas ──
+    // ── Funciones de Ficha Técnica / Receta Estándar ──
 function toggleClonarEscalarPanel(forzar) {
   const p = document.getElementById('panel-clonar-escalar');
   if (!p) return;
@@ -3854,25 +4012,18 @@ function clearSelectedComponent() {
 }
 
 
-
-let procLineas = []; // {componente_id, nombre, cantidad_total, costo_und}
-
+    // ── Función de Kardex ──
 
 
 
-    // ── Funciones de Kardex ──
+
 function verKardex(id, nombre, movimientoId = null) {
   let url = 'https://' + NEGOCIO_SLUG + '.tuc-tuc.co/kardex?producto_id=' + encodeURIComponent(id);
   if (movimientoId) url += '&movimiento_id=' + encodeURIComponent(movimientoId);
   window.open(url, '_blank');
-}
 
 
-
-
-
-    // ── Funciones de Auditoría Integral ──
-      }
+    // ── Auditoría Integral de Integridad ──
     }
 
     async function cargarAuditoriaProductos(preserveScroll = true) {
@@ -4347,9 +4498,282 @@ function verKardex(id, nombre, movimientoId = null) {
         if (prodInfo.estado === 'OK') {
           badgeEstado.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300';
           badgeEstado.textContent = '✅ Cuadrado / Sano';
+        } else if (prodInfo.estado === 'REQUIERE_VINCULAR_IDS') {
+          badgeEstado.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300';
+          badgeEstado.textContent = '🔗 Requiere Vincular IDs (Fase 1)';
+        } else if (prodInfo.estado === 'DOCS_SIN_ASIENTO' || (prodInfo.docs_sin_asiento > 0)) {
+          badgeEstado.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-100 text-orange-950 border border-orange-300';
+          badgeEstado.textContent = '📄 Requiere Generar Asientos Faltantes';
+        } else {
+          badgeEstado.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300';
+          badgeEstado.textContent = '⚠️ Presenta Diferencias';
+        }
+      }
+
+      if (bannerHuerfanos) bannerHuerfanos.classList.add('hidden');
+      if (tbody) {
+        tbody.innerHTML = `
+          <tr><td colspan="7" class="text-center py-10 text-gray-500 font-sans">
+            <span class="animate-spin inline-block mr-2 text-rose-500 text-lg">⏳</span> Cargando desglose y cotejo documental de este producto...
+          </td></tr>
+        `;
+      }
+      if (totalesContainer) totalesContainer.innerHTML = '';
+      if (accionesContainer) accionesContainer.innerHTML = '';
+
+      try {
+        const url = `/api/inventario/${NEGOCIO_ID}/auditoria-productos/${productoId}/detalle-cotejo`;
+        const r = await fetch(url);
+        const d = await r.json();
+        if (!d.ok) {
+          if (tbody) {
+            tbody.innerHTML = `
+              <tr><td colspan="7" class="text-center py-8 text-rose-600 font-sans font-bold">
+                Error al cargar documentos: ${d.error || 'Error desconocido'}
+                <div class="mt-2"><button onclick="abrirModalCotejoDocumental(${productoId})" class="px-3 py-1 bg-rose-600 text-white font-bold rounded-lg hover:bg-rose-700 text-xs">Reintentar</button></div>
+              </td></tr>
+            `;
+          }
+          return;
+        }
+
+        const cotejo = d.cotejo || [];
+        if (!cotejo.length) {
+          if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="7" class="text-center py-8 text-gray-400 font-sans italic">Sin documentos registrados en Kardex ni Contabilidad para este producto.</td></tr>`;
+          }
+          return;
+        }
+
+        // Subtítulo con conteo
+        if (subtitulo) {
+          subtitulo.textContent = `${d.producto.nombre} (ID #${d.producto.id}) • Categoría: ${d.producto.categoria || 'Sin categoría'} • ${cotejo.length} documento(s) cotejados`;
+        }
+
+        // Actualizar Badge de Estado dinámicamente con los datos frescos del servidor
+        if (badgeEstado) {
+          if (d.total_huerfanos > 0) {
+            badgeEstado.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300';
+            badgeEstado.textContent = '🔗 Requiere Vincular IDs (Fase 1)';
+          } else if (d.resumen && d.resumen.total_sin_asiento > 0) {
+            badgeEstado.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-100 text-orange-950 border border-orange-300';
+            badgeEstado.textContent = `📄 Requiere Generar Asientos (${d.resumen.total_sin_asiento} faltantes)`;
+          } else if (d.resumen && Math.abs(d.resumen.existencia.diferencia) >= 1.0) {
+            badgeEstado.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300';
+            badgeEstado.textContent = `⚠️ Presenta Diferencias (${fmtMon(d.resumen.existencia.diferencia)})`;
+          } else {
+            badgeEstado.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300';
+            badgeEstado.textContent = '✅ Cuadrado / Sano';
+          }
+        }
+
+        // Banner huérfanos o sin asiento
+        if (d.total_huerfanos > 0 && bannerHuerfanos) {
+          bannerHuerfanos.classList.remove('hidden');
+          bannerHuerfanos.innerHTML = `
+            <div class="bg-amber-50 border border-amber-300 rounded-xl p-3 flex items-center justify-between gap-3 text-xs text-amber-900 shadow-2xs">
+              <div class="flex items-center gap-2.5">
+                <span class="text-lg">⚠️</span>
+                <div>
+                  <span class="font-bold uppercase tracking-wider text-[11px] bg-amber-200 text-amber-950 px-1.5 py-0.5 rounded">Fase 1 Requerida</span>
+                  <div class="mt-0.5 font-sans">
+                    Hay <strong>${d.total_huerfanos} asiento(s) contable(s) huérfano(s)</strong> que pertenecen a este producto pero no tienen su ID asignado en contabilidad.
+                  </div>
+                </div>
+              </div>
+              <button onclick="confirmarVincularIds(${productoId}); cerrarModalCotejo();" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs transition shrink-0 shadow-sm flex items-center gap-1.5 cursor-pointer">
+                <span>🔗</span> Vincular IDs Ahora (Fase 1)
+              </button>
+            </div>
+          `;
+        } else if (d.resumen && d.resumen.total_sin_asiento > 0 && bannerHuerfanos) {
+          bannerHuerfanos.classList.remove('hidden');
+          bannerHuerfanos.innerHTML = `
+            <div class="bg-orange-50 border border-orange-300 rounded-xl p-3 flex items-center justify-between gap-3 text-xs text-orange-950 shadow-2xs">
+              <div class="flex items-center gap-2.5">
+                <span class="text-lg">📄</span>
+                <div>
+                  <span class="font-bold uppercase tracking-wider text-[11px] bg-orange-200 text-orange-950 px-1.5 py-0.5 rounded">Asientos Contables Faltantes</span>
+                  <div class="mt-0.5 font-sans">
+                    Hay <strong>${d.resumen.total_sin_asiento} documento(s) en Kardex</strong> sin registro contable en la Cuenta 14. Puedes generar su asiento haciendo clic en el botón <strong>⚡ Asentar</strong> de la fila.
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+        }
+
+        let rowsHtml = '';
+        cotejo.forEach(c => {
+          const kDetalle = c.kardex.map(k => `${k.tipo === 'entrada' ? '📥 Ent' : '📤 Sal'} ${fmt(k.cantidad)} × ${fmtMon(k.costo_und)}`).join(', ') || '<span class="text-gray-400 font-sans italic">Sin kardex</span>';
+          
+          const cDetalle = c.contabilidad.map(ac => {
+            const rawConcepto = (ac.concepto || '').replace(/"/g, '&quot;');
+            const isDeb = String(ac.tipo).toUpperCase().startsWith('D');
+            const badgeTipo = isDeb 
+              ? `<span class="px-1.5 py-0.2 rounded text-[9px] font-bold bg-blue-100 text-blue-800 border border-blue-200">📥 DÉBITO</span>`
+              : `<span class="px-1.5 py-0.2 rounded text-[9px] font-bold bg-orange-100 text-orange-800 border border-orange-200">📤 CRÉDITO</span>`;
+
+            if (ac.pendiente_vinculo) {
+              return `
+                <div class="bg-amber-100/90 border border-amber-300 rounded-lg p-1.5 my-1 text-amber-950 font-sans">
+                  <div class="flex items-center gap-1.5 font-bold flex-wrap">
+                    <span>#${ac.id} (Cta ${ac.cuenta})</span>
+                    ${badgeTipo}
+                    <span class="text-gray-900">${fmtMon(ac.monto)}</span>
+                    <span class="px-1 py-0.2 bg-amber-300 text-amber-900 rounded text-[9px] uppercase font-bold">⚠️ Sin Vincular ID</span>
+                  </div>
+                  <div class="text-[10px] text-amber-800 italic mt-0.5 truncate max-w-sm" title="${rawConcepto}">
+                    Concepto: ${rawConcepto}
+                  </div>
+                </div>
+              `;
+            }
+            return `
+              <div class="font-sans py-0.5 flex items-center gap-1.5 flex-wrap" title="${rawConcepto}">
+                <span class="font-bold text-gray-700">#${ac.id}</span>
+                <span class="text-gray-500 text-[11px]">(Cta ${ac.cuenta})</span>
+                ${badgeTipo}
+                <span class="font-bold text-gray-900">${fmtMon(ac.monto)}</span>
+              </div>
+            `;
+          }).join('') || '<span class="text-gray-400 font-sans italic">Sin asiento</span>';
+
+          const dif = c.diferencia;
+          const isOk = c.ok;
+          let badge = '';
+          if (c.tiene_huerfanos) {
+            badge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">🔗 Requiere Vínculo</span>`;
+          } else if (c.sin_asiento) {
+            const rawNombreDoc = (c.tipo_documento_nombre || '').replace(/'/g, "\\'");
+            badge = `
+              <div class="flex flex-col items-center gap-1">
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-900 border border-orange-300">📄 Sin Asiento</span>
+                <button onclick="abrirModalGenerarAsientoFaltante(${productoId}, '${c.documento}', ${c.tipo_documento_id || 'null'}, '${rawNombreDoc}')" 
+                        class="px-2 py-0.5 bg-orange-600 hover:bg-orange-700 text-white rounded text-[10px] font-bold shadow-2xs transition cursor-pointer flex items-center gap-1">
+                  <span>⚡</span> Asentar
+                </button>
+              </div>
+            `;
+          } else if (isOk) {
+            badge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700">✅ OK</span>`;
+          } else {
+            badge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700">⚠️ Dif</span>`;
+          }
+
+          const rowClass = c.tiene_huerfanos
+            ? 'bg-amber-50/80 hover:bg-amber-100/60 border-l-4 border-amber-400'
+            : (!isOk ? 'bg-amber-50/30 hover:bg-gray-50' : 'hover:bg-gray-50');
+
+          rowsHtml += `
+            <tr class="${rowClass}">
+              <td class="px-3 py-2 text-left font-sans">
+                <div class="font-bold text-gray-800">${c.tipo_documento_nombre || 'Documento'} #${c.documento}</div>
+                <div class="text-[10px] text-gray-400">${c.fecha || '—'}</div>
+              </td>
+              <td class="px-3 py-2 text-left font-sans text-gray-700">${kDetalle}</td>
+              <td class="px-3 py-2 text-right font-bold text-gray-900">${fmtMon(c.kardex_total)}</td>
+              <td class="px-3 py-2 text-left text-gray-700">${cDetalle}</td>
+              <td class="px-3 py-2 text-right font-bold text-gray-900">${fmtMon(c.contab_total)}</td>
+              <td class="px-3 py-2 text-right font-bold ${Math.abs(dif) >= 0.01 ? 'text-rose-600' : 'text-gray-400'}">${fmtMon(dif)}</td>
+              <td class="px-3 py-2 text-center font-sans">${badge}</td>
+            </tr>
+          `;
+        });
+
+        if (tbody) tbody.innerHTML = rowsHtml;
+
+        // Totales estructurados en el pie
+        const resu = d.resumen || {
+          entradas: { kardex: 0, contabilidad: 0, diferencia: 0 },
+          salidas: { kardex: 0, contabilidad: 0, diferencia: 0 },
+          existencia: { kardex: 0, contabilidad: 0, diferencia: 0 }
+        };
+
+        if (totalesContainer) {
+          totalesContainer.innerHTML = `
+            <div class="flex items-center gap-2.5 text-xs flex-wrap">
+              <!-- Entradas -->
+              <div class="bg-gray-50 border border-gray-200 rounded-xl px-2.5 py-1.5 space-y-0.5 shadow-2xs">
+                <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wide flex items-center gap-1">
+                  <span>📥</span> Entradas (Compras / Prod)
+                </div>
+                <div class="text-xs text-gray-700 flex items-center gap-1.5 font-sans">
+                  <span>Kardex: <strong class="font-mono text-gray-900 font-bold">${fmtMon(resu.entradas.kardex)}</strong></span>
+                  <span class="text-gray-300">|</span>
+                  <span>Contab: <strong class="font-mono text-gray-900 font-bold">${fmtMon(resu.entradas.contabilidad)}</strong></span>
+                  <span class="text-gray-300">|</span>
+                  <span class="font-bold font-mono ${Math.abs(resu.entradas.diferencia) >= 0.01 ? 'text-rose-600' : 'text-emerald-600'}">Dif: ${fmtMon(resu.entradas.diferencia)}</span>
+                </div>
+              </div>
+
+              <!-- Salidas -->
+              <div class="bg-gray-50 border border-gray-200 rounded-xl px-2.5 py-1.5 space-y-0.5 shadow-2xs">
+                <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wide flex items-center gap-1">
+                  <span>📤</span> Salidas (Ventas / Ajustes)
+                </div>
+                <div class="text-xs text-gray-700 flex items-center gap-1.5 font-sans">
+                  <span>Kardex: <strong class="font-mono text-gray-900 font-bold">${fmtMon(resu.salidas.kardex)}</strong></span>
+                  <span class="text-gray-300">|</span>
+                  <span>Contab: <strong class="font-mono text-gray-900 font-bold">${fmtMon(resu.salidas.contabilidad)}</strong></span>
+                  <span class="text-gray-300">|</span>
+                  <span class="font-bold font-mono ${Math.abs(resu.salidas.diferencia) >= 0.01 ? 'text-rose-600' : 'text-emerald-600'}">Dif: ${fmtMon(resu.salidas.diferencia)}</span>
+                </div>
+              </div>
+
+              <!-- Saldo Neto Existencia Actual -->
+              <div class="bg-indigo-50/80 border border-indigo-200 rounded-xl px-2.5 py-1.5 space-y-0.5 shadow-2xs">
+                <div class="text-[10px] font-bold text-indigo-900 uppercase tracking-wide flex items-center gap-1">
+                  <span>📊</span> Existencia Neta (Ent − Sal)
+                </div>
+                <div class="text-xs text-indigo-950 flex items-center gap-1.5 font-sans">
+                  <span>Kardex: <strong class="font-mono font-bold">${fmtMon(resu.existencia.kardex)}</strong></span>
+                  <span class="text-indigo-300">|</span>
+                  <span>Cta 14: <strong class="font-mono font-bold">${fmtMon(resu.existencia.contabilidad)}</strong></span>
+                  <span class="text-indigo-300">|</span>
+                  <span class="font-bold font-mono ${Math.abs(resu.existencia.diferencia) >= 0.01 ? 'text-rose-600' : 'text-emerald-700'}">Dif: ${fmtMon(resu.existencia.diferencia)}</span>
+                </div>
+              </div>
+            </div>
+          `;
+        }
+
+        // Acciones en el pie si aplican
+        if (accionesContainer) {
+          let btns = '';
+          if (d.total_huerfanos > 0) {
+            btns += `
+              <button onclick="confirmarVincularIds(${productoId}); cerrarModalCotejo();" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl transition shadow-xs flex items-center gap-1 cursor-pointer">
+                <span>🔗</span> Vincular IDs
+              </button>
+            `;
+          }
+          if (d.resumen && (Math.abs(d.resumen.existencia.diferencia) >= 1.0 || (prodInfo && Math.abs(prodInfo.dif_stock) >= 0.001))) {
+            btns += `
+              <button onclick="cerrarModalCotejo(); abrirModalRepararValores(${productoId});" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition shadow-xs flex items-center gap-1 cursor-pointer">
+                <span>⚡</span> Reparar Valores
+              </button>
+            `;
+          }
+          accionesContainer.innerHTML = btns;
+        }
+
+      } catch (err) {
+        console.error('[Auditoria] Error al abrir modal cotejo:', err);
+        if (tbody) {
+          tbody.innerHTML = `
+            <tr><td colspan="7" class="text-center py-8 text-rose-600 font-sans font-bold">
+              Error de conexión: ${err.message}
+            </td></tr>
+          `;
+        }
+      }
+    }
 
 
-    // ── Funciones de Gestión de Unidades de Medida y Equivalencias ──
+    // ── Unidades de Medida y Equivalencias ──
+
+
 
 // ── GESTIÓN DE UNIDADES DE MEDIDA Y EQUIVALENCIAS ──────────────────────────────
 let catalogoUnidades = [];
@@ -4644,15 +5068,12 @@ async function eliminarEquivalencia(id) {
   }
 }
 
-// Unidades cargadas en el bootstrap principal
-
-
 
     // ── Inicialización Reactiva al Cargar la Página ──
     document.addEventListener('DOMContentLoaded', async () => {
       inicializarDecimalesProductos();
 
-      // Cargar Catálogos Iniciales
+      // Cargar Unidades y Productos
       await cargarUnidadesYEquivalencias();
       await cargarProductos();
 

@@ -54,9 +54,98 @@
       border: 1px solid #e2e8f0;
       overflow: hidden;
     }
-    .tab-active {
+        .tab-active {
       background-color: #f43f5e !important;
       color: white !important;
+    }
+
+    /* Autocomplete Dropdowns */
+    .ac-list {
+      position: absolute;
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      max-height: 220px;
+      overflow-y: auto;
+      z-index: 100;
+      width: 100%;
+    }
+    .ac-item {
+      padding: 8px 12px;
+      cursor: pointer;
+      font-size: .85rem;
+    }
+    .ac-item:hover, .ac-item.ac-focus {
+      background: #fef2f2;
+      color: #e11d48;
+    }
+
+    /* Base Form Controls & Inputs */
+    input, select, textarea {
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      padding: 8px 12px;
+      width: 100%;
+      font-size: .875rem;
+      outline: none;
+      transition: border-color .15s;
+    }
+    input:focus, select:focus, textarea:focus {
+      border-color: #e11d48;
+    }
+
+    #tab-entradas input:not([type="hidden"]),
+    #tab-entradas select,
+    #tab-entradas textarea {
+      font-size: 1rem;
+      padding: 10px 12px;
+      border-radius: 10px;
+      font-weight: 600;
+      min-height: 44px;
+    }
+    #tab-entradas label {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: #374151;
+      margin-bottom: 4px;
+      display: block;
+    }
+    #tab-entradas #entrada-tipo-doc,
+    #tab-entradas #entrada-num-doc,
+    #tab-entradas #entrada-fecha-doc {
+      width: 100%;
+    }
+    #tab-entradas input[id^="ent-ac-"],
+    #tab-entradas textarea[id^="ent-ac-"],
+    #tab-entradas input[id^="ent-pres-"] {
+      text-align: left;
+      padding-left: 12px;
+    }
+    #tab-entradas textarea[id^="ent-ac-"] {
+      resize: none;
+      overflow: hidden;
+    }
+    #tab-entradas input[id^="ent-cant-emp-"] {
+      max-width: 100%;
+    }
+    #tab-entradas select[id^="ent-iva-pct-"] {
+      width: 70px;
+      flex: none;
+      font-size: 0.95rem;
+      padding-left: 6px;
+      padding-right: 2px;
+      text-align: left;
+    }
+    #tab-entradas .grid-cols-12 > div:last-child {
+      white-space: nowrap;
+    }
+    #tab-entradas input[id^="ent-cant-"],
+    #tab-entradas input[id^="ent-costo-"],
+    #tab-entradas input[id^="ent-total-"],
+    #tab-entradas input[id^="ent-vu-"] {
+      text-align: right;
+      padding-right: 5px;
     }
   </style>
 </head>
@@ -5543,6 +5632,63 @@ async function initDefaultProveedor() {
 
 
 
+function cargarEntradaDesdeComprasPendiente() {
+  const raw = sessionStorage.getItem('entrada_desde_compras') || localStorage.getItem('entrada_desde_compras');
+  if (!raw) return;
+  sessionStorage.removeItem('entrada_desde_compras');
+  localStorage.removeItem('entrada_desde_compras');
+
+  let transferencia;
+  try {
+    transferencia = JSON.parse(raw);
+  } catch (error) {
+    console.error('No se pudo leer la entrada pendiente de Compras Sugeridas:', error);
+    return;
+  }
+
+  const p = transferencia.proveedor;
+  const prods = transferencia.productos || [];
+  if (!p || !prods.length) return;
+
+  const contLineas = document.getElementById('entrada-lineas');
+  if (contLineas) contLineas.innerHTML = '';
+  entradaLineas = [];
+
+  const inpProvId = document.getElementById('entrada-proveedor-id');
+  if (inpProvId) inpProvId.value = p.proveedor_id || '';
+
+  const inpProvNom = document.getElementById('entrada-proveedor');
+  if (inpProvNom) inpProvNom.value = p.proveedor_nombre || '';
+
+  const inpDoc = document.getElementById('entrada-num-doc');
+  if (inpDoc) inpDoc.value = transferencia.documento || '';
+
+  const inpFecha = document.getElementById('entrada-fecha-doc');
+  if (inpFecha) inpFecha.value = transferencia.fecha || '';
+
+  document.getElementById('btn-crear-proveedor')?.classList.add('hidden');
+  document.getElementById('badge-proveedor-creado')?.classList.add('hidden');
+
+  prods.forEach(prod => {
+    agregarLineaEntradaConDatos(
+      prod.producto_id,
+      prod.producto_nombre,
+      prod.cantidad_sugerida_unidades,
+      prod.costo_unitario,
+      prod.iva_pct || 0,
+      prod.presentacion_id,
+      prod.presentacion_nombre,
+      prod.unidades_presentacion,
+      prod.cantidad_sugerida_usuario,
+      prod.costo_empaque_usuario,
+      prod.total_costo
+    );
+  });
+
+  calcularTotalesEntrada();
+  toast(`Cargados ${prods.length} ítems de ${p.proveedor_nombre} en Entradas.`);
+}
+
 // == escanear-factura-menu ==
 function toggleMenuEscanearFactura(ev) {
   if (ev) ev.stopPropagation();
@@ -7089,7 +7235,80 @@ async function validarFechaEntrada(fecha) {
       await cargarMetodosPagoEntrada();
       actualizarConfirmacionSede();
       actualizarConfirmacionMetodoPago();
+
+      // Autocomplete Proveedor
+      setupRemoteAC('entrada-proveedor', 'entrada-proveedor-list', 'entrada-proveedor-id', '/api/inventario/proveedores/buscar', () => {
+        document.getElementById('btn-crear-proveedor')?.classList.add('hidden');
+        document.getElementById('badge-proveedor-creado')?.classList.add('hidden');
+        verificarDocumentoExistente();
+        if (typeof historialEntradas !== 'undefined') { for (const k in historialEntradas) delete historialEntradas[k]; }
+      });
+
+      // Proveedor por defecto (Tercero Ocasional si no viene en URL)
+      await initDefaultProveedor();
+
+      // Cargar entrada pendiente desde Compras Sugeridas si existe en sesión
+      cargarEntradaDesdeComprasPendiente();
+
+      // Verificar y restaurar borrador de la nube
       verificarBorradorEntradaServidor();
+
+      // Auto-guardado en borrador al digitar campos del encabezado
+      ['entrada-num-doc', 'entrada-fecha-doc', 'entrada-notas'].forEach(id => {
+        document.getElementById(id)?.addEventListener('input', programarGuardadoBorradorEntrada);
+      });
+
+      // Visibilidad del botón crear proveedor cuando se escribe un nombre no existente
+      document.getElementById('entrada-proveedor')?.addEventListener('input', (e) => {
+        const val = e.target.value.trim();
+        const btn = document.getElementById('btn-crear-proveedor');
+        const badge = document.getElementById('badge-proveedor-creado');
+        if (badge) badge.classList.add('hidden');
+        if (btn) {
+          if (val.length > 1) {
+            btn.classList.remove('hidden');
+          } else {
+            btn.classList.add('hidden');
+          }
+        }
+      });
+
+      // Cambios de tipo de documento y validación de existencia
+      document.getElementById('entrada-tipo-doc')?.addEventListener('change', () => {
+        actualizarVisibilidadNumeroEntrada();
+        verificarDocumentoExistente();
+      });
+
+      document.getElementById('entrada-num-doc')?.addEventListener('blur', verificarDocumentoExistente);
+
+      // Precargar edición de documento si viene por parámetros de URL (?tipo_doc=&num_doc=)
+      const urlParams = new URLSearchParams(window.location.search);
+      const qTipoDoc = urlParams.get('tipo_doc');
+      const qNumDoc = urlParams.get('num_doc');
+      const qProvId = urlParams.get('prov_id');
+      const qProvNom = urlParams.get('prov_nom');
+      if (qTipoDoc && qNumDoc) {
+        window.history.replaceState({}, document.title, window.location.pathname);
+        const selectEl = document.getElementById('entrada-tipo-doc');
+        const matchedTd = tiposDocEntrada.find(t => {
+          const q = qTipoDoc.toLowerCase();
+          const code = (t.codigo || '').toLowerCase();
+          const name = (t.nombre || '').toLowerCase();
+          if (q === 'factura' && (code === 'factura proveedor' || name.includes('proveedor'))) return true;
+          if (q === 'ajuste' && (code === 'ajuste entrada' || name.includes('ajuste'))) return true;
+          return String(t.id).toLowerCase() === q || name === q || code === q || name.includes(q) || q.includes(name);
+        });
+        if (matchedTd && selectEl) selectEl.value = matchedTd.id;
+        document.getElementById('entrada-num-doc').value = qNumDoc;
+        if (qProvId) document.getElementById('entrada-proveedor-id').value = qProvId;
+        if (qProvNom) {
+          document.getElementById('entrada-proveedor').value = qProvNom;
+          document.getElementById('btn-crear-proveedor')?.classList.add('hidden');
+          document.getElementById('badge-proveedor-creado')?.classList.add('hidden');
+        }
+        setTimeout(() => verificarDocumentoExistente(), 150);
+      }
+
       setupNavegacionTecladoEntradas();
 
       // Precargar primera línea vacía si no hay borrador activo tras 300ms

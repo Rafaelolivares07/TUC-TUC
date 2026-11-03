@@ -1154,41 +1154,69 @@
       previsualizarProduccion(true, true);
     }
 
-    // ── Consecutivo y Tipos de Documento ──
-    async function cargarTiposDocProduccion() {
-      const sel = document.getElementById('prod-tipo-doc');
-      if (!sel) return;
+    // ── Consecutivo y Tipos de Documento Parametrizados (Original) ──
+    let tiposDocProduccion = [];
+
+    function actualizarAvisoProduccionReemplazo() {
+      const box = document.getElementById('aviso-prod-reemplazo');
+      const spanFecha = document.getElementById('aviso-prod-reemplazo-fecha');
+      if (!box || !spanFecha) return;
+      const raw = sessionStorage.getItem('tuctuc_produccion_reemplazo');
+      if (!raw) {
+        box.classList.add('hidden');
+        return;
+      }
       try {
-        const res = await fetch(`/api/inventario/${NEGOCIO_ID}/tipos-documento?modulo=PRODUCCION`);
-        const data = await res.json();
-        if (data.ok && data.tipos && data.tipos.length) {
-          sel.innerHTML = data.tipos.map(t => `<option value="${t.id}" data-prefijo="${t.prefijo || ''}">${t.nombre} (${t.prefijo || 'DOC'})</option>`).join('');
-          mostrarConsecutivoProduccion();
+        const data = JSON.parse(raw);
+        if (data && data.fecha) {
+          spanFecha.textContent = data.fecha;
+          box.classList.remove('hidden');
         } else {
-          sel.innerHTML = '<option value="PROD">Orden de Producción Estándar (OP)</option>';
-          mostrarConsecutivoProduccion();
+          box.classList.add('hidden');
         }
       } catch(e) {
-        sel.innerHTML = '<option value="PROD">Orden de Producción (OP)</option>';
-        mostrarConsecutivoProduccion();
+        box.classList.add('hidden');
       }
     }
 
-    async function mostrarConsecutivoProduccion() {
-      const sel = document.getElementById('prod-tipo-doc');
-      const inp = document.getElementById('prod-num-doc');
-      if (!inp) return;
-      const tipoVal = sel?.value || 'PROD';
+    async function cargarTiposDocProduccion() {
       try {
-        const res = await fetch(`/api/inventario/${NEGOCIO_ID}/consecutivo?tipo=${tipoVal}`);
-        const d = await res.json();
-        if (d.ok && d.consecutivo) {
-          inp.value = d.consecutivo;
-        } else {
-          inp.value = 'OP-' + Date.now().toString().slice(-6);
+        const prodFechaEl = document.getElementById('prod-fecha');
+        if (prodFechaEl) {
+          if (!prodFechaEl.value) prodFechaEl.value = getFechaHoyBogota();
+          prodFechaEl.max = getFechaHoyBogota();
+        }
+        actualizarAvisoProduccionReemplazo();
+        const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/tipos-doc`);
+        const d = await r.json();
+        if (d.ok) {
+          tiposDocProduccion = d.tipos.filter(t => t.activo && t.mueve_inventario && t.tipo_movimiento === 'produccion');
+          const select = document.getElementById('prod-tipo-doc');
+          if (select) {
+            select.innerHTML = tiposDocProduccion.map(t => `<option value="${t.id}" ${t.predeterminado ? 'selected' : ''}>${t.nombre}</option>`).join('');
+            if (!tiposDocProduccion.length) {
+              select.innerHTML = '<option value="">No hay tipos de doc. de producción configurados</option>';
+            }
+            mostrarConsecutivoProduccion();
+            cargarHistorialProduccion();
+          }
         }
       } catch(e) {
-        inp.value = 'OP-' + Date.now().toString().slice(-6);
+        console.error('Error al cargar tipos de documento para producción:', e);
+      }
+    }
+
+    function mostrarConsecutivoProduccion() {
+      const select = document.getElementById('prod-tipo-doc');
+      const input = document.getElementById('prod-num-doc');
+      if (!select || !input) return;
+      const id = parseInt(select.value);
+      const td = tiposDocProduccion.find(t => t.id === id);
+      if (td) {
+        const nextNum = Math.max((td.consecutivo || 0) + 1, (td.numero_inicio || 1));
+        input.value = nextNum;
+      } else {
+        input.value = '';
       }
     }
 
@@ -1501,91 +1529,96 @@
       rendBox.classList.remove('hidden');
     }
 
-    // ── Registrar Producción ──
+    // ── Registrar Producción (Original Exacto) ──
+    async function cargarProductos() {
+      await cargarProductosSilencioso(true);
+    }
+
     async function registrarProduccion() {
-      if (!activePreviewData) {
-        toast('Primero debes previsualizar la producción', false);
+      const idVal = document.getElementById('prod-ac-id').value;
+      if (!idVal) {
+        toast('Selecciona un producto a producir de la lista', false);
         return;
       }
 
-      const prodId = document.getElementById('prod-ac-id')?.value;
-      const cantRealStr = document.getElementById('prod-preview-cant-input')?.value;
-      const cantReal = parseFloat(cantRealStr);
-      if (!cantReal || isNaN(cantReal) || cantReal <= 0) {
-        toast('Ingresa una cantidad real obtenida válida', false);
+      if (!prodPuedeRegistrar || !activePreviewData) {
+        toast('No se puede registrar. Primero genera la vista previa y asegúrate de contar con stock suficiente de componentes.', false);
         return;
       }
 
-      const tipoDoc = document.getElementById('prod-tipo-doc')?.value || 'PROD';
-      const numDoc = document.getElementById('prod-num-doc')?.value;
-      const fecha = document.getElementById('prod-fecha')?.value || getFechaHoyBogota();
-      const responsableId = document.getElementById('prod-responsable-id')?.value || null;
-      const responsableNombre = document.getElementById('prod-responsable')?.value.trim() || null;
-      const notas = document.getElementById('prod-notas')?.value || '';
+      const id    = parseInt(idVal);
+      const qty   = (activePreviewData && Number(activePreviewData.cantidad) > 0)
+        ? Number(activePreviewData.cantidad)
+        : parseFloat(document.getElementById('prod-cantidad').value);
+      if (!qty || qty <= 0) {
+        toast('La cantidad real producida debe ser mayor a cero.', false);
+        return;
+      }
+      const fecha = (document.getElementById('prod-fecha')?.value || '').trim() || null;
+      const notas = document.getElementById('prod-notas').value.trim() || null;
+      const tipo_doc_id = parseInt(document.getElementById('prod-tipo-doc').value) || null;
+      const td = tiposDocProduccion.find(t => t.id === tipo_doc_id);
+      const tipo_documento = td ? td.nombre : null;
+      const documento_numero = document.getElementById('prod-num-doc').value || null;
+      const tercero_id = parseInt(document.getElementById('prod-responsable-id').value) || null;
+      const tercero_nombre = document.getElementById('prod-responsable').value.trim() || null;
 
       const btn = document.getElementById('prod-btn-registrar');
-      if (btn) {
-        btn.disabled = true;
-        btn.textContent = 'Registrando...';
-      }
+      if (btn) btn.disabled = true;
+
+      // Extraer componentes reales consumidos
+      const componentes = activePreviewData.lineas.map(l => ({
+        componente_id: l.id,
+        cantidad: l.a_consumir
+      }));
 
       try {
-        const payload = {
-          producto_id: parseInt(prodId, 10),
-          cantidad: cantReal,
-          cantidad_teorica: activePreviewData.cantidad,
-          tipo_documento: tipoDoc,
-          numero_documento: numDoc,
-          fecha: fecha,
-          responsable_id: responsableId ? parseInt(responsableId, 10) : null,
-          responsable_nombre: responsableNombre,
-          notas: notas,
-          centro_utilidad_id: (CENTRO_ACTIVO && CENTRO_ACTIVO.id) ? CENTRO_ACTIVO.id : null,
-          lineas: activePreviewData.lineas || []
-        };
-
-        const res = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion/registrar`, {
+        const r = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            producto_id: id,
+            cantidad: qty,
+            fecha,
+            notas,
+            tipo_documento_id: tipo_doc_id,
+            tipo_documento,
+            documento_numero,
+            tercero_id,
+            tercero_nombre,
+            componentes
+          })
         });
-
-        const d = await res.json();
-        if (!d.ok) {
-          toast(d.error || 'Error al registrar orden de producción', false);
-          if (btn) {
-            btn.disabled = false;
-            btn.innerHTML = '<span>🏭</span> Registrar Producción';
+        const d = await r.json();
+        if (d.ok) {
+          toast(`✅ Producción registrada: ${d.producido} × ${d.producto}`);
+          document.getElementById('prod-ac-input').value = '';
+          document.getElementById('prod-ac-id').value = '';
+          document.getElementById('prod-cantidad').value = '1';
+          document.getElementById('prod-notas').value = '';
+          const prodFechaEl = document.getElementById('prod-fecha');
+          if (prodFechaEl) {
+            prodFechaEl.value = getFechaHoyBogota();
+            prodFechaEl.max = getFechaHoyBogota();
           }
-          return;
+          limpiarPreview();
+          ocultarSugerencia();
+          sessionStorage.removeItem('tuctuc_produccion_reemplazo');
+          actualizarAvisoProduccionReemplazo();
+          await cargarProductos();
+          await cargarTiposDocProduccion();
+          await cargarHistorialProduccion(1);
+        } else {
+          toast(d.error || 'Error al registrar la producción', false);
+          if (btn) btn.disabled = false;
         }
-
-        toast(`✅ Producción registrada con éxito: ${d.documento || numDoc} (${_fmtProdNum(cantReal)} und)`, true);
-
-        // Limpiar formulario
-        limpiarPreview();
-        ocultarSugerencia();
-        document.getElementById('prod-ac-input').value = '';
-        document.getElementById('prod-ac-id').value = '';
-        document.getElementById('prod-cantidad').value = '1';
-        document.getElementById('prod-notas').value = '';
-
-        // Actualizar consecutivo e historial
-        mostrarConsecutivoProduccion();
-        cargarHistorialProduccion(1);
-        cargarSugerenciasProduccion();
-
       } catch(e) {
+        console.error(e);
         toast('Error de red al registrar producción', false);
-      } finally {
-        if (btn) {
-          btn.disabled = false;
-          btn.innerHTML = '<span>🏭</span> Registrar Producción';
-        }
+        if (btn) btn.disabled = false;
       }
     }
 
-    // ── Historial de Producciones ──
     async function cargarHistorialProduccion(pagina = 1) {
       _historialProduccionPaginaActual = pagina;
       const tb = document.getElementById('prod-historial-tabla-body');

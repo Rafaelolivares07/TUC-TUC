@@ -34,15 +34,15 @@
         .toast-ok { background: #059669; }
         .toast-err { background: #b91c1c; border: 1px solid #7f1d1d; }
         #lista-productos {
-            max-height: calc(100dvh - 225px);
-            max-height: calc(100vh - 225px);
+            height: calc(100dvh - 330px);
+            max-height: calc(100dvh - 330px);
             overflow-y: auto !important;
             overscroll-behavior-y: contain;
-            -webkit-overflow-scrolling: touch;
-            touch-action: pan-y;
+            -webkit-overflow-scrolling: touch !important;
+            touch-action: pan-y !important;
             scrollbar-width: thin;
             scrollbar-color: #94a3b8 #f1f5f9;
-            padding-bottom: 4rem;
+            padding-bottom: 4.5rem;
         }
         #lista-productos::-webkit-scrollbar {
             width: 8px;
@@ -147,20 +147,12 @@
             margin: auto !important;
         }
 
-        @media (max-width: 767px) {
-            #lista-productos {
-                max-height: none !important;
-                overflow-y: visible !important;
-                padding-bottom: 8rem !important;
-            }
-        }
-
         @media (min-width: 768px) {
             #layout { display: grid; grid-template-columns: 1fr 390px; gap: 0.75rem; }
             #lista-productos {
-                max-height: calc(100dvh - 210px);
-                max-height: calc(100vh - 210px);
-                padding-bottom: 4.5rem;
+                height: calc(100dvh - 220px);
+                max-height: calc(100dvh - 220px);
+                padding-bottom: 4rem;
             }
             #carrito-items { max-height: 42vh; }
         }
@@ -214,7 +206,7 @@
         {% endif %}
         <h1 class="text-2xl font-bold text-gray-800 mb-1">{{ tienda.nombre }}</h1>
         <p class="text-gray-500 mb-2">Caja — Ingresa tu PIN</p>
-        <span class="inline-block bg-indigo-100 text-indigo-800 text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-full border border-indigo-200 mb-6">{{ APP_VERSION|default('v2.4.3') }}</span>
+        <span class="inline-block bg-indigo-100 text-indigo-800 text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-full border border-indigo-200 mb-6">{{ APP_VERSION|default('v2.4.4') }}</span>
         <div class="flex gap-3 justify-center mb-6">
             <input id="pin-input" type="password" inputmode="numeric" maxlength="10"
                    placeholder="••••"
@@ -237,7 +229,7 @@
         <div class="flex flex-wrap items-center gap-1.5 min-w-0 flex-1">
             <h1 class="font-bold text-gray-800 text-sm sm:text-lg truncate max-w-[130px] sm:max-w-none">{{ tienda.nombre }}</h1>
             <span class="bg-green-100 text-green-700 text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-full shrink-0">Caja</span>
-            <span class="bg-indigo-100 text-indigo-800 text-[9px] sm:text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-full border border-indigo-200 shrink-0">{{ APP_VERSION|default('v2.4.3') }}</span>
+            <span class="bg-indigo-100 text-indigo-800 text-[9px] sm:text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-full border border-indigo-200 shrink-0">{{ APP_VERSION|default('v2.4.4') }}</span>
             <span id="badge-cajero" class="bg-blue-100 text-blue-700 text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-full hidden shrink-0 truncate max-w-[110px]"></span>
             <!-- Centro de Utilidad Selector Directo y Botón Sedes -->
             <div class="inline-flex items-center gap-1 bg-emerald-50 border border-emerald-300 rounded-xl px-2 py-0.5 shadow-xs transition hover:bg-emerald-100/70 shrink-0 max-w-[190px] sm:max-w-none">
@@ -4060,18 +4052,21 @@ function renderProductos(lista) {
 function ajustarAlturaCatalogo() {
     const cont = document.getElementById('lista-productos');
     if (!cont) return;
-    if (window.innerWidth < 768) {
-        cont.style.maxHeight = 'none';
-        cont.style.overflowY = 'visible';
-        cont.style.paddingBottom = '8rem';
-    } else {
-        const rect = cont.getBoundingClientRect();
-        const espacioRestante = Math.floor(window.innerHeight - rect.top - 20);
-        if (espacioRestante > 180) {
-            cont.style.maxHeight = espacioRestante + 'px';
-            cont.style.overflowY = 'auto';
-            cont.style.paddingBottom = '4.5rem';
-        }
+    
+    // Garantizar que SIEMPRE sea scrolleable con aceleración táctil
+    cont.style.overflowY = 'auto';
+    cont.style.webkitOverflowScrolling = 'touch';
+    cont.style.touchAction = 'pan-y';
+
+    const rect = cont.getBoundingClientRect();
+    // En celular dejamos 75px por la barra flotante del carrito; en tablet/PC dejamos 20px
+    const margenInferior = (window.innerWidth < 768) ? 75 : 20;
+    const espacioRestante = Math.floor(window.innerHeight - rect.top - margenInferior);
+
+    if (espacioRestante > 100) {
+        cont.style.height = espacioRestante + 'px';
+        cont.style.maxHeight = espacioRestante + 'px';
+        cont.style.paddingBottom = (window.innerWidth < 768 ? '4.5rem' : '3.5rem');
     }
 }
 window.addEventListener('resize', ajustarAlturaCatalogo);

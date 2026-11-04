@@ -4937,16 +4937,6 @@ def solar_proyecto_pdf(token):
         conn.close()
 
 
-@bp.route('/docs/tienda')
-def docs_tienda():
-    return render_template('docs_tienda.html')
-
-
-@bp.route('/admin/docs/tienda')
-def admin_docs_tienda():
-    return render_template('docs_tienda_admin.html')
-
-
 @bp.route('/api/caja/<slug>/tipos-doc', methods=['GET'])
 @bp.route('/api/tienda/<slug>/tipos-doc', methods=['GET'])
 def api_tienda_tipos_doc_get(slug):

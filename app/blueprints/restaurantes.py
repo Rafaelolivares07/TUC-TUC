@@ -3023,8 +3023,3 @@ def api_restaurante_visitas_publicas(slug):
     finally:
         conn.close()
 
-
-@bp.route('/docs/restaurante')
-@bp.route('/admin/docs/restaurante')
-def docs_restaurante():
-    return render_template('docs_restaurante.html')

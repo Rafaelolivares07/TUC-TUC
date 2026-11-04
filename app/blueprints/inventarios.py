@@ -17916,6 +17916,71 @@ def api_auditoria_reparar_valores(negocio_id, producto_id):
 
 # ── CENTROS DE UTILIDAD, DISPOSITIVOS Y TRASLADOS ────────────────────────────
 
+def _tercero_sesion_centros(conn, ses=None):
+    """Id de persona (tercero) de la sesión para llaves de centros.
+
+    Reusa el criterio central: chat_tercero_id manda; si falta y
+    usuario_id es un tercero válido (magic-link/PIN), vale ese.
+    """
+    if ses is None:
+        ses = session
+    try:
+        from .core import _tercero_de_sesion
+        return _tercero_de_sesion(conn, ses)
+    except Exception:
+        try:
+            return ses.get('chat_tercero_id')
+        except Exception:
+            return None
+
+
+def _asegurar_acceso_centros(conn):
+    """Molde bueno: acceso a centros por (tercero_id, negocio_id).
+
+    La tabla nació con usuario_id pelado (ambiguo: fila de usuarios o id
+    de tercero) y sin negocio. Se agregan las llaves nuevas y se rellenan
+    con lo existente; usuario_id se conserva por compatibilidad.
+    Idempotente: segura para correr en cada petición que toca centros.
+    """
+    try:
+        conn.execute("""CREATE TABLE IF NOT EXISTS usuarios_centros_utilidad (
+            id SERIAL PRIMARY KEY,
+            usuario_id INTEGER,
+            centro_utilidad_id INTEGER NOT NULL,
+            rol_en_centro VARCHAR(50) DEFAULT 'operador',
+            es_predeterminado BOOLEAN DEFAULT FALSE,
+            tercero_id INTEGER,
+            negocio_id INTEGER
+        )""")
+        conn.execute("ALTER TABLE usuarios_centros_utilidad ADD COLUMN IF NOT EXISTS tercero_id INTEGER")
+        conn.execute("ALTER TABLE usuarios_centros_utilidad ADD COLUMN IF NOT EXISTS negocio_id INTEGER")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_ucu_tercero_negocio ON usuarios_centros_utilidad (tercero_id, negocio_id)")
+        conn.commit()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return
+    try:
+        conn.execute("""
+            UPDATE usuarios_centros_utilidad u SET negocio_id = c.negocio_id
+            FROM centros_utilidad c
+            WHERE u.centro_utilidad_id = c.id AND u.negocio_id IS NULL
+        """)
+        conn.execute("""
+            UPDATE usuarios_centros_utilidad u SET tercero_id = u.usuario_id
+            WHERE u.tercero_id IS NULL AND u.usuario_id IS NOT NULL
+              AND EXISTS (SELECT 1 FROM terceros t WHERE t.id = u.usuario_id)
+        """)
+        conn.commit()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+
+
 @bp.route('/api/centros_utilidad/<int:negocio_id>', methods=['GET'])
 def api_listar_centros_utilidad(negocio_id):
     if 'usuario_id' not in session:
@@ -17929,6 +17994,8 @@ def api_listar_centros_utilidad(negocio_id):
 
         usuario_id = session.get('usuario_id')
         es_admin = _puede_gestionar_negocio(_contexto)
+        _asegurar_acceso_centros(conn)
+        tercero_id = _tercero_sesion_centros(conn)
 
         centros_db = conn.execute("""
             SELECT id, codigo, nombre, tipo, direccion, telefono, imagen_url, color_badge, activo, telegram_chat_id,
@@ -17954,9 +18021,11 @@ def api_listar_centros_utilidad(negocio_id):
 
         permisos_rows = conn.execute("""
             SELECT centro_utilidad_id, es_predeterminado, rol_en_centro
-            FROM usuarios_centros_utilidad
-            WHERE usuario_id = %s
-        """, (usuario_id,)).fetchall()
+            FROM usuarios_centros_utilidad u
+            JOIN centros_utilidad c ON c.id = u.centro_utilidad_id
+            WHERE c.negocio_id = %s
+              AND (u.tercero_id = %s OR (u.tercero_id IS NULL AND u.usuario_id = %s))
+        """, (negocio_id, tercero_id, usuario_id)).fetchall()
         permisos_map = {r['centro_utilidad_id']: r for r in permisos_rows}
 
         centro_sesion_id = session.get('centro_utilidad_id')
@@ -18022,6 +18091,8 @@ def api_cambiar_centro_utilidad():
 
         usuario_id = session.get('usuario_id')
         es_admin = _puede_gestionar_negocio(_contexto)
+        _asegurar_acceso_centros(conn)
+        tercero_id = _tercero_sesion_centros(conn)
 
         if str(nuevo_id).lower() == 'consolidado':
             if not es_admin:
@@ -18051,9 +18122,11 @@ def api_cambiar_centro_utilidad():
 
         if not es_admin:
             tiene_permiso = conn.execute("""
-                SELECT 1 FROM usuarios_centros_utilidad
-                WHERE usuario_id = %s AND centro_utilidad_id = %s
-            """, (usuario_id, nuevo_id)).fetchone()
+                SELECT 1 FROM usuarios_centros_utilidad u
+                JOIN centros_utilidad c ON c.id = u.centro_utilidad_id
+                WHERE u.centro_utilidad_id = %s AND c.negocio_id = %s
+                  AND (u.tercero_id = %s OR (u.tercero_id IS NULL AND u.usuario_id = %s))
+            """, (nuevo_id, negocio_id, tercero_id, usuario_id)).fetchone()
             if not tiene_permiso:
                 return jsonify({'ok': False, 'error': 'No tiene permiso para este centro'}), 403
 
@@ -18205,13 +18278,15 @@ def api_crear_centro_utilidad():
             RETURNING id, codigo, nombre, tipo, telefono, direccion, color_badge
         """, (negocio_id, codigo, nombre, tipo, telefono, direccion, color_badge, telegram_chat_id)).fetchone()
 
-        # Asignar permiso a usuario_id actual si no lo tiene
+        # Asignar permiso al creador (molde bueno: tercero+negocio; usuario_id se conserva)
+        _asegurar_acceso_centros(conn)
         u_id = session.get('usuario_id')
         if u_id and nuevo:
+            t_id = _tercero_sesion_centros(conn)
             conn.execute("""
-                INSERT INTO usuarios_centros_utilidad (usuario_id, centro_utilidad_id, rol_en_centro, es_predeterminado)
-                VALUES (%s, %s, 'administrador', FALSE)
-            """, (u_id, nuevo['id']))
+                INSERT INTO usuarios_centros_utilidad (usuario_id, tercero_id, negocio_id, centro_utilidad_id, rol_en_centro, es_predeterminado)
+                VALUES (%s, %s, %s, %s, 'administrador', FALSE)
+            """, (u_id, t_id, negocio_id, nuevo['id']))
 
         conn.commit()
 

@@ -1818,7 +1818,9 @@ def check_dynamic_permissions():
         return
 
     # Excepción temporal: Inventario permanece accesible mientras se define su autorización.
-    if endpoint in ('inventarios.admin_inventario', 'inventarios.admin_inventario_fisico'):
+    # Visor de manuales: se auto-chequea por slug (anonimo = publico, como antes).
+    if endpoint in ('inventarios.admin_inventario', 'inventarios.admin_inventario_fisico',
+                    'core.core_ver_manual'):
         return
         
     # 1. Superadmin bypass completo
@@ -2066,6 +2068,22 @@ def core_ver_manual(manual_slug):
     import os
     from ..buscador_motor import MANUALES_MAPA
     
+    if 'usuario_id' in session and session.get('rol') != 'Administrador':
+        _tid = session.get('chat_tercero_id')
+        _neg = session.get('active_negocio_id')
+        if not _tid or not _neg:
+            abort(403)
+        from ..db import get_db_connection as _g2
+        _cx = _g2()
+        try:
+            _pm = _cx.execute(
+                """SELECT 1 FROM permisos_terceros pt JOIN pantallas p ON p.id = pt.pantalla_id
+                   WHERE pt.tercero_id = %s AND pt.negocio_id = %s AND p.clave = %s""",
+                (_tid, _neg, 'manual_' + manual_slug)).fetchone()
+        finally:
+            _cx.close()
+        if not _pm and _tid > 107:
+            abort(403)
     archivo_info = MANUALES_MAPA.get(manual_slug)
     if not archivo_info:
         nombre_archivo = f"{manual_slug}_usuario.md"
@@ -2096,6 +2114,22 @@ def core_ver_manual(manual_slug):
                            contenido_md=contenido_md,
                            fecha="2026-10-26",
                            back_url=back_url)
+
+
+def _manuales_otorgados(conn, ses):
+    """Slugs de manuales otorgados al (tercero, negocio). None = todos."""
+    if ses.get('rol') == 'Administrador':
+        return None
+    tercero_id = _tercero_de_sesion(conn, ses)
+    negocio_id = ses.get('active_negocio_id')
+    if not tercero_id or not negocio_id:
+        return set()
+    rows = conn.execute(r"""
+        SELECT p.query FROM permisos_terceros pt
+        JOIN pantallas p ON p.id = pt.pantalla_id
+        WHERE pt.tercero_id = %s AND pt.negocio_id = %s AND p.clave LIKE 'manual\_%' ESCAPE '\\'
+    """, (tercero_id, negocio_id)).fetchall()
+    return {r['query'][4:] for r in rows if (r['query'] or '').startswith('doc=')}
 
 
 def _endpoints_otorgados(conn, ses):
@@ -2139,17 +2173,21 @@ def api_buscador_omni():
             pass
 
     otorgados = None
+    manuales = None
     if 'usuario_id' in session and session.get('rol') != 'Administrador':
         from ..db import get_db_connection
         try:
             _c0 = get_db_connection()
             try:
                 otorgados = _endpoints_otorgados(_c0, session)
+                manuales = _manuales_otorgados(_c0, session)
             finally:
                 _c0.close()
         except Exception:
             otorgados = set()
-    res = buscar_omni(q, negocio_id=negocio_id, slug=slug, otorgados=otorgados)
+            manuales = set()
+    res = buscar_omni(q, negocio_id=negocio_id, slug=slug, otorgados=otorgados,
+                      manuales_otorgados=manuales)
     datos = []
     extras = {'sueltos': [], 'sueltos_total': 0}
     if negocio_id and len(q) >= 2:

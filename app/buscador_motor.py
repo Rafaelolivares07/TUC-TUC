@@ -77,6 +77,7 @@ def _cargar_indice_manuales():
                 'icono': '📖',
                 'resumen': preview or 'Ver detalle y pasos en el manual',
                 'url': f'/docs/{slug}#{anchor}',
+                'slug': slug,
                 'busqueda': f"{quitar_tildes(titulo)} {quitar_tildes(nombre_manual)} {quitar_tildes(preview)}"
             })
 
@@ -141,6 +142,13 @@ _CATALOGO_PANTALLAS = [
     ('inv_tab_actas', 'Libro de Actas de Inventario', 'inventarios.admin_inventario', '📋', 'Inventario > Actas', 'tab=actas_inventario', '/inventario/{nid}?tab=actas_inventario', ['libro de actas', 'actas inventario', 'firmas actas', 'registro legal', 'acta conteo'], 1230, False),
     ('mant_tool_auditor', 'Auditoría de Documentos (Mantenimiento)', 'inventarios.admin_negocio_mantenimiento', '🔍', 'Mantenimiento > Auditoría', 'tool=auditor-documentos', '/admin/mantenimiento/{nid}?tool=auditor-documentos', ['auditoria documentos', 'buscar documento', 'anular documento', 'factura proveedor', 'factura venta', 'descuadres', 'cruces'], 1240, False),
     ('mant_tool_unificar', 'Unificación de Terceros (Mantenimiento)', 'inventarios.admin_negocio_mantenimiento', '👥', 'Mantenimiento > Terceros', 'tool=unificar-terceros', '/admin/mantenimiento/{nid}?tool=unificar-terceros', ['unificar terceros', 'fusionar clientes', 'proveedores duplicados', 'limpiar terceros', 'duplicados'], 1250, False),
+    ('manual_contabilidad', 'Manual de Contabilidad', 'core.core_ver_manual', '📖', 'Manuales de ayuda', 'doc=contabilidad', '/docs/contabilidad', ['manual', 'ayuda', 'contabilidad', 'guia contable', 'tutorial'], 300, True),
+    ('manual_tienda', 'Manual de Tienda', 'core.core_ver_manual', '📖', 'Manuales de ayuda', 'doc=tienda', '/docs/tienda', ['manual', 'ayuda', 'tienda', 'guia tienda', 'vender'], 310, True),
+    ('manual_restaurante', 'Manual de Restaurante', 'core.core_ver_manual', '📖', 'Manuales de ayuda', 'doc=restaurante', '/docs/restaurante', ['manual', 'ayuda', 'restaurante', 'mesas', 'guia restaurante'], 320, True),
+    ('manual_domotica', 'Manual de Domótica', 'core.core_ver_manual', '📖', 'Manuales de ayuda', 'doc=domotica', '/docs/domotica', ['manual', 'ayuda', 'domotica', 'dispositivos', 'control casa'], 330, True),
+    ('manual_asistencia-remota', 'Manual de Asistencia Remota', 'core.core_ver_manual', '📖', 'Manuales de ayuda', 'doc=asistencia-remota', '/docs/asistencia-remota', ['manual', 'ayuda', 'asistencia', 'soporte', 'remoto'], 340, True),
+    ('manual_alegra', 'Manual de Alegra', 'core.core_ver_manual', '📖', 'Manuales de ayuda', 'doc=alegra', '/docs/alegra', ['manual', 'ayuda', 'alegra', 'facturacion electronica', 'integracion'], 350, True),
+    ('manual_vendedor', 'Manual de Vendedor', 'core.core_ver_manual', '📖', 'Manuales de ayuda', 'doc=vendedor', '/docs/vendedor', ['manual', 'ayuda', 'vendedor', 'pedidos', 'preventa'], 360, True),
 ]
 
 
@@ -222,6 +230,8 @@ def _obtener_catalogo_base(negocio_id=None, slug=None, otorgados=None, filas=Non
     out = []
     vistos = set()
     for r in (filas if filas is not None else _filas_catalogo()):
+        if (r.get('modulo') or '') == 'Manuales de ayuda':
+            continue  # omni los muestra como secciones de ayuda, no como rutas
         ep = r.get('endpoint') or ''
         _k = (ep, r.get('query') or '')
         if _k in vistos:
@@ -247,7 +257,7 @@ def _obtener_catalogo_base(negocio_id=None, slug=None, otorgados=None, filas=Non
     return out
 
 
-def buscar_omni(q, negocio_id=None, slug=None, otorgados=None, filas=None):
+def buscar_omni(q, negocio_id=None, slug=None, otorgados=None, filas=None, manuales_otorgados=None):
     q_limpio = (q or '').strip()
     q_norm = quitar_tildes(q_limpio)
     
@@ -298,6 +308,8 @@ def buscar_omni(q, negocio_id=None, slug=None, otorgados=None, filas=None):
     # 2. Búsqueda en Manuales y Secciones de Ayuda
     resultados_ayuda = []
     for item in secciones_manuales:
+        if manuales_otorgados is not None and item.get('slug') not in manuales_otorgados:
+            continue
         tit_norm = quitar_tildes(item['titulo'])
         full_text = item['busqueda']
 
@@ -323,6 +335,7 @@ def buscar_omni(q, negocio_id=None, slug=None, otorgados=None, filas=None):
     for a in resultados_ayuda:
         a.pop('score', None)
         a.pop('busqueda', None)
+        a.pop('slug', None)
 
     return {
         'ok': True,

@@ -26,6 +26,9 @@
     #menu-desk { transform: translateX(-100%); transition: transform .2s ease; }
     body.menu-abierto #menu-desk { transform: none; }
     @media (prefers-reduced-motion: reduce) { #menu-desk { transition: none; } }
+    #menu-desk-grip{position:absolute;top:0;right:-6px;width:12px;height:100%;cursor:ew-resize;touch-action:none;z-index:5;}
+    #menu-desk-grip::after{content:'';position:absolute;top:0;bottom:0;left:5px;width:2px;background:transparent;border-radius:2px;}
+    #menu-desk-grip:hover::after{background:#cbd5e1;}
   </style>
 </head>
 <body data-page="portal" class="bg-white min-h-screen flex flex-col justify-between text-slate-800 selection:bg-indigo-500 selection:text-white{% if session.get('_su_original') %} pb-12{% endif %}">
@@ -156,7 +159,7 @@
         </button>
         <div data-panel class="hidden pl-2 pb-1">
           {% for pant in sec['items'] %}
-          <a href="{{ pant.resolved_url }}"{% if pant.resolved_url != '#' %} target="_blank" rel="noopener"{% endif %} class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] text-slate-600 hover:bg-slate-50 hover:text-slate-900 no-underline transition">
+          <a href="{{ pant.resolved_url }}"{% if pant.resolved_url != '#' %} target="_blank" rel="noopener"{% endif %} title="{{ pant.nombre }}" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] text-slate-600 hover:bg-slate-50 hover:text-slate-900 no-underline transition">
             <i class="bi {{ pant.icono_bi or 'bi-grid' }} w-5 shrink-0 text-center text-slate-400 text-sm not-italic"></i>
             <span class="truncate">{{ pant.nombre }}</span>
           </a>
@@ -165,6 +168,7 @@
       </div>
       {% endfor %}
     </nav>
+    <div id="menu-desk-grip" title="Arrastra para ajustar el ancho" aria-hidden="true"></div>
   </aside>
   <script>
     (function() {
@@ -196,6 +200,20 @@
         h.addEventListener('click', function() { set(panel.classList.contains('hidden')); });
         set(i === 0);
       });
+      (function(){
+        var aside=document.getElementById('menu-desk'),grip=document.getElementById('menu-desk-grip');
+        if(!aside||!grip)return;
+        var MIN=200,MAX=440,KEY='deskMenuAncho',ini=null;
+        try{var g=parseInt(localStorage.getItem(KEY)||'',10);if(g>=MIN&&g<=MAX)aside.style.width=g+'px';}catch(e){}
+        grip.addEventListener('pointerdown',function(e){
+          e.preventDefault();
+          try{grip.setPointerCapture(e.pointerId);}catch(err){}
+          ini=aside.getBoundingClientRect().left;
+          var mover=function(ev){var nw=Math.min(MAX,Math.max(MIN,ev.clientX-ini));aside.style.width=nw+'px';};
+          var fin=function(){grip.removeEventListener('pointermove',mover);grip.removeEventListener('pointerup',fin);grip.removeEventListener('pointercancel',fin);try{localStorage.setItem(KEY,parseInt(aside.style.width,10)||'');}catch(err){}};
+          grip.addEventListener('pointermove',mover);grip.addEventListener('pointerup',fin);grip.addEventListener('pointercancel',fin);
+        });
+      })();
       try { if (localStorage.getItem(KEY) === '1') abrir(true); } catch (e) {}
     })();
   </script>

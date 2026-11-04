@@ -2149,7 +2149,7 @@ def _manuales_otorgados(conn, ses):
     rows = conn.execute(r"""
         SELECT p.query FROM permisos_terceros pt
         JOIN pantallas p ON p.id = pt.pantalla_id
-        WHERE pt.tercero_id = %s AND pt.negocio_id = %s AND p.clave LIKE 'manual\_%' ESCAPE '\\'
+        WHERE pt.tercero_id = %s AND pt.negocio_id = %s AND p.clave LIKE 'manual\_%%'
     """, (tercero_id, negocio_id)).fetchall()
     return {r['query'][4:] for r in rows if (r['query'] or '').startswith('doc=')}
 
@@ -2202,11 +2202,17 @@ def api_buscador_omni():
             _c0 = get_db_connection()
             try:
                 otorgados = _endpoints_otorgados(_c0, session)
-                manuales = _manuales_otorgados(_c0, session)
             finally:
                 _c0.close()
         except Exception:
             otorgados = set()
+        try:
+            _c1 = get_db_connection()
+            try:
+                manuales = _manuales_otorgados(_c1, session)
+            finally:
+                _c1.close()
+        except Exception:
             manuales = set()
     res = buscar_omni(q, negocio_id=negocio_id, slug=slug, otorgados=otorgados,
                       manuales_otorgados=manuales)

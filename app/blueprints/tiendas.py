@@ -930,7 +930,14 @@ def tienda_caja(slug):
         negocio = _obtener_negocio_por_slug(conn, slug)
         if not negocio:
             return "Negocio no encontrado", 404
-        return render_template('caja.html', tienda=negocio, slug=slug, modo_admin='usuario_id' in session)
+        nombre_sesion = session.get('nombre', '') or ''
+        terc_sesion = session.get('chat_tercero_id') or session.get('usuario_id')
+        tercero_sesion = None
+        if terc_sesion:
+            _r = conn.execute("SELECT id FROM terceros WHERE id = %s", (terc_sesion,)).fetchone()
+            tercero_sesion = _r['id'] if _r else None
+        return render_template('caja.html', tienda=negocio, slug=slug, modo_admin='usuario_id' in session,
+                               nombre_usuario=nombre_sesion, tercero_usuario=tercero_sesion)
     except Exception as e:
         return str(e), 500
     finally:
@@ -963,7 +970,14 @@ def admin_tienda_caja(slug):
             flash('Acceso denegado. Se requiere ser administrador o dueño del negocio.', 'danger')
             return redirect(url_for('auth.admin_login'))
             
-        return render_template('caja.html', tienda=negocio, slug=slug, modo_admin=True)
+        nombre_sesion = session.get('nombre', '') or ''
+        terc_sesion = session.get('chat_tercero_id') or uid
+        tercero_sesion = None
+        if terc_sesion:
+            _r = conn.execute("SELECT id FROM terceros WHERE id = %s", (terc_sesion,)).fetchone()
+            tercero_sesion = _r['id'] if _r else None
+        return render_template('caja.html', tienda=negocio, slug=slug, modo_admin=True,
+                               nombre_usuario=nombre_sesion, tercero_usuario=tercero_sesion)
     except Exception as e:
         return str(e), 500
     finally:

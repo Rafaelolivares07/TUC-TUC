@@ -1544,6 +1544,8 @@ const TIENDA_ID = {{ (tienda.id | default(0)) | tojson }};
 const TIENDA_NOMBRE = '{{ tienda.nombre }}';
 const TERCERO_ID = {{ tienda.tercero_id | tojson }};
 const MODO_ADMIN = {{ (modo_admin|default(false)) | tojson }};
+const NOMBRE_USUARIO = {{ (nombre_usuario|default('')) | tojson }};
+const TERCERO_USUARIO = {{ (tercero_usuario|default(none)) | tojson }};
 const NEGOCIO_FACTURACION_COPIAS = parseInt("{{ tienda.facturacion_copias|default(1) }}") || 1;
 const PERMITIR_INVENTARIO_NEGATIVO = {{ 'true' if tienda.permitir_inventario_negativo is not false else 'false' }};
 let productos = [];
@@ -3715,10 +3717,10 @@ async function seleccionarCentroCaja(id) {
 async function iniciarCajaAdmin() {
     autenticado = true;
     cajeroId = null;
-    cajeroNombre = 'Administrador';
-    cajeroTerceroId = null;
+    cajeroNombre = NOMBRE_USUARIO || 'Administrador';
+    cajeroTerceroId = TERCERO_USUARIO;
     const badge = document.getElementById('badge-cajero');
-    badge.textContent = 'Administrador';
+    badge.textContent = `👤 ${cajeroNombre}`;
     badge.classList.remove('hidden');
     document.getElementById('pantalla-pin').classList.add('hidden');
     document.getElementById('pantalla-caja').classList.remove('hidden');

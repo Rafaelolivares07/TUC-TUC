@@ -22,8 +22,10 @@
     /* Omni: al buscar con resultados, el heroe se compacta arriba (encabezado + input siempre visibles) */
     body.omni-heroe main { justify-content: flex-start !important; margin-top: 0 !important; padding-top: 10px !important; }
     body[data-page="portal"] > header { position: fixed; top: 0; left: 0; right: 0; z-index: 60; }
-    /* Menu desk: se esconde al buscar (el heroe compacto manda) */
-    body.omni-heroe #menu-desk { display: none; }
+    /* Menu lateral desk: arranca cerrado, abre a pedido */
+    #menu-desk { transform: translateX(-100%); transition: transform .2s ease; }
+    body.menu-abierto #menu-desk { transform: none; }
+    @media (prefers-reduced-motion: reduce) { #menu-desk { transition: none; } }
   </style>
 </head>
 <body data-page="portal" class="bg-white min-h-screen flex flex-col justify-between text-slate-800 selection:bg-indigo-500 selection:text-white">
@@ -31,6 +33,11 @@
   <!-- CABECERA CORPORATIVA MINIMALISTA -->
   <header class="w-full bg-white border-b border-slate-100 px-4 sm:px-8 py-3.5 flex items-center justify-between z-30">
     <div class="flex items-center gap-3">
+      {% if menu_secciones %}
+      <button id="desk-menu-btn" type="button" aria-label="Abrir menú" class="p-1.5 -ml-1.5 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition bg-transparent border-0 cursor-pointer">
+        <i class="bi bi-list text-xl leading-none"></i>
+      </button>
+      {% endif %}
       <!-- Marca TUC TUC (Tipografía afinada, sin iconos artificiales) -->
       <a href="/portal" class="no-underline group flex items-center">
         <span class="font-semibold text-slate-900 text-sm hover:text-indigo-600">TUC TUC</span>
@@ -113,23 +120,75 @@
     </div>
   </header>
 
+  {% if menu_secciones %}
+  <!-- MENU LATERAL DESK: arranca cerrado, secciones tipo acordeon -->
+  <div id="menu-backdrop" class="hidden fixed inset-0 bg-slate-900/40 z-40 sm:hidden"></div>
+  <aside id="menu-desk" aria-label="Menú" class="fixed top-0 left-0 h-full w-64 bg-white border-r border-slate-200 z-50 flex flex-col shadow-xl">
+    <div class="flex items-center justify-between pl-4 pr-2 h-14 border-b border-slate-100 shrink-0">
+      <span class="font-semibold text-sm text-slate-900">Menú</span>
+      <button id="menu-desk-cerrar" type="button" aria-label="Cerrar menú" class="p-2 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition bg-transparent border-0 cursor-pointer">
+        <i class="bi bi-x-lg text-base leading-none"></i>
+      </button>
+    </div>
+    <nav class="flex-1 overflow-y-auto p-2">
+      {% for sec in menu_secciones %}
+      <div class="mb-1">
+        <button type="button" data-acordeon aria-expanded="false" class="w-full flex items-center justify-between px-3 py-2 rounded-lg text-[13px] font-semibold text-slate-700 hover:bg-slate-50 transition bg-transparent border-0 cursor-pointer">
+          <span>{{ sec.modulo }}</span>
+          <i class="bi bi-chevron-down text-xs text-slate-400"></i>
+        </button>
+        <div data-panel class="hidden pl-2 pb-1">
+          {% for pant in sec['items'] %}
+          <a href="{{ pant.resolved_url }}" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] text-slate-600 hover:bg-slate-50 hover:text-slate-900 no-underline transition">
+            <span class="w-5 shrink-0 text-center text-slate-400">{{ pant.icono or '' }}</span>
+            <span class="truncate">{{ pant.nombre }}</span>
+          </a>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+    </nav>
+  </aside>
+  <script>
+    (function() {
+      var KEY = 'deskMenuAbierto';
+      function abrir(v) {
+        document.body.classList.toggle('menu-abierto', v);
+        try { localStorage.setItem(KEY, v ? '1' : '0'); } catch (e) {}
+        var b = document.getElementById('menu-backdrop');
+        if (b) b.classList.toggle('hidden', !v);
+      }
+      var btn = document.getElementById('desk-menu-btn');
+      if (btn) btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        abrir(!document.body.classList.contains('menu-abierto'));
+      });
+      var x = document.getElementById('menu-desk-cerrar');
+      if (x) x.addEventListener('click', function() { abrir(false); });
+      var bd = document.getElementById('menu-backdrop');
+      if (bd) bd.addEventListener('click', function() { abrir(false); });
+      document.addEventListener('keydown', function(e) { if (e.key === 'Escape') abrir(false); });
+      document.querySelectorAll('#menu-desk [data-acordeon]').forEach(function(h, i) {
+        var panel = h.parentElement.querySelector('[data-panel]');
+        var chev = h.querySelector('.bi-chevron-down');
+        function set(open) {
+          if (panel) panel.classList.toggle('hidden', !open);
+          if (chev) chev.style.transform = open ? 'rotate(180deg)' : '';
+          h.setAttribute('aria-expanded', open ? 'true' : 'false');
+        }
+        h.addEventListener('click', function() { set(panel.classList.contains('hidden')); });
+        set(i === 0);
+      });
+      try { if (localStorage.getItem(KEY) === '1') abrir(true); } catch (e) {}
+    })();
+  </script>
+  {% endif %}
+
   <!-- LIENZO BLANCO CENTRAL CON BUSCADOR HERO -->
   <main class="flex-1 flex flex-col items-center justify-center px-4 -mt-12 sm:-mt-16 w-full">
     <div class="w-full max-w-2xl flex flex-col items-center">
       {% include 'partials/buscador_omni.html' %}
     </div>
-
-    {% if pantallas_autorizadas %}
-    <nav id="menu-desk" aria-label="Menú" class="w-full max-w-2xl mt-10 grid grid-cols-1 sm:grid-cols-2 gap-3">
-      {% for pant in pantallas_autorizadas %}
-      <a href="{{ pant.resolved_url }}" class="group flex items-center gap-3 bg-white border border-slate-200 rounded-xl px-4 py-3 no-underline shadow-sm hover:border-indigo-300 hover:shadow transition">
-        <span class="shrink-0 w-9 h-9 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center text-base font-semibold group-hover:bg-indigo-50 group-hover:text-indigo-700">{{ pant.icono or '' }}</span>
-        <span class="flex-1 min-w-0 text-sm font-semibold text-slate-800 truncate">{{ pant.nombre }}</span>
-        <i class="bi bi-arrow-right text-slate-300 group-hover:text-indigo-500 transition"></i>
-      </a>
-      {% endfor %}
-    </nav>
-    {% endif %}
   </main>
 
   <!-- FOOTER VACÍO PARA BALANCE / ESPACIO -->

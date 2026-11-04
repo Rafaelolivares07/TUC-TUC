@@ -1758,6 +1758,32 @@ def _pantallas_de_sesion(conn, ses):
         rows = []
     return [dict(r) for r in rows], slug, active_id
 
+_SECCIONES_MENU = {
+    'inventarios': 'Inventario',
+    'contabilidad': 'Contabilidad',
+    'tiendas': 'Ventas',
+    'restaurantes': 'Ventas',
+    'crm': 'Comercial',
+    'core': 'General',
+    'agenda': 'General',
+    'auth': 'General',
+    'admin_agent_bp': 'Administracion',
+}
+
+
+def _agrupar_por_modulo(pantallas):
+    """Agrupa pantallas por seccion del lateral (respeta orden de llegada)."""
+    grupos = {}
+    orden = []
+    for p in pantallas:
+        pref = (p.get('endpoint') or '').split('.')[0]
+        mod = _SECCIONES_MENU.get(pref, (pref or 'general').replace('_', ' ').title())
+        if mod not in grupos:
+            grupos[mod] = []
+            orden.append(mod)
+        grupos[mod].append(p)
+    return [{'modulo': m, 'items': grupos[m]} for m in orden]
+
 
 @bp.route('/inicio')
 def colaborador_inicio():
@@ -1790,8 +1816,10 @@ def colaborador_portal():
     conn.close()
     for d in pantallas_autorizadas:
         d['resolved_url'] = _resolver_url_pantalla(d['endpoint'], active_id, slug)
+    menu_secciones = _agrupar_por_modulo(pantallas_autorizadas)
     return render_template('portal.html', nombre=nombre,
-                           pantallas_autorizadas=pantallas_autorizadas)
+                           pantallas_autorizadas=pantallas_autorizadas,
+                           menu_secciones=menu_secciones)
 
 
 @bp.route('/admin/pantallas-catalogo')

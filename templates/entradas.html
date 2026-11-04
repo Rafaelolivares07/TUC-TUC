@@ -4444,6 +4444,9 @@ function actualizarConfirmacionMetodoPago() {
 
 function validarConfirmacionEncabezadoEntrada() {
   const entCu = document.getElementById('entrada-centro-utilidad');
+  if (entCu && entCu.value && entCu.value !== 'consolidado') {
+    actualizarConfirmacionSede();
+  }
   if (!entCu || !entCu.value || !sedeConfirmada) {
     toast('⚠️ Debe seleccionar y confirmar la Sede / Bodega Destino antes de continuar.', false);
     if (entCu) {
@@ -4459,6 +4462,9 @@ function validarConfirmacionEncabezadoEntrada() {
   }
 
   const entMp = document.getElementById('entrada-metodo-pago');
+  if (entMp && entMp.value) {
+    actualizarConfirmacionMetodoPago();
+  }
   if (!entMp || !entMp.value || !metodoPagoConfirmado) {
     toast('⚠️ Debe seleccionar y confirmar el Método de Pago antes de continuar.', false);
     if (entMp) {
@@ -5113,108 +5119,96 @@ async function crearProveedorNuevo() {
 
 
 
-async function verificarDocumentoExistente() {
+let _ultimoDocVerificadoKey = '';
 
+async function verificarDocumentoExistente(forzar = false) {
   const tipo = document.getElementById('entrada-tipo-doc').value;
-
   const num = document.getElementById('entrada-num-doc').value.trim();
-
   const provId = document.getElementById('entrada-proveedor-id').value;
-
   const provNombre = document.getElementById('entrada-proveedor').value.trim();
 
-  
-
   const select = document.getElementById('entrada-tipo-doc');
-
   const id = parseInt(select.value);
-
   const td = tiposDocEntrada.find(t => t.id === id);
-
   const requiresProvider = td ? !td.es_interno : true;
 
-  
-
   if (!tipo || !num || (requiresProvider && !provId && !provNombre)) {
-
     return;
-
   }
 
-  
+  const docKey = `${tipo}|${num.toLowerCase()}|${provId || provNombre.toLowerCase()}`;
+  if (!forzar && _ultimoDocVerificadoKey === docKey && esModificacionDoc) {
+    return; // Evita borrar y sobreescribir las ediciones que el usuario ya esté haciendo
+  }
 
   try {
-
     const url = `/api/inventario/${NEGOCIO_ID}/documento/consultar?tipo_documento=${encodeURIComponent(tipo)}&documento_numero=${encodeURIComponent(num)}&proveedor_id=${provId || ''}&proveedor_nombre=${encodeURIComponent(provNombre)}`;
-
     const r = await fetch(url);
-
     const d = await r.json();
-
     if (d.ok && d.existe) {
-
+      _ultimoDocVerificadoKey = docKey;
       esModificacionDoc = true;
-
       toast('Factura/Documento existente cargado para modificar', true);
-
       if (d.notas) {
-
         document.getElementById('entrada-notas').value = d.notas;
-
       }
-
       if (d.fecha) {
-
         document.getElementById('entrada-fecha-doc').value = d.fecha;
-
+      }
+      if (d.bodega) {
+        const cuEl = document.getElementById('entrada-centro-utilidad');
+        if (cuEl) {
+          cuEl.value = d.bodega;
+          actualizarConfirmacionSede();
+        }
+      } else {
+        actualizarConfirmacionSede();
+      }
+      if (d.metodo_pago) {
+        const mpEl = document.getElementById('entrada-metodo-pago');
+        if (mpEl) {
+          mpEl.value = d.metodo_pago;
+          actualizarConfirmacionMetodoPago();
+        }
+      } else {
+        actualizarConfirmacionMetodoPago();
+      }
+      if (d.proveedor_id) {
+        document.getElementById('entrada-proveedor-id').value = d.proveedor_id;
+      }
+      if (d.proveedor_nombre) {
+        document.getElementById('entrada-proveedor').value = d.proveedor_nombre;
+        document.getElementById('btn-crear-proveedor')?.classList.add('hidden');
+        document.getElementById('badge-proveedor-creado')?.classList.add('hidden');
       }
 
       const cont = document.getElementById('entrada-lineas');
-
       cont.innerHTML = '';
-
       entradaLineas = [];
 
-      
-
       for (const item of d.items) {
-
         agregarLineaEntradaConDatos(
-
           item.producto_id,
-
           item.nombre_producto,
-
           item.cantidad,
-
           item.valor_unitario,
-
           item.iva_pct,
-
           item.presentacion_id,
-
           item.presentacion_nombre,
-
-          item.presentacion_equivalencia
-
+          item.presentacion_equivalencia,
+          null,
+          null,
+          item.valor_total
         );
-
       }
-
       calcularTotalesEntrada();
-
     } else {
-
       esModificacionDoc = false;
-
+      _ultimoDocVerificadoKey = '';
     }
-
   } catch(e) {
-
     console.error(e);
-
   }
-
 }
 
 
@@ -7342,6 +7336,7 @@ async function registrarEntrada() {
     entradaLineas = [];
 
     esModificacionDoc = false;
+    _ultimoDocVerificadoKey = '';
     _borradorCargadoActual = null;
     document.getElementById('banner-borrador-entrada')?.classList.add('hidden');
     document.getElementById('indicador-auto-guardado-borrador')?.classList.add('hidden');
@@ -7514,7 +7509,7 @@ async function validarFechaEntrada(fecha) {
           document.getElementById('btn-crear-proveedor')?.classList.add('hidden');
           document.getElementById('badge-proveedor-creado')?.classList.add('hidden');
         }
-        setTimeout(() => verificarDocumentoExistente(), 150);
+        setTimeout(() => verificarDocumentoExistente(true), 150);
       }
 
       setupNavegacionTecladoEntradas();

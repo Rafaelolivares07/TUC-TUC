@@ -869,8 +869,9 @@
 
     // Si estamos en el menú principal (/portal), abrir en una nueva pestaña
     // para dejar la pestaña del menú principal abierta
-    const esMenuPrincipal = window.location.pathname === '/portal' || 
-                            window.location.pathname === '/' || 
+    const rutaMenu = window.location.pathname.replace(/\/+$/, "") || "/";
+    const esMenuPrincipal = rutaMenu === '/portal' ||
+                            rutaMenu === '/' ||
                             document.body.dataset.page === 'portal';
 
     if (esMenuPrincipal) {

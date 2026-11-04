@@ -934,7 +934,7 @@
       }
       
       auditorDocumentoSeleccionado = { 
-        tipo, 
+        tipo: (d.tipo_documento_id || d.tipo_documento || tipo), 
         numero, 
         terceroId: provId, 
         terceroNombre: provNombre,
@@ -1170,8 +1170,8 @@
       return;
     }
     
-    if (has_inventario) {
-      window.location.href = `/admin/inventario/${NEGOCIO_ID}?tipo_doc=${encodeURIComponent(tipo)}&num_doc=${encodeURIComponent(numero)}&prov_id=${encodeURIComponent(terceroId || '')}&prov_nom=${encodeURIComponent(terceroNombre || '')}#entradas`;
+    if (has_inventario || (tipo_movimiento && tipo_movimiento.toLowerCase() === 'entrada')) {
+      window.location.href = `/entradas/${NEGOCIO_ID}?tipo_doc=${encodeURIComponent(tipo || '')}&num_doc=${encodeURIComponent(numero || '')}&prov_id=${encodeURIComponent(terceroId || '')}&prov_nom=${encodeURIComponent(terceroNombre || '')}`;
     } else {
       let extra = '';
       if (comprobante_id) {
@@ -1633,7 +1633,7 @@
     const tipo = urlParams.get('tipo_documento');
     const numero = urlParams.get('documento_numero');
     const terceroId = urlParams.get('tercero_id') || '';
-    if (tipo && numero) {
+    if (numero) {
       colapsarSeccionesGeneralesAuditoria();
       const inputNum = document.getElementById('auditor-directo-num');
       if (inputNum) inputNum.value = numero;

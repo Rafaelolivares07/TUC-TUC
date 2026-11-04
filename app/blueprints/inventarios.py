@@ -2013,22 +2013,36 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
     if not es_interno and tipo_doc_id and documento_numero and proveedor_id:
         num_variants = resolver_variantes_numero(documento_numero)
         
+        tipo_names = [tipo_documento.lower()]
+        if tipo_doc_id == 1:
+            tipo_names.extend(['factura de proveedor', 'factura proveedor', 'factura', 'compra'])
+        elif tipo_doc_id == 3:
+            tipo_names.extend(['ajuste de inventario', 'ajuste entrada', 'ajuste'])
+
         existing_movs = conn.execute("""
             SELECT id, producto_id FROM movimientos_inventario
             WHERE negocio_id = %s AND tipo = 'entrada' 
-              AND tipo_documento_id = %s 
-              AND documento_numero IN %s 
+              AND (
+                  (tipo_documento_id IS NOT NULL AND tipo_documento_id = %s)
+                  OR (tipo_documento_id IS NULL AND LOWER(COALESCE(tipo_documento, '')) IN %s)
+                  OR %s IS NULL
+              )
+              AND (LOWER(documento_numero) IN %s OR LOWER(COALESCE(numero_documento, '')) IN %s)
               AND proveedor_id = %s
-        """, (negocio_id, tipo_doc_id, tuple(num_variants), proveedor_id)).fetchall()
+        """, (negocio_id, tipo_doc_id, tuple(tipo_names), tipo_doc_id, tuple(v.lower() for v in num_variants), tuple(v.lower() for v in num_variants), proveedor_id)).fetchall()
         
         existing_saldo = conn.execute("""
             SELECT 1 FROM saldo_por_documentos
             WHERE negocio_id = %s 
               AND tercero_id = %s 
-              AND tipo_documento_id = %s 
-              AND numero_documento IN %s
+              AND (
+                  (tipo_documento_id IS NOT NULL AND tipo_documento_id = %s)
+                  OR (LOWER(COALESCE(tipo_documento, '')) IN %s)
+                  OR %s IS NULL
+              )
+              AND LOWER(numero_documento) IN %s
             LIMIT 1
-        """, (negocio_id, proveedor_id, tipo_doc_id, tuple(num_variants))).fetchone()
+        """, (negocio_id, proveedor_id, tipo_doc_id, tuple(tipo_names), tipo_doc_id, tuple(v.lower() for v in num_variants))).fetchone()
         
         if existing_movs or existing_saldo:
             if es_modificacion:
@@ -2046,9 +2060,13 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
                     DELETE FROM saldo_por_documentos
                     WHERE negocio_id = %s 
                       AND tercero_id = %s 
-                      AND tipo_documento_id = %s 
-                      AND numero_documento IN %s
-                """, (negocio_id, proveedor_id, tipo_doc_id, tuple(num_variants)))
+                      AND (
+                          (tipo_documento_id IS NOT NULL AND tipo_documento_id = %s)
+                          OR (LOWER(COALESCE(tipo_documento, '')) IN %s)
+                          OR %s IS NULL
+                      )
+                      AND LOWER(numero_documento) IN %s
+                """, (negocio_id, proveedor_id, tipo_doc_id, tuple(tipo_names), tipo_doc_id, tuple(v.lower() for v in num_variants)))
                 
                 # 3. Delete cotizaciones (strictly for this provider)
                 conn.execute("""
@@ -9729,11 +9747,37 @@ def api_auditar_documento(negocio_id):
     num_doc = request.args.get('documento_numero', '').strip()
     proveedor_id = request.args.get('proveedor_id', '').strip()
     
-    if not tipo_doc or not num_doc:
-        return jsonify({'ok': False, 'error': 'tipo_documento y documento_numero requeridos'}), 400
+    if not num_doc:
+        return jsonify({'ok': False, 'error': 'documento_numero requerido'}), 400
     
     conn = get_db_connection()
     try:
+        # Si no se pasó tipo_doc, intentar deducirlo de movimientos_inventario o pedidos
+        num_variants_init = resolver_variantes_numero(num_doc)
+        if not tipo_doc:
+            row_guess = conn.execute("""
+                SELECT tipo_documento_id, tipo_documento, proveedor_id
+                FROM movimientos_inventario
+                WHERE negocio_id = %s AND (documento_numero IN %s OR numero_documento IN %s)
+                ORDER BY id DESC LIMIT 1
+            """, (negocio_id, tuple(num_variants_init), tuple(num_variants_init))).fetchone()
+            if row_guess:
+                if row_guess['tipo_documento_id']:
+                    tipo_doc = str(row_guess['tipo_documento_id'])
+                elif row_guess['tipo_documento']:
+                    tipo_doc = str(row_guess['tipo_documento'])
+                if not proveedor_id and row_guess['proveedor_id']:
+                    proveedor_id = str(row_guess['proveedor_id'])
+            else:
+                row_p_guess = conn.execute("""
+                    SELECT tipo_documento_id, numero_documento
+                    FROM pedidos
+                    WHERE negocio_id = %s AND numero_documento IN %s
+                    ORDER BY id DESC LIMIT 1
+                """, (negocio_id, tuple(num_variants_init))).fetchone()
+                if row_p_guess and row_p_guess['tipo_documento_id']:
+                    tipo_doc = str(row_p_guess['tipo_documento_id'])
+
         # Resolver tipo_documento_id
         tipo_documento_id = None
         tipo_doc_codigo = None
@@ -10098,6 +10142,8 @@ def api_auditar_documento(negocio_id):
             'es_ultimo_consecutivo': es_ultimo_consecutivo,
             'es_interno': es_interno,
             'tipo_movimiento': tipo_movimiento,
+            'tipo_documento_id': tipo_documento_id,
+            'tipo_documento': tipo_doc_nombre or tipo_doc,
             'multiples_proveedores': multiples_proveedores,
             'lista_proveedores': lista_proveedores
         })
@@ -10960,21 +11006,28 @@ def api_consultar_documento_existente(negocio_id):
 
         # Check if there is any movement with this key
         query_base = """
-SELECT m.id, m.producto_id, m.nombre_producto, m.cantidad, m.valor_unitario, m.iva_pct, m.notas,
-       m.presentacion_id, p_pres.nombre AS presentacion_nombre, p_pres.equivalencia AS presentacion_equivalencia
+SELECT m.id, m.producto_id, m.nombre_producto, m.cantidad, m.valor_unitario, m.valor_total, m.iva_pct, m.notas,
+       m.presentacion_id, p_pres.nombre AS presentacion_nombre, p_pres.equivalencia AS presentacion_equivalencia,
+       m.bodega, m.metodo_pago, m.proveedor_id, COALESCE(t.nombre, m.proveedor_nombre) AS proveedor_nombre,
+       m.tipo_documento_id, m.tipo_documento, m.documento_fecha, m.created_at
 FROM movimientos_inventario m
 LEFT JOIN presentaciones p_pres ON p_pres.id = m.presentacion_id
+LEFT JOIN terceros t ON t.id = m.proveedor_id
 WHERE m.negocio_id = %s AND m.tipo = 'entrada'
-AND (m.tipo_documento_id = %s OR (m.tipo_documento_id IS NULL AND LOWER(m.tipo_documento) IN %s))
-AND LOWER(m.documento_numero) IN %s
+AND (
+    (m.tipo_documento_id IS NOT NULL AND m.tipo_documento_id = %s)
+    OR (LOWER(COALESCE(m.tipo_documento, '')) IN %s)
+    OR %s IS NULL
+)
+AND (LOWER(m.documento_numero) IN %s OR LOWER(COALESCE(m.numero_documento, '')) IN %s)
 """
-        params = [negocio_id, tipo_doc_id, tuple(tipo_names), tuple(v.lower() for v in num_variants)]
+        params = [negocio_id, tipo_doc_id, tuple(tipo_names), tipo_doc_id, tuple(v.lower() for v in num_variants), tuple(v.lower() for v in num_variants)]
 
         if proveedor_id:
             query_base += " AND m.proveedor_id = %s"
             params.append(proveedor_id)
         elif proveedor_nombre:
-            query_base += " AND LOWER(m.proveedor_nombre) = LOWER(%s)"
+            query_base += " AND LOWER(COALESCE(t.nombre, m.proveedor_nombre)) = LOWER(%s)"
             params.append(proveedor_nombre)
 
         query = query_base + " ORDER BY m.id"
@@ -10982,43 +11035,32 @@ AND LOWER(m.documento_numero) IN %s
         if not rows:
             return jsonify({'ok': True, 'existe': False})
             
-        # Get notes and date from first movement
-        notes_query = """
-SELECT notas, documento_fecha, created_at FROM movimientos_inventario
-WHERE negocio_id = %s AND tipo = 'entrada' 
-AND (tipo_documento_id = %s OR (tipo_documento_id IS NULL AND LOWER(tipo_documento) IN %s))
-AND LOWER(documento_numero) IN %s
-"""
-        notes_params = [negocio_id, tipo_doc_id, tuple(tipo_names), tuple(v.lower() for v in num_variants)]
-        
-        if proveedor_id:
-            notes_query += " AND proveedor_id = %s"
-            notes_params.append(proveedor_id)
-        elif proveedor_nombre:
-            notes_query += " AND LOWER(proveedor_nombre) = LOWER(%s)"
-            notes_params.append(proveedor_nombre)
-            
-        notes_query += " LIMIT 1"
-        first_row = conn.execute(notes_query, tuple(notes_params)).fetchone()
-        notes = first_row['notas'] if (first_row and 'notas' in first_row) else ''
+        first_row = rows[0]
+        notes = first_row['notas'] or ''
         
         doc_date = None
-        if first_row:
-            if first_row['documento_fecha']:
-                doc_date = first_row['documento_fecha'].isoformat()
-            elif first_row['created_at']:
-                doc_date = first_row['created_at'].strftime('%Y-%m-%d')
+        if first_row['documento_fecha']:
+            doc_date = first_row['documento_fecha'].isoformat()
+        elif first_row['created_at']:
+            doc_date = first_row['created_at'].strftime('%Y-%m-%d')
             
         return jsonify({
             'ok': True,
             'existe': True,
             'notas': notes,
             'fecha': doc_date,
+            'bodega': first_row['bodega'],
+            'metodo_pago': first_row['metodo_pago'],
+            'proveedor_id': first_row['proveedor_id'],
+            'proveedor_nombre': first_row['proveedor_nombre'],
+            'tipo_documento_id': first_row['tipo_documento_id'],
+            'tipo_documento': first_row['tipo_documento'],
             'items': [{
                 'producto_id': r['producto_id'],
                 'nombre_producto': r['nombre_producto'],
                 'cantidad': float(r['cantidad']),
                 'valor_unitario': float(r['valor_unitario'] or 0),
+                'valor_total': float(r['valor_total'] or 0),
                 'iva_pct': float(r['iva_pct'] or 0),
                 'notas': r['notas'],
                 'presentacion_id': r['presentacion_id'],

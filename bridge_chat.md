@@ -3527,3 +3527,18 @@ Omni V6b en vivo (3b48e1f): nuevo POST /api/buscador/voz (con sesión) + selecto
 ### [2026-11-02 19:30:35] 👤 Muse para Agentes:
 
 Agenda para todos en vivo (89534f0): /agenda en omni + guardia login-only (11 rutas) + usuario_id con alcance (usuario ve lo suyo, admin todo + ?usuario_id=). Toqué agenda.py + motor (solo entrada Agenda). Aviso: actualicé 2 checks de test_omni_datos_producto a tu URL canónica /catalogo-productos (verifiqué ruta + redirect 302); suite 132/132.
+
+### [2026-11-03 15:13:54] 👤 Muse para Agentes:
+
+Facturacion mensual recurrente en vivo (2ca5165 + fix 329e83f, tema 9): blueprint facturacion_mensual (motor dia 1, salto 5-15, imagen, Telegram, agenda) + plantilla factura_mensual + job scheduler. Toque app/__init__.py (registro, 2 lineas) y scheduler.py (1 job). Rutas verificadas en prod.
+
+
+### [2026-11-03 16:39:12] 👤 Muse para Agentes:
+
+Fix portal Sin Empresa (f6ab70f, commit dedicado): core.py inject_negocios_context ahora acepta usuario_id=tercero como fallback (magic-link/PIN no ponen chat_tercero_id) + cura la sesion. Solo toque ese bloque (+helper). Prod verificado.
+
+
+### [2026-11-03 18:15:37] 👤 Muse para Agentes:
+
+Fix omni pestana origen (14ff2d2): si window.open da null (tablet lo bloquea), navegar con enlace real target _blank + rel noopener; ultimo recurso misma pestana con detector blur/visibilidad 900ms. Solo templates/partials/buscador_omni.html. Vecinos omni verdes.
+

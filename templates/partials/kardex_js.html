@@ -1483,7 +1483,8 @@ function renderizarTablaKardex(d) {
       </button>
     `;
 
-    const linkDocUrl = (docDisplay && docNumRaw) ? `/admin/mantenimiento/${NEGOCIO_ID}?tool=auditor-documentos&tipo_documento=${encodeURIComponent(docTypeRaw)}&documento_numero=${encodeURIComponent(docNumRaw)}&tercero_id=${encodeURIComponent(m.proveedor_id || '')}` : '';
+    const docTypeParam = m.tipo_documento_id || docTypeRaw || cleanType || '';
+    const linkDocUrl = (docDisplay && docNumRaw) ? `/admin/mantenimiento/${NEGOCIO_ID}?tool=auditor-documentos&tipo_documento=${encodeURIComponent(docTypeParam)}&documento_numero=${encodeURIComponent(docNumRaw)}&tercero_id=${encodeURIComponent(m.proveedor_id || '')}` : '';
 
     let docColTipo = '', docColNum = '';
     if (cleanType && cleanNum) {

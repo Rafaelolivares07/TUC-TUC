@@ -80,6 +80,18 @@ def create_app():
     except Exception as _e:
         print(f'[negocios] init: {_e}')
 
+    # Sembrar catalogo unico de pantallas (omni + menu + otorgar)
+    try:
+        from .db import get_db_connection as _gdb_cat
+        from .blueprints.core import _asegurar_pantallas_catalogo
+        _conn_cat = _gdb_cat()
+        try:
+            _asegurar_pantallas_catalogo(_conn_cat)
+        finally:
+            _conn_cat.close()
+    except Exception as _e:
+        print(f'[pantallas] init: {_e}')
+
     # Inicializar APScheduler para tareas en segundo plano (amortizaciones, domÃƒÂ³tica, crm)
     try:
         from .scheduler import init_scheduler
@@ -205,7 +217,7 @@ def create_app():
                 if session.get('rol') == 'ClienteVFP':
                     abort(403)
                 from flask import make_response
-                from .blueprints.core import _pantallas_de_sesion, _resolver_url_pantalla, _agrupar_por_modulo
+                from .blueprints.core import _pantallas_de_sesion, _url_pantalla, _agrupar_por_modulo
                 from .db import get_db_connection
                 _conn = get_db_connection()
                 try:
@@ -216,7 +228,7 @@ def create_app():
                     except Exception:
                         pass
                 for _d in _pants:
-                    _d['resolved_url'] = _resolver_url_pantalla(_d['endpoint'], _nid, _slug)
+                    _d['resolved_url'] = _url_pantalla(_d, _nid, _slug)
                 _secs = _agrupar_por_modulo(_pants)
                 resp = make_response(render_template('portal.html', nombre=session.get('nombre', ''),
                                                      pantallas_autorizadas=_pants,

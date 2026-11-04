@@ -1490,14 +1490,14 @@ def core_gestion_permisos():
     from ..db import get_db_connection
     conn = get_db_connection()
     if role in ('Administrador',):
-        pantallas = conn.execute("SELECT id, nombre, clave, endpoint, icono FROM pantallas ORDER BY id").fetchall()
+        pantallas = conn.execute("SELECT id, nombre, clave, endpoint, icono, modulo, url_tpl, query FROM pantallas WHERE otorgable IS NOT FALSE ORDER BY orden, id").fetchall()
     else:
         pantallas = conn.execute("""
-            SELECT p.id, p.nombre, p.clave, p.endpoint, p.icono 
+            SELECT p.id, p.nombre, p.clave, p.endpoint, p.icono, p.modulo, p.url_tpl, p.query 
             FROM permisos_terceros pt
             JOIN pantallas p ON p.id = pt.pantalla_id
-            WHERE pt.tercero_id = %s AND pt.negocio_id = %s
-            ORDER BY p.id
+            WHERE pt.tercero_id = %s AND pt.negocio_id = %s AND p.otorgable IS NOT FALSE
+            ORDER BY p.orden, p.id
         """, (tercero_id, active_negocio_id)).fetchall()
     conn.close()
     
@@ -1809,7 +1809,7 @@ def check_dynamic_permissions():
     from ..db import get_db_connection
     conn = get_db_connection()
     pantalla = conn.execute(
-        "SELECT id, clave, nombre FROM pantallas WHERE endpoint = %s LIMIT 1",
+        "SELECT id, clave, nombre FROM pantallas WHERE endpoint = %s AND otorgable IS NOT FALSE LIMIT 1",
         (endpoint,)
     ).fetchone()
     conn.close()
@@ -1835,9 +1835,9 @@ def check_dynamic_permissions():
     # 2. Consultar si tiene el permiso asignado
     conn = get_db_connection()
     permiso = conn.execute("""
-        SELECT 1 FROM permisos_terceros 
-        WHERE tercero_id = %s AND negocio_id = %s AND pantalla_id = %s
-    """, (tercero_id, negocio_id, pantalla['id'])).fetchone()
+        SELECT 1 FROM permisos_terceros pt JOIN pantallas p ON p.id = pt.pantalla_id
+        WHERE pt.tercero_id = %s AND pt.negocio_id = %s AND p.endpoint = %s
+    """, (tercero_id, negocio_id, endpoint)).fetchone()
     conn.close()
     
     if permiso:
@@ -1850,18 +1850,57 @@ def check_dynamic_permissions():
     abort(403)
 
 
-def _resolver_url_pantalla(endpoint, negocio_id, slug):
-    from flask import url_for
-    try:
-        if 'negocio_id' in endpoint or endpoint in ('inventarios.admin_inventario', 'contabilidad.admin_contabilidad'):
-            return url_for(endpoint, negocio_id=negocio_id)
-        elif 'slug' in endpoint or endpoint in ('tiendas.admin_caja',):
-            return url_for(endpoint, slug=slug) if slug else '#'
-        else:
-            return url_for(endpoint)
-    except Exception:
-        return '#'
+def _url_pantalla(fila, negocio_id, slug):
+    """URL de una fila del catalogo (delega al motor)."""
+    from ..buscador_motor import _url_fila
+    return _url_fila(fila, negocio_id, slug)
 
+
+def _asegurar_pantallas_catalogo(conn):
+    """Crea/extiende pantallas y siembra el catalogo unico (omni+menu+otorgar)."""
+    from ..buscador_motor import _CATALOGO_PANTALLAS, _SUGERIDOS
+    import json as _json
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS pantallas (
+            id SERIAL PRIMARY KEY,
+            nombre TEXT,
+            clave TEXT,
+            endpoint TEXT,
+            icono TEXT
+        )
+        """)
+    for _col, _typ in (('modulo', 'TEXT'), ('query', 'TEXT'), ('url_tpl', 'TEXT'),
+                       ('keywords', 'TEXT'), ('orden', 'INTEGER DEFAULT 0'),
+                       ('otorgable', 'BOOLEAN DEFAULT TRUE'),
+                       ('sugerido', 'BOOLEAN DEFAULT FALSE')):
+        conn.execute(f"ALTER TABLE pantallas ADD COLUMN IF NOT EXISTS {_col} {_typ}")
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pantallas_clave ON pantallas (clave)")
+    conn.execute("UPDATE pantallas SET otorgable = TRUE WHERE otorgable IS NULL")
+    conn.execute("UPDATE pantallas SET sugerido = FALSE WHERE sugerido IS NULL")
+    conn.execute("UPDATE pantallas SET orden = 9000 + id WHERE orden IS NULL OR orden = 0")
+    for (_clave, _nombre, _ep, _icono, _mod, _q, _tpl, _kws, _ord, _ot) in _CATALOGO_PANTALLAS:
+        _k = _json.dumps(_kws, ensure_ascii=False)
+        _sug = _clave in _SUGERIDOS
+        _existe = conn.execute(
+            "SELECT 1 FROM pantallas WHERE endpoint = %s AND COALESCE(query, %s) = COALESCE(%s, %s) LIMIT 1",
+            (_ep, _q or '', _q, '')).fetchone()
+        if _existe:
+            conn.execute(
+                """UPDATE pantallas SET modulo = COALESCE(modulo, %s), url_tpl = COALESCE(url_tpl, %s),
+                          keywords = COALESCE(keywords, %s), icono = COALESCE(icono, %s), sugerido = COALESCE(sugerido, FALSE) OR %s
+                   WHERE endpoint = %s AND COALESCE(query, %s) = COALESCE(%s, %s)""",
+                (_mod, _tpl, _k, _icono, _sug, _ep, _q or '', _q, ''))
+        else:
+            conn.execute(
+                """INSERT INTO pantallas (clave, nombre, endpoint, icono, modulo, query, url_tpl,
+                                          keywords, orden, otorgable, sugerido)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                   ON CONFLICT (clave) DO NOTHING""",
+                (_clave, _nombre, _ep, _icono, _mod, _q, _tpl, _k, _ord, _ot, _sug))
+    try:
+        conn.commit()
+    except Exception:
+        pass
 
 def _pantallas_de_sesion(conn, ses):
     """Pantallas autorizadas del (tercero, negocio) en sesion.
@@ -1882,14 +1921,14 @@ def _pantallas_de_sesion(conn, ses):
             if t:
                 slug = t['slug']
     if role in ('Administrador',):
-        rows = conn.execute("SELECT id, nombre, clave, endpoint, icono FROM pantallas ORDER BY id").fetchall()
+        rows = conn.execute("SELECT id, nombre, clave, endpoint, icono, modulo, url_tpl, query FROM pantallas WHERE otorgable IS NOT FALSE ORDER BY orden, id").fetchall()
     elif tercero_id and active_id:
         rows = conn.execute("""
-                SELECT p.id, p.nombre, p.clave, p.endpoint, p.icono
+                SELECT p.id, p.nombre, p.clave, p.endpoint, p.icono, p.modulo, p.url_tpl, p.query
                 FROM permisos_terceros pt
                 JOIN pantallas p ON p.id = pt.pantalla_id
-                WHERE pt.tercero_id = %s AND pt.negocio_id = %s
-                ORDER BY p.id
+                WHERE pt.tercero_id = %s AND pt.negocio_id = %s AND p.otorgable IS NOT FALSE
+                ORDER BY p.orden, p.id
             """, (tercero_id, active_id)).fetchall()
     else:
         rows = []
@@ -1939,7 +1978,7 @@ def _agrupar_por_modulo(pantallas):
     orden = []
     for p in pantallas:
         pref = (p.get('endpoint') or '').split('.')[0]
-        mod = _SECCIONES_MENU.get(pref, (pref or 'general').replace('_', ' ').title())
+        mod = p.get('modulo') or _SECCIONES_MENU.get(pref, (pref or 'general').replace('_', ' ').title())
         if mod not in grupos:
             grupos[mod] = []
             orden.append(mod)
@@ -1960,7 +1999,7 @@ def colaborador_inicio():
     conn.close()
 
     for d in pantallas_autorizadas:
-        d['resolved_url'] = _resolver_url_pantalla(d['endpoint'], active_id, slug)
+        d['resolved_url'] = _url_pantalla(d, active_id, slug)
 
     return render_template('inicio.html', 
                            nombre=nombre,
@@ -1977,7 +2016,7 @@ def colaborador_portal():
     pantallas_autorizadas, slug, active_id = _pantallas_de_sesion(conn, session)
     conn.close()
     for d in pantallas_autorizadas:
-        d['resolved_url'] = _resolver_url_pantalla(d['endpoint'], active_id, slug)
+        d['resolved_url'] = _url_pantalla(d, active_id, slug)
     menu_secciones = _agrupar_por_modulo(pantallas_autorizadas)
     return render_template('portal.html', nombre=nombre,
                            pantallas_autorizadas=pantallas_autorizadas,
@@ -2037,6 +2076,21 @@ def core_ver_manual(manual_slug):
                            back_url=back_url)
 
 
+def _endpoints_otorgados(conn, ses):
+    """Endpoints otorgados al (tercero, negocio) en sesion. None = todos."""
+    if ses.get('rol') == 'Administrador':
+        return None
+    tercero_id = _tercero_de_sesion(conn, ses)
+    negocio_id = ses.get('active_negocio_id')
+    if not tercero_id or not negocio_id:
+        return set()
+    rows = conn.execute("""
+        SELECT p.endpoint FROM permisos_terceros pt
+        JOIN pantallas p ON p.id = pt.pantalla_id
+        WHERE pt.tercero_id = %s AND pt.negocio_id = %s
+    """, (tercero_id, negocio_id)).fetchall()
+    return {r['endpoint'] for r in rows if r['endpoint']}
+
 @bp.route('/api/buscador/omni', methods=['GET'])
 def api_buscador_omni():
     from ..buscador_motor import buscar_omni
@@ -2062,7 +2116,18 @@ def api_buscador_omni():
         except Exception:
             pass
 
-    res = buscar_omni(q, negocio_id=negocio_id, slug=slug)
+    otorgados = None
+    if 'usuario_id' in session and session.get('rol') != 'Administrador':
+        from ..db import get_db_connection
+        try:
+            _c0 = get_db_connection()
+            try:
+                otorgados = _endpoints_otorgados(_c0, session)
+            finally:
+                _c0.close()
+        except Exception:
+            otorgados = set()
+    res = buscar_omni(q, negocio_id=negocio_id, slug=slug, otorgados=otorgados)
     datos = []
     extras = {'sueltos': [], 'sueltos_total': 0}
     if negocio_id and len(q) >= 2:

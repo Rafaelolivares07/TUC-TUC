@@ -4,6 +4,7 @@
 import os
 import re
 import unicodedata
+import json
 
 def quitar_tildes(texto):
     if not texto:
@@ -86,370 +87,172 @@ def invalidar_cache_manuales():
     global _CACHE_MANUALES
     _CACHE_MANUALES = None
 
-def _obtener_catalogo_base(negocio_id=None, slug=None):
-    nid = str(negocio_id) if negocio_id else '1'
-    s_slug = slug or 'mi-negocio'
+_SUGERIDOS = {'caja_pos', 'conta_tab_puc', 'catalogo_productos', 'entradas', 'kardex'}
 
-    return [
-        # ── PANTALLAS PRINCIPALES Y GLOBALES ──────────────────────────
-        {
-            'titulo': 'Inicio / Menú Principal',
-            'modulo': 'General',
-            'icono': '🏠',
-            'url': '/inicio',
-            'keywords': ['inicio', 'dashboard', 'panel', 'home', 'herramientas', 'menu principal', 'accesos']
-        },
-        {
-            'titulo': 'Desk',
-            'modulo': 'General',
-            'icono': '🏢',
-            'url': '/portal',
-            'keywords': ['desk', 'portal', 'portada', 'buscar', 'buscador', 'lanzador']
-        },
-        {
-            'titulo': 'Agenda',
-            'modulo': 'General',
-            'icono': '\U0001F5D3\U0000FE0F',
-            'url': '/agenda',
-            'keywords': ['agenda', 'tareas', 'pendientes', 'recordatorios', 'por hacer', 'lista de tareas']
-        },
-        {
-            'titulo': 'Kardex',
-            'modulo': 'Inventario',
-            'icono': '\U0001F4E6',
-            'url': f'https://{s_slug}.tuc-tuc.co/kardex' if slug else f'/inventario/{nid}/kardex',
-            'keywords': ['kardex', 'movimientos', 'existencias', 'saldos', 'entradas', 'salidas']
-        },
-        {
-            'titulo': 'Contabilidad — General',
-            'modulo': 'Contabilidad',
-            'icono': '📒',
-            'url': f'/contabilidad/{nid}',
-            'keywords': ['contabilidad', 'contable', 'finanzas', 'cuentas', 'asientos', 'balance']
-        },
-        {
-            'titulo': 'Inventario — General',
-            'modulo': 'Inventario',
-            'icono': '📦',
-            'url': f'/inventario/{nid}',
-            'keywords': ['inventario', 'stock', 'almacen', 'existencias', 'bodega', 'productos']
-        },
-        {
-            'titulo': 'Caja POS / Terminal de Ventas',
-            'modulo': 'Ventas',
-            'icono': '🛒',
-            'url': f'/tienda/{s_slug}/caja' if slug else '/caja',
-            'keywords': ['caja', 'pos', 'vender', 'cobrar', 'facturar', 'punto de venta', 'ticket', 'arqueo']
-        },
-        {
-            'titulo': 'Mantenimiento de Negocio',
-            'modulo': 'Mantenimiento',
-            'icono': '🛠️',
-            'url': f'/admin/mantenimiento/{nid}',
-            'keywords': ['mantenimiento negocio', 'herramientas', 'reparar', 'depurar', 'auditoria', 'utilidades']
-        },
+_CATALOGO_PANTALLAS = [
+    ('inicio', 'Inicio / Menú Principal', 'core.colaborador_inicio', '🏠', 'General', None, '/inicio', ['inicio', 'dashboard', 'panel', 'home', 'herramientas', 'menu principal', 'accesos'], 10, True),
+    ('portal', 'Desk', 'core.colaborador_portal', '🏢', 'General', None, '/portal', ['desk', 'portal', 'portada', 'buscar', 'buscador', 'lanzador'], 20, True),
+    ('agenda', 'Agenda', 'agenda.agenda', '🗓️', 'General', None, '/agenda', ['agenda', 'tareas', 'pendientes', 'recordatorios', 'por hacer', 'lista de tareas'], 30, True),
+    ('caja_pos', 'Caja POS / Terminal de Ventas', 'tiendas.tienda_caja', '🛒', 'Ventas', None, '/tienda/{slug}/caja', ['caja', 'pos', 'vender', 'cobrar', 'facturar', 'punto de venta', 'ticket', 'arqueo'], 40, True),
+    ('mi_tienda', 'Mi Tienda (Dashboard)', 'tiendas.mi_tienda', '🏪', 'Ventas', None, '/mi-tienda/{slug}', ['mi tienda', 'panel tienda', 'administrar tienda', 'catalogo tienda', 'pauta', 'pedidos tienda', 'visitantes'], 50, True),
+    ('mi_restaurante', 'Mi Restaurante (Dashboard)', 'restaurantes.mi_restaurante', '🍽️', 'Ventas', None, '/mi-restaurante/{slug}', ['mi restaurante', 'panel restaurante', 'mesas', 'cuentas', 'menu del dia', 'catalogo restaurante'], 60, True),
+    ('mesero', 'Mesero (Toma de pedidos)', 'restaurantes.restaurante_mesero', '🧾', 'Ventas', None, '/r/{slug}/mesero', ['mesero', 'tomar pedido', 'pedido mesa', 'orden mesa'], 70, True),
+    ('cocina', 'Cocina (Comandas)', 'restaurantes.restaurante_cocina', '👨\u200d🍳', 'Ventas', None, '/r/{slug}/cocina', ['cocina', 'comandas', 'pedidos cocina', 'preparacion'], 80, True),
+    ('metodos_pago', 'Métodos de pago (Tienda)', 'tiendas.admin_tienda_metodos_pago', '💳', 'Ventas', None, '/admin/tienda/{slug}/metodos-pago', ['metodos de pago tienda', 'formas de pago', 'nequi', 'daviplata', 'transferencia'], 90, True),
+    ('inventario', 'Inventario — General', 'inventarios.admin_inventario', '📦', 'Inventario', None, '/inventario/{nid}', ['inventario', 'stock', 'almacen', 'existencias', 'bodega', 'productos'], 100, True),
+    ('kardex', 'Kardex', 'inventarios.kardex_standalone', '📦', 'Inventario', None, None, ['kardex', 'movimientos', 'existencias', 'saldos', 'entradas', 'salidas'], 110, True),
+    ('catalogo_productos', 'Catálogo de Productos e Insumos', 'inventarios.catalogo_productos_standalone', '📋', 'Inventario', None, '/catalogo-productos/{nid}', ['productos', 'insumos', 'catalogo', 'catálogo', 'catalogo de productos', 'precios', 'categorias', 'codigo de barras', 'barcode', 'costo unitario', 'recetas', 'ficha tecnica'], 120, True),
+    ('entradas', 'Entradas de Almacén (Compras y Facturas)', 'inventarios.entradas_standalone', '📥', 'Inventario', None, '/entradas/{nid}', ['entradas de almacen', 'compras', 'factura de compra', 'recepcion insumos', 'remision', 'ingreso stock'], 130, True),
+    ('produccion', 'Órdenes de Producción y Fabricación', 'inventarios.produccion_standalone', '⚙️', 'Inventario', None, '/produccion/{nid}', ['produccion', 'orden de produccion', 'fabricacion', 'lote', 'transformacion', 'cocina'], 140, True),
+    ('ventas_costos', 'Ventas y Costos (Margen de Contribución)', 'inventarios.ventas_costos_standalone', '📊', 'Comercial', None, '/ventas-costos/{nid}', ['ventas costos', 'costo de ventas', 'margen de ganancia', 'utilidad bruta', 'rentabilidad productos', 'ventas/costos', 'costos'], 150, True),
+    ('inventario_fisico', 'Inventario Físico (Conteo y Ajuste)', 'inventarios.admin_inventario_fisico', '📋', 'Inventario', None, '/admin/inventario-fisico/{nid}', ['inventario fisico', 'conteo fisico', 'toma de inventario', 'sobrantes faltantes', 'ajuste de inventario', 'conteo manual'], 160, True),
+    ('inventario_distribuido', 'Inventario Físico Distribuido (Móvil / Tablet)', 'inventarios.admin_inventario_distribuido', '🔄', 'Inventario', None, '/admin/inventario-distribuido/{nid}', ['inventario distribuido', 'conteo por zonas', 'conteo con celulares', 'varios contadores', 'tablet'], 170, True),
+    ('contabilidad', 'Contabilidad — General', 'contabilidad.admin_contabilidad', '📒', 'Contabilidad', None, '/contabilidad/{nid}', ['contabilidad', 'contable', 'finanzas', 'cuentas', 'asientos', 'balance'], 180, True),
+    ('tesoreria', 'Tesorería: Pagos, Desembolsos y Recaudos', 'contabilidad.tesoreria_standalone', '🏛️', 'Contabilidad', None, '/tesoreria/{nid}', ['tesoreria', 'tesorería', 'gastos', 'desembolsos', 'recaudos', 'caja menor', 'pagos', 'egresos', 'salidas de dinero', 'compras gastos', 'pagos proveedores'], 190, True),
+    ('saldos_documentos', 'Reporte de Saldos por Documento', 'contabilidad.admin_saldos_documentos', '📊', 'Contabilidad', None, '/admin/saldos-documentos/{nid}', ['saldos por documento', 'cartera', 'cuentas por pagar', 'cuentas por cobrar', 'facturas pendientes', 'cxp', 'cxc'], 200, True),
+    ('conciliacion', 'Conciliación de Cuentas y Bancos', 'contabilidad.admin_conciliacion_disponible', '⚖️', 'Contabilidad', None, '/admin/conciliacion-disponible/{nid}', ['conciliacion bancaria', 'conciliar disponible', 'extracto bancario', 'banco vs libros', 'saldo real', 'disponible'], 210, True),
+    ('mant_negocio', 'Mantenimiento de Negocio', 'inventarios.admin_negocio_mantenimiento', '🛠️', 'Mantenimiento', None, '/admin/mantenimiento/{nid}', ['mantenimiento negocio', 'herramientas', 'reparar', 'depurar', 'auditoria', 'utilidades'], 220, True),
+    ('mant_global', 'Mantenimiento del Sistema (Global)', 'core.admin_mantenimiento', '🔧', 'Administración', None, '/admin/mantenimiento', ['mantenimiento', 'logs', 'git', 'version', 'diagnostico', 'base de datos'], 230, True),
+    ('gestion_permisos', 'Gestión de Permisos y Colaboradores', 'core.core_gestion_permisos', '👥', 'Administración', None, '/admin/permisos', ['permisos', 'usuarios', 'colaboradores', 'roles', 'accesos', 'empleados'], 240, True),
+    ('pantallas_catalogo', 'Catálogo Técnico de Pantallas', 'core.core_pantallas_catalogo', '🖥️', 'Administración', None, '/admin/pantallas-catalogo', ['pantallas catalogo', 'modulos', 'endpoints', 'permisos', 'vistas'], 250, True),
+    ('negocio_config', 'Configuración de Negocio', 'negocios.admin_config_negocio', '⚙️', 'Administración', None, '/admin/negocio/{nid}/config', ['configuracion negocio', 'logo', 'razon social', 'nit', 'datos empresa', 'horarios'], 260, True),
+    ('conta_tab_puc', 'Plan Único de Cuentas (PUC)', 'contabilidad.admin_contabilidad', '📋', 'Contabilidad > Cuentas', 'tab=puc', '/contabilidad/{nid}?tab=puc', ['puc', 'plan de cuentas', 'catalogo de cuentas', 'adoptar cuenta', 'codigo contable', 'subcuenta'], 1010, False),
+    ('conta_tab_tipos', 'Tipos de Documento Contable', 'contabilidad.admin_contabilidad', '📄', 'Contabilidad > Configuración', 'tab=tipos', '/contabilidad/{nid}?tab=tipos', ['tipos documento', 'comprobante de ingreso', 'comprobante de egreso', 'facturas compra', 'nota contable', 'consecutivos'], 1020, False),
+    ('conta_tab_params', 'Parametrización de Asientos', 'contabilidad.admin_contabilidad', '⚙️', 'Contabilidad > Reglas', 'tab=params', '/contabilidad/{nid}?tab=params', ['parametrizacion', 'moldes', 'reglas contables', 'debitos creditos', 'automatizacion asientos', 'partida doble', 'plantillas contables'], 1030, False),
+    ('conta_tab_pago', 'Métodos de Pago', 'contabilidad.admin_contabilidad', '💳', 'Contabilidad / Tienda', 'tab=pago_metodos', '/contabilidad/{nid}?tab=pago_metodos', ['metodos de pago', 'formas de pago', 'tarjeta', 'nequi', 'daviplata', 'transferencia', 'efectivo', 'bancos'], 1040, False),
+    ('conta_tab_amort', 'Amortizaciones de Gastos y Préstamos', 'contabilidad.admin_contabilidad', '⏳', 'Contabilidad > Finanzas', 'tab=amortizaciones', '/contabilidad/{nid}?tab=amortizaciones', ['amortizaciones', 'diferidos', 'prestamos', 'cuotas', 'seguros anticipados', 'tablas amortizacion'], 1050, False),
+    ('conta_tab_pyg', 'Estado de Resultados (PyG)', 'contabilidad.admin_contabilidad', '📊', 'Contabilidad > Informes', 'tab=estado_resultados', '/contabilidad/{nid}?tab=estado_resultados', ['estado de resultados', 'pyg', 'perdidas y ganancias', 'utilidad', 'ingresos vs gastos', 'rentabilidad', 'ejercicio'], 1060, False),
+    ('conta_tab_equilibrio', 'Punto de Equilibrio', 'contabilidad.admin_contabilidad', '🎯', 'Contabilidad > Informes', 'tab=punto_equilibrio', '/contabilidad/{nid}?tab=punto_equilibrio', ['punto de equilibrio', 'costos fijos', 'costos variables', 'margen de contribucion', 'ventas minimas', 'meta ventas'], 1070, False),
+    ('conta_tab_grupos', 'Grupos de Inventario Contables', 'contabilidad.admin_contabilidad', '🗂️', 'Contabilidad > Grupos Inv.', 'tab=grupos', '/contabilidad/{nid}?tab=grupos', ['grupos inventario', 'grupos contables', 'cuentas inventario', 'clasificacion contable'], 1080, False),
+    ('conta_tab_manual', 'Comprobante Manual (Crear / Editar)', 'contabilidad.admin_contabilidad', '✏️', 'Contabilidad > Asientos', 'tab=manual', '/contabilidad/{nid}?tab=manual', ['comprobante manual', 'nuevo comprobante', 'crear asiento', 'nota contable manual', 'asiento ajuste'], 1090, False),
+    ('conta_tab_comps', 'Comprobantes Generados (Histórico)', 'contabilidad.admin_contabilidad', '📚', 'Contabilidad > Asientos', 'tab=comps', '/contabilidad/{nid}?tab=comps', ['comprobantes', 'asientos contables', 'historico contable', 'buscar comprobante', 'libro diario', 'movimientos contables'], 1100, False),
+    ('conta_tab_progs', 'Programaciones Contables Recurrentes', 'contabilidad.admin_contabilidad', '⏱️', 'Contabilidad > Automatización', 'tab=progs', '/contabilidad/{nid}?tab=progs', ['programaciones', 'asientos programados', 'recurrentes', 'asientos automaticos', 'periodicos'], 1110, False),
+    ('conta_tab_consulta', 'Consulta de Movimientos (Libro Mayor)', 'contabilidad.admin_contabilidad', '🔍', 'Contabilidad > Informes', 'tab=consulta', '/contabilidad/{nid}?tab=consulta', ['consulta movimientos', 'libro mayor', 'auxiliar contable', 'movimientos cuenta', 'extracto cuenta', 'tercero cuenta'], 1120, False),
+    ('conta_tab_balance', 'Balance y Cierre de Periodo', 'contabilidad.admin_contabilidad', '⚖️', 'Contabilidad > Cierre', 'tab=balance', '/contabilidad/{nid}?tab=balance', ['balance', 'balance de prueba', 'cierre contable', 'cierre de mes', 'cierre anual', 'saldos cuentas'], 1130, False),
+    ('conta_tab_reclas', 'Reclasificaciones Contables', 'contabilidad.admin_contabilidad', '🔀', 'Contabilidad > Ajustes', 'tab=reclasificaciones', '/contabilidad/{nid}?tab=reclasificaciones', ['reclasificaciones', 'reclasificar', 'corregir cuenta', 'mover asiento', 'ajuste contable'], 1140, False),
+    ('inv_tab_tarjetas', 'Tarjetas Estándar (Fórmulas y Recetas)', 'inventarios.admin_inventario', '🧾', 'Inventario > Producción', 'tab=tarjetas', '/inventario/{nid}?tab=tarjetas', ['tarjetas estandar', 'recetas', 'formulas', 'ingredientes', 'porciones', 'costo receta', 'ficha tecnica'], 1150, False),
+    ('inv_tab_compras', 'Sugerencias de Compras (Reabastecimiento)', 'inventarios.admin_inventario', '🛒', 'Inventario > Compras', 'tab=compras_sugerencias', '/inventario/{nid}?tab=compras_sugerencias', ['sugerencias compras', 'reabastecer', 'punto de reorden', 'stock minimo', 'faltantes', 'pedir insumos', 'sugerir compras'], 1160, False),
+    ('inv_tab_cotiz', 'Cotizaciones de Proveedores', 'inventarios.admin_inventario', '📋', 'Inventario > Compras', 'tab=cotizaciones', '/inventario/{nid}?tab=cotizaciones', ['cotizaciones', 'cotizar', 'comparar proveedores', 'precios proveedor', 'solicitud de precio'], 1170, False),
+    ('inv_tab_traslados', 'Traslados entre Bodegas o Sedes', 'inventarios.admin_inventario', '🔄', 'Inventario > Movimientos', 'tab=traslados', '/inventario/{nid}?tab=traslados', ['traslados', 'mover stock', 'enviar a otra bodega', 'transferencia entre sedes', 'remision interna', 'traspasos'], 1180, False),
+    ('inv_tab_ensambles', 'Ensambles de Productos', 'inventarios.admin_inventario', '🧩', 'Inventario > Producción', 'tab=ensambles', '/inventario/{nid}?tab=ensambles', ['ensambles', 'combos', 'armar paquetes', 'desarmar', 'kits', 'ensamblar'], 1190, False),
+    ('inv_tab_enshist', 'Ensambles Históricos', 'inventarios.admin_inventario', '📦', 'Inventario > Producción', 'tab=ensambles_historicos', '/inventario/{nid}?tab=ensambles_historicos', ['ensambles historicos', 'historico ensambles', 'registros ensambles', 'combos armados'], 1200, False),
+    ('inv_tab_eres', 'Estado de Resultados de Inventario', 'inventarios.admin_inventario', '📊', 'Inventario > Informes', 'tab=estado_resultados', '/inventario/{nid}?tab=estado_resultados', ['estado de resultados inventario', 'pyg inventario', 'utilidad inventario', 'ganancias'], 1210, False),
+    ('inv_tab_recosteo', 'Recosteo y Auditoría de Inventario', 'inventarios.admin_inventario', '🔍', 'Inventario > Auditoría', 'tab=recosteo', '/inventario/{nid}?tab=recosteo', ['recosteo', 'auditoria inventario', 'corregir costo promedio', 'descuadres de costo', 'recalcular costos'], 1220, False),
+    ('inv_tab_actas', 'Libro de Actas de Inventario', 'inventarios.admin_inventario', '📋', 'Inventario > Actas', 'tab=actas_inventario', '/inventario/{nid}?tab=actas_inventario', ['libro de actas', 'actas inventario', 'firmas actas', 'registro legal', 'acta conteo'], 1230, False),
+    ('mant_tool_auditor', 'Auditoría de Documentos (Mantenimiento)', 'inventarios.admin_negocio_mantenimiento', '🔍', 'Mantenimiento > Auditoría', 'tool=auditor-documentos', '/admin/mantenimiento/{nid}?tool=auditor-documentos', ['auditoria documentos', 'buscar documento', 'anular documento', 'factura proveedor', 'factura venta', 'descuadres', 'cruces'], 1240, False),
+    ('mant_tool_unificar', 'Unificación de Terceros (Mantenimiento)', 'inventarios.admin_negocio_mantenimiento', '👥', 'Mantenimiento > Terceros', 'tool=unificar-terceros', '/admin/mantenimiento/{nid}?tool=unificar-terceros', ['unificar terceros', 'fusionar clientes', 'proveedores duplicados', 'limpiar terceros', 'duplicados'], 1250, False),
+    ('tesoreria_inv', 'Tesorería y Desembolsos de Inventario', 'contabilidad.tesoreria_standalone', '💸', 'Inventario > Pagos', None, '/tesoreria/{nid}', ['tesoreria', 'tesorería', 'desembolsos', 'gastos inventario', 'pagos proveedores', 'egresos inventario', 'pagos'], 1260, False),
+]
 
-        # ── PESTAÑAS CONTABILIDAD (EXHAUSTIVO 18/18) ───────────────────
-        {
-            'titulo': 'Plan Único de Cuentas (PUC)',
-            'modulo': 'Contabilidad > Cuentas',
-            'icono': '📋',
-            'url': f'/contabilidad/{nid}?tab=puc',
-            'keywords': ['puc', 'plan de cuentas', 'catalogo de cuentas', 'adoptar cuenta', 'codigo contable', 'subcuenta']
-        },
-        {
-            'titulo': 'Tipos de Documento Contable',
-            'modulo': 'Contabilidad > Configuración',
-            'icono': '📄',
-            'url': f'/contabilidad/{nid}?tab=tipos',
-            'keywords': ['tipos documento', 'comprobante de ingreso', 'comprobante de egreso', 'facturas compra', 'nota contable', 'consecutivos']
-        },
-        {
-            'titulo': 'Parametrización de Asientos',
-            'modulo': 'Contabilidad > Reglas',
-            'icono': '⚙️',
-            'url': f'/contabilidad/{nid}?tab=params',
-            'keywords': ['parametrizacion', 'moldes', 'reglas contables', 'debitos creditos', 'automatizacion asientos', 'partida doble', 'plantillas contables']
-        },
-        {
-            'titulo': 'Métodos de Pago',
-            'modulo': 'Contabilidad / Tienda',
-            'icono': '💳',
-            'url': f'/contabilidad/{nid}?tab=pago_metodos',
-            'keywords': ['metodos de pago', 'formas de pago', 'tarjeta', 'nequi', 'daviplata', 'transferencia', 'efectivo', 'bancos']
-        },
-        {
-            'titulo': 'Tesorería: Pagos, Desembolsos y Recaudos',
-            'modulo': 'Contabilidad > Tesorería',
-            'icono': '🏛️',
-            'url': f'/tesoreria/{nid}',
-            'keywords': ['tesoreria', 'tesorería', 'gastos', 'desembolsos', 'recaudos', 'caja menor', 'pagos', 'egresos', 'salidas de dinero', 'compras gastos', 'pagos proveedores']
-        },
-        {
-            'titulo': 'Amortizaciones de Gastos y Préstamos',
-            'modulo': 'Contabilidad > Finanzas',
-            'icono': '⏳',
-            'url': f'/contabilidad/{nid}?tab=amortizaciones',
-            'keywords': ['amortizaciones', 'diferidos', 'prestamos', 'cuotas', 'seguros anticipados', 'tablas amortizacion']
-        },
-        {
-            'titulo': 'Estado de Resultados (PyG)',
-            'modulo': 'Contabilidad > Informes',
-            'icono': '📊',
-            'url': f'/contabilidad/{nid}?tab=estado_resultados',
-            'keywords': ['estado de resultados', 'pyg', 'perdidas y ganancias', 'utilidad', 'ingresos vs gastos', 'rentabilidad', 'ejercicio']
-        },
-        {
-            'titulo': 'Punto de Equilibrio',
-            'modulo': 'Contabilidad > Informes',
-            'icono': '🎯',
-            'url': f'/contabilidad/{nid}?tab=punto_equilibrio',
-            'keywords': ['punto de equilibrio', 'costos fijos', 'costos variables', 'margen de contribucion', 'ventas minimas', 'meta ventas']
-        },
-        {
-            'titulo': 'Grupos de Inventario Contables',
-            'modulo': 'Contabilidad > Grupos Inv.',
-            'icono': '🗂️',
-            'url': f'/contabilidad/{nid}?tab=grupos',
-            'keywords': ['grupos inventario', 'grupos contables', 'cuentas inventario', 'clasificacion contable']
-        },
-        {
-            'titulo': 'Comprobante Manual (Crear / Editar)',
-            'modulo': 'Contabilidad > Asientos',
-            'icono': '✏️',
-            'url': f'/contabilidad/{nid}?tab=manual',
-            'keywords': ['comprobante manual', 'nuevo comprobante', 'crear asiento', 'nota contable manual', 'asiento ajuste']
-        },
-        {
-            'titulo': 'Comprobantes Generados (Histórico)',
-            'modulo': 'Contabilidad > Asientos',
-            'icono': '📚',
-            'url': f'/contabilidad/{nid}?tab=comps',
-            'keywords': ['comprobantes', 'asientos contables', 'historico contable', 'buscar comprobante', 'libro diario', 'movimientos contables']
-        },
-        {
-            'titulo': 'Programaciones Contables Recurrentes',
-            'modulo': 'Contabilidad > Automatización',
-            'icono': '⏱️',
-            'url': f'/contabilidad/{nid}?tab=progs',
-            'keywords': ['programaciones', 'asientos programados', 'recurrentes', 'asientos automaticos', 'periodicos']
-        },
-        {
-            'titulo': 'Consulta de Movimientos (Libro Mayor)',
-            'modulo': 'Contabilidad > Informes',
-            'icono': '🔍',
-            'url': f'/contabilidad/{nid}?tab=consulta',
-            'keywords': ['consulta movimientos', 'libro mayor', 'auxiliar contable', 'movimientos cuenta', 'extracto cuenta', 'tercero cuenta']
-        },
-        {
-            'titulo': 'Balance y Cierre de Periodo',
-            'modulo': 'Contabilidad > Cierre',
-            'icono': '⚖️',
-            'url': f'/contabilidad/{nid}?tab=balance',
-            'keywords': ['balance', 'balance de prueba', 'cierre contable', 'cierre de mes', 'cierre anual', 'saldos cuentas']
-        },
-        {
-            'titulo': 'Reclasificaciones Contables',
-            'modulo': 'Contabilidad > Ajustes',
-            'icono': '🔀',
-            'url': f'/contabilidad/{nid}?tab=reclasificaciones',
-            'keywords': ['reclasificaciones', 'reclasificar', 'corregir cuenta', 'mover asiento', 'ajuste contable']
-        },
-        {
-            'titulo': 'Reporte de Saldos por Documento',
-            'modulo': 'Contabilidad > Cartera',
-            'icono': '📊',
-            'url': f'/admin/saldos-documentos/{nid}',
-            'keywords': ['saldos por documento', 'cartera', 'cuentas por pagar', 'cuentas por cobrar', 'facturas pendientes', 'cxp', 'cxc']
-        },
-        {
-            'titulo': 'Conciliación de Cuentas y Bancos',
-            'modulo': 'Contabilidad > Bancos',
-            'icono': '⚖️',
-            'url': f'/admin/conciliacion-disponible/{nid}',
-            'keywords': ['conciliacion bancaria', 'conciliar disponible', 'extracto bancario', 'banco vs libros', 'saldo real', 'disponible']
-        },
 
-        # ── PESTAÑAS INVENTARIO (EXHAUSTIVO 17/17) ─────────────────────
-        {
-            'titulo': 'Catálogo de Productos e Insumos',
-            'modulo': 'Inventario > Catálogo',
-            'icono': '📋',
-            'url': f'/catalogo-productos/{nid}',
-            'keywords': ['productos', 'insumos', 'catalogo', 'catálogo', 'catalogo de productos', 'precios', 'categorias', 'codigo de barras', 'barcode', 'costo unitario', 'recetas', 'ficha tecnica']
-        },
-        {
-            'titulo': 'Tarjetas Estándar (Fórmulas y Recetas)',
-            'modulo': 'Inventario > Producción',
-            'icono': '🧾',
-            'url': f'/inventario/{nid}?tab=tarjetas',
-            'keywords': ['tarjetas estandar', 'recetas', 'formulas', 'ingredientes', 'porciones', 'costo receta', 'ficha tecnica']
-        },
-        {
-            'titulo': 'Entradas de Almacén (Compras y Facturas)',
-            'modulo': 'Inventario > Movimientos',
-            'icono': '📥',
-            'url': f'/entradas/{nid}',
-            'keywords': ['entradas de almacen', 'compras', 'factura de compra', 'recepcion insumos', 'remision', 'ingreso stock']
-        },
-        {
-            'titulo': 'Órdenes de Producción y Fabricación',
-            'modulo': 'Inventario > Producción',
-            'icono': '⚙️',
-            'url': f'/produccion/{nid}',
-            'keywords': ['produccion', 'orden de produccion', 'fabricacion', 'lote', 'transformacion', 'cocina']
-        },
-        {
-            'titulo': 'Sugerencias de Compras (Reabastecimiento)',
-            'modulo': 'Inventario > Compras',
-            'icono': '🛒',
-            'url': f'/inventario/{nid}?tab=compras_sugerencias',
-            'keywords': ['sugerencias compras', 'reabastecer', 'punto de reorden', 'stock minimo', 'faltantes', 'pedir insumos', 'sugerir compras']
-        },
-        {
-            'titulo': 'Cotizaciones de Proveedores',
-            'modulo': 'Inventario > Compras',
-            'icono': '📋',
-            'url': f'/inventario/{nid}?tab=cotizaciones',
-            'keywords': ['cotizaciones', 'cotizar', 'comparar proveedores', 'precios proveedor', 'solicitud de precio']
-        },
-        {
-            'titulo': 'Traslados entre Bodegas o Sedes',
-            'modulo': 'Inventario > Movimientos',
-            'icono': '🔄',
-            'url': f'/inventario/{nid}?tab=traslados',
-            'keywords': ['traslados', 'mover stock', 'enviar a otra bodega', 'transferencia entre sedes', 'remision interna', 'traspasos']
-        },
-        {
-            'titulo': 'Ensambles de Productos',
-            'modulo': 'Inventario > Producción',
-            'icono': '🧩',
-            'url': f'/inventario/{nid}?tab=ensambles',
-            'keywords': ['ensambles', 'combos', 'armar paquetes', 'desarmar', 'kits', 'ensamblar']
-        },
-        {
-            'titulo': 'Ensambles Históricos',
-            'modulo': 'Inventario > Producción',
-            'icono': '📦',
-            'url': f'/inventario/{nid}?tab=ensambles_historicos',
-            'keywords': ['ensambles historicos', 'historico ensambles', 'registros ensambles', 'combos armados']
-        },
-                {
-            'titulo': 'Ventas y Costos (Margen de Contribución)',
-            'modulo': 'Comercial > Rentabilidad',
-            'icono': '📊',
-            'url': f'/ventas-costos/{nid}',
-            'keywords': ['ventas costos', 'costo de ventas', 'margen de ganancia', 'utilidad bruta', 'rentabilidad productos', 'ventas/costos', 'costos']
-        },
-        {
-            'titulo': 'Tesorería y Desembolsos de Inventario',
-            'modulo': 'Inventario > Pagos',
-            'icono': '💸',
-            'url': f'/tesoreria/{nid}',
-            'keywords': ['tesoreria', 'tesorería', 'desembolsos', 'gastos inventario', 'pagos proveedores', 'egresos inventario', 'pagos']
-        },
-        {
-            'titulo': 'Estado de Resultados de Inventario',
-            'modulo': 'Inventario > Informes',
-            'icono': '📊',
-            'url': f'/inventario/{nid}?tab=estado_resultados',
-            'keywords': ['estado de resultados inventario', 'pyg inventario', 'utilidad inventario', 'ganancias']
-        },
-        {
-            'titulo': 'Recosteo y Auditoría de Inventario',
-            'modulo': 'Inventario > Auditoría',
-            'icono': '🔍',
-            'url': f'/inventario/{nid}?tab=recosteo',
-            'keywords': ['recosteo', 'auditoria inventario', 'corregir costo promedio', 'descuadres de costo', 'recalcular costos']
-        },
-        {
-            'titulo': 'Libro de Actas de Inventario',
-            'modulo': 'Inventario > Actas',
-            'icono': '📋',
-            'url': f'/inventario/{nid}?tab=actas_inventario',
-            'keywords': ['libro de actas', 'actas inventario', 'firmas actas', 'registro legal', 'acta conteo']
-        },
-        {
-            'titulo': 'Inventario Físico (Conteo y Ajuste)',
-            'modulo': 'Inventario > Ajustes',
-            'icono': '📋',
-            'url': f'/admin/inventario-fisico/{nid}',
-            'keywords': ['inventario fisico', 'conteo fisico', 'toma de inventario', 'sobrantes faltantes', 'ajuste de inventario', 'conteo manual']
-        },
-        {
-            'titulo': 'Inventario Físico Distribuido (Móvil / Tablet)',
-            'modulo': 'Inventario > Ajustes',
-            'icono': '🔄',
-            'url': f'/admin/inventario-distribuido/{nid}',
-            'keywords': ['inventario distribuido', 'conteo por zonas', 'conteo con celulares', 'varios contadores', 'tablet']
-        },
+def _filas_desde_semilla():
+    """Filas dict desde la semilla en codigo (tests standalone)."""
+    out = []
+    for (_clave, _nombre, _ep, _icono, _mod, _q, _tpl, _kws, _ord, _ot) in _CATALOGO_PANTALLAS:
+        out.append({'clave': _clave, 'nombre': _nombre, 'endpoint': _ep, 'icono': _icono,
+                    'modulo': _mod, 'query': _q, 'url_tpl': _tpl,
+                    'keywords': json.dumps(_kws, ensure_ascii=False),
+                    'orden': _ord, 'otorgable': _ot, 'sugerido': _clave in _SUGERIDOS})
+    return out
 
-        # ── HERRAMIENTAS DE MANTENIMIENTO ─────────────────────────────
-        {
-            'titulo': 'Auditoría de Documentos (Mantenimiento)',
-            'modulo': 'Mantenimiento > Auditoría',
-            'icono': '🔍',
-            'url': f'/admin/mantenimiento/{nid}?tool=auditor-documentos',
-            'keywords': ['auditoria documentos', 'buscar documento', 'anular documento', 'factura proveedor', 'factura venta', 'descuadres', 'cruces']
-        },
-        {
-            'titulo': 'Unificación de Terceros (Mantenimiento)',
-            'modulo': 'Mantenimiento > Terceros',
-            'icono': '👥',
-            'url': f'/admin/mantenimiento/{nid}?tool=unificar-terceros',
-            'keywords': ['unificar terceros', 'fusionar clientes', 'proveedores duplicados', 'limpiar terceros', 'duplicados']
-        },
 
-        # ── HERRAMIENTAS ADMINISTRATIVAS GLOBALES ─────────────────────
-        {
-            'titulo': 'Catálogo Técnico de Pantallas',
-            'modulo': 'Administración',
-            'icono': '🖥️',
-            'url': '/admin/pantallas-catalogo',
-            'keywords': ['pantallas catalogo', 'modulos', 'endpoints', 'permisos', 'vistas']
-        },
-        {
-            'titulo': 'Configuración de Negocio',
-            'modulo': 'Administración',
-            'icono': '⚙️',
-            'url': '/admin/negocio-config',
-            'keywords': ['configuracion negocio', 'logo', 'razon social', 'nit', 'datos empresa', 'horarios']
-        },
-        {
-            'titulo': 'Gestión de Permisos y Colaboradores',
-            'modulo': 'Administración',
-            'icono': '👥',
-            'url': '/admin/permisos',
-            'keywords': ['permisos', 'usuarios', 'colaboradores', 'roles', 'accesos', 'empleados']
-        },
-        {
-            'titulo': 'Mantenimiento del Sistema (Global)',
-            'modulo': 'Administración',
-            'icono': '🔧',
-            'url': '/admin/mantenimiento',
-            'keywords': ['mantenimiento', 'logs', 'git', 'version', 'diagnostico', 'base de datos']
-        }
-    ]
+def _url_fila(fila, negocio_id, slug):
+    """URL de una fila: plantilla, kardex, o resolver Flask."""
+    tpl = (fila.get('url_tpl') or '').strip()
+    if tpl and (('{nid}' in tpl and negocio_id is None) or ('{slug}' in tpl and not slug)):
+        return '#'
+    if tpl:
+        try:
+            return tpl.format(nid=negocio_id, slug=slug or '')
+        except Exception:
+            pass
+    ep = fila.get('endpoint') or ''
+    if ep == 'inventarios.kardex_standalone':
+        if slug:
+            return f'https://{slug}.tuc-tuc.co/kardex'
+        return f'/inventario/{negocio_id}/kardex' if negocio_id is not None else '#'
+    try:
+        from flask import url_for
+    except Exception:
+        return '#'
+    url = '#'
+    for _kw in ({'negocio_id': negocio_id} if negocio_id is not None else {},
+               {'tercero_id': negocio_id} if negocio_id is not None else {},
+               {'slug': slug} if slug else {}, {}):
+        try:
+            url = url_for(ep, **_kw)
+            break
+        except Exception:
+            continue
+    if url != '#' and fila.get('query'):
+        url += ('&' if '?' in url else '?') + fila['query']
+    return url
 
-def buscar_omni(q, negocio_id=None, slug=None):
+
+_CACHE_CATALOGO = None
+
+
+def _filas_catalogo(conn=None):
+    """Filas del catalogo unico (cache en proceso; [] si no hay BD)."""
+    global _CACHE_CATALOGO
+    if _CACHE_CATALOGO is not None:
+        return _CACHE_CATALOGO
+    cerrar = False
+    try:
+        if conn is None:
+            from .db import get_db_connection
+            conn = get_db_connection()
+            cerrar = True
+        rows = conn.execute(
+            "SELECT nombre, modulo, icono, endpoint, query, url_tpl, keywords, sugerido "
+            "FROM pantallas ORDER BY orden, id").fetchall()
+        _CACHE_CATALOGO = [dict(r) for r in rows]
+    except Exception:
+        _CACHE_CATALOGO = _CACHE_CATALOGO or []
+    finally:
+        if cerrar:
+            try:
+                conn.close()
+            except Exception:
+                pass
+    return _CACHE_CATALOGO
+
+
+def _obtener_catalogo_base(negocio_id=None, slug=None, otorgados=None, filas=None):
+    """Entradas omni desde el catalogo unico. otorgados=None muestra todo."""
+    out = []
+    for r in (filas if filas is not None else _filas_catalogo()):
+        ep = r.get('endpoint') or ''
+        if otorgados is not None and ep not in otorgados:
+            continue
+        try:
+            kws = json.loads(r.get('keywords') or '[]')
+            if not isinstance(kws, list):
+                kws = [kws]
+        except Exception:
+            kws = [r.get('keywords')] if r.get('keywords') else []
+        out.append({
+            'titulo': r.get('nombre') or '',
+            'modulo': r.get('modulo') or 'General',
+            'icono': r.get('icono') or '',
+            'url': _url_fila(r, negocio_id, slug),
+            'keywords': kws,
+            'endpoint': ep,
+            'sugerido': bool(r.get('sugerido')),
+        })
+    return out
+
+
+def buscar_omni(q, negocio_id=None, slug=None, otorgados=None, filas=None):
     q_limpio = (q or '').strip()
     q_norm = quitar_tildes(q_limpio)
     
-    rutas_base = _obtener_catalogo_base(negocio_id=negocio_id, slug=slug)
+    rutas_base = _obtener_catalogo_base(negocio_id=negocio_id, slug=slug, otorgados=otorgados, filas=filas)
     secciones_manuales = _cargar_indice_manuales()
 
     if not q_norm:
-        # Si la consulta está vacía, devuelve los accesos más populares / estándar
-        rutas_sugeridas = [
-            r for r in rutas_base if r['titulo'] in (
-                'Caja POS / Terminal de Ventas',
-                'Plan Único de Cuentas (PUC)',
-                'Tesorería: Desembolsos y Recaudos',
-                'Catálogo de Productos e Insumos',
-                'Entradas de Almacén (Compras y Facturas)',
-                'Kardex',
-            )
-        ]
+        # Sin consulta: sugeridos del catalogo (ya filtrados por otorgados)
+        rutas_sugeridas = [r for r in rutas_base if r.get('sugerido')][:6]
         return {
             'ok': True,
             'q': '',

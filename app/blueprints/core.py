@@ -1881,16 +1881,21 @@ def _asegurar_pantallas_catalogo(conn):
     for (_clave, _nombre, _ep, _icono, _mod, _q, _tpl, _kws, _ord, _ot) in _CATALOGO_PANTALLAS:
         _k = _json.dumps(_kws, ensure_ascii=False)
         _sug = _clave in _SUGERIDOS
+        if _q:
+            _w = "endpoint = %s AND query = %s"
+            _wp = (_ep, _q)
+        else:
+            _w = "endpoint = %s AND (query IS NULL OR query = '')"
+            _wp = (_ep,)
         _existe = conn.execute(
-            "SELECT 1 FROM pantallas WHERE endpoint = %s AND COALESCE(query, %s) = COALESCE(%s, %s) LIMIT 1",
-            (_ep, _q or '', _q, '')).fetchone()
+            "SELECT 1 FROM pantallas WHERE " + _w + " LIMIT 1", _wp).fetchone()
         if _existe:
             # Autoritativo: la semilla manda en contenido (respeta clave y otorgable)
             conn.execute(
                 """UPDATE pantallas SET nombre = %s, modulo = %s, url_tpl = %s,
                           keywords = %s, icono = %s, orden = %s, sugerido = COALESCE(sugerido, FALSE) OR %s
-                   WHERE endpoint = %s AND COALESCE(query, %s) = COALESCE(%s, %s)""",
-                (_nombre, _mod, _tpl, _k, _icono, _ord, _sug, _ep, _q or '', _q, ''))
+                   WHERE """ + _w,
+                (_nombre, _mod, _tpl, _k, _icono, _ord, _sug) + tuple(_wp))
         else:
             conn.execute(
                 """INSERT INTO pantallas (clave, nombre, endpoint, icono, modulo, query, url_tpl,

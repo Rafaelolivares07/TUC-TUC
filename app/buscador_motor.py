@@ -221,8 +221,13 @@ def _filas_catalogo(conn=None):
 def _obtener_catalogo_base(negocio_id=None, slug=None, otorgados=None, filas=None):
     """Entradas omni desde el catalogo unico. otorgados=None muestra todo."""
     out = []
+    vistos = set()
     for r in (filas if filas is not None else _filas_catalogo()):
         ep = r.get('endpoint') or ''
+        _k = (ep, r.get('query') or '')
+        if _k in vistos:
+            continue
+        vistos.add(_k)
         if otorgados is not None and ep not in otorgados:
             continue
         try:

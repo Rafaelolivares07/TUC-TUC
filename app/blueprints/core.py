@@ -1885,11 +1885,12 @@ def _asegurar_pantallas_catalogo(conn):
             "SELECT 1 FROM pantallas WHERE endpoint = %s AND COALESCE(query, %s) = COALESCE(%s, %s) LIMIT 1",
             (_ep, _q or '', _q, '')).fetchone()
         if _existe:
+            # Autoritativo: la semilla manda en contenido (respeta clave y otorgable)
             conn.execute(
-                """UPDATE pantallas SET modulo = COALESCE(modulo, %s), url_tpl = COALESCE(url_tpl, %s),
-                          keywords = COALESCE(keywords, %s), icono = COALESCE(icono, %s), sugerido = COALESCE(sugerido, FALSE) OR %s
+                """UPDATE pantallas SET nombre = %s, modulo = %s, url_tpl = %s,
+                          keywords = %s, icono = %s, orden = %s, sugerido = COALESCE(sugerido, FALSE) OR %s
                    WHERE endpoint = %s AND COALESCE(query, %s) = COALESCE(%s, %s)""",
-                (_mod, _tpl, _k, _icono, _sug, _ep, _q or '', _q, ''))
+                (_nombre, _mod, _tpl, _k, _icono, _ord, _sug, _ep, _q or '', _q, ''))
         else:
             conn.execute(
                 """INSERT INTO pantallas (clave, nombre, endpoint, icono, modulo, query, url_tpl,
@@ -1897,6 +1898,9 @@ def _asegurar_pantallas_catalogo(conn):
                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                    ON CONFLICT (clave) DO NOTHING""",
                 (_clave, _nombre, _ep, _icono, _mod, _q, _tpl, _k, _ord, _ot, _sug))
+    conn.execute("""UPDATE pantallas SET clave = 'gestion_permisos'
+        WHERE endpoint = 'core.core_gestion_permisos' AND clave IS DISTINCT FROM 'gestion_permisos'
+        AND NOT EXISTS (SELECT 1 FROM pantallas WHERE clave = 'gestion_permisos')""")
     try:
         conn.commit()
     except Exception:

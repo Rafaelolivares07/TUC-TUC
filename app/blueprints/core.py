@@ -1786,6 +1786,55 @@ def api_su_salir():
     return jsonify({'ok': True})
 
 
+@bp.after_app_request
+def _inyectar_cinta_su_global(response):
+    """Cinta 'Volver a mi sesion' en TODA pagina HTML durante simulacion.
+
+    Caso Rafa 04/11 pm: atrapado en cuerpo simulado dentro de pagina
+    standalone (caja/permisos) sin cinta. Mismo molde que el globo del
+    chat: solo inyecta si falta (portal/inicio/base traen la suya).
+    """
+    try:
+        if request.method != 'GET':
+            return response
+        if not session.get('_su_original'):
+            return response
+        p = request.path or ''
+        if (p.startswith('/api/') or p.startswith('/static/') or
+                p.startswith('/chat') or p.startswith('/login') or
+                p.startswith('/admin/login') or request.args.get('embed') == '1'):
+            return response
+        if response.direct_passthrough:
+            return response
+        ctype = response.content_type or ''
+        if 'text/html' not in ctype.lower():
+            return response
+        html = response.get_data(as_text=True)
+        if '</body>' not in html or 'Volver a mi sesi' in html:
+            return response
+        import html as _h
+        nombre = _h.escape(session.get('nombre', '') or '', quote=True)
+        cinta = (
+            '<style>body{padding-bottom:44px !important;}</style>'
+            '<div id="tuctuc-su-cinta" style="position:fixed;bottom:0;left:0;right:0;'
+            'background:#0f172a;color:#fff;font-size:12px;padding:8px 16px;'
+            'display:flex;align-items:center;justify-content:center;gap:8px;'
+            'z-index:2000;font-family:system-ui,sans-serif;">'
+            'Viendo como <strong>' + nombre + '</strong> '
+            '<button type="button" onclick="suSalir()" style="text-decoration:underline;'
+            'background:transparent;border:0;color:#fff;cursor:pointer;font-size:12px;'
+            'padding:0;">Volver a mi sesi\u00f3n</button></div>'
+            '<script>function suSalir(){fetch(\'/api/su/salir\',{method:\'POST\'})'
+            '.then(function(r){return r.json();})'
+            '.then(function(d){if(d.ok){window.location.href=\'/portal\';}'
+            'else{alert(\'Error: \'+(d.error||\'desconocido\'));}});}</script>'
+        )
+        response.set_data(html.replace('</body>', cinta + '\n</body>', 1))
+    except Exception:
+        pass
+    return response
+
+
 @bp.before_app_request
 def check_dynamic_permissions():
     if 'usuario_id' not in session:

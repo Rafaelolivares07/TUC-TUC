@@ -159,10 +159,17 @@
         </button>
         <div data-panel class="hidden pl-2 pb-1">
           {% for pant in sec['items'] %}
-          <a href="{{ pant.resolved_url }}"{% if pant.resolved_url != '#' %} target="_blank" rel="noopener"{% endif %} title="{{ pant.nombre }}" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] text-slate-600 hover:bg-slate-50 hover:text-slate-900 no-underline transition">
+          {% if pant.resolved_url != '#' %}
+          <a href="{{ pant.resolved_url }}" target="_blank" rel="noopener" title="{{ pant.nombre }}" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] text-slate-600 hover:bg-slate-50 hover:text-slate-900 no-underline transition">
             <i class="bi {{ pant.icono_bi or 'bi-grid' }} w-5 shrink-0 text-center text-slate-400 text-sm not-italic"></i>
             <span class="truncate">{{ pant.nombre }}</span>
           </a>
+          {% else %}
+          <span title="Elige un negocio arriba para abrir esta opción" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] text-slate-300 cursor-not-allowed select-none">
+            <i class="bi {{ pant.icono_bi or 'bi-grid' }} w-5 shrink-0 text-center text-sm not-italic"></i>
+            <span class="truncate">{{ pant.nombre }}</span>
+          </span>
+          {% endif %}
           {% endfor %}
         </div>
       </div>

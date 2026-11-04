@@ -108,9 +108,15 @@
             <h2 class="text-sm font-bold text-gray-800 truncate txt-nombre" title="{{ pant.nombre }}">{{ pant.nombre }}</h2>
             <p class="text-[10px] text-gray-400 mt-0.5">Acceso verificado</p>
           </div>
-          <a href="{{ pant.resolved_url }}"{% if pant.resolved_url != '#' %} target="_blank" rel="noopener"{% endif %} class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition no-underline">
+          {% if pant.resolved_url != '#' %}
+          <a href="{{ pant.resolved_url }}" target="_blank" rel="noopener" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition no-underline">
             Entrar
           </a>
+          {% else %}
+          <span title="Elige un negocio arriba para abrir esta opción" class="bg-slate-200 text-slate-400 font-bold text-xs px-3.5 py-2 rounded-xl cursor-not-allowed select-none">
+            Entrar
+          </span>
+          {% endif %}
         </div>
       {% endfor %}
     </div>

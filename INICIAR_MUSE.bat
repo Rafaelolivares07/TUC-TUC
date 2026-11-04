@@ -64,11 +64,11 @@ echo   Omitido: sin consola interactiva.
 :tema_ok
 
 echo [6/8] Etiqueta de pestana
-set "ETIQUETA=TUCTUC"
-powershell -NoProfile -Command "$p='C:\Users\RAFAEL OLIVARES\Documents\docs\_conversacion\tema_activo.txt'; $t=''; if (Test-Path $p) { $t=Get-Content $p -TotalCount 1 }; $r='TUCTUC'; if (-not [string]::IsNullOrWhiteSpace($t)) { $r=(($t -replace '^\d+_','') -replace '\.md$','').ToUpper() }; [IO.File]::WriteAllText($env:TEMP+'\muse_etiqueta.txt', $r)"
-set /p ETIQUETA=<"%TEMP%\muse_etiqueta.txt" 2>nul
-if not defined ETIQUETA set "ETIQUETA=TUCTUC"
-del "%TEMP%\muse_etiqueta.txt" 2>nul
+set "ETIQUETA="
+for /f "delims=" %%e in ('C:\Tools\Python313\python.exe "%V2%\muse_cuota.py" --etiqueta 2^>nul') do set "ETIQUETA=%%e"
+if not defined ETIQUETA set "ETIQUETA=tuctuc"
+REM titulo corto: tag cuota + tema, ej "80%% marketing"
+REM muse_etiqueta.txt ya no se usa
 echo   Pestana: !ETIQUETA!
 
 echo [7/8] Python + CLI muse + acceso

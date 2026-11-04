@@ -63,13 +63,17 @@ def _cargar_indice_manuales():
                 continue
                 
             anchor = slugify(titulo)
-            preview = ''
-            for j in range(i + 1, min(i + 6, len(lines))):
+            cuerpo = []
+            for j in range(i + 1, len(lines)):
                 next_l = lines[j].strip()
-                if next_l and not next_l.startswith('#') and not next_l.startswith('---'):
-                    clean_p = re.sub(r'[*_`\[\]]', '', next_l)
-                    preview = clean_p[:130] + ('...' if len(clean_p) > 130 else '')
+                if re.match(r'^#{1,3}\s+', next_l):
                     break
+                if next_l and not next_l.startswith('---'):
+                    cuerpo.append(re.sub(r'[*_`\[\]]', '', next_l))
+            preview = ''
+            if cuerpo:
+                preview = cuerpo[0][:130] + ('...' if len(cuerpo[0]) > 130 else '')
+            full_txt = ' '.join(cuerpo)[:3000]
                     
             secciones.append({
                 'titulo': titulo,
@@ -78,7 +82,7 @@ def _cargar_indice_manuales():
                 'resumen': preview or 'Ver detalle y pasos en el manual',
                 'url': f'/docs/{slug}#{anchor}',
                 'slug': slug,
-                'busqueda': f"{quitar_tildes(titulo)} {quitar_tildes(nombre_manual)} {quitar_tildes(preview)}"
+                'busqueda': f"{quitar_tildes(titulo)} {quitar_tildes(nombre_manual)} {quitar_tildes(full_txt)}"
             })
 
     _CACHE_MANUALES = secciones
@@ -89,6 +93,9 @@ def invalidar_cache_manuales():
     _CACHE_MANUALES = None
 
 _SUGERIDOS = {'caja_pos', 'conta_tab_puc', 'catalogo_productos', 'entradas', 'kardex'}
+
+# Grants viejos -> fila semilla (endpoint legado, clave nueva).
+_MIGRAR_GRANTS = (('tiendas.admin_caja', 'caja_pos'),)
 
 _CATALOGO_PANTALLAS = [
     ('inicio', 'Inicio / Menú Principal', 'core.colaborador_inicio', '🏠', 'General', None, '/inicio', ['inicio', 'dashboard', 'panel', 'home', 'herramientas', 'menu principal', 'accesos'], 10, True),

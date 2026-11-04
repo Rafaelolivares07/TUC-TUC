@@ -1860,7 +1860,7 @@ def _url_pantalla(fila, negocio_id, slug):
 
 def _asegurar_pantallas_catalogo(conn):
     """Crea/extiende pantallas y siembra el catalogo unico (omni+menu+otorgar)."""
-    from ..buscador_motor import _CATALOGO_PANTALLAS, _SUGERIDOS
+    from ..buscador_motor import _CATALOGO_PANTALLAS, _SUGERIDOS, _MIGRAR_GRANTS
     import json as _json
     conn.execute("""
         CREATE TABLE IF NOT EXISTS pantallas (
@@ -1921,6 +1921,28 @@ def _asegurar_pantallas_catalogo(conn):
                 AND NOT EXISTS (SELECT 1 FROM permisos_terceros WHERE pantalla_id = pantallas.id)""",
             tuple(_wp) + (_clave,))
 
+    for (_viejo_ep, _nueva_clave) in _MIGRAR_GRANTS:
+        _sid = conn.execute(
+            "SELECT id FROM pantallas WHERE clave = %s LIMIT 1", (_nueva_clave,)).fetchone()
+        if not _sid:
+            continue
+        for _v in conn.execute(
+                "SELECT id FROM pantallas WHERE endpoint = %s", (_viejo_ep,)).fetchall() or []:
+            if _v['id'] == _sid['id']:
+                continue
+            conn.execute(
+                """DELETE FROM permisos_terceros WHERE pantalla_id = %s
+                   AND EXISTS (SELECT 1 FROM permisos_terceros x
+                               WHERE x.pantalla_id = %s AND x.tercero_id = permisos_terceros.tercero_id
+                               AND x.negocio_id = permisos_terceros.negocio_id)""",
+                (_v['id'], _sid['id']))
+            conn.execute(
+                "UPDATE permisos_terceros SET pantalla_id = %s WHERE pantalla_id = %s",
+                (_sid['id'], _v['id']))
+        conn.execute(
+            """DELETE FROM pantallas WHERE endpoint = %s AND id <> %s
+               AND NOT EXISTS (SELECT 1 FROM permisos_terceros WHERE pantalla_id = pantallas.id)""",
+            (_viejo_ep, _sid['id']))
     try:
         conn.commit()
     except Exception:

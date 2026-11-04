@@ -15,6 +15,7 @@ import asyncio
 import json
 import os
 import re
+import shutil
 import sys
 import tempfile
 import time
@@ -26,6 +27,11 @@ import winsound
 
 DIR_ACTUAL = os.path.dirname(os.path.abspath(__file__))
 RUTA_CONFIG = os.path.join(DIR_ACTUAL, 'voces_config.json')
+
+# Turno unico de voz compartido con reproducir.ps1 (muse).
+CERROJO_VOZ = os.path.join(tempfile.gettempdir(), 'tuctuc_voz_playing.lock')
+SILENCIO_VOZ = 5
+CERROJO_VIEJO = 600
 
 CONFIG_DEFAULT = {
     'anti': {'voz': 'es-CO-GonzaloNeural', 'volumen': '+50%'},
@@ -104,6 +110,46 @@ def reproducir_nativo(ruta_wav: str, bloqueante: bool = True):
     winsound.PlaySound(ruta_wav, flags)
 
 
+def adquirir_voz(timeout=15):
+    """Toma el turno de voz compartido con los demas agentes.
+
+    Si el turno lleva tomado mas de CERROJO_VIEJO segundos se considera
+    colgado y se rompe. Retorna True con el turno en mano, False si se
+    acabo el tiempo de espera.
+    """
+    t0 = time.time()
+    while True:
+        try:
+            os.mkdir(CERROJO_VOZ)
+            return True
+        except FileExistsError:
+            try:
+                edad = time.time() - os.path.getmtime(CERROJO_VOZ)
+            except OSError:
+                edad = 0
+            if edad > CERROJO_VIEJO:
+                shutil.rmtree(CERROJO_VOZ, ignore_errors=True)
+                try:
+                    if os.path.isfile(CERROJO_VOZ):
+                        os.remove(CERROJO_VOZ)
+                except OSError:
+                    pass
+        except OSError:
+            pass
+        if time.time() - t0 >= timeout:
+            return False
+        time.sleep(0.25)
+
+
+def liberar_voz(silencio=SILENCIO_VOZ):
+    """Suelta el turno tras N segundos de silencio con el candado puesto."""
+    try:
+        if silencio and silencio > 0:
+            time.sleep(silencio)
+    finally:
+        shutil.rmtree(CERROJO_VOZ, ignore_errors=True)
+
+
 def main():
     parser = argparse.ArgumentParser(description='Voz de agentes para TucTuc')
     parser.add_argument('texto', nargs='?', default='', help='Texto a hablar (o usar --archivo)')
@@ -149,7 +195,12 @@ def main():
     try:
         asyncio.run(sintetizar(texto, archivo_mp3, voz, volumen))
         mp3_a_wav(archivo_mp3, archivo_wav)
-        reproducir_nativo(archivo_wav, bloqueante=True)
+        turno = adquirir_voz()
+        try:
+            reproducir_nativo(archivo_wav, bloqueante=True)
+        finally:
+            if turno:
+                liberar_voz()
     except Exception as e:
         sys.stderr.write(f'Error en habla_agente: {e}\n')
     finally:

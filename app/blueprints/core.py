@@ -1726,21 +1726,17 @@ def _resolver_url_pantalla(endpoint, negocio_id, slug):
         return '#'
 
 
-@bp.route('/inicio')
-def colaborador_inicio():
-    if 'usuario_id' not in session and 'rol' not in session:
-        return redirect(url_for('auth.admin_login'))
-        
-    role = session.get('rol')
-    tercero_id = session.get('chat_tercero_id')
-    active_id = session.get('active_negocio_id')
-    nombre = session.get('nombre', '')
-    
-    # Obtener el slug del negocio activo (buscando en restaurantes y tiendas)
+def _pantallas_de_sesion(conn, ses):
+    """Pantallas autorizadas del (tercero, negocio) en sesion.
+
+    Misma fuente para /inicio y desk. Tercero con respaldo magic-link/PIN
+    (_tercero_de_sesion); superadmin ve el catalogo completo.
+    Devuelve (filas, slug_negocio, negocio_id)."""
+    role = ses.get('rol')
+    tercero_id = _tercero_de_sesion(conn, ses)
+    active_id = ses.get('active_negocio_id')
     slug = None
     if active_id:
-        from ..db import get_db_connection
-        conn = get_db_connection()
         r = conn.execute("SELECT slug FROM restaurantes WHERE tercero_id = %s LIMIT 1", (active_id,)).fetchone()
         if r:
             slug = r['slug']
@@ -1748,34 +1744,36 @@ def colaborador_inicio():
             t = conn.execute("SELECT slug FROM tiendas WHERE tercero_id = %s LIMIT 1", (active_id,)).fetchone()
             if t:
                 slug = t['slug']
-        conn.close()
-        
-    # Obtener pantallas autorizadas
-    from ..db import get_db_connection
-    conn = get_db_connection()
     if role in ('Administrador', 'ClienteVFP'):
-        # El superadmin ve todas las pantallas
         rows = conn.execute("SELECT id, nombre, clave, endpoint, icono FROM pantallas ORDER BY id").fetchall()
-    else:
-        # Los colaboradores ven solo sus pantallas permitidas para el negocio activo
-        if tercero_id and active_id:
-            rows = conn.execute("""
-                SELECT p.id, p.nombre, p.clave, p.endpoint, p.icono 
+    elif tercero_id and active_id:
+        rows = conn.execute("""
+                SELECT p.id, p.nombre, p.clave, p.endpoint, p.icono
                 FROM permisos_terceros pt
                 JOIN pantallas p ON p.id = pt.pantalla_id
                 WHERE pt.tercero_id = %s AND pt.negocio_id = %s
                 ORDER BY p.id
             """, (tercero_id, active_id)).fetchall()
-        else:
-            rows = []
-    conn.close()
-    
-    pantallas_autorizadas = []
-    for r in rows:
-        d = dict(r)
-        d['resolved_url'] = _resolver_url_pantalla(d['endpoint'], active_id, slug)
-        pantallas_autorizadas.append(d)
+    else:
+        rows = []
+    return [dict(r) for r in rows], slug, active_id
+
+
+@bp.route('/inicio')
+def colaborador_inicio():
+    if 'usuario_id' not in session and 'rol' not in session:
+        return redirect(url_for('auth.admin_login'))
         
+    nombre = session.get('nombre', '')
+
+    from ..db import get_db_connection
+    conn = get_db_connection()
+    pantallas_autorizadas, slug, active_id = _pantallas_de_sesion(conn, session)
+    conn.close()
+
+    for d in pantallas_autorizadas:
+        d['resolved_url'] = _resolver_url_pantalla(d['endpoint'], active_id, slug)
+
     return render_template('inicio.html', 
                            nombre=nombre,
                            pantallas_autorizadas=pantallas_autorizadas)
@@ -1786,7 +1784,14 @@ def colaborador_portal():
     if 'usuario_id' not in session and 'rol' not in session:
         return redirect(url_for('auth.entrar'))
     nombre = session.get('nombre', '')
-    return render_template('portal.html', nombre=nombre)
+    from ..db import get_db_connection
+    conn = get_db_connection()
+    pantallas_autorizadas, slug, active_id = _pantallas_de_sesion(conn, session)
+    conn.close()
+    for d in pantallas_autorizadas:
+        d['resolved_url'] = _resolver_url_pantalla(d['endpoint'], active_id, slug)
+    return render_template('portal.html', nombre=nombre,
+                           pantallas_autorizadas=pantallas_autorizadas)
 
 
 @bp.route('/admin/pantallas-catalogo')

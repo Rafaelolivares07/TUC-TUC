@@ -203,7 +203,20 @@ def create_app():
                 if 'usuario_id' not in session and 'rol' not in session:
                     return redirect('/entrar')
                 from flask import make_response
-                resp = make_response(render_template('portal.html', nombre=session.get('nombre', '')))
+                from .blueprints.core import _pantallas_de_sesion, _resolver_url_pantalla
+                from .db import get_db_connection
+                _conn = get_db_connection()
+                try:
+                    _pants, _slug, _nid = _pantallas_de_sesion(_conn, session)
+                finally:
+                    try:
+                        _conn.close()
+                    except Exception:
+                        pass
+                for _d in _pants:
+                    _d['resolved_url'] = _resolver_url_pantalla(_d['endpoint'], _nid, _slug)
+                resp = make_response(render_template('portal.html', nombre=session.get('nombre', ''),
+                                                     pantallas_autorizadas=_pants))
                 resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
                 resp.headers['Pragma'] = 'no-cache'
                 resp.headers['Expires'] = '0'

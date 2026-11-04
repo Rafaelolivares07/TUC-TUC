@@ -89,6 +89,11 @@ def _procesar_login(ok_url, fail_endpoint):
         """, (usuario, password)).fetchone()
 
         if admin:
+            if admin['rol'] == 'ClienteVFP':
+                # Cuentas VFP: solo agente SAR de escritorio (/api/sar/login), sin web
+                flash('Esta cuenta usa el agente SAR, no la web.', 'warning')
+                return redirect(url_for(fail_endpoint))
+
             tercero = conn.execute(
                 "SELECT id FROM terceros WHERE tipo_tercero = 'admin' AND nombre = %s LIMIT 1",
                 (admin['nombre'],)
@@ -109,8 +114,6 @@ def _procesar_login(ok_url, fail_endpoint):
             session['dispositivo_id']  = admin.get('dispositivo_id', '')
             session.permanent          = True
             session.modified           = True
-            if admin['rol'] == 'ClienteVFP':
-                return redirect(url_for('admin_agent.consultas_page'))
             return redirect(ok_url)
         else:
             flash('Usuario o contraseña incorrectos', 'danger')

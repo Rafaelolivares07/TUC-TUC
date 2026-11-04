@@ -193,7 +193,7 @@ def create_app():
             return entrada()
 
         if host_limpio == 'desk.tuc-tuc.co':
-            from flask import redirect, render_template, session
+            from flask import abort, redirect, render_template, session
             if (request.path.startswith('/api/') or request.path.startswith('/static/') or
                     request.path.startswith('/chat') or request.path.startswith('/login') or
                     request.path.startswith('/entrar') or request.path.startswith('/admin/login') or
@@ -202,6 +202,8 @@ def create_app():
             if request.path in ('/', '/portal'):
                 if 'usuario_id' not in session and 'rol' not in session:
                     return redirect('/entrar')
+                if session.get('rol') == 'ClienteVFP':
+                    abort(403)
                 from flask import make_response
                 from .blueprints.core import _pantallas_de_sesion, _resolver_url_pantalla, _agrupar_por_modulo
                 from .db import get_db_connection

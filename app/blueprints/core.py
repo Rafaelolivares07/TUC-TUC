@@ -1240,7 +1240,7 @@ def api_negocio_logo_upload(negocio_id):
     tercero_id = session.get('chat_tercero_id')
     
     # Si no es administrador global, verificar si está vinculado al negocio
-    if role not in ('Administrador', 'ClienteVFP'):
+    if role not in ('Administrador',):
         if not tercero_id:
             return jsonify({'ok': False, 'error': 'No autorizado'}), 403
         from ..db import get_db_connection
@@ -1335,7 +1335,7 @@ def inject_negocios_context():
             session.modified = True
         
         negocios = []
-        if role in ('Administrador', 'ClienteVFP'):
+        if role in ('Administrador',):
             # El superadmin ve todos los negocios en el sistema
             rows = conn.execute("""
                 SELECT id, nombre FROM terceros 
@@ -1422,7 +1422,7 @@ def api_session_switch_negocio(negocio_id):
     tercero_id = session.get('chat_tercero_id')
     
     # Validar que el usuario tenga acceso al negocio
-    if role not in ('Administrador', 'ClienteVFP'):
+    if role not in ('Administrador',):
         if not tercero_id:
             return jsonify({'ok': False, 'error': 'No autorizado'}), 403
         from ..db import get_db_connection
@@ -1472,7 +1472,7 @@ def core_gestion_permisos():
     active_negocio_id = session.get('active_negocio_id')
     
     # Si no es administrador global, validar que tenga el permiso 'gestion_permisos' para el negocio activo
-    if role not in ('Administrador', 'ClienteVFP'):
+    if role not in ('Administrador',):
         if not active_negocio_id or not tercero_id:
             abort(403)
         from ..db import get_db_connection
@@ -1489,7 +1489,7 @@ def core_gestion_permisos():
     # Obtener las pantallas que este usuario tiene derecho a asignar
     from ..db import get_db_connection
     conn = get_db_connection()
-    if role in ('Administrador', 'ClienteVFP'):
+    if role in ('Administrador',):
         pantallas = conn.execute("SELECT id, nombre, clave, endpoint, icono FROM pantallas ORDER BY id").fetchall()
     else:
         pantallas = conn.execute("""
@@ -1525,7 +1525,7 @@ def api_permisos_buscar_terceros():
         SELECT id, nombre, telefono 
         FROM terceros 
         WHERE (nombre ILIKE %s OR telefono ILIKE %s) 
-          AND (tipo_tercero IS NULL OR tipo_tercero != 'negocio')
+          AND (tipo_tercero IS NULL OR tipo_tercero NOT IN ('negocio', 'admin'))
         LIMIT 15
     """, (f"%{q}%", f"%{q}%")).fetchall()
     conn.close()
@@ -1540,7 +1540,7 @@ def api_permisos_obtener(tercero_id, negocio_id):
         
     role = session.get('rol')
     caller_tercero_id = session.get('chat_tercero_id')
-    if role not in ('Administrador', 'ClienteVFP'):
+    if role not in ('Administrador',):
         if not caller_tercero_id:
             return jsonify({'ok': False, 'error': 'No autorizado'}), 403
         from ..db import get_db_connection
@@ -1586,7 +1586,7 @@ def api_permisos_guardar():
     from ..db import get_db_connection
     conn = get_db_connection()
     try:
-        if role not in ('Administrador', 'ClienteVFP'):
+        if role not in ('Administrador',):
             if not caller_tercero_id:
                 conn.close()
                 return jsonify({'ok': False, 'error': 'No autorizado'}), 403
@@ -1630,7 +1630,7 @@ def api_permisos_guardar():
         """, (target_tercero_id, negocio_id))
         
         # Borrar permisos anteriores para este negocio
-        if role in ('Administrador', 'ClienteVFP'):
+        if role in ('Administrador',):
             conn.execute("""
                 DELETE FROM permisos_terceros 
                 WHERE tercero_id = %s AND negocio_id = %s
@@ -1671,7 +1671,9 @@ def _su_puede_simular(conn, ses, tercero_id, negocio_id):
         return False, 'Ya estas simulando: sal primero'
     rol = ses.get('rol')
     yo = _tercero_de_sesion(conn, ses)
-    es_super = rol in ('Administrador', 'ClienteVFP')
+    if rol == 'ClienteVFP':
+        return False, 'Cuenta VFP sin acceso'
+    es_super = rol in ('Administrador',)
     if not es_super:
         if not yo:
             return False, 'No autorizado'
@@ -1792,6 +1794,16 @@ def check_dynamic_permissions():
     endpoint = request.endpoint
     if not endpoint:
         return
+    # ClienteVFP: solo area VFP (admin_agent) + auth; resto de la web negado
+    if session.get('rol') == 'ClienteVFP':
+        if endpoint.startswith('admin_agent.') or endpoint.startswith('auth.') or endpoint == 'static':
+            return
+        if (request.is_json or
+                request.headers.get('X-Requested-With') == 'XMLHttpRequest' or
+                'application/json' in request.headers.get('Accept', '')):
+            return jsonify({'ok': False, 'error': 'Cuenta VFP sin acceso web'}), 403
+        abort(403)
+
         
     # Verificar si este endpoint corresponde a una pantalla registrada
     from ..db import get_db_connection
@@ -1811,7 +1823,7 @@ def check_dynamic_permissions():
         
     # 1. Superadmin bypass completo
     role = session.get('rol')
-    if role in ('Administrador', 'ClienteVFP'):
+    if role in ('Administrador',):
         return
         
     tercero_id = session.get('chat_tercero_id')
@@ -1869,7 +1881,7 @@ def _pantallas_de_sesion(conn, ses):
             t = conn.execute("SELECT slug FROM tiendas WHERE tercero_id = %s LIMIT 1", (active_id,)).fetchone()
             if t:
                 slug = t['slug']
-    if role in ('Administrador', 'ClienteVFP'):
+    if role in ('Administrador',):
         rows = conn.execute("SELECT id, nombre, clave, endpoint, icono FROM pantallas ORDER BY id").fetchall()
     elif tercero_id and active_id:
         rows = conn.execute("""
@@ -1974,7 +1986,7 @@ def colaborador_portal():
 
 @bp.route('/admin/pantallas-catalogo')
 def core_pantallas_catalogo():
-    if 'rol' not in session or session['rol'] not in ('Administrador', 'ClienteVFP'):
+    if 'rol' not in session or session['rol'] not in ('Administrador',):
         abort(403)
         
     from ..db import get_db_connection

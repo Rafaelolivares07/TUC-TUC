@@ -69,6 +69,21 @@
 
 </head>
 <body>
+    {% if session.get('_su_original') %}
+    <style>body{padding-bottom:44px !important;}</style>
+    <div class="fixed-bottom bg-dark text-white text-center small py-2" style="z-index: 2000;">
+        <i class="bi bi-eye-fill me-1"></i>
+        Viendo como <strong>{{ session.get('nombre', '') }}</strong>
+        <button type="button" onclick="suSalir()" class="btn btn-link btn-sm text-white text-decoration-underline p-0 ms-1" style="font-size: 12px;">Volver a mi sesión</button>
+    </div>
+    <script>
+        function suSalir() {
+            fetch('/api/su/salir', { method: 'POST' })
+                .then(r => r.json())
+                .then(d => { if (d.ok) { window.location.href = '/portal'; } else { alert('Error: ' + (d.error || 'desconocido')); } });
+        }
+    </script>
+    {% endif %}
     <header>
         <!-- Navbar mejorado con color de fondo y sombra -->
         <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">

@@ -14,7 +14,24 @@
     }
   </style>
 </head>
-<body class="p-4 sm:p-8 min-h-screen">
+<body class="p-4 sm:p-8 min-h-screen{% if session.get('_su_original') %} pb-12{% endif %}">
+  {% if session.get('_su_original') %}
+  <div class="fixed bottom-0 left-0 right-0 bg-slate-900 text-white text-xs px-4 py-2 flex items-center justify-center gap-2 z-[70]">
+    <i class="bi bi-eye-fill"></i>
+    <span>Viendo como <strong>{{ session.get('nombre', '') }}</strong></span>
+    <button type="button" onclick="suSalir()" class="underline underline-offset-2 hover:text-indigo-200 bg-transparent border-0 text-white cursor-pointer text-xs p-0">Volver a mi sesión</button>
+  </div>
+  <script>
+    function suSalir() {
+      fetch('/api/su/salir', { method: 'POST' })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          if (d.ok) { window.location.href = '/portal'; }
+          else { alert('Error: ' + (d.error || 'desconocido')); }
+        });
+    }
+  </script>
+  {% endif %}
 
   <div class="max-w-3xl mx-auto">
     <!-- Cabecera / Negocio Activo & Carrusel Trigger -->

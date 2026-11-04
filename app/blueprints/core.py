@@ -1490,10 +1490,10 @@ def core_gestion_permisos():
     from ..db import get_db_connection
     conn = get_db_connection()
     if role in ('Administrador', 'ClienteVFP'):
-        pantallas = conn.execute("SELECT id, nombre, clave, icono FROM pantallas ORDER BY id").fetchall()
+        pantallas = conn.execute("SELECT id, nombre, clave, endpoint, icono FROM pantallas ORDER BY id").fetchall()
     else:
         pantallas = conn.execute("""
-            SELECT p.id, p.nombre, p.clave, p.icono 
+            SELECT p.id, p.nombre, p.clave, p.endpoint, p.icono 
             FROM permisos_terceros pt
             JOIN pantallas p ON p.id = pt.pantalla_id
             WHERE pt.tercero_id = %s AND pt.negocio_id = %s
@@ -1501,8 +1501,14 @@ def core_gestion_permisos():
         """, (tercero_id, active_negocio_id)).fetchall()
     conn.close()
     
-    return render_template('gestion_permisos.html', 
-                           pantallas_disponibles=[dict(p) for p in pantallas])
+    pant_disp = []
+    for p in pantallas:
+        d = dict(p)
+        d['icono_bi'] = _icono_bi(d.get('endpoint'))
+        pant_disp.append(d)
+    return render_template('gestion_permisos.html',
+                           nombre=session.get('nombre', ''),
+                           pantallas_disponibles=pant_disp)
 
 
 @bp.route('/api/permisos/buscar-terceros')
@@ -1659,6 +1665,125 @@ def api_permisos_guardar():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+def _su_puede_simular(conn, ses, tercero_id, negocio_id):
+    """Indica si la sesion puede entrar como (tercero, negocio)."""
+    if ses.get('_su_original'):
+        return False, 'Ya estas simulando: sal primero'
+    rol = ses.get('rol')
+    yo = _tercero_de_sesion(conn, ses)
+    es_super = rol in ('Administrador', 'ClienteVFP')
+    if not es_super:
+        if not yo:
+            return False, 'No autorizado'
+        link = conn.execute(
+            'SELECT 1 FROM terceros_negocios WHERE tercero_id = %s AND negocio_id = %s AND activo = TRUE',
+            (yo, negocio_id)).fetchone()
+        if not link:
+            return False, 'No autorizado en este negocio'
+        gest = conn.execute("""
+            SELECT 1 FROM permisos_terceros pt
+            JOIN pantallas p ON p.id = pt.pantalla_id
+            WHERE pt.tercero_id = %s AND pt.negocio_id = %s AND p.clave = 'gestion_permisos'
+        """, (yo, negocio_id)).fetchone()
+        if not gest:
+            return False, 'No tienes gestion de accesos'
+    tgt = conn.execute(
+        'SELECT id, nombre, telefono FROM terceros WHERE id = %s', (tercero_id,)).fetchone()
+    if not tgt:
+        return False, 'Tercero inexistente'
+    vlink = conn.execute(
+        'SELECT 1 FROM terceros_negocios WHERE tercero_id = %s AND negocio_id = %s AND activo = TRUE',
+        (tercero_id, negocio_id)).fetchone()
+    if not vlink:
+        return False, 'Sin vinculo con el negocio'
+    if not es_super:
+        mias = {r['pantalla_id'] for r in conn.execute(
+            'SELECT pantalla_id FROM permisos_terceros WHERE tercero_id = %s AND negocio_id = %s',
+            (yo, negocio_id)).fetchall()}
+        suyas = {r['pantalla_id'] for r in conn.execute(
+            'SELECT pantalla_id FROM permisos_terceros WHERE tercero_id = %s AND negocio_id = %s',
+            (tercero_id, negocio_id)).fetchall()}
+        if not suyas <= mias:
+            return False, 'No puedes simular accesos que no posees'
+    return True, ''
+
+
+@bp.route('/api/su/entrar', methods=['POST'])
+def api_su_entrar():
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json() or {}
+    try:
+        tercero_id = int(data.get('tercero_id') or 0)
+        negocio_id = int(data.get('negocio_id') or 0)
+    except (TypeError, ValueError):
+        return jsonify({'ok': False, 'error': 'Datos invalidos'}), 400
+    if not tercero_id or not negocio_id:
+        return jsonify({'ok': False, 'error': 'Datos faltantes'}), 400
+    from ..db import get_db_connection
+    conn = get_db_connection()
+    try:
+        puede, why = _su_puede_simular(conn, session, tercero_id, negocio_id)
+        if not puede:
+            conn.close()
+            return jsonify({'ok': False, 'error': why}), 403
+        tgt = conn.execute(
+            'SELECT id, nombre, telefono FROM terceros WHERE id = %s', (tercero_id,)).fetchone()
+        r = conn.execute('SELECT 1 FROM restaurantes WHERE tercero_id = %s LIMIT 1',
+                       (negocio_id,)).fetchone()
+        if r:
+            rol_sim = 'Restaurante'
+        else:
+            t = conn.execute('SELECT 1 FROM tiendas WHERE tercero_id = %s LIMIT 1',
+                           (negocio_id,)).fetchone()
+            rol_sim = 'Tienda' if t else 'Vendedor'
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+    session['_su_original'] = {
+        'usuario_id': session.get('usuario_id'),
+        'rol': session.get('rol'),
+        'chat_tercero_id': session.get('chat_tercero_id'),
+        'nombre': session.get('nombre', ''),
+        'telefono': session.get('telefono', ''),
+        'active_negocio_id': session.get('active_negocio_id'),
+        'dispositivo_id': session.get('dispositivo_id', ''),
+    }
+    session['usuario_id'] = tgt['id']
+    session['nombre'] = tgt['nombre']
+    session['telefono'] = tgt['telefono'] or ''
+    session['rol'] = rol_sim
+    session.pop('chat_tercero_id', None)
+    session['active_negocio_id'] = negocio_id
+    session.modified = True
+    return jsonify({'ok': True, 'nombre': tgt['nombre']})
+
+
+@bp.route('/api/su/salir', methods=['POST'])
+def api_su_salir():
+    orig = session.get('_su_original')
+    if not orig:
+        return jsonify({'ok': False, 'error': 'No estabas simulando'}), 400
+    if orig.get('usuario_id') is None:
+        session.pop('usuario_id', None)
+    else:
+        session['usuario_id'] = orig['usuario_id']
+    session['rol'] = orig.get('rol')
+    if orig.get('chat_tercero_id'):
+        session['chat_tercero_id'] = orig['chat_tercero_id']
+    else:
+        session.pop('chat_tercero_id', None)
+    session['nombre'] = orig.get('nombre', '')
+    session['telefono'] = orig.get('telefono', '')
+    session['active_negocio_id'] = orig.get('active_negocio_id')
+    session['dispositivo_id'] = orig.get('dispositivo_id', '')
+    session.pop('_su_original', None)
+    session.modified = True
+    return jsonify({'ok': True})
+
+
 @bp.before_app_request
 def check_dynamic_permissions():
     if 'usuario_id' not in session:
@@ -1756,7 +1881,12 @@ def _pantallas_de_sesion(conn, ses):
             """, (tercero_id, active_id)).fetchall()
     else:
         rows = []
-    return [dict(r) for r in rows], slug, active_id
+    fuera = []
+    for r in rows:
+        d = dict(r)
+        d['icono_bi'] = _icono_bi(d.get('endpoint'))
+        fuera.append(d)
+    return fuera, slug, active_id
 
 _SECCIONES_MENU = {
     'inventarios': 'Inventario',
@@ -1769,6 +1899,26 @@ _SECCIONES_MENU = {
     'auth': 'General',
     'admin_agent_bp': 'Administracion',
 }
+
+
+_ICONOS_MENU = {
+    'inventarios': 'bi-box-seam',
+    'contabilidad': 'bi-calculator',
+    'tiendas': 'bi-shop',
+    'restaurantes': 'bi-cup-hot',
+    'crm': 'bi-people',
+    'agenda': 'bi-calendar-check',
+    'core': 'bi-grid',
+    'auth': 'bi-key',
+    'admin_agent_bp': 'bi-clipboard-data',
+    'rockola': 'bi-music-note-beamed',
+    'domotica': 'bi-lightbulb',
+}
+
+
+def _icono_bi(endpoint):
+    """Icono corporativo (bootstrap-icons) segun el modulo del endpoint."""
+    return _ICONOS_MENU.get((endpoint or '').split('.')[0], 'bi-grid')
 
 
 def _agrupar_por_modulo(pantallas):

@@ -1,222 +1,248 @@
-{% extends 'base.html' %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Permisos - TUC TUC</title>
+  <script src="/static/js/tailwind.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <style>
+    body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
+    #toast { transition: opacity .25s ease, transform .25s ease; }
+  </style>
+</head>
+<body class="min-h-screen text-slate-800">
 
-{% block title %}Gestión de Permisos - TUC TUC{% endblock %}
-
-{% block content %}
-<div class="container my-4" style="max-width: 650px;">
-    <!-- Encabezado -->
-    <div class="d-flex align-items-center mb-4">
-        <div class="bg-primary text-white rounded-3 p-2.5 me-3 shadow-sm d-flex align-items-center justify-content-center" style="height: 48px; width: 48px;">
-            <i class="bi bi-key-fill" style="font-size: 24px;"></i>
-        </div>
-        <div>
-            <h4 class="fw-bold text-dark mb-0">Gestión de Permisos</h4>
-            <p class="text-muted small mb-0">Asigna accesos a colaboradores para el negocio activo.</p>
-        </div>
+  <!-- CABECERA CORPORATIVA -->
+  <header class="w-full bg-white border-b border-slate-100 px-4 sm:px-8 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <a href="/portal" class="flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-indigo-600 no-underline transition">
+        <i class="bi bi-arrow-left"></i><span>Desk</span>
+      </a>
+      <div class="h-4 w-px bg-slate-200"></div>
+      <span class="text-sm font-semibold text-slate-900">Permisos</span>
     </div>
+    <div class="flex items-center gap-2 text-xs text-slate-500">
+      <i class="bi bi-person-circle text-base text-slate-400"></i>
+      <span>Tú: <strong class="text-slate-700">{{ nombre }}</strong></span>
+      {% if negocio_activo %}
+      <span class="hidden sm:inline text-slate-300">·</span>
+      <span class="hidden sm:inline truncate max-w-40">{{ negocio_activo.nombre }}</span>
+      {% endif %}
+    </div>
+  </header>
 
-    <!-- Negocio Activo Info -->
-    {% if negocio_activo %}
-    <div class="card border-0 shadow-sm mb-4 bg-light">
-        <div class="card-body py-2.5 px-3 d-flex align-items-center justify-content-between">
-            <span class="text-muted small">Negocio seleccionado:</span>
-            <div class="d-flex align-items-center">
-                {% if negocio_activo.logo_url %}
-                    <img src="{{ negocio_activo.logo_url }}" class="rounded-circle border border-secondary me-2" style="height: 24px; width: 24px; object-fit: cover;">
-                {% endif %}
-                <span class="fw-bold text-dark small">{{ negocio_activo.nombre }}</span>
-            </div>
-        </div>
+  <main class="max-w-2xl mx-auto px-4 py-6">
+
+    {% if not negocio_activo %}
+    <div class="bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-xl px-4 py-3">
+      Elige un negocio en el desk para poder gestionar permisos.
     </div>
     {% else %}
-    <div class="alert alert-warning border-0 shadow-sm mb-4">
-        Deber tener un negocio seleccionado en el carrusel de la cabecera para poder gestionar permisos.
-    </div>
+
+    <!-- PASO 1: BUSCAR COLABORADOR -->
+    <section class="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 mb-4">
+      <h2 class="text-[13px] font-bold text-slate-800 mb-2.5 flex items-center gap-1.5">
+        <i class="bi bi-search text-indigo-600"></i>1. Busca un colaborador
+      </h2>
+      <div class="relative">
+        <input type="text" id="buscar-tercero" placeholder="Escribe el nombre o celular..."
+               autocomplete="off"
+               class="w-full text-sm border border-slate-200 rounded-xl px-3.5 py-2.5 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100">
+        <div id="buscar-list" class="hidden absolute left-0 right-0 z-50 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden max-h-56 overflow-y-auto"></div>
+      </div>
+    </section>
+
+    <!-- PASO 2: PERMISOS -->
+    <section id="card-permisos" class="hidden bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
+      <div class="bg-indigo-50/70 border border-indigo-100 rounded-xl px-3.5 py-2.5 mb-3 flex items-center gap-2.5">
+        <i class="bi bi-person-fill-check text-indigo-600 text-lg"></i>
+        <div class="min-w-0">
+          <div class="text-[11px] text-slate-500">Otorgando permisos a:</div>
+          <div id="txt-tercero-confirmado" class="text-sm font-bold text-slate-800 truncate">-</div>
+        </div>
+      </div>
+
+      <h2 class="text-[13px] font-bold text-slate-800 mb-2.5 flex items-center gap-1.5">
+        <i class="bi bi-ui-checks text-indigo-600"></i>2. Pantallas permitidas
+      </h2>
+      <div id="lista-pantallas" class="border border-slate-200 rounded-xl overflow-hidden mb-4 divide-y divide-slate-100">
+        {% for pant in pantallas_disponibles %}
+        <label class="flex items-center justify-between gap-3 px-3.5 py-2.5 cursor-pointer hover:bg-slate-50 transition">
+          <span class="flex items-center gap-3 min-w-0">
+            <i class="bi {{ pant.icono_bi or 'bi-grid' }} text-slate-400 text-lg"></i>
+            <span class="min-w-0">
+              <span class="block text-[13px] font-semibold text-slate-800 truncate">{{ pant.nombre }}</span>
+              <span class="block text-[11px] text-slate-400">Clave: {{ pant.clave }}</span>
+            </span>
+          </span>
+          <input type="checkbox" value="{{ pant.id }}"
+                 class="check-pantalla shrink-0 w-5 h-5 accent-indigo-600 cursor-pointer">
+        </label>
+        {% endfor %}
+      </div>
+
+      <div class="flex flex-col gap-2">
+        <button onclick="guardarPermisos()" id="btn-guardar"
+                class="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl px-4 py-2.5 transition flex items-center justify-center gap-1.5 cursor-pointer border-0">
+          <i class="bi bi-check-circle"></i>Guardar permisos
+        </button>
+        <button onclick="entrarComo()" id="btn-su"
+                class="w-full bg-slate-800 hover:bg-slate-900 text-white text-sm font-bold rounded-xl px-4 py-2.5 transition flex items-center justify-center gap-1.5 cursor-pointer border-0">
+          <i class="bi bi-eye-fill"></i>Entrar como este usuario
+        </button>
+        <button onclick="cancelarEdicion()"
+                class="w-full bg-transparent text-slate-400 hover:text-slate-600 text-xs font-semibold rounded-xl px-4 py-1.5 transition cursor-pointer border-0">
+          Cancelar
+        </button>
+      </div>
+    </section>
     {% endif %}
+  </main>
 
-    {% if negocio_activo %}
-    <!-- Paso 1: Buscar Colaborador -->
-    <div class="card border-0 shadow-sm mb-4">
-        <div class="card-body p-3">
-            <h6 class="fw-bold text-dark mb-2.5"><i class="bi bi-search me-1.5 text-primary"></i>1. Busca un colaborador (Tercero)</h6>
-            <div class="position-relative">
-                <input type="text" id="buscar-tercero" class="form-control" placeholder="Escribe el nombre o celular..." autocomplete="off">
-                <div id="buscar-list" class="list-group position-absolute w-100 shadow-sm hidden" style="z-index: 1000; max-height: 200px; overflow-y: auto;"></div>
-            </div>
-        </div>
-    </div>
+  <div id="toast" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-[80] text-white text-xs font-semibold rounded-xl px-4 py-2.5 shadow-lg"></div>
 
-    <!-- Paso 2: Configurar Permisos (Oculto al inicio) -->
-    <div id="card-permisos" class="card border-0 shadow-sm hidden">
-        <div class="card-header bg-white py-3 border-0">
-            <div class="alert alert-primary border-0 p-2.5 mb-0 d-flex align-items-center">
-                <i class="bi bi-person-fill-check me-2.5" style="font-size: 20px;"></i>
-                <div>
-                    <div class="small fw-semibold text-muted mb-0">Otorgando permisos a:</div>
-                    <div class="fw-bold text-dark" id="txt-tercero-confirmado" style="font-size: 15px;">-</div>
-                </div>
-            </div>
-        </div>
-        <div class="card-body pt-0 px-3 pb-3">
-            <h6 class="fw-bold text-dark mb-3"><i class="bi bi-ui-checks me-1.5 text-primary"></i>2. Selecciona las pantallas permitidas</h6>
-            
-            <div class="list-group list-group-flush border rounded-3 overflow-hidden mb-3" id="lista-pantallas">
-                {% for pant in pantallas_disponibles %}
-                <label class="list-group-item d-flex align-items-center justify-content-between p-3" style="cursor: pointer;">
-                    <div class="d-flex align-items-center">
-                        <span class="fs-4 me-3">{{ pant.icono or '🖥️' }}</span>
-                        <div>
-                            <div class="fw-bold text-dark small">{{ pant.nombre }}</div>
-                            <div class="text-muted small" style="font-size: 11px;">Clave de acceso: <code>{{ pant.clave }}</code></div>
-                        </div>
-                    </div>
-                    <input type="checkbox" class="form-check-input check-pantalla" value="{{ pant.id }}" style="width: 1.25rem; height: 1.25rem;">
-                </label>
-                {% endfor %}
-            </div>
-
-            <!-- Botones -->
-            <div class="d-grid gap-2">
-                <button onclick="guardarPermisos()" class="btn btn-primary fw-bold" id="btn-guardar">
-                    <i class="bi bi-check-circle me-1.5"></i>Guardar Permisos
-                </button>
-                <button onclick="cancelarEdicion()" class="btn btn-light text-muted btn-sm border-0">
-                    Cancelar
-                </button>
-            </div>
-        </div>
-    </div>
-    {% endif %}
-</div>
-{% endblock %}
-
-{% block scripts %}
 <script>
-    let selectedTerceroId = null;
-    const activeNegocioId = {% if negocio_activo %}{{ negocio_activo.id }}{% else %}null{% endif %};
+  let selectedTerceroId = null;
+  let selectedTerceroTel = '';
+  const activeNegocioId = {% if negocio_activo %}{{ negocio_activo.id }}{% else %}null{% endif %};
 
-    document.addEventListener('DOMContentLoaded', () => {
-        if (!activeNegocioId) return;
+  function toast(msg, ok) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'fixed bottom-6 left-1/2 -translate-x-1/2 z-[80] text-white text-xs font-semibold rounded-xl px-4 py-2.5 shadow-lg ' + (ok ? 'bg-emerald-600' : 'bg-rose-600');
+    clearTimeout(t._h);
+    t._h = setTimeout(function() { t.className += ' hidden'; }, 3200);
+  }
 
-        const searchInput = document.getElementById('buscar-tercero');
-        const searchList = document.getElementById('buscar-list');
+  document.addEventListener('DOMContentLoaded', function() {
+    if (!activeNegocioId) return;
+    const input = document.getElementById('buscar-tercero');
+    const list = document.getElementById('buscar-list');
+    let timeout = null;
+    let items = [];
+    let active = -1;
 
-        let timeout = null;
-        searchInput.addEventListener('input', () => {
-            clearTimeout(timeout);
-            const q = searchInput.value.trim();
-            if (q.length < 2) {
-                searchList.classList.add('hidden');
-                return;
-            }
-            timeout = setTimeout(() => {
-                fetch(`/api/permisos/buscar-terceros?q=${encodeURIComponent(q)}`)
-                    .then(r => r.json())
-                    .then(data => {
-                        searchList.innerHTML = '';
-                        if (data.results && data.results.length > 0) {
-                            searchList.classList.remove('hidden');
-                            data.results.forEach(item => {
-                                const btn = document.createElement('button');
-                                btn.type = 'button';
-                                btn.className = 'list-group-item list-group-item-action py-2.5 px-3 text-start small d-flex justify-content-between align-items-center';
-                                btn.innerHTML = `
-                                    <span class="fw-bold text-dark">${item.nombre}</span>
-                                    <span class="text-muted small">${item.telefono || 'Sin celular'}</span>
-                                `;
-                                btn.onclick = () => seleccionarTercero(item.id, item.nombre, item.telefono);
-                                searchList.appendChild(btn);
-                            });
-                        } else {
-                            searchList.classList.remove('hidden');
-                            searchList.innerHTML = `<div class="list-group-item text-muted text-center py-3 small">No se encontraron resultados</div>`;
-                        }
-                    });
-            }, 300);
+    function pintar(opciones) {
+      items = opciones;
+      active = -1;
+      list.innerHTML = '';
+      if (!opciones.length) {
+        list.innerHTML = '<div class="px-3.5 py-3 text-xs text-slate-400 text-center">Sin resultados</div>';
+      } else {
+        opciones.forEach(function(it, i) {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'w-full flex items-center justify-between gap-2 px-3.5 py-2.5 text-left hover:bg-slate-50 bg-transparent border-0 cursor-pointer';
+          b.dataset.i = i;
+          const n = document.createElement('span');
+          n.className = 'text-[13px] font-semibold text-slate-800 truncate';
+          n.textContent = it.nombre;
+          const t = document.createElement('span');
+          t.className = 'text-[11px] text-slate-400 shrink-0';
+          t.textContent = it.telefono || 'Sin celular';
+          b.appendChild(n);
+          b.appendChild(t);
+          b.addEventListener('click', function() { seleccionarTercero(it.id, it.nombre, it.telefono); });
+          list.appendChild(b);
         });
+      }
+      list.classList.remove('hidden');
+    }
 
-        // Ocultar lista al hacer clic fuera
-        document.addEventListener('click', (e) => {
-            if (e.target !== searchInput && e.target !== searchList) {
-                searchList.classList.add('hidden');
-            }
-        });
+    function resaltar() {
+      Array.from(list.children).forEach(function(el, i) {
+        el.classList.toggle('bg-indigo-50', i === active);
+      });
+    }
+
+    input.addEventListener('input', function() {
+      clearTimeout(timeout);
+      const q = input.value.trim();
+      if (q.length < 2) { list.classList.add('hidden'); return; }
+      timeout = setTimeout(function() {
+        fetch('/api/permisos/buscar-terceros?q=' + encodeURIComponent(q))
+          .then(function(r) { return r.json(); })
+          .then(function(data) { pintar(data.results || []); });
+      }, 280);
     });
 
-    function seleccionarTercero(id, nombre, telefono) {
-        selectedTerceroId = id;
-        document.getElementById('buscar-list').classList.add('hidden');
-        document.getElementById('buscar-tercero').value = nombre;
-        
-        // Confirmar en tarjeta
-        document.getElementById('txt-tercero-confirmado').textContent = `${nombre} (${telefono || 'Sin celular'})`;
-        
-        // Cargar permisos actuales
-        fetch(`/api/permisos/tercero/${id}/negocio/${activeNegocioId}`)
-            .then(r => r.json())
-            .then(data => {
-                // Limpiar todos los checkboxes
-                document.querySelectorAll('.check-pantalla').forEach(cb => cb.checked = false);
-                
-                // Marcar los activos
-                if (data.pantallas_autorizadas) {
-                    data.pantallas_autorizadas.forEach(pId => {
-                        const cb = document.querySelector(`.check-pantalla[value="${pId}"]`);
-                        if (cb) cb.checked = true;
-                    });
-                }
-                
-                // Mostrar panel de permisos
-                document.getElementById('card-permisos').classList.remove('hidden');
-                document.getElementById('card-permisos').scrollIntoView({ behavior: 'smooth' });
-            });
-    }
+    input.addEventListener('keydown', function(e) {
+      if (list.classList.contains('hidden') || !items.length) return;
+      if (e.key === 'ArrowDown') { e.preventDefault(); active = (active + 1) % items.length; resaltar(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); active = (active - 1 + items.length) % items.length; resaltar(); }
+      else if (e.key === 'Enter' && active >= 0) { e.preventDefault(); const it = items[active]; seleccionarTercero(it.id, it.nombre, it.telefono); }
+      else if (e.key === 'Escape') { list.classList.add('hidden'); }
+    });
 
-    function guardarPermisos() {
-        if (!selectedTerceroId || !activeNegocioId) return;
+    document.addEventListener('click', function(e) {
+      if (!list.contains(e.target) && e.target !== input) list.classList.add('hidden');
+    });
+  });
 
-        const btn = document.getElementById('btn-guardar');
-        btn.disabled = true;
-        btn.innerHTML = `<span class="spinner-border spinner-border-sm me-1.5" role="status"></span>Guardando...`;
-
-        const pantallas = [];
-        document.querySelectorAll('.check-pantalla:checked').forEach(cb => {
-            pantallas.push(parseInt(cb.value));
+  function seleccionarTercero(id, nombre, telefono) {
+    selectedTerceroId = id;
+    selectedTerceroTel = telefono || '';
+    document.getElementById('buscar-list').classList.add('hidden');
+    document.getElementById('buscar-tercero').value = nombre;
+    document.getElementById('txt-tercero-confirmado').textContent = nombre + ' (' + (telefono || 'Sin celular') + ')';
+    fetch('/api/permisos/tercero/' + id + '/negocio/' + activeNegocioId)
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        document.querySelectorAll('.check-pantalla').forEach(function(cb) { cb.checked = false; });
+        (data.pantallas_autorizadas || []).forEach(function(pId) {
+          const cb = document.querySelector('.check-pantalla[value="' + pId + '"]');
+          if (cb) cb.checked = true;
         });
+        document.getElementById('card-permisos').classList.remove('hidden');
+        document.getElementById('card-permisos').scrollIntoView({ behavior: 'smooth' });
+      });
+  }
 
-        fetch('/api/permisos/guardar', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                tercero_id: selectedTerceroId,
-                negocio_id: activeNegocioId,
-                pantallas: pantallas
-            })
-        })
-        .then(r => r.json())
-        .then(data => {
-            btn.disabled = false;
-            btn.innerHTML = `<i class="bi bi-check-circle me-1.5"></i>Guardar Permisos`;
-            
-            if (data.ok) {
-                alert('Permisos guardados con éxito');
-                cancelarEdicion();
-            } else {
-                alert('Error al guardar permisos: ' + (data.error || 'Desconocido'));
-            }
-        })
-        .catch(err => {
-            btn.disabled = false;
-            btn.innerHTML = `<i class="bi bi-check-circle me-1.5"></i>Guardar Permisos`;
-            console.error(err);
-        });
-    }
+  function guardarPermisos() {
+    if (!selectedTerceroId || !activeNegocioId) return;
+    const btn = document.getElementById('btn-guardar');
+    btn.disabled = true;
+    const pantallas = [];
+    document.querySelectorAll('.check-pantalla:checked').forEach(function(cb) { pantallas.push(parseInt(cb.value)); });
+    fetch('/api/permisos/guardar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tercero_id: selectedTerceroId, negocio_id: activeNegocioId, pantallas: pantallas })
+    })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        btn.disabled = false;
+        if (data.ok) { toast('Permisos guardados', true); cancelarEdicion(); }
+        else { toast('Error: ' + (data.error || 'desconocido'), false); }
+      })
+      .catch(function(err) { btn.disabled = false; console.error(err); });
+  }
 
-    function cancelarEdicion() {
-        selectedTerceroId = null;
-        document.getElementById('buscar-tercero').value = '';
-        document.getElementById('card-permisos').classList.add('hidden');
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
+  function entrarComo() {
+    if (!selectedTerceroId || !activeNegocioId) return;
+    const btn = document.getElementById('btn-su');
+    btn.disabled = true;
+    fetch('/api/su/entrar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tercero_id: selectedTerceroId, negocio_id: activeNegocioId })
+    })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.ok) { window.location.href = '/portal'; }
+        else { btn.disabled = false; toast('Error: ' + (data.error || 'desconocido'), false); }
+      })
+      .catch(function(err) { btn.disabled = false; console.error(err); });
+  }
+
+  function cancelarEdicion() {
+    selectedTerceroId = null;
+    document.getElementById('buscar-tercero').value = '';
+    document.getElementById('card-permisos').classList.add('hidden');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
 </script>
-{% endblock %}
+</body>
+</html>

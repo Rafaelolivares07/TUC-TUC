@@ -110,7 +110,7 @@ def reproducir_nativo(ruta_wav: str, bloqueante: bool = True):
     winsound.PlaySound(ruta_wav, flags)
 
 
-def adquirir_voz(timeout=15):
+def adquirir_voz(timeout=180):
     """Toma el turno de voz compartido con los demas agentes.
 
     Si el turno lleva tomado mas de CERROJO_VIEJO segundos se considera

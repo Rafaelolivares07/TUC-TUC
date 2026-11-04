@@ -9,8 +9,9 @@ if (-not (Test-Path $mp3)) { exit 0 }
 $lockDir = Join-Path $env:TEMP "tuctuc_voz_playing.lock"
 $staleSec = 600
 $gapSec = 5
+$waitSec = 180
 $waited = 0
-while ((Test-Path $lockDir) -and $waited -lt 15) {
+while ((Test-Path $lockDir) -and $waited -lt $waitSec) {
     try {
         $edad = ((Get-Date) - (Get-Item $lockDir).LastWriteTime).TotalSeconds
         if ($edad -gt $staleSec) {

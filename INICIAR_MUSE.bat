@@ -116,8 +116,9 @@ where wt >nul 2>nul
 if %errorlevel% neq 0 goto :sin_wt
 echo   wt --title "!ETIQUETA!" --suppressApplicationTitle -d "%CD%" cmd /k !MUSECMD! --yolo
 wt --title "!ETIQUETA!" --suppressApplicationTitle -d "%CD%" cmd /k !MUSECMD! --yolo
-echo WT_EXIT=%errorlevel%>>"%LOG%"
-if %errorlevel% neq 0 goto :wt_fallo
+set "WTX=%errorlevel%"
+(echo WT_EXIT=!WTX!)>>"%LOG%"
+if !WTX! neq 0 goto :wt_fallo
 echo   Listo. Trabaja en la pestana !ETIQUETA!.
 echo FIN_OK>>"%LOG%"
 exit /b 0

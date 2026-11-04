@@ -30,7 +30,7 @@ RUTA_CONFIG = os.path.join(DIR_ACTUAL, 'voces_config.json')
 
 # Turno unico de voz compartido con reproducir.ps1 (muse).
 CERROJO_VOZ = os.path.join(tempfile.gettempdir(), 'tuctuc_voz_playing.lock')
-SILENCIO_VOZ = 5
+SILENCIO_VOZ = 15
 CERROJO_VIEJO = 600
 
 CONFIG_DEFAULT = {
@@ -110,12 +110,12 @@ def reproducir_nativo(ruta_wav: str, bloqueante: bool = True):
     winsound.PlaySound(ruta_wav, flags)
 
 
-def adquirir_voz(timeout=180):
+def adquirir_voz(timeout=None):
     """Toma el turno de voz compartido con los demas agentes.
 
     Si el turno lleva tomado mas de CERROJO_VIEJO segundos se considera
-    colgado y se rompe. Retorna True con el turno en mano, False si se
-    acabo el tiempo de espera.
+    colgado y se rompe. Sin timeout espera hasta que el turno se libere
+    (fin + 15s); con timeout retorna False si se acaba.
     """
     t0 = time.time()
     while True:
@@ -136,7 +136,7 @@ def adquirir_voz(timeout=180):
                     pass
         except OSError:
             pass
-        if time.time() - t0 >= timeout:
+        if timeout is not None and time.time() - t0 >= timeout:
             return False
         time.sleep(0.25)
 

@@ -8,10 +8,8 @@ if (-not (Test-Path $mp3)) { exit 0 }
 
 $lockDir = Join-Path $env:TEMP "tuctuc_voz_playing.lock"
 $staleSec = 600
-$gapSec = 5
-$waitSec = 180
-$waited = 0
-while ((Test-Path $lockDir) -and $waited -lt $waitSec) {
+$gapSec = 15
+while (Test-Path $lockDir) {
     try {
         $edad = ((Get-Date) - (Get-Item $lockDir).LastWriteTime).TotalSeconds
         if ($edad -gt $staleSec) {
@@ -20,7 +18,6 @@ while ((Test-Path $lockDir) -and $waited -lt $waitSec) {
         }
     } catch { }
     Start-Sleep -Milliseconds 250
-    $waited += 0.25
 }
 
 # Marcar inicio de turno de audio

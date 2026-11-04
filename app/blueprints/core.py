@@ -1881,19 +1881,26 @@ def _asegurar_pantallas_catalogo(conn):
     for (_clave, _nombre, _ep, _icono, _mod, _q, _tpl, _kws, _ord, _ot) in _CATALOGO_PANTALLAS:
         _k = _json.dumps(_kws, ensure_ascii=False)
         _sug = _clave in _SUGERIDOS
+        _por_clave = conn.execute(
+            "SELECT 1 FROM pantallas WHERE clave = %s LIMIT 1", (_clave,)).fetchone()
         if _q:
             _w = "endpoint = %s AND query = %s"
             _wp = (_ep, _q)
         else:
             _w = "endpoint = %s AND (query IS NULL OR query = '')"
             _wp = (_ep,)
-        _existe = conn.execute(
-            "SELECT 1 FROM pantallas WHERE " + _w + " LIMIT 1", _wp).fetchone()
-        if _existe:
-            # Autoritativo: la semilla manda en contenido (respeta clave y otorgable)
+        if _por_clave:
+            # Autoritativo por clave (repara endpoint/query cruzados)
+            conn.execute(
+                """UPDATE pantallas SET nombre = %s, endpoint = %s, icono = %s, modulo = %s,
+                          query = %s, url_tpl = %s, keywords = %s, orden = %s, sugerido = %s
+                   WHERE clave = %s""",
+                (_nombre, _ep, _icono, _mod, _q, _tpl, _k, _ord, _sug, _clave))
+        elif conn.execute("SELECT 1 FROM pantallas WHERE " + _w + " LIMIT 1", _wp).fetchone():
+            # Autoritativo por endpoint (respeta clave y otorgable)
             conn.execute(
                 """UPDATE pantallas SET nombre = %s, modulo = %s, url_tpl = %s,
-                          keywords = %s, icono = %s, orden = %s, sugerido = COALESCE(sugerido, FALSE) OR %s
+                          keywords = %s, icono = %s, orden = %s, sugerido = %s
                    WHERE """ + _w,
                 (_nombre, _mod, _tpl, _k, _icono, _ord, _sug) + tuple(_wp))
         else:
@@ -1903,6 +1910,11 @@ def _asegurar_pantallas_catalogo(conn):
                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                    ON CONFLICT (clave) DO NOTHING""",
                 (_clave, _nombre, _ep, _icono, _mod, _q, _tpl, _k, _ord, _ot, _sug))
+        conn.execute(
+            """DELETE FROM pantallas WHERE """ + _w + """
+                AND clave IS DISTINCT FROM %s
+                AND NOT EXISTS (SELECT 1 FROM permisos_terceros WHERE pantalla_id = pantallas.id)""",
+            tuple(_wp) + (_clave,))
     conn.execute("""UPDATE pantallas SET clave = 'gestion_permisos'
         WHERE endpoint = 'core.core_gestion_permisos' AND clave IS DISTINCT FROM 'gestion_permisos'
         AND NOT EXISTS (SELECT 1 FROM pantallas WHERE clave = 'gestion_permisos')""")

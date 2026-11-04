@@ -1896,28 +1896,29 @@ def _asegurar_pantallas_catalogo(conn):
                           query = %s, url_tpl = %s, keywords = %s, orden = %s, sugerido = %s
                    WHERE clave = %s""",
                 (_nombre, _ep, _icono, _mod, _q, _tpl, _k, _ord, _sug, _clave))
-        elif conn.execute("SELECT 1 FROM pantallas WHERE " + _w + " LIMIT 1", _wp).fetchone():
-            # Autoritativo por endpoint (respeta clave y otorgable)
-            conn.execute(
-                """UPDATE pantallas SET nombre = %s, modulo = %s, url_tpl = %s,
-                          keywords = %s, icono = %s, orden = %s, sugerido = %s
-                   WHERE """ + _w,
-                (_nombre, _mod, _tpl, _k, _icono, _ord, _sug) + tuple(_wp))
         else:
-            conn.execute(
-                """INSERT INTO pantallas (clave, nombre, endpoint, icono, modulo, query, url_tpl,
-                                          keywords, orden, otorgable, sugerido)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                   ON CONFLICT (clave) DO NOTHING""",
-                (_clave, _nombre, _ep, _icono, _mod, _q, _tpl, _k, _ord, _ot, _sug))
+            _row = conn.execute(
+                "SELECT id FROM pantallas WHERE " + _w + " ORDER BY id LIMIT 1", _wp).fetchone()
+            if _row:
+                # Autoritativo por endpoint (unifica clave; respeta otorgable)
+                conn.execute(
+                    """UPDATE pantallas SET clave = %s, nombre = %s, modulo = %s, url_tpl = %s,
+                              keywords = %s, icono = %s, orden = %s, sugerido = %s
+                       WHERE id = %s""",
+                    (_clave, _nombre, _mod, _tpl, _k, _icono, _ord, _sug, _row['id']))
+            else:
+                conn.execute(
+                    """INSERT INTO pantallas (clave, nombre, endpoint, icono, modulo, query, url_tpl,
+                                              keywords, orden, otorgable, sugerido)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                       ON CONFLICT (clave) DO NOTHING""",
+                    (_clave, _nombre, _ep, _icono, _mod, _q, _tpl, _k, _ord, _ot, _sug))
         conn.execute(
             """DELETE FROM pantallas WHERE """ + _w + """
                 AND clave IS DISTINCT FROM %s
                 AND NOT EXISTS (SELECT 1 FROM permisos_terceros WHERE pantalla_id = pantallas.id)""",
             tuple(_wp) + (_clave,))
-    conn.execute("""UPDATE pantallas SET clave = 'gestion_permisos'
-        WHERE endpoint = 'core.core_gestion_permisos' AND clave IS DISTINCT FROM 'gestion_permisos'
-        AND NOT EXISTS (SELECT 1 FROM pantallas WHERE clave = 'gestion_permisos')""")
+
     try:
         conn.commit()
     except Exception:

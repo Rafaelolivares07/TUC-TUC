@@ -1538,7 +1538,8 @@ def core_gestion_permisos():
         pant_disp.append(d)
     return render_template('gestion_permisos.html',
                            nombre=session.get('nombre', ''),
-                           pantallas_disponibles=pant_disp)
+                           pantallas_disponibles=pant_disp,
+                           rol=role)
 
 
 @bp.route('/api/permisos/buscar-terceros')
@@ -1701,29 +1702,11 @@ def api_permisos_guardar():
 
 
 def _su_puede_simular(conn, ses, tercero_id, negocio_id):
-    """Indica si la sesion puede entrar como (tercero, negocio)."""
+    """Solo el superadmin entra como (tercero, negocio)."""
+    if ses.get('rol') not in ('Administrador',):
+        return False, 'Solo el superadministrador puede simular usuarios'
     if ses.get('_su_original'):
         return False, 'Ya estas simulando: sal primero'
-    rol = ses.get('rol')
-    yo = _tercero_de_sesion(conn, ses)
-    if rol == 'ClienteVFP':
-        return False, 'Cuenta VFP sin acceso'
-    es_super = rol in ('Administrador',)
-    if not es_super:
-        if not yo:
-            return False, 'No autorizado'
-        link = conn.execute(
-            'SELECT 1 FROM terceros_negocios WHERE tercero_id = %s AND negocio_id = %s AND activo = TRUE',
-            (yo, negocio_id)).fetchone()
-        if not link:
-            return False, 'No autorizado en este negocio'
-        gest = conn.execute("""
-            SELECT 1 FROM permisos_terceros pt
-            JOIN pantallas p ON p.id = pt.pantalla_id
-            WHERE pt.tercero_id = %s AND pt.negocio_id = %s AND p.clave = 'gestion_permisos'
-        """, (yo, negocio_id)).fetchone()
-        if not gest:
-            return False, 'No tienes gestion de accesos'
     tgt = conn.execute(
         'SELECT id, nombre, telefono FROM terceros WHERE id = %s', (tercero_id,)).fetchone()
     if not tgt:
@@ -1733,15 +1716,6 @@ def _su_puede_simular(conn, ses, tercero_id, negocio_id):
         (tercero_id, negocio_id)).fetchone()
     if not vlink:
         return False, 'Sin vinculo con el negocio'
-    if not es_super:
-        mias = {r['pantalla_id'] for r in conn.execute(
-            'SELECT pantalla_id FROM permisos_terceros WHERE tercero_id = %s AND negocio_id = %s',
-            (yo, negocio_id)).fetchall()}
-        suyas = {r['pantalla_id'] for r in conn.execute(
-            'SELECT pantalla_id FROM permisos_terceros WHERE tercero_id = %s AND negocio_id = %s',
-            (tercero_id, negocio_id)).fetchall()}
-        if not suyas <= mias:
-            return False, 'No puedes simular accesos que no posees'
     return True, ''
 
 

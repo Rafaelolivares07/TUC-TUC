@@ -31,7 +31,7 @@
         <kbd class="px-1.5 py-0.5 bg-white border border-gray-200 rounded font-mono text-[10px] text-slate-400">Ctrl</kbd>
         <kbd class="px-1.5 py-0.5 bg-white border border-gray-200 rounded font-mono text-[10px] text-slate-400">K</kbd>
       </div>
-      <button type="button" id="omni-mic" title="Hablar para buscar"
+      <button type="button" id="omni-mic" title="Hablar para buscar (Ctrl+M)"
               class="shrink-0 p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition cursor-pointer">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15a3 3 0 003-3V6a3 3 0 10-6 0v6a3 3 0 003 3z"/>
@@ -79,6 +79,7 @@
         <span><kbd class="px-1.5 py-0.5 bg-white border border-gray-200 rounded font-mono text-[10px]">↑</kbd> <kbd class="px-1.5 py-0.5 bg-white border border-gray-200 rounded font-mono text-[10px]">↓</kbd> Navegar</span>
         <span><kbd class="px-1.5 py-0.5 bg-white border border-gray-200 rounded font-mono text-[10px]">Enter</kbd> Seleccionar</span>
         <span><kbd class="px-1.5 py-0.5 bg-white border border-gray-200 rounded font-mono text-[10px]">Esc</kbd> Cerrar</span>
+        <span><kbd class="px-1.5 py-0.5 bg-white border border-gray-200 rounded font-mono text-[10px]">Ctrl</kbd> <kbd class="px-1.5 py-0.5 bg-white border border-gray-200 rounded font-mono text-[10px]">M</kbd> Hablar</span>
       </div>
       <span class="text-[10px] font-semibold text-gray-400">TUC TUC Omnibox</span>
     </div>
@@ -1004,13 +1005,16 @@
     }
   });
 
-  // Atajo global Ctrl+K o Cmd+K
+  // Atajos globales: Ctrl+K enfoca, Ctrl+M habla (Cmd en Mac)
   document.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
       e.preventDefault();
       input.focus();
       input.select();
       abrirDropdown();
+    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'm') {
+      e.preventDefault();
+      try { if (micBtn) micBtn.click(); } catch (err) {}
     }
   });
 

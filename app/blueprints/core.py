@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime  # noqa
 
 import requests as http_requests
-from flask import (Blueprint, jsonify, redirect, render_template,
+from flask import (abort, Blueprint, jsonify, redirect, render_template,
                    request, session, url_for)
 
 from ..db import get_db_connection
@@ -1320,6 +1320,29 @@ def _tercero_de_sesion(conn, ses):
         return None
     return row['id'] if row else None
 
+
+def _negocio_activo_de_sesion(conn, ses, tercero_id):
+    """active_negocio_id, o primer negocio vinculado (molde inject_negocios_context).
+
+    Las sesiones magic-link/PIN/SU no siempre traen negocio fijado; el contexto
+    lo cura al renderizar, pero el guardian corre antes y debe resolver igual."""
+    nid = ses.get('active_negocio_id')
+    if nid:
+        return nid
+    if not tercero_id:
+        return None
+    try:
+        row = conn.execute(
+            "SELECT negocio_id AS id FROM terceros_negocios WHERE tercero_id = %s AND activo = TRUE ORDER BY negocio_id LIMIT 1",
+            (tercero_id,)).fetchone()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return None
+    return row['id'] if row else None
+
 @bp.app_context_processor
 def inject_negocios_context():
     if 'usuario_id' not in session:
@@ -1473,18 +1496,25 @@ def core_gestion_permisos():
     
     # Si no es administrador global, validar que tenga el permiso 'gestion_permisos' para el negocio activo
     if role not in ('Administrador',):
-        if not active_negocio_id or not tercero_id:
-            abort(403)
         from ..db import get_db_connection
         conn = get_db_connection()
-        has_perm = conn.execute("""
-            SELECT 1 FROM permisos_terceros pt
-            JOIN pantallas p ON p.id = pt.pantalla_id
-            WHERE pt.tercero_id = %s AND pt.negocio_id = %s AND p.clave = 'gestion_permisos'
-        """, (tercero_id, active_negocio_id)).fetchone()
-        conn.close()
-        if not has_perm:
-            abort(403)
+        try:
+            tercero_id = _tercero_de_sesion(conn, session)
+            active_negocio_id = _negocio_activo_de_sesion(conn, session, tercero_id)
+            if not active_negocio_id or not tercero_id:
+                abort(403)
+            has_perm = conn.execute("""
+                SELECT 1 FROM permisos_terceros pt
+                JOIN pantallas p ON p.id = pt.pantalla_id
+                WHERE pt.tercero_id = %s AND pt.negocio_id = %s AND p.clave = 'gestion_permisos'
+            """, (tercero_id, active_negocio_id)).fetchone()
+            if not has_perm:
+                abort(403)
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
             
     # Obtener las pantallas que este usuario tiene derecho a asignar
     from ..db import get_db_connection
@@ -1539,12 +1569,13 @@ def api_permisos_obtener(tercero_id, negocio_id):
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
         
     role = session.get('rol')
-    caller_tercero_id = session.get('chat_tercero_id')
     if role not in ('Administrador',):
-        if not caller_tercero_id:
-            return jsonify({'ok': False, 'error': 'No autorizado'}), 403
         from ..db import get_db_connection
         conn = get_db_connection()
+        caller_tercero_id = _tercero_de_sesion(conn, session)
+        if not caller_tercero_id:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'No autorizado'}), 403
         link = conn.execute(
             "SELECT 1 FROM terceros_negocios WHERE tercero_id = %s AND negocio_id = %s AND activo = TRUE",
             (caller_tercero_id, negocio_id)
@@ -1587,6 +1618,7 @@ def api_permisos_guardar():
     conn = get_db_connection()
     try:
         if role not in ('Administrador',):
+            caller_tercero_id = _tercero_de_sesion(conn, session)
             if not caller_tercero_id:
                 conn.close()
                 return jsonify({'ok': False, 'error': 'No autorizado'}), 403
@@ -1839,7 +1871,7 @@ def _inyectar_cinta_su_global(response):
 def check_dynamic_permissions():
     if 'usuario_id' not in session:
         return
-        
+
     endpoint = request.endpoint
     if not endpoint:
         return
@@ -1853,52 +1885,54 @@ def check_dynamic_permissions():
             return jsonify({'ok': False, 'error': 'Cuenta VFP sin acceso web'}), 403
         abort(403)
 
-        
     # Verificar si este endpoint corresponde a una pantalla registrada
-    from ..db import get_db_connection
     conn = get_db_connection()
-    pantalla = conn.execute(
-        "SELECT id, clave, nombre FROM pantallas WHERE endpoint = %s AND otorgable IS NOT FALSE LIMIT 1",
-        (endpoint,)
-    ).fetchone()
-    conn.close()
-    
-    if not pantalla:
-        return
+    try:
+        pantalla = conn.execute(
+            "SELECT id, clave, nombre FROM pantallas WHERE endpoint = %s AND otorgable IS NOT FALSE LIMIT 1",
+            (endpoint,)
+        ).fetchone()
 
-    # Excepción temporal: Inventario permanece accesible mientras se define su autorización.
-    # Visor de manuales: se auto-chequea por slug (anonimo = publico, como antes).
-    if endpoint in ('inventarios.admin_inventario', 'inventarios.admin_inventario_fisico',
-                    'core.core_ver_manual'):
-        return
-        
-    # 1. Superadmin bypass completo
-    role = session.get('rol')
-    if role in ('Administrador',):
-        return
-        
-    tercero_id = session.get('chat_tercero_id')
-    negocio_id = session.get('active_negocio_id')
-    
-    if not tercero_id or not negocio_id:
+        if not pantalla:
+            return
+
+        # Excepción temporal: Inventario permanece accesible mientras se define su autorización.
+        # Visor de manuales: se auto-chequea por slug (anonimo = publico, como antes).
+        if endpoint in ('inventarios.admin_inventario', 'inventarios.admin_inventario_fisico',
+                        'core.core_ver_manual'):
+            return
+
+        # 1. Superadmin bypass completo
+        role = session.get('rol')
+        if role in ('Administrador',):
+            return
+
+        # Tercero/negocio con respaldo magic-link/PIN/SU (la sesion fiel no trae chat_tercero_id)
+        tercero_id = _tercero_de_sesion(conn, session)
+        negocio_id = _negocio_activo_de_sesion(conn, session, tercero_id)
+
+        if not tercero_id or not negocio_id:
+            abort(403)
+
+        # 2. Consultar si tiene el permiso asignado
+        permiso = conn.execute("""
+            SELECT 1 FROM permisos_terceros pt JOIN pantallas p ON p.id = pt.pantalla_id
+            WHERE pt.tercero_id = %s AND pt.negocio_id = %s AND p.endpoint = %s
+        """, (tercero_id, negocio_id, endpoint)).fetchone()
+
+        if permiso:
+            return
+
+        # 3. Periodo de gracia para usuarios existentes (Tercero ID <= 107)
+        if tercero_id <= 107:
+            return
+
         abort(403)
-        
-    # 2. Consultar si tiene el permiso asignado
-    conn = get_db_connection()
-    permiso = conn.execute("""
-        SELECT 1 FROM permisos_terceros pt JOIN pantallas p ON p.id = pt.pantalla_id
-        WHERE pt.tercero_id = %s AND pt.negocio_id = %s AND p.endpoint = %s
-    """, (tercero_id, negocio_id, endpoint)).fetchone()
-    conn.close()
-    
-    if permiso:
-        return
-        
-    # 3. Periodo de gracia para usuarios existentes (Tercero ID <= 107)
-    if tercero_id <= 107:
-        return
-        
-    abort(403)
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 
 def _url_pantalla(fila, negocio_id, slug):
@@ -2140,21 +2174,24 @@ def core_ver_manual(manual_slug):
     from ..buscador_motor import MANUALES_MAPA
     
     if 'usuario_id' in session and session.get('rol') != 'Administrador':
-        _tid = session.get('chat_tercero_id')
-        _neg = session.get('active_negocio_id')
-        if not _tid or not _neg:
-            abort(403)
         from ..db import get_db_connection as _g2
         _cx = _g2()
         try:
+            _tid = _tercero_de_sesion(_cx, session)
+            _neg = _negocio_activo_de_sesion(_cx, session, _tid)
+            if not _tid or not _neg:
+                abort(403)
             _pm = _cx.execute(
                 """SELECT 1 FROM permisos_terceros pt JOIN pantallas p ON p.id = pt.pantalla_id
                    WHERE pt.tercero_id = %s AND pt.negocio_id = %s AND p.clave = %s""",
                 (_tid, _neg, 'manual_' + manual_slug)).fetchone()
+            if not _pm and _tid > 107:
+                abort(403)
         finally:
-            _cx.close()
-        if not _pm and _tid > 107:
-            abort(403)
+            try:
+                _cx.close()
+            except Exception:
+                pass
     archivo_info = MANUALES_MAPA.get(manual_slug)
     if not archivo_info:
         nombre_archivo = f"{manual_slug}_usuario.md"

@@ -211,6 +211,8 @@ def create_app():
                     request.path.startswith('/entrar') or request.path.startswith('/admin/login') or
                     request.path == '/sw.js'):
                 return
+            if request.path == '/inicio':
+                return redirect('/portal')
             if request.path in ('/', '/portal'):
                 if 'usuario_id' not in session and 'rol' not in session:
                     return redirect('/entrar')

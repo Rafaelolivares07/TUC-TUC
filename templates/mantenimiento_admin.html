@@ -946,7 +946,9 @@
       // Configurar estado del botón de modificar
       const btnModificar = document.getElementById('btn-aud-modificar');
       if (btnModificar) {
-        if (d.tipo_movimiento === 'venta' || tipo.toLowerCase() === 'pedido_venta' || tipo.toLowerCase() === 'ventas') {
+        const tipoStr = String(tipo || '').toLowerCase();
+        const movStr = String(d.tipo_movimiento || '').toLowerCase();
+        if (movStr === 'venta' || tipoStr === 'pedido_venta' || tipoStr === 'ventas') {
           btnModificar.disabled = true;
           btnModificar.classList.add('opacity-40', 'cursor-not-allowed');
           btnModificar.title = 'Las facturas de venta no se pueden modificar directamente desde aquí.';
@@ -1161,28 +1163,42 @@
   }
 
   function modificarDocumentoAuditor() {
-    if (!auditorDocumentoSeleccionado) return;
-    const { tipo, numero, terceroId, terceroNombre, tipo_movimiento, has_inventario, comprobante_id } = auditorDocumentoSeleccionado;
+    let sel = auditorDocumentoSeleccionado;
+    if (!sel) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const qTipo = urlParams.get('tipo_documento') || document.getElementById('auditor-filtro-tipo')?.value;
+      const qNum = urlParams.get('documento_numero') || document.getElementById('auditor-directo-num')?.value;
+      const qTercero = urlParams.get('tercero_id') || '';
+      if (qNum) {
+        sel = { tipo: qTipo, numero: qNum, terceroId: qTercero, has_inventario: true };
+      }
+    }
+    if (!sel) {
+      toast('No se ha seleccionado ningún documento para modificar.', false);
+      return;
+    }
+    const { tipo, numero, terceroId, terceroNombre, tipo_movimiento, has_inventario, comprobante_id } = sel;
     
-    const tipoLower = (tipo || '').toLowerCase();
-    if (tipo_movimiento === 'venta' || tipoLower === 'pedido_venta' || tipoLower === 'ventas') {
+    const tipoLower = String(tipo || '').toLowerCase();
+    const movLower = String(tipo_movimiento || '').toLowerCase();
+    if (movLower === 'venta' || tipoLower === 'pedido_venta' || tipoLower === 'ventas') {
       toast('Las facturas de venta no se pueden modificar directamente desde aquí.', false);
       return;
     }
 
-    if (tipo_movimiento === 'produccion' || tipoLower === 'produccion') {
+    if (movLower === 'produccion' || tipoLower === 'produccion') {
       window.location.href = `/produccion/${NEGOCIO_ID}`;
       return;
     }
     
-    if (has_inventario || (tipo_movimiento && tipo_movimiento.toLowerCase() === 'entrada')) {
+    if (has_inventario || movLower === 'entrada') {
       window.location.href = `/entradas/${NEGOCIO_ID}?tipo_doc=${encodeURIComponent(tipo || '')}&num_doc=${encodeURIComponent(numero || '')}&prov_id=${encodeURIComponent(terceroId || '')}&prov_nom=${encodeURIComponent(terceroNombre || '')}`;
     } else {
       let extra = '';
       if (comprobante_id) {
         extra = `&comprobante_id=${comprobante_id}`;
       }
-      window.location.href = `/admin/contabilidad/${NEGOCIO_ID}?tab=manual&tipo_doc=${encodeURIComponent(tipo)}&num_doc=${encodeURIComponent(numero)}${extra}`;
+      window.location.href = `/admin/contabilidad/${NEGOCIO_ID}?tab=manual&tipo_doc=${encodeURIComponent(tipo || '')}&num_doc=${encodeURIComponent(numero || '')}${extra}`;
     }
   }
 

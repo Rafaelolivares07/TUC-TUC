@@ -11,9 +11,9 @@
     </div>
     
     <input type="text" id="omni-input" style="scroll-margin-top:64px" 
-           placeholder="" aria-label="Buscar" 
+           placeholder="Clic aquí o Ctrl+K para buscar" aria-label="Buscar" 
            autocomplete="off" spellcheck="false"
-           class="w-full h-full bg-transparent border-0 outline-none text-sm sm:text-base font-medium text-slate-800 p-0 m-0">
+           class="w-full h-full bg-transparent border-0 outline-none text-sm sm:text-base font-medium text-slate-800 placeholder-slate-400 p-0 m-0">
     <!-- Spinner de carga -->
     <div id="omni-loading" class="hidden shrink-0 ms-2 text-indigo-500 animate-spin">
       <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none">
@@ -27,31 +27,30 @@
   <div class="flex items-center gap-2 px-3 sm:px-4 pt-1.5">
     <div id="omni-guia" class="flex-1 min-w-0 text-left text-[11px] font-medium text-slate-500">Busca pantallas, pestañas o manuales de ayuda.</div>
     <div class="flex items-center gap-0.5 shrink-0">
-      <div id="omni-shortcut-badge" class="hidden sm:flex items-center gap-1 me-1">
-        <kbd class="px-1.5 py-0.5 bg-white border border-gray-200 rounded font-mono text-[10px] text-slate-400">Ctrl</kbd>
-        <kbd class="px-1.5 py-0.5 bg-white border border-gray-200 rounded font-mono text-[10px] text-slate-400">K</kbd>
-      </div>
-      <button type="button" id="omni-mic" title="Hablar para buscar (Ctrl+M)"
-              class="shrink-0 p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition cursor-pointer">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15a3 3 0 003-3V6a3 3 0 10-6 0v6a3 3 0 003 3z"/>
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 10v2a7 7 0 01-14 0v-2m7 9v3"/>
-        </svg>
-      </button>
+      <span id="omni-mic-wrap" class="flex flex-col items-center leading-none">
+        <button type="button" id="omni-mic" title="Hablar para buscar (Ctrl+M)"
+                class="shrink-0 p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition cursor-pointer">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15a3 3 0 003-3V6a3 3 0 10-6 0v6a3 3 0 003 3z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 10v2a7 7 0 01-14 0v-2m7 9v3"/>
+          </svg>
+        </button>
+        <span id="omni-mic-atajo" class="text-[9px] font-bold text-slate-300 mt-0.5 select-none">Ctrl+M</span>
+      </span>
       <button type="button" id="omni-mute" title="Silenciar al buscador"
               class="shrink-0 p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition cursor-pointer">
-        <svg id="omni-mute-icon-on" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg id="omni-mute-icon-on" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5L6 9H3v6h3l5 4V5z"/>
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.5 8.5a5 5 0 010 7M18 6a8.5 8.5 0 010 12"/>
         </svg>
-        <svg id="omni-mute-icon-off" class="hidden w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg id="omni-mute-icon-off" class="hidden w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5L6 9H3v6h3l5 4V5z"/>
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M22 9l-6 6M16 9l6 6"/>
         </svg>
       </button>
       <button type="button" id="omni-voz-toggle" title="Elegir voz" aria-expanded="false" aria-controls="omni-voz"
-              class="shrink-0 p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition cursor-pointer">
-        <svg id="omni-voz-chevron" class="w-4 h-4 transition-transform duration-150" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              class="shrink-0 p-1 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition cursor-pointer">
+        <svg id="omni-voz-chevron" class="w-3 h-3 transition-transform duration-150" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
         </svg>
       </button>
@@ -158,8 +157,24 @@
     omniPararAudio();
     try { if (window.speechSynthesis) speechSynthesis.cancel(); } catch (e) {}
   }
+  let omniGuiaT1 = null, omniGuiaT2 = null;
+  function omniGuiaActividad() {
+    try {
+      if (!guiaEl) return;
+      if (omniGuiaT1) clearTimeout(omniGuiaT1);
+      if (omniGuiaT2) clearTimeout(omniGuiaT2);
+      guiaEl.classList.remove('text-slate-300');
+      guiaEl.classList.add('text-slate-500');
+      omniGuiaT1 = setTimeout(() => {
+        try { guiaEl.classList.remove('text-slate-500'); guiaEl.classList.add('text-slate-300'); } catch (e) {}
+      }, 60000);
+      omniGuiaT2 = setTimeout(() => {
+        try { guiaEl.textContent = ''; } catch (e) {}
+      }, 180000);
+    } catch (e) {}
+  }
   function omniHablar(texto) {
-    try { guiaEl.textContent = texto; guiaEl.classList.remove('hidden'); } catch (e) {}
+    try { guiaEl.textContent = texto; guiaEl.classList.remove('hidden'); omniGuiaActividad(); } catch (e) {}
     if (omniMudo()) return;
     const seq = ++omniVozSeq;
     omniCallar();
@@ -229,7 +244,7 @@
     omniEscuchando = false;
     omniPintarMic();
   }
-  if (!SR && micBtn) { try { micBtn.style.display = 'none'; } catch (e) {} }
+  if (!SR && micBtn) { try { (document.getElementById('omni-mic-wrap') || micBtn).style.display = 'none'; } catch (e) {} }
   if (micBtn) micBtn.addEventListener('click', (ev) => {
     ev.stopPropagation();
     if (omniMicHoldOff && Date.now() - omniMicHoldOff < 2000) { omniMicHoldOff = 0; return; }
@@ -957,6 +972,7 @@
   input.addEventListener('input', () => {
     vistaDetalle = false;
     omniCallar();
+    omniGuiaActividad();
     clearTimeout(debounceTimer);
     const q = input.value.trim();
     if (q.length < 2) {
@@ -1055,5 +1071,6 @@
   omniPintarMute();
   omniPintarMic();
   omniPintarVozDespliegue();
+  omniGuiaActividad();
 })();
 </script>

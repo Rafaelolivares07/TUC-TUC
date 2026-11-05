@@ -205,7 +205,7 @@
           <div class="flex items-center gap-2">
             <div class="relative flex-1">
               <i class="bi bi-search absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-              <input id="auditor-tercero" type="text" placeholder="Escribe el nombre o documento del cliente o proveedor..." autocomplete="off"
+              <input id="auditor-tercero" type="text" onfocus="this.select()" placeholder="Escribe el nombre o documento del cliente o proveedor..." autocomplete="off"
                      class="w-full bg-slate-50 focus:bg-white border border-slate-200 rounded-xl pl-9 pr-3 py-2.5 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all">
               <div id="auditor-tercero-list" class="ac-list hidden"></div>
               <input type="hidden" id="auditor-tercero-id">
@@ -236,7 +236,7 @@
               <option value="todos">Todos los tipos</option>
             </select>
             <div class="relative">
-              <input id="auditor-filtro-numero" type="text" oninput="filtrarTablaHistorico()" placeholder="Filtrar número..."
+              <input id="auditor-filtro-numero" type="text" onfocus="this.select()" oninput="filtrarTablaHistorico()" placeholder="Filtrar número..."
                      class="bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs outline-none focus:border-rose-500 w-36 sm:w-44">
             </div>
           </div>
@@ -284,7 +284,7 @@
         <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 max-w-2xl">
           <div class="sm:col-span-6">
             <label class="block text-[11px] font-bold text-slate-500 uppercase mb-1">Número o Consecutivo</label>
-            <input id="auditor-directo-num" type="text" placeholder="Ej: FV-0009, 200995 o VENTA-0004"
+            <input id="auditor-directo-num" type="text" onfocus="this.select()" placeholder="Ej: FV-0009, 200995 o VENTA-0004"
                    onkeydown="if(event.key === 'Enter') auditarDocumentoDirecto()"
                    class="w-full bg-slate-50 focus:bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-mono outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all">
           </div>
@@ -334,7 +334,7 @@
           <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 pt-2">
             <div>
               <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Buscar Número o Tercero</label>
-              <input id="aud-filtro-recientes-q" type="text" placeholder="Ej: FV-0012, Carnes..."
+              <input id="aud-filtro-recientes-q" type="text" onfocus="this.select()" placeholder="Ej: FV-0012, Carnes..."
                      onkeydown="if(event.key === 'Enter') aplicarFiltrosAuditoria()"
                      class="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs w-full outline-none focus:border-indigo-500">
             </div>
@@ -478,7 +478,7 @@
           <!-- Modificar Tercero -->
           <div class="relative">
             <label class="block text-[11px] font-bold text-slate-500 uppercase mb-1">Nuevo Tercero (Cliente / Proveedor)</label>
-            <input type="text" id="aud-edit-tercero" placeholder="Buscar nuevo cliente o proveedor..." autocomplete="off"
+            <input type="text" id="aud-edit-tercero" onfocus="this.select()" placeholder="Buscar nuevo cliente o proveedor..." autocomplete="off"
                    class="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-slate-50 focus:bg-white transition-all">
             <div id="aud-edit-tercero-list" class="ac-drop hidden"></div>
             <input type="hidden" id="aud-edit-tercero-id">

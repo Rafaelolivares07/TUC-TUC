@@ -244,7 +244,7 @@
               </p>
             </div>
             <div class="relative mt-2">
-              <input id="auditor-tercero" type="text" placeholder="Buscar tercero por nombre..." autocomplete="off" class="border border-gray-300 rounded-lg px-3 py-2 w-full text-sm outline-none focus:border-rose-500 bg-white">
+              <input id="auditor-tercero" type="text" onfocus="this.select()" placeholder="Buscar tercero por nombre..." autocomplete="off" class="border border-gray-300 rounded-lg px-3 py-2 w-full text-sm outline-none focus:border-rose-500 bg-white">
               <div id="auditor-tercero-list" class="ac-list hidden"></div>
               <input type="hidden" id="auditor-tercero-id">
             </div>
@@ -264,7 +264,7 @@
               </p>
             </div>
             <div class="flex gap-2 mt-2">
-              <input id="auditor-directo-num" type="text" placeholder="Ej: FV-0009, VENTA-0004 o ID 6" class="border border-gray-300 rounded-lg px-3 py-2 flex-1 text-sm outline-none focus:border-blue-500 bg-white">
+              <input id="auditor-directo-num" type="text" onfocus="this.select()" placeholder="Ej: FV-0009, VENTA-0004 o ID 6" class="border border-gray-300 rounded-lg px-3 py-2 flex-1 text-sm outline-none focus:border-blue-500 bg-white">
               <select id="auditor-directo-tipo" class="border border-gray-300 rounded-lg px-2 py-2 text-xs outline-none bg-white">
                 <option value="">Tipo de documento</option>
               </select>
@@ -294,7 +294,7 @@
         <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 mb-4 bg-gray-50 p-3 rounded-xl border border-gray-100">
           <div>
             <label class="block text-[10px] font-bold text-gray-400 uppercase mb-0.5">Buscar</label>
-            <input id="aud-filtro-recientes-q" type="text" placeholder="No. doc o tercero..." onkeydown="if(event.key === 'Enter') aplicarFiltrosAuditoria()" class="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs w-full bg-white outline-none">
+            <input id="aud-filtro-recientes-q" type="text" onfocus="this.select()" placeholder="No. doc o tercero..." onkeydown="if(event.key === 'Enter') aplicarFiltrosAuditoria()" class="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs w-full bg-white outline-none">
           </div>
           <div>
             <label class="block text-[10px] font-bold text-gray-400 uppercase mb-0.5">Tipo de Documento</label>

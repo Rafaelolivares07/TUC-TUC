@@ -1119,7 +1119,7 @@
 
         for (const doc of docs) {
           const numLimpio = (doc.numero_documento || '').replace(/^[^-]+-/, '');
-          const audUrl = (doc.tipo_documento_id && doc.numero_documento) ? `/admin/mantenimiento/${NEGOCIO_ID}?tool=auditor-documentos&tipo_documento=${encodeURIComponent(doc.tipo_documento_id)}&documento_numero=${encodeURIComponent(doc.numero_documento)}&tercero_id=${encodeURIComponent(doc.cliente_tercero_id || '')}` : '';
+          const audUrl = (doc.tipo_documento_id && doc.numero_documento) ? `/auditor-documentos/${NEGOCIO_ID}?tipo_documento=${encodeURIComponent(doc.tipo_documento_id)}&documento_numero=${encodeURIComponent(doc.numero_documento)}&tercero_id=${encodeURIComponent(doc.cliente_tercero_id || '')}` : '';
           const kardexVal = doc.total_costo_kardex || 0;
           const posVal = doc.total_costo || 0;
           const desfase = doc.desfase_kardex !== undefined ? doc.desfase_kardex : (kardexVal - posVal);

@@ -2254,7 +2254,7 @@ async function cargarComprobantes() {
       <td class="px-3 py-2.5 font-mono text-xs text-gray-600">
         <div class="flex items-center gap-1.5">
           <span>${c.numero_documento}</span>
-          <a href="/admin/mantenimiento/${NEGOCIO_ID}?tool=auditor-documentos&tipo_documento=${encodeURIComponent(c.tipo_documento)}&documento_numero=${encodeURIComponent(c.numero_documento)}" 
+          <a href="/auditor-documentos/${NEGOCIO_ID}?tipo_documento=${encodeURIComponent(c.tipo_documento)}&documento_numero=${encodeURIComponent(c.numero_documento)}" 
              target="_blank" 
              rel="noopener noreferrer" 
              title="Auditar documento en pestaña nueva" 
@@ -3473,7 +3473,7 @@ async function consultarMovimientos() {
           <tr class="border-b border-gray-100 hover:bg-blue-50/30 transition-colors">
             <td class="px-3 py-2.5 text-xs text-gray-500 whitespace-nowrap text-left">${l.fecha || ''}</td>
             <td class="px-3 py-2.5 text-xs text-gray-800 font-medium whitespace-nowrap text-left">
-              <a href="/admin/mantenimiento/${NEGOCIO_ID}?tool=auditor-documentos&tipo_documento=${encodeURIComponent(l.tipo_comprobante || '')}&documento_numero=${encodeURIComponent(l.numero_comprobante || '')}&tercero_id=${l.tercero_id || ''}" 
+              <a href="/auditor-documentos/${NEGOCIO_ID}?tipo_documento=${encodeURIComponent(l.tipo_comprobante || '')}&documento_numero=${encodeURIComponent(l.numero_comprobante || '')}&tercero_id=${l.tercero_id || ''}" 
                  target="_blank" 
                  class="text-blue-600 hover:text-blue-800 hover:underline font-bold inline-flex items-center gap-0.5" 
                  title="Auditar documento">

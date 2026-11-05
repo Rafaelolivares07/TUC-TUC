@@ -1650,7 +1650,9 @@
   const urlParams = new URLSearchParams(window.location.search);
   const tool = urlParams.get('tool');
   if (tool === 'auditor-documentos') {
-    abrirHerramienta('auditor-documentos');
+    window.location.replace(`/auditor-documentos/${NEGOCIO_ID}?${urlParams.toString()}`);
+    return;
+  }
     const tipo = urlParams.get('tipo_documento');
     const numero = urlParams.get('documento_numero');
     const terceroId = urlParams.get('tercero_id') || '';

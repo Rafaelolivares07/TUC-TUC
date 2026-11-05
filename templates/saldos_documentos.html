@@ -323,7 +323,7 @@ function renderizarTabla(lista) {
                             </svg>
                           </button>
                           <div class="leading-tight">
-                            <a href="/admin/mantenimiento/{{ negocio_id }}?tool=auditor-documentos&tipo_documento=${encodeURIComponent(s.tipo_documento_id)}&documento_numero=${encodeURIComponent(s.numero_documento)}&scroll=bottom"
+                            <a href="/auditor-documentos/{{ negocio_id }}?tipo_documento=${encodeURIComponent(s.tipo_documento_id)}&documento_numero=${encodeURIComponent(s.numero_documento)}&scroll=bottom"
                                target="_blank"
                                class="text-blue-600 hover:text-blue-800 hover:underline font-semibold text-[13px] inline-flex items-center gap-1"
                                title="Ver auditoría técnica en pestaña nueva">

@@ -19285,7 +19285,7 @@ async function toggleDetalleVC(tr, productoId) {
 
     for (const doc of docs) {
       const numLimpio = (doc.numero_documento || '').replace(/^[^-]+-/, '');
-      const audUrl = (doc.tipo_documento_id && doc.numero_documento) ? `/admin/mantenimiento/${NEGOCIO_ID}?tool=auditor-documentos&tipo_documento=${encodeURIComponent(doc.tipo_documento_id)}&documento_numero=${encodeURIComponent(doc.numero_documento)}&tercero_id=${encodeURIComponent(doc.cliente_tercero_id || '')}` : '';
+      const audUrl = (doc.tipo_documento_id && doc.numero_documento) ? `/auditor-documentos/${NEGOCIO_ID}?tipo_documento=${encodeURIComponent(doc.tipo_documento_id)}&documento_numero=${encodeURIComponent(doc.numero_documento)}&tercero_id=${encodeURIComponent(doc.cliente_tercero_id || '')}` : '';
       const kardexVal = doc.total_costo_kardex || 0;
       const posVal = doc.total_costo || 0;
       const desfase = doc.desfase_kardex !== undefined ? doc.desfase_kardex : (kardexVal - posVal);
@@ -20823,7 +20823,7 @@ async function cargarReporteEnsambles() {
               const prop = v.propuesta || {tipo: 'sin_costo', total: 0};
               const posT = Number(v.costo_pos_total || 0);
               const difD = posT - Number(prop.total || 0);
-              const audUrl = (v.tipo_documento_id && v.numero_documento) ? `/admin/mantenimiento/${NEGOCIO_ID}?tool=auditor-documentos&tipo_documento=${encodeURIComponent(v.tipo_documento_id)}&documento_numero=${encodeURIComponent(v.numero_documento)}&tercero_id=${encodeURIComponent(v.cliente_tercero_id || '')}` : '';
+              const audUrl = (v.tipo_documento_id && v.numero_documento) ? `/auditor-documentos/${NEGOCIO_ID}?tipo_documento=${encodeURIComponent(v.tipo_documento_id)}&documento_numero=${encodeURIComponent(v.numero_documento)}&tercero_id=${encodeURIComponent(v.cliente_tercero_id || '')}` : '';
               html += `<div id="vsd-card-${pid}-${numLimpio}" class="border border-rose-300 bg-white rounded-xl overflow-hidden shadow-xs">`;
               html += `<div class="w-full flex items-center justify-between px-3.5 py-2.5 bg-gray-50 flex-wrap gap-2">`;
               html += `<button type="button" onclick="toggleRepairLevel('${docAccId}')" class="flex items-center gap-2 flex-wrap text-left cursor-pointer">`;

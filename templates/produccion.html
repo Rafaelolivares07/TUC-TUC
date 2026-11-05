@@ -677,7 +677,7 @@
     <div class="mt-8 border-t border-gray-150 pt-6">
       <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
         <button type="button" onclick="toggleHistorialProduccion()" aria-expanded="false" aria-controls="prod-historial-wrapper" class="font-bold text-slate-800 text-xs flex items-center gap-1.5 outline-none hover:text-indigo-700 cursor-pointer">
-          <span id="historial-toggle-icon">▼</span><span>📋</span> Historial Reciente de Producción
+          <span id="historial-toggle-icon">▶</span><span>📋</span> Historial Reciente de Producción
         </button>
       </div>
 
@@ -2685,6 +2685,20 @@ async function cargarTiposDocProduccion() {
 }
 
 
+
+function toggleHistorialProduccion() {
+  const body = document.getElementById('prod-historial-wrapper');
+  const icon = document.getElementById('historial-toggle-icon');
+  const btn = document.querySelector('[aria-controls="prod-historial-wrapper"]');
+  if (!body) return;
+  const collapsed = body.classList.toggle('hidden');
+  if (icon) icon.textContent = collapsed ? '▶' : '▼';
+  if (btn) btn.setAttribute('aria-expanded', String(!collapsed));
+  if (!collapsed && body.dataset.cargado !== '1') {
+    body.dataset.cargado = '1';
+    cargarHistorialProduccion();
+  }
+}
 
 let histProdPagina = 1;
 

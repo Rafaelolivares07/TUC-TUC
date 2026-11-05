@@ -1546,18 +1546,21 @@ def api_permisos_buscar_terceros():
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
     q = request.args.get('q', '').strip()
+    negocio_id = request.args.get('negocio_id', type=int) or session.get('active_negocio_id')
     if not q:
         return jsonify({'results': []})
         
     from ..db import get_db_connection
     conn = get_db_connection()
     rows = conn.execute("""
-        SELECT id, nombre, telefono 
-        FROM terceros 
-        WHERE (nombre ILIKE %s OR telefono ILIKE %s) 
-          AND (tipo_tercero IS NULL OR tipo_tercero NOT IN ('negocio', 'admin'))
+        SELECT t.id, t.nombre, t.telefono, COUNT(pt.pantalla_id) AS n_permisos
+        FROM terceros t
+        LEFT JOIN permisos_terceros pt ON pt.tercero_id = t.id AND pt.negocio_id = %s
+        WHERE (t.nombre ILIKE %s OR t.telefono ILIKE %s)
+          AND (t.tipo_tercero IS NULL OR t.tipo_tercero NOT IN ('negocio', 'admin'))
+        GROUP BY t.id
         LIMIT 15
-    """, (f"%{q}%", f"%{q}%")).fetchall()
+    """, (negocio_id, f"%{q}%", f"%{q}%")).fetchall()
     conn.close()
     
     return jsonify({'results': [dict(r) for r in rows]})

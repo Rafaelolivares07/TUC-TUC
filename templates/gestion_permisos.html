@@ -136,13 +136,26 @@
           b.type = 'button';
           b.className = 'w-full flex items-center justify-between gap-2 px-3.5 py-2.5 text-left hover:bg-slate-50 bg-transparent border-0 cursor-pointer';
           b.dataset.i = i;
+          const izq = document.createElement('span');
+          izq.className = 'flex items-center gap-2 min-w-0';
           const n = document.createElement('span');
           n.className = 'text-[13px] font-semibold text-slate-800 truncate';
           n.textContent = it.nombre;
+          izq.appendChild(n);
+          const np = (typeof it.n_permisos === 'number') ? it.n_permisos : 0;
+          const badge = document.createElement('span');
+          if (np > 0) {
+            badge.className = 'shrink-0 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5';
+            badge.textContent = np + (np === 1 ? ' permiso' : ' permisos');
+          } else {
+            badge.className = 'shrink-0 text-[10px] font-semibold text-slate-400 bg-slate-50 border border-slate-200 rounded-full px-2 py-0.5';
+            badge.textContent = 'sin accesos';
+          }
+          izq.appendChild(badge);
           const t = document.createElement('span');
           t.className = 'text-[11px] text-slate-400 shrink-0';
           t.textContent = it.telefono || 'Sin celular';
-          b.appendChild(n);
+          b.appendChild(izq);
           b.appendChild(t);
           b.addEventListener('click', function() { seleccionarTercero(it.id, it.nombre, it.telefono); });
           list.appendChild(b);
@@ -162,7 +175,7 @@
       const q = input.value.trim();
       if (q.length < 2) { list.classList.add('hidden'); return; }
       timeout = setTimeout(function() {
-        fetch('/api/permisos/buscar-terceros?q=' + encodeURIComponent(q))
+        fetch('/api/permisos/buscar-terceros?q=' + encodeURIComponent(q) + '&negocio_id=' + activeNegocioId)
           .then(function(r) { return r.json(); })
           .then(function(data) { pintar(data.results || []); });
       }, 280);

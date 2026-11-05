@@ -1169,6 +1169,11 @@
       toast('Las facturas de venta no se pueden modificar directamente desde aquí.', false);
       return;
     }
+
+    if (tipo_movimiento === 'produccion' || tipoLower === 'produccion') {
+      window.location.href = `/produccion/${NEGOCIO_ID}`;
+      return;
+    }
     
     if (has_inventario || (tipo_movimiento && tipo_movimiento.toLowerCase() === 'entrada')) {
       window.location.href = `/entradas/${NEGOCIO_ID}?tipo_doc=${encodeURIComponent(tipo || '')}&num_doc=${encodeURIComponent(numero || '')}&prov_id=${encodeURIComponent(terceroId || '')}&prov_nom=${encodeURIComponent(terceroNombre || '')}`;

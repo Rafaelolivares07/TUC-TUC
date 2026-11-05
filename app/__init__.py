@@ -271,6 +271,7 @@ def create_app():
                 request.path.startswith('/chat') or request.path.startswith('/pagar/') or
                 request.path.startswith('/proyecto/') or request.path.startswith('/solar/proyecto/') or
                 request.path.startswith('/kardex') or request.path.startswith('/entradas') or
+                request.path.startswith('/auditor-documentos') or
                 request.path.startswith('/produccion') or request.path.startswith('/ventas-costos') or
                 request.path.startswith('/catalogo-productos') or request.path.startswith('/entrar') or
                 request.path.startswith('/login') or request.path.startswith('/logout') or

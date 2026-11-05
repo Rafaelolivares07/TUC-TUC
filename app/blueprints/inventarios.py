@@ -10367,6 +10367,134 @@ def api_anular_documento(negocio_id):
         conn.close()
 
 
+@bp.route('/api/inventario/<int:negocio_id>/mantenimiento/modificar-documento', methods=['POST'])
+def api_modificar_documento_mantenimiento(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    
+    data = request.get_json() or {}
+    tipo_doc = _txt(data.get('tipo_documento'))
+    num_doc = _txt(data.get('documento_numero'))
+    nueva_fecha_raw = _txt(data.get('nueva_fecha'))
+    nuevo_tercero_id = _int_o_none(data.get('nuevo_tercero_id'))
+    
+    if not num_doc:
+        return jsonify({'ok': False, 'error': 'documento_numero requerido'}), 400
+    if not nueva_fecha_raw and not nuevo_tercero_id:
+        return jsonify({'ok': False, 'error': 'Debe especificar nueva_fecha o nuevo_tercero_id'}), 400
+    
+    nueva_fecha = None
+    if nueva_fecha_raw:
+        try:
+            nueva_fecha = date.fromisoformat(nueva_fecha_raw[:10])
+        except ValueError:
+            return jsonify({'ok': False, 'error': 'Fecha invalida'}), 400
+        if nueva_fecha > _hoy_bogota():
+            return jsonify({'ok': False, 'error': f'La fecha no puede ser futura respecto a hoy ({_hoy_bogota()})'}), 400
+
+    conn = get_db_connection()
+    try:
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
+        if error:
+            return error
+            
+        doc_codes = resolver_variantes_numero(num_doc)
+        if tipo_doc:
+            doc_codes.extend([f"{tipo_doc}-{num_doc}", f"{tipo_doc}{num_doc}"])
+        doc_codes = list(set([d.lower() for d in doc_codes]))
+
+        prod_ids_to_recostear = set()
+
+        if nuevo_tercero_id:
+            tercero_row = conn.execute("SELECT id, nombre FROM terceros WHERE id = %s", (nuevo_tercero_id,)).fetchone()
+            if not tercero_row:
+                return jsonify({'ok': False, 'error': 'El tercero especificado no existe'}), 404
+            
+            conn.execute("""
+                UPDATE movimientos_inventario
+                SET proveedor_id = %s
+                WHERE negocio_id = %s AND (
+                    LOWER(documento_numero) IN %s
+                    OR (numero_documento IS NOT NULL AND LOWER(numero_documento) IN %s)
+                )
+            """, (nuevo_tercero_id, negocio_id, tuple(doc_codes), tuple(doc_codes)))
+
+            conn.execute("""
+                UPDATE movimientos_contables
+                SET tercero_id = %s
+                WHERE negocio_id = %s AND (
+                    LOWER(documento_numero) IN %s
+                    OR (numero_documento IS NOT NULL AND LOWER(numero_documento) IN %s)
+                )
+            """, (nuevo_tercero_id, negocio_id, tuple(doc_codes), tuple(doc_codes)))
+
+            conn.execute("""
+                UPDATE pedidos
+                SET cliente_id = %s, id_tercero = %s
+                WHERE negocio_id = %s AND (
+                    LOWER(numero_documento) IN %s
+                )
+            """, (nuevo_tercero_id, nuevo_tercero_id, negocio_id, tuple(doc_codes)))
+
+        if nueva_fecha:
+            movs = conn.execute("""
+                SELECT id, producto_id
+                FROM movimientos_inventario
+                WHERE negocio_id = %s AND (
+                    LOWER(documento_numero) IN %s
+                    OR (numero_documento IS NOT NULL AND LOWER(numero_documento) IN %s)
+                )
+            """, (negocio_id, tuple(doc_codes), tuple(doc_codes))).fetchall()
+            for m in movs:
+                prod_ids_to_recostear.add(m['producto_id'])
+
+            conn.execute("""
+                UPDATE movimientos_inventario
+                SET documento_fecha = %s
+                WHERE negocio_id = %s AND (
+                    LOWER(documento_numero) IN %s
+                    OR (numero_documento IS NOT NULL AND LOWER(numero_documento) IN %s)
+                )
+            """, (nueva_fecha, negocio_id, tuple(doc_codes), tuple(doc_codes)))
+
+            conn.execute("""
+                UPDATE comprobantes_diario
+                SET fecha = %s
+                WHERE negocio_id = %s AND (
+                    LOWER(numero) IN %s
+                    OR (documento_fisico IS NOT NULL AND LOWER(documento_fisico) IN %s)
+                )
+            """, (nueva_fecha, negocio_id, tuple(doc_codes), tuple(doc_codes)))
+
+            conn.execute("""
+                UPDATE movimientos_contables
+                SET fecha = %s
+                WHERE negocio_id = %s AND (
+                    LOWER(documento_numero) IN %s
+                    OR (numero_documento IS NOT NULL AND LOWER(numero_documento) IN %s)
+                )
+            """, (nueva_fecha, negocio_id, tuple(doc_codes), tuple(doc_codes)))
+
+            conn.execute("""
+                UPDATE pedidos
+                SET fecha = %s
+                WHERE negocio_id = %s AND (
+                    LOWER(numero_documento) IN %s
+                )
+            """, (nueva_fecha, negocio_id, tuple(doc_codes)))
+
+            for pid in prod_ids_to_recostear:
+                _recostear_producto(conn, negocio_id, pid)
+
+        conn.commit()
+        return jsonify({'ok': True, 'mensaje': 'Documento modificado y propagado con exito'})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
 @bp.route('/admin/inventario/<int:negocio_id>')
 @bp.route('/admin/inventario/<int:negocio_id>/<tab_name>')
 @bp.route('/inventario/<int:negocio_id>')
@@ -10798,6 +10926,67 @@ def admin_negocio_mantenimiento(negocio_id):
                                negocio_nombre=contexto['negocio_nombre'],
                                volver_url=contexto['volver_url'],
                                volver_label=contexto['volver_label'])
+    except Exception as e:
+        return f"Error: {e}", 500
+    finally:
+        conn.close()
+
+
+@bp.route('/auditor-documentos')
+@bp.route('/auditor-documentos/<int:negocio_id>')
+def auditor_documentos_standalone(negocio_id=None):
+    """Vista corporativa independiente de Auditoria de Documentos."""
+    if 'usuario_id' not in session and 'rol' not in session:
+        return redirect(url_for('auth.admin_login'))
+    
+    conn = get_db_connection()
+    try:
+        if not negocio_id:
+            negocio_activo = session.get('negocio_activo')
+            if negocio_activo and isinstance(negocio_activo, dict) and negocio_activo.get('id'):
+                negocio_id = negocio_activo['id']
+            elif session.get('negocio_id'):
+                negocio_id = session.get('negocio_id')
+            else:
+                n_row = conn.execute("SELECT id FROM negocios WHERE activo = TRUE ORDER BY id ASC LIMIT 1").fetchone()
+                if not n_row:
+                    n_row = conn.execute("SELECT id FROM terceros WHERE es_empresa = TRUE OR es_proveedor = TRUE ORDER BY id ASC LIMIT 1").fetchone()
+                if n_row:
+                    negocio_id = n_row['id']
+                else:
+                    return "No hay negocios registrados", 404
+
+        contexto = _contexto_negocio(conn, negocio_id)
+        if not contexto:
+            return "Negocio no encontrado", 404
+        if not _puede_gestionar_negocio(contexto):
+            return "No autorizado para este negocio", 403
+
+        centros_rows = conn.execute("""
+            SELECT id, codigo, nombre, tipo, color_badge, imagen_url, telefono, direccion
+            FROM centros_utilidad
+            WHERE negocio_id = %s AND activo = TRUE
+            ORDER BY id ASC
+        """, (negocio_id,)).fetchall()
+        centros = [dict(c) for c in centros_rows]
+        
+        centro_activo_id = session.get('centro_utilidad_id')
+        centro_activo = None
+        if centro_activo_id:
+            for c in centros:
+                if str(c['id']) == str(centro_activo_id):
+                    centro_activo = c
+                    break
+        if not centro_activo and centros:
+            centro_activo = centros[0]
+
+        return render_template('auditor_documentos.html',
+                               negocio_id=negocio_id,
+                               negocio_nombre=contexto['negocio_nombre'],
+                               volver_url=contexto['volver_url'],
+                               volver_label=contexto['volver_label'],
+                               centros_utilidad=centros,
+                               centro_activo=centro_activo)
     except Exception as e:
         return f"Error: {e}", 500
     finally:

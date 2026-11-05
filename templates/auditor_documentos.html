@@ -1,0 +1,1507 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full bg-slate-50">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Auditoría de Documentos — {{ negocio_nombre }} | TUC TUC</title>
+
+  <script src="/static/js/tailwind.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+
+  <style>
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    .font-mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Custom Scrollbar */
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #f1f5f9;
+      border-radius: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+
+    /* Toast Flotante */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 9999;
+      padding: 12px 20px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 600;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2);
+      transform: translateY(100px);
+      opacity: 0;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+    .toast-ok {
+      background: #0f172a;
+      color: #38bdf8;
+      border-left: 4px solid #0284c7;
+    }
+    .toast-err {
+      background: #0f172a;
+      color: #f87171;
+      border-left: 4px solid #ef4444;
+    }
+    .toast-warn {
+      background: #0f172a;
+      color: #fbbf24;
+      border-left: 4px solid #f59e0b;
+    }
+
+    /* Autocomplete */
+    .ac-list, .ac-drop {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 100%;
+      margin-top: 4px;
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      box-shadow: 0 12px 30px -4px rgba(0,0,0,0.12);
+      max-height: 240px;
+      overflow-y: auto;
+      z-index: 50;
+    }
+    .ac-item {
+      padding: 10px 14px;
+      cursor: pointer;
+      font-size: 13px;
+      border-bottom: 1px solid #f8fafc;
+      transition: background 0.15s;
+    }
+    .ac-item:hover, .ac-focus {
+      background: #f1f5f9;
+      color: #0f172a;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body class="h-full flex flex-col text-slate-800 antialiased selection:bg-rose-500 selection:text-white">
+
+  <!-- ================= TOPBAR CORPORATIVO ================= -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-2xs">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+      
+      <!-- Identidad Corporativa: TUC TUC | Negocio | Sede -->
+      <div class="flex items-center gap-3">
+        <a href="/inicio" class="group flex items-center gap-2.5 text-slate-900 hover:text-rose-600 transition-colors" title="Regresar al Menú Principal">
+          <span class="font-extrabold text-sm sm:text-base tracking-wider text-slate-900 group-hover:text-rose-600 transition-colors">
+            TUC TUC
+          </span>
+          <span class="text-sm font-semibold tracking-wider text-slate-300">|</span>
+          <span class="text-sm sm:text-base font-bold tracking-tight text-slate-900 group-hover:text-rose-600 transition-colors uppercase">
+            {{ negocio_nombre }}
+          </span>
+        </a>
+
+        {% if centro_activo %}
+        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+          {{ centro_activo.nombre | upper }}
+        </span>
+        {% endif %}
+      </div>
+
+      <!-- Contexto y Navegación -->
+      <div class="flex items-center gap-2.5">
+        <span class="hidden md:inline-flex px-3 py-1 bg-rose-50 text-rose-700 font-bold text-xs rounded-xl border border-rose-200">
+          🔍 Consola de Auditoría
+        </span>
+        <a href="/admin/mantenimiento/{{ negocio_id }}" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all border border-slate-200 flex items-center gap-1.5">
+          <span>&larr;</span> <span>Mantenimiento</span>
+        </a>
+        <a href="/inventario/{{ negocio_id }}" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all border border-slate-200 flex items-center gap-1.5">
+          <span>&larr;</span> <span>Inventario</span>
+        </a>
+        <a href="/inicio" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all border border-slate-200 flex items-center gap-1.5">
+          <span>&larr;</span> <span>Inicio</span>
+        </a>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- ================= CONTENEDOR PRINCIPAL ================= -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+    <!-- SELECTOR DE MODO DE BÚSQUEDA (PESTAÑAS ESTILO DESK) -->
+    <div class="bg-white rounded-2xl shadow-xs border border-slate-200 p-2 flex flex-wrap gap-2 items-center justify-between">
+      <div class="flex items-center gap-1.5 sm:gap-2 overflow-x-auto">
+        <button id="tab-btn-tercero" onclick="cambiarTabAuditoria('tercero')"
+                class="px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all bg-rose-500 text-white shadow-xs">
+          <i class="bi bi-person-badge"></i>
+          <span>Buscar por Tercero</span>
+        </button>
+        <button id="tab-btn-directo" onclick="cambiarTabAuditoria('directo')"
+                class="px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all bg-slate-100 text-slate-600 hover:bg-slate-200/80">
+          <i class="bi bi-hash"></i>
+          <span>Consecutivo Directo</span>
+        </button>
+        <button id="tab-btn-recientes" onclick="cambiarTabAuditoria('recientes')"
+                class="px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all bg-slate-100 text-slate-600 hover:bg-slate-200/80">
+          <i class="bi bi-clock-history"></i>
+          <span>Transacciones Globales</span>
+        </button>
+      </div>
+
+      <div class="text-[11px] font-semibold text-slate-400 px-3 hidden sm:block">
+        Auditoría cruzada de Inventario, Contabilidad y Ventas
+      </div>
+    </div>
+
+    <!-- SECCIÓN 1: BÚSQUEDA POR TERCERO (CON HISTORIAL INMEDIATAMENTE CONTIGUO) -->
+    <div id="seccion-aud-tercero" class="space-y-4">
+      
+      <!-- Card Input Buscador de Tercero -->
+      <div class="bg-white rounded-2xl shadow-xs border border-slate-200 p-5">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+          <div>
+            <h2 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <span class="text-rose-500"><i class="bi bi-person-search text-base"></i></span>
+              <span>Consulta por Cliente o Proveedor</span>
+            </h2>
+            <p class="text-xs text-slate-500 mt-0.5">
+              Visualiza en un solo panel contiguo todos los documentos, movimientos y saldos del tercero seleccionado.
+            </p>
+          </div>
+
+          <div id="selected-aud-tercero-badge" class="hidden flex items-center gap-2">
+            <span class="inline-flex items-center gap-1.5 px-3 py-1 bg-rose-50 text-rose-700 border border-rose-200 rounded-full text-xs font-bold">
+              <span class="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+              <span id="aud-tercero-nombre-lbl">—</span>
+            </span>
+            <button onclick="limpiarTerceroSeleccionado()" class="text-xs text-slate-400 hover:text-rose-600 font-bold px-2 py-1 rounded-lg border border-slate-200 hover:border-rose-200 transition">
+              ✕ Cambiar
+            </button>
+          </div>
+        </div>
+
+        <div class="relative">
+          <div class="flex items-center gap-2">
+            <div class="relative flex-1">
+              <i class="bi bi-search absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+              <input id="auditor-tercero" type="text" placeholder="Escribe el nombre o documento del cliente o proveedor..." autocomplete="off"
+                     class="w-full bg-slate-50 focus:bg-white border border-slate-200 rounded-xl pl-9 pr-3 py-2.5 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all">
+              <div id="auditor-tercero-list" class="ac-list hidden"></div>
+              <input type="hidden" id="auditor-tercero-id">
+            </div>
+            <button onclick="buscarTerceroManual()" class="px-4 py-2.5 bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs rounded-xl shadow-xs transition shrink-0">
+              Buscar
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- RESULTADOS HISTÓRICOS DEL TERCERO (INMEDIATAMENTE CONTIGUO) -->
+      <div id="auditor-panel-historico" class="bg-white rounded-2xl shadow-xs border border-slate-200 overflow-hidden">
+        
+        <!-- Header del Historial de Tercero con Filtros Rápidos -->
+        <div class="p-4 sm:p-5 bg-slate-50/80 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-black uppercase tracking-wider text-slate-700">Documentos del Tercero:</span>
+            <span id="aud-historico-badge-txt" class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800">
+              Seleccionar Tercero
+            </span>
+          </div>
+
+          <!-- Filtros rápidos locales para el historial del tercero -->
+          <div class="flex items-center gap-2 flex-wrap">
+            <select id="auditor-filtro-tipo" onchange="filtrarTablaHistorico()"
+                    class="bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-medium text-slate-700 outline-none focus:border-rose-500">
+              <option value="todos">Todos los tipos</option>
+            </select>
+            <div class="relative">
+              <input id="auditor-filtro-numero" type="text" oninput="filtrarTablaHistorico()" placeholder="Filtrar número..."
+                     class="bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs outline-none focus:border-rose-500 w-36 sm:w-44">
+            </div>
+          </div>
+        </div>
+
+        <!-- Tabla de Documentos del Tercero -->
+        <div class="overflow-x-auto max-h-96 overflow-y-auto custom-scrollbar">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead class="sticky top-0 bg-slate-50 z-10 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-200">
+              <tr>
+                <th class="py-3 px-4 font-bold">Tipo Documento</th>
+                <th class="py-3 px-4 font-bold">Número / Consecutivo</th>
+                <th class="py-3 px-4 font-bold">Fecha</th>
+                <th class="py-3 px-4 font-bold text-right">Monto Total</th>
+                <th class="py-3 px-4 font-bold text-right">Saldo Pendiente</th>
+                <th class="py-3 px-4 font-bold text-center">Acción</th>
+              </tr>
+            </thead>
+            <tbody id="aud-tbody-historico" class="divide-y divide-slate-100 font-medium">
+              <tr>
+                <td colspan="6" class="text-center text-slate-400 py-10">
+                  <i class="bi bi-search text-2xl block mb-2 opacity-50"></i>
+                  Selecciona un cliente o proveedor arriba para cargar sus documentos
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- SECCIÓN 2: BÚSQUEDA DIRECTA POR NÚMERO / ID -->
+    <div id="seccion-aud-directo" class="hidden">
+      <div class="bg-white rounded-2xl shadow-xs border border-slate-200 p-6">
+        <h2 class="text-sm font-bold text-slate-800 flex items-center gap-2 mb-1">
+          <span class="text-blue-500"><i class="bi bi-hash text-lg"></i></span>
+          <span>Consultar Documento Directamente por Número o ID</span>
+        </h2>
+        <p class="text-xs text-slate-500 mb-5">
+          Ingresa el número consecutivo físico, comprobante de diario, código de venta o ID interno.
+        </p>
+
+        <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 max-w-2xl">
+          <div class="sm:col-span-6">
+            <label class="block text-[11px] font-bold text-slate-500 uppercase mb-1">Número o Consecutivo</label>
+            <input id="auditor-directo-num" type="text" placeholder="Ej: FV-0009, 200995 o VENTA-0004"
+                   onkeydown="if(event.key === 'Enter') auditarDocumentoDirecto()"
+                   class="w-full bg-slate-50 focus:bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-mono outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all">
+          </div>
+          <div class="sm:col-span-4">
+            <label class="block text-[11px] font-bold text-slate-500 uppercase mb-1">Tipo (Opcional)</label>
+            <select id="auditor-directo-tipo"
+                    class="w-full bg-slate-50 focus:bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-semibold text-slate-700 outline-none focus:border-blue-500 transition-all">
+              <option value="">Cualquier tipo</option>
+            </select>
+          </div>
+          <div class="sm:col-span-2 flex items-end">
+            <button onclick="auditarDocumentoDirecto()"
+                    class="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-1.5">
+              <i class="bi bi-search"></i>
+              <span>Auditar</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SECCIÓN 3: HISTORIAL GENERAL / TRANSACCIONES RECIENTES -->
+    <div id="seccion-aud-recientes" class="hidden">
+      <div class="bg-white rounded-2xl shadow-xs border border-slate-200 overflow-hidden">
+        
+        <!-- Filtros de Transacciones Recientes -->
+        <div class="p-5 bg-slate-50/80 border-b border-slate-200 space-y-3">
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <h2 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+                <span class="text-indigo-500"><i class="bi bi-clock-history"></i></span>
+                <span>Transacciones Recientes (Todos los documentos, todos los terceros)</span>
+              </h2>
+              <p class="text-xs text-slate-500 mt-0.5">Explora el flujo global de operaciones registradas en el sistema.</p>
+            </div>
+            
+            <div class="flex items-center gap-2">
+              <button onclick="aplicarFiltrosAuditoria()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl shadow-xs transition flex items-center gap-1.5">
+                <i class="bi bi-funnel"></i> <span>Filtrar</span>
+              </button>
+              <button onclick="limpiarFiltrosAuditoria()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs px-3.5 py-2 rounded-xl transition">
+                Limpiar
+              </button>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 pt-2">
+            <div>
+              <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Buscar Número o Tercero</label>
+              <input id="aud-filtro-recientes-q" type="text" placeholder="Ej: FV-0012, Carnes..."
+                     onkeydown="if(event.key === 'Enter') aplicarFiltrosAuditoria()"
+                     class="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs w-full outline-none focus:border-indigo-500">
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Tipo de Documento</label>
+              <select id="aud-filtro-recientes-tipo" onchange="aplicarFiltrosAuditoria()"
+                      class="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs w-full outline-none focus:border-indigo-500 font-medium">
+                <option value="todos">Todos los tipos</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Fecha Desde</label>
+              <input id="aud-filtro-recientes-desde" type="date" onchange="aplicarFiltrosAuditoria()"
+                     class="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs w-full outline-none focus:border-indigo-500">
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Fecha Hasta</label>
+              <input id="aud-filtro-recientes-hasta" type="date" onchange="aplicarFiltrosAuditoria()"
+                     class="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs w-full outline-none focus:border-indigo-500">
+            </div>
+          </div>
+        </div>
+
+        <!-- Tabla de Transacciones Recientes -->
+        <div class="overflow-x-auto max-h-[480px] overflow-y-auto custom-scrollbar">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead class="sticky top-0 bg-slate-50 z-10 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-200">
+              <tr>
+                <th class="py-3 px-4 font-bold">Fecha</th>
+                <th class="py-3 px-4 font-bold">Tipo</th>
+                <th class="py-3 px-4 font-bold">Consecutivo</th>
+                <th class="py-3 px-4 font-bold">Tercero</th>
+                <th class="py-3 px-4 font-bold text-right">Contable</th>
+                <th class="py-3 px-4 font-bold text-right">Inventario</th>
+                <th class="py-3 px-4 font-bold text-right">Venta / Pedido</th>
+                <th class="py-3 px-4 font-bold text-center">Acción</th>
+              </tr>
+            </thead>
+            <tbody id="aud-tbody-recientes" class="divide-y divide-slate-100 font-medium">
+              <tr>
+                <td colspan="8" class="text-center text-slate-400 py-10">Cargando transacciones recientes...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Paginador -->
+        <div class="p-3 bg-slate-50/80 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500 font-medium">
+          <div>
+            Total registros: <span id="aud-total-recientes" class="font-bold text-slate-700">0</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <button id="btn-aud-recientes-prev" onclick="audPaginaAnterior()"
+                    class="px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed font-semibold">
+              ← Anterior
+            </button>
+            <span>Página <span id="aud-pag-actual" class="font-bold text-slate-800">1</span> de <span id="aud-pag-total" class="font-bold text-slate-800">1</span></span>
+            <button id="btn-aud-recientes-next" onclick="audPaginaSiguiente()"
+                    class="px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed font-semibold">
+              Siguiente →
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- INDICADOR DE CARGA -->
+    <div id="auditor-cargando" class="hidden text-center py-12">
+      <div class="inline-block animate-spin text-rose-500 text-3xl mb-3">
+        <i class="bi bi-arrow-repeat"></i>
+      </div>
+      <p class="text-slate-500 font-bold text-sm">Cargando datos y movimientos del documento...</p>
+      <p class="text-slate-400 text-xs mt-1">Auditando consistencia en inventario, diario contable y facturación</p>
+    </div>
+
+    <!-- ESTADO VACÍO (INICIAL) -->
+    <div id="auditor-vacio" class="text-center py-12 border-2 border-dashed border-slate-200 rounded-2xl bg-white p-6">
+      <div class="w-12 h-12 mx-auto rounded-full bg-slate-100 text-slate-400 flex items-center justify-center text-xl mb-3">
+        <i class="bi bi-file-earmark-medical"></i>
+      </div>
+      <h3 class="font-bold text-slate-700 text-sm">Selecciona o consulta un documento</h3>
+      <p class="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+        Elige un documento desde el historial del tercero, busca directamente por consecutivo o selecciona una transacción reciente para auditar sus movimientos.
+      </p>
+    </div>
+
+    <!-- ================= RESULTADOS DETALLADOS DE AUDITORÍA ================= -->
+    <div id="auditor-resultados" class="hidden space-y-6">
+
+      <!-- AVISO DE MÚLTIPLES PROVEEDORES (SI APLICA) -->
+      <div id="aud-multiples-proveedores-aviso" class="hidden"></div>
+
+      <!-- BARRA DE ACCIONES DEL DOCUMENTO (HEADER PRINCIPAL DE AUDITORÍA) -->
+      <div class="bg-white rounded-2xl shadow-xs border border-slate-200 p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <div class="flex items-center gap-2.5 flex-wrap">
+            <span class="text-xs font-black uppercase tracking-wider text-slate-400">Documento Auditado:</span>
+            <span id="aud-res-doc-titulo" class="font-mono font-black text-base sm:text-lg text-slate-900">—</span>
+            <span id="aud-res-doc-badge-tipo" class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-700">—</span>
+          </div>
+          <p id="aud-res-doc-subtitulo" class="text-xs text-slate-500 mt-1"></p>
+        </div>
+
+        <div class="flex items-center gap-2 flex-wrap">
+          <button id="btn-aud-modificar" onclick="modificarDocumentoAuditor()"
+                  class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-xl transition flex items-center gap-1.5 shadow-xs"
+                  title="Ir al módulo correspondiente para editar este documento">
+            <span>✏️</span> <span>Ir a Modificar</span>
+          </button>
+          <button id="btn-aud-anular" onclick="anularDocumentoAuditor()"
+                  class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl transition flex items-center gap-1.5 shadow-xs"
+                  title="Anular documento conservando consecutivo">
+            <span>🚫</span> <span>Anular Documento</span>
+          </button>
+          <button id="btn-aud-eliminar" onclick="eliminarDocumentoAuditor()"
+                  class="hidden px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs rounded-xl transition flex items-center gap-1.5 shadow-xs"
+                  title="Elimina el registro y retrocede el consecutivo en 1 para reutilizarlo">
+            <span>🗑️</span> <span>Eliminar y Liberar</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- CARD 1: MODIFICAR CABECERA (FECHA / TERCERO) -->
+      <div class="bg-white rounded-2xl shadow-xs border border-slate-200 p-5">
+        <h3 class="font-bold text-sm text-slate-800 flex items-center gap-2 mb-3">
+          <span class="text-blue-500"><i class="bi bi-pencil-square"></i></span>
+          <span>Modificar Cabecera del Documento (Fecha / Tercero)</span>
+        </h3>
+        <p class="text-xs text-slate-500 mb-4">
+          Actualiza la fecha contable/inventario o reasigna el cliente/proveedor asociado. Los cambios se propagarán sincronizadamente.
+        </p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- Modificar Fecha -->
+          <div>
+            <label class="block text-[11px] font-bold text-slate-500 uppercase mb-1">Nueva Fecha del Documento</label>
+            <input type="date" id="aud-edit-fecha"
+                   class="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-slate-50 focus:bg-white transition-all">
+          </div>
+          <!-- Modificar Tercero -->
+          <div class="relative">
+            <label class="block text-[11px] font-bold text-slate-500 uppercase mb-1">Nuevo Tercero (Cliente / Proveedor)</label>
+            <input type="text" id="aud-edit-tercero" placeholder="Buscar nuevo cliente o proveedor..." autocomplete="off"
+                   class="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-slate-50 focus:bg-white transition-all">
+            <div id="aud-edit-tercero-list" class="ac-drop hidden"></div>
+            <input type="hidden" id="aud-edit-tercero-id">
+          </div>
+        </div>
+
+        <div class="flex justify-end mt-4 pt-3 border-t border-slate-100">
+          <button id="btn-aud-guardar-cambios" onclick="guardarCambiosAuditoriaDocumento()"
+                  class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2 rounded-xl shadow-xs transition disabled:opacity-50">
+            Guardar Cambios de Cabecera
+          </button>
+        </div>
+      </div>
+
+      <!-- CARD 2: MOVIMIENTOS DE INVENTARIO (KARDEX) -->
+      <div id="aud-card-inventario" class="hidden bg-white rounded-2xl shadow-xs border border-slate-200 overflow-hidden">
+        <div class="p-4 sm:p-5 border-b border-slate-200 flex items-center justify-between gap-3">
+          <div>
+            <h3 class="font-bold text-sm text-slate-800 flex items-center gap-2">
+              <span class="text-emerald-500"><i class="bi bi-box-seam"></i></span>
+              <span>Movimientos de Inventario (Kardex)</span>
+            </h3>
+            <p id="aud-lbl-inv-documento" class="text-xs text-slate-500 mt-0.5"></p>
+          </div>
+          <span class="px-2.5 py-1 bg-emerald-50 text-emerald-700 text-[11px] font-bold rounded-lg border border-emerald-200">
+            Impacto en Stock & Costos
+          </span>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead class="bg-slate-50 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-200">
+              <tr>
+                <th class="py-3 px-4 font-bold">Producto</th>
+                <th class="py-3 px-4 font-bold">Tipo</th>
+                <th class="py-3 px-4 font-bold">Motivo</th>
+                <th class="py-3 px-4 font-bold text-right">Cantidad</th>
+                <th class="py-3 px-4 font-bold text-right">Valor Unitario</th>
+                <th class="py-3 px-4 font-bold text-right">Valor Total</th>
+              </tr>
+            </thead>
+            <tbody id="aud-tbody-inventario" class="divide-y divide-slate-100 font-medium"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- CARD 3: ASIENTO CONTABLE (PUC) -->
+      <div id="aud-card-contabilidad" class="hidden bg-white rounded-2xl shadow-xs border border-slate-200 overflow-hidden">
+        <div class="p-4 sm:p-5 border-b border-slate-200 flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <h3 class="font-bold text-sm text-slate-800 flex items-center gap-2">
+              <span class="text-indigo-500"><i class="bi bi-bank"></i></span>
+              <span>Asiento Contable de Diario</span>
+            </h3>
+            <p id="aud-lbl-cc-concepto" class="text-xs text-slate-500 mt-0.5"></p>
+          </div>
+          <div class="flex items-center gap-2">
+            <span id="aud-badge-cc-saldo" class="bg-amber-100 text-amber-800 text-xs font-bold px-3 py-1 rounded-full hidden"></span>
+            <span id="aud-badge-cc-numero" class="bg-slate-100 text-slate-700 text-xs font-bold px-3 py-1 rounded-full"></span>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead class="bg-slate-50 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-200">
+              <tr>
+                <th class="py-3 px-4 font-bold">Cuenta PUC</th>
+                <th class="py-3 px-4 font-bold">Concepto</th>
+                <th class="py-3 px-4 font-bold text-right">Débito</th>
+                <th class="py-3 px-4 font-bold text-right">Crédito</th>
+              </tr>
+            </thead>
+            <tbody id="aud-tbody-contabilidad" class="divide-y divide-slate-100 font-medium"></tbody>
+            <tfoot class="bg-slate-50 border-t border-slate-200 font-bold text-slate-800">
+              <tr>
+                <td colspan="2" class="py-3 px-4 text-right">Totales Cuadrados:</td>
+                <td id="aud-val-cc-debito" class="py-3 px-4 text-right text-emerald-700 font-mono"></td>
+                <td id="aud-val-cc-credito" class="py-3 px-4 text-right text-emerald-700 font-mono"></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
+      <!-- CARD 4: VENTAS / FACTURACIÓN -->
+      <div id="aud-card-ventas" class="hidden bg-white rounded-2xl shadow-xs border border-slate-200 overflow-hidden">
+        <div class="p-4 sm:p-5 border-b border-slate-200 flex items-center justify-between gap-3">
+          <div>
+            <h3 class="font-bold text-sm text-slate-800 flex items-center gap-2">
+              <span class="text-violet-500"><i class="bi bi-receipt"></i></span>
+              <span>Pedido de Ventas / Facturación</span>
+            </h3>
+            <p id="aud-lbl-venta-cliente" class="text-xs text-slate-500 mt-0.5"></p>
+          </div>
+          <span id="aud-badge-venta-estado" class="text-xs font-bold px-3 py-1 rounded-full"></span>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead class="bg-slate-50 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-200">
+              <tr>
+                <th class="py-3 px-4 font-bold">Producto</th>
+                <th class="py-3 px-4 font-bold text-right">Cantidad</th>
+                <th class="py-3 px-4 font-bold text-right">Precio Unitario</th>
+                <th class="py-3 px-4 font-bold text-right">Subtotal</th>
+              </tr>
+            </thead>
+            <tbody id="aud-tbody-ventas" class="divide-y divide-slate-100 font-medium"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ZONA DE CONTROL Y ADVERTENCIA -->
+      <div class="p-4 rounded-2xl border border-rose-200 bg-rose-50/60 text-rose-900 text-xs flex gap-3">
+        <span class="text-lg text-rose-600"><i class="bi bi-shield-exclamation"></i></span>
+        <div>
+          <h4 class="font-bold mb-1">Políticas de Auditoría & Consistencia</h4>
+          <p class="leading-relaxed text-rose-800">
+            Al anular o eliminar este documento se actualizarán permanentemente sus movimientos de inventario, asientos contables y pedidos correspondientes. Los saldos de stock y costos promedio de los productos involucrados se recalcularán cronológicamente de manera automática.
+          </p>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- TOAST NOTIFICACIONES -->
+  <div id="toast" class="toast"></div>
+
+  <script>
+    const NEGOCIO_ID = {{ negocio_id }};
+    let auditorDocumentosHistorial = [];
+    let auditorDocumentoSeleccionado = null;
+    let audFiltros = { page: 1, q: '', tipo: 'todos', desde: '', hasta: '' };
+    let audTotalPages = 1;
+
+    function toast(msg, ok = true) {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.className = `toast show ${ok ? 'toast-ok' : 'toast-err'}`;
+      setTimeout(() => el.classList.remove('show'), 3500);
+    }
+
+    function cambiarTabAuditoria(tab) {
+      const tabs = ['tercero', 'directo', 'recientes'];
+      tabs.forEach(t => {
+        const btn = document.getElementById(`tab-btn-${t}`);
+        const sec = document.getElementById(`seccion-aud-${t}`);
+        if (t === tab) {
+          btn.className = 'px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all bg-rose-500 text-white shadow-xs';
+          if (sec) sec.classList.remove('hidden');
+        } else {
+          btn.className = 'px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all bg-slate-100 text-slate-600 hover:bg-slate-200/80';
+          if (sec) sec.classList.add('hidden');
+        }
+      });
+
+      if (tab === 'recientes') {
+        cargarDocumentosRecientes();
+      }
+    }
+
+    function formatearFechaLocal(fechaStr) {
+      if (!fechaStr) return '—';
+      const soloFecha = String(fechaStr).split('T')[0].split(' ')[0].trim();
+      const parts = soloFecha.split('-');
+      if (parts.length === 3 && parts[0].length === 4) {
+        const [y, m, d] = parts;
+        return `${parseInt(d, 10)}/${parseInt(m, 10)}/${y}`;
+      }
+      return soloFecha;
+    }
+
+    function sincronizarTerceroAuditoria(id, nombre) {
+      const idVal = id ? String(id) : '';
+      const nomVal = nombre || '';
+
+      const inpTopId = document.getElementById('auditor-tercero-id');
+      if (inpTopId) inpTopId.value = idVal;
+
+      const inpTop = document.getElementById('auditor-tercero');
+      if (inpTop) inpTop.value = nomVal;
+
+      const badgeTxt = document.getElementById('aud-historico-badge-txt');
+      if (badgeTxt) badgeTxt.textContent = nomVal || 'Seleccionar Tercero';
+
+      const lblTop = document.getElementById('aud-tercero-nombre-lbl');
+      if (lblTop) lblTop.textContent = nomVal;
+
+      const badgeTop = document.getElementById('selected-aud-tercero-badge');
+      if (badgeTop) {
+        if (nomVal) badgeTop.classList.remove('hidden');
+        else badgeTop.classList.add('hidden');
+      }
+    }
+
+    function limpiarTerceroSeleccionado() {
+      sincronizarTerceroAuditoria('', '');
+      document.getElementById('aud-tbody-historico').innerHTML = `
+        <tr>
+          <td colspan="6" class="text-center text-slate-400 py-10">
+            <i class="bi bi-search text-2xl block mb-2 opacity-50"></i>
+            Selecciona un cliente o proveedor arriba para cargar sus documentos
+          </td>
+        </tr>
+      `;
+      auditorDocumentosHistorial = [];
+      const inp = document.getElementById('auditor-tercero');
+      if (inp) {
+        inp.value = '';
+        inp.focus();
+      }
+    }
+
+    async function buscarTerceroManual() {
+      const q = document.getElementById('auditor-tercero').value.trim();
+      if (!q) return;
+      try {
+        const r = await fetch(`/api/inventario/terceros/buscar?q=${encodeURIComponent(q)}`);
+        const list = await r.json();
+        if (list && list.length > 0) {
+          sincronizarTerceroAuditoria(list[0].id, list[0].nombre);
+          cargarDocumentosTercero(list[0].id, list[0].nombre);
+        } else {
+          toast('No se encontró ningún tercero con ese nombre', false);
+        }
+      } catch (e) {
+        toast('Error buscando tercero', false);
+      }
+    }
+
+    async function initDefaultAuditorTercero() {
+      try {
+        const r = await fetch(`/api/inventario/terceros/buscar?q=Tercero Ocasional`);
+        const matches = await r.json();
+        const match = matches.find(m => m.nombre.toLowerCase() === 'tercero ocasional');
+        if (match) {
+          sincronizarTerceroAuditoria(match.id, match.nombre);
+          cargarDocumentosTercero(match.id, match.nombre);
+        }
+      } catch(e) {
+        console.error('Error setting default auditor client:', e);
+      }
+    }
+
+    async function cargarDocumentosTercero(terceroId, terceroNombre = null) {
+      if (terceroNombre) {
+        sincronizarTerceroAuditoria(terceroId, terceroNombre);
+      }
+      const selectTipo = document.getElementById('auditor-filtro-tipo');
+      const tbody = document.getElementById('aud-tbody-historico');
+      
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="6" class="text-center text-slate-400 py-8">
+            <div class="inline-block animate-spin text-rose-500 text-xl mb-1">
+              <i class="bi bi-arrow-repeat"></i>
+            </div>
+            <p>Cargando documentos de este tercero...</p>
+          </td>
+        </tr>
+      `;
+
+      try {
+        const r = await fetch(`/api/inventario/${NEGOCIO_ID}/mantenimiento/documentos-tercero/${terceroId}`);
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Error al cargar historial');
+
+        auditorDocumentosHistorial = d.documentos || [];
+
+        // Poblar tipos únicos en el select
+        const uniqueTypes = [...new Set(auditorDocumentosHistorial.map(doc => doc.tipo_documento))].sort();
+        selectTipo.innerHTML = '<option value="todos">Todos los tipos</option>' + 
+          uniqueTypes.map(t => `<option value="${t}">${t.toUpperCase()}</option>`).join('');
+
+        renderTablaHistorico(auditorDocumentosHistorial);
+      } catch(e) {
+        console.error(e);
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="6" class="text-center text-red-500 py-6">Error al cargar historial del tercero: ${e.message}</td>
+          </tr>
+        `;
+        toast(e.message || 'Error al cargar historial del tercero', false);
+      }
+    }
+
+    function renderTablaHistorico(docs) {
+      const tbody = document.getElementById('aud-tbody-historico');
+      const terceroId = document.getElementById('auditor-tercero-id').value;
+
+      if (!docs.length) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="6" class="text-center text-slate-400 py-8">Sin documentos históricos encontrados para este tercero</td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = docs.map(doc => {
+        const balanceVal = doc.saldo_pendiente !== undefined && doc.saldo_pendiente !== null ? doc.saldo_pendiente : null;
+        let balanceStr = '—';
+        let balanceClass = 'text-slate-500';
+        if (balanceVal !== null) {
+          balanceStr = '$' + balanceVal.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+          if (balanceVal > 0) {
+            balanceClass = 'text-amber-600 font-bold';
+          } else {
+            balanceClass = 'text-emerald-600 font-semibold';
+          }
+        }
+        return `
+          <tr class="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
+            <td class="py-2.5 px-4 font-bold text-slate-700">${doc.tipo_documento.toUpperCase()}</td>
+            <td class="py-2.5 px-4 font-mono font-bold text-slate-800">${doc.documento_numero}</td>
+            <td class="py-2.5 px-4 text-slate-500">${formatearFechaLocal(doc.fecha)}</td>
+            <td class="py-2.5 px-4 text-right font-semibold text-slate-800">$${doc.monto_total ? doc.monto_total.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '0.00'}</td>
+            <td class="py-2.5 px-4 text-right ${balanceClass}">${balanceStr}</td>
+            <td class="py-2.5 px-4 text-center">
+              <button onclick="consultarDocumentoDetalle('${doc.tipo_documento}', '${doc.documento_numero}', '${terceroId}')" 
+                      class="px-3 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold rounded-lg text-[11px] transition inline-flex items-center gap-1">
+                <i class="bi bi-search"></i> <span>Auditar</span>
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function filtrarTablaHistorico() {
+      const tipo = document.getElementById('auditor-filtro-tipo').value;
+      const numFiltro = document.getElementById('auditor-filtro-numero').value.toLowerCase().trim();
+
+      const filtered = auditorDocumentosHistorial.filter(doc => {
+        const matchTipo = (tipo === 'todos') || (doc.tipo_documento === tipo);
+        const matchNum = !numFiltro || (doc.documento_numero && doc.documento_numero.toLowerCase().includes(numFiltro));
+        return matchTipo && matchNum;
+      });
+
+      renderTablaHistorico(filtered);
+    }
+
+    async function auditarDocumentoDirecto() {
+      const num = document.getElementById('auditor-directo-num').value.trim();
+      const tipo = document.getElementById('auditor-directo-tipo').value;
+      if (!num) {
+        toast('Por favor ingresa un número de documento o ID', false);
+        return;
+      }
+      consultarDocumentoDetalle(tipo, num, '');
+    }
+
+    async function consultarDocumentoDetalle(tipo, numero, terceroId) {
+      const loader = document.getElementById('auditor-cargando');
+      const vacio = document.getElementById('auditor-vacio');
+      const resultados = document.getElementById('auditor-resultados');
+
+      loader.classList.remove('hidden');
+      vacio.classList.add('hidden');
+      resultados.classList.add('hidden');
+
+      try {
+        const r = await fetch(`/api/inventario/${NEGOCIO_ID}/mantenimiento/auditar-documento?tipo_documento=${encodeURIComponent(tipo)}&documento_numero=${encodeURIComponent(numero)}&proveedor_id=${terceroId}`);
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Error al cargar detalles del documento');
+
+        // Botones de acción
+        const btnAnular = document.getElementById('btn-aud-anular');
+        const btnEliminar = document.getElementById('btn-aud-eliminar');
+
+        if (d.es_interno) {
+          if (btnAnular) {
+            btnAnular.innerHTML = '<span>🚫</span> <span>Anular Documento</span>';
+            btnAnular.title = 'Conserva el consecutivo fiscal como anulado.';
+          }
+          if (btnEliminar) {
+            if (d.es_ultimo_consecutivo) {
+              btnEliminar.classList.remove('hidden');
+              btnEliminar.disabled = false;
+              btnEliminar.innerHTML = '<span>🗑️</span> <span>Eliminar y Liberar</span>';
+              btnEliminar.title = 'Elimina la transacción y retrocede el consecutivo en 1 para ser reutilizado.';
+            } else {
+              btnEliminar.classList.add('hidden');
+            }
+          }
+        } else {
+          if (btnAnular) {
+            btnAnular.innerHTML = '<span>🚫</span> <span>Anular Registro</span>';
+          }
+          if (btnEliminar) {
+            btnEliminar.classList.remove('hidden');
+            btnEliminar.disabled = false;
+            btnEliminar.innerHTML = '<span>🗑️</span> <span>Eliminar Definitivamente</span>';
+          }
+        }
+
+        // Múltiples proveedores aviso
+        const divMultiples = document.getElementById('aud-multiples-proveedores-aviso');
+        if (divMultiples) {
+          if (d.multiples_proveedores && d.lista_proveedores && d.lista_proveedores.length > 1) {
+            divMultiples.classList.remove('hidden');
+            divMultiples.innerHTML = `
+              <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-amber-800 text-xs">
+                <div class="font-bold mb-1 flex items-center gap-1.5 text-amber-900">
+                  <i class="bi bi-exclamation-triangle-fill"></i>
+                  <span>Múltiples Terceros encontrados para este número (#${numero})</span>
+                </div>
+                <p class="mb-2 text-amber-800/90">Selecciona el tercero específico que deseas auditar:</p>
+                <div class="flex flex-wrap gap-2">
+                  ${d.lista_proveedores.map(p => `
+                    <button onclick="consultarDocumentoDetalle('${tipo}', '${numero}', '${p.id}')" 
+                            class="px-3 py-1.5 rounded-lg border text-xs font-bold transition ${String(p.id) === String(terceroId) ? 'bg-amber-600 text-white border-amber-600 shadow-xs' : 'bg-white hover:bg-amber-100 text-amber-900 border-amber-200'}">
+                      ${p.nombre || 'Sin Nombre'} (ID: ${p.id})
+                    </button>
+                  `).join('')}
+                </div>
+              </div>
+            `;
+          } else {
+            divMultiples.classList.add('hidden');
+            divMultiples.innerHTML = '';
+          }
+        }
+
+        // Determinar tercero
+        let provId = terceroId;
+        let provNombre = '';
+        if (d.inventario && d.inventario.length > 0) {
+          provId = d.inventario[0].proveedor_id || provId;
+          provNombre = d.inventario[0].proveedor_nombre || '';
+        } else if (d.ventas) {
+          provId = d.ventas.tercero_id || provId;
+          provNombre = d.ventas.cliente_nombre || '';
+        }
+
+        auditorDocumentoSeleccionado = { 
+          tipo: (d.tipo_documento_id || d.tipo_documento || tipo), 
+          numero, 
+          terceroId: provId, 
+          terceroNombre: provNombre,
+          tipo_movimiento: d.tipo_movimiento,
+          has_inventario: (d.inventario && d.inventario.length > 0),
+          comprobante_id: (d.contabilidad ? d.contabilidad.id : null)
+        };
+
+        // Header del documento auditado
+        document.getElementById('aud-res-doc-titulo').textContent = `${numero}`;
+        document.getElementById('aud-res-doc-badge-tipo').textContent = String(d.tipo_documento_nombre || d.tipo_documento || tipo).toUpperCase();
+        
+        let subInfo = [];
+        if (provNombre) subInfo.push(`Tercero: ${provNombre}`);
+        if (d.tipo_movimiento) subInfo.push(`Movimiento: ${d.tipo_movimiento.toUpperCase()}`);
+        document.getElementById('aud-res-doc-subtitulo').textContent = subInfo.join(' • ');
+
+        // Configurar estado del botón de modificar
+        const btnModificar = document.getElementById('btn-aud-modificar');
+        if (btnModificar) {
+          const tipoStr = String(tipo || '').toLowerCase();
+          const movStr = String(d.tipo_movimiento || '').toLowerCase();
+          if (movStr === 'venta' || tipoStr === 'pedido_venta' || tipoStr === 'ventas') {
+            btnModificar.disabled = true;
+            btnModificar.classList.add('opacity-40', 'cursor-not-allowed');
+            btnModificar.title = 'Las facturas de venta no se pueden modificar directamente desde aquí.';
+          } else {
+            btnModificar.disabled = false;
+            btnModificar.classList.remove('opacity-40', 'cursor-not-allowed');
+            btnModificar.title = '';
+          }
+        }
+
+        // Obtener fecha del documento para formulario de cabecera
+        let docFecha = '';
+        if (d.contabilidad && d.contabilidad.fecha) {
+          docFecha = d.contabilidad.fecha.split('T')[0];
+        } else if (d.inventario && d.inventario.length > 0) {
+          const item = d.inventario[0];
+          docFecha = (item.documento_fecha || (item.created_at ? item.created_at.split('T')[0] : ''));
+        } else if (d.ventas && d.ventas.fecha) {
+          docFecha = d.ventas.fecha.split('T')[0];
+        }
+
+        document.getElementById('aud-edit-fecha').value = docFecha;
+        document.getElementById('aud-edit-tercero-id').value = provId || '';
+        document.getElementById('aud-edit-tercero').value = provNombre || '';
+
+        // Render Inventario
+        const cardInv = document.getElementById('aud-card-inventario');
+        const tbodyInv = document.getElementById('aud-tbody-inventario');
+        if (d.inventario && d.inventario.length) {
+          cardInv.classList.remove('hidden');
+          const item = d.inventario[0];
+          const dateRaw = item.documento_fecha || (item.created_at ? item.created_at.split('T')[0] : null);
+          const invDate = formatearFechaLocal(dateRaw);
+          const terceroLbl = provNombre ? ` | Tercero: ${provNombre}` : '';
+          document.getElementById('aud-lbl-inv-documento').textContent = `Documento: ${tipo}-${numero}${terceroLbl} | Fecha: ${invDate}`;
+          tbodyInv.innerHTML = d.inventario.map(item => `
+            <tr class="hover:bg-slate-50 transition-colors">
+              <td class="py-2.5 px-4 font-semibold text-slate-800">
+                ${item.nombre_producto}
+                ${item.producto_padre_nombre ? `<span class="text-slate-400 text-[10px] block font-normal">(Origen: ${item.producto_padre_nombre})</span>` : ''}
+              </td>
+              <td class="py-2.5 px-4"><span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase ${item.tipo === 'entrada' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">${item.tipo}</span></td>
+              <td class="py-2.5 px-4 text-slate-500">${item.motivo || '—'}</td>
+              <td class="py-2.5 px-4 text-right font-mono">${item.cantidad.toLocaleString('es-CO')}</td>
+              <td class="py-2.5 px-4 text-right font-mono">$${item.valor_unitario !== null && item.valor_unitario !== undefined ? item.valor_unitario.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '—'}</td>
+              <td class="py-2.5 px-4 text-right font-mono font-bold text-slate-900">$${item.valor_total !== null && item.valor_total !== undefined ? item.valor_total.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '—'}</td>
+            </tr>
+          `).join('');
+        } else {
+          cardInv.classList.add('hidden');
+          tbodyInv.innerHTML = '';
+        }
+
+        // Render Contabilidad
+        const cardCont = document.getElementById('aud-card-contabilidad');
+        const tbodyCont = document.getElementById('aud-tbody-contabilidad');
+        if (d.contabilidad) {
+          cardCont.classList.remove('hidden');
+          if (d.contabilidad.numero_comprobante.includes(d.contabilidad.documento_fisico)) {
+            document.getElementById('aud-badge-cc-numero').textContent = d.contabilidad.numero_comprobante;
+          } else {
+            document.getElementById('aud-badge-cc-numero').textContent = `${d.contabilidad.numero_comprobante} (Doc: ${d.contabilidad.documento_fisico || '—'})`;
+          }
+
+          const badgeSaldo = document.getElementById('aud-badge-cc-saldo');
+          if (d.saldo_pendiente !== undefined && d.saldo_pendiente !== null) {
+            badgeSaldo.textContent = `Saldo Pendiente: $${d.saldo_pendiente.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            badgeSaldo.classList.remove('hidden');
+          } else {
+            badgeSaldo.classList.add('hidden');
+          }
+
+          document.getElementById('aud-lbl-cc-concepto').textContent = `Fecha: ${formatearFechaLocal(d.contabilidad.fecha)} | Concepto: ${d.contabilidad.descripcion || '—'}`;
+
+          tbodyCont.innerHTML = d.contabilidad.asientos.map(e => `
+            <tr class="hover:bg-slate-50 transition-colors">
+              <td class="py-2.5 px-4 font-mono font-semibold text-slate-800">${e.cuenta}</td>
+              <td class="py-2.5 px-4 text-slate-600">${e.concepto || '—'}</td>
+              <td class="py-2.5 px-4 text-right font-mono text-slate-800">${e.tipo === 'D' ? '$' + e.monto.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '—'}</td>
+              <td class="py-2.5 px-4 text-right font-mono text-slate-800">${e.tipo === 'C' ? '$' + e.monto.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '—'}</td>
+            </tr>
+          `).join('');
+          document.getElementById('aud-val-cc-debito').textContent = '$' + d.contabilidad.total_debitos.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+          document.getElementById('aud-val-cc-credito').textContent = '$' + d.contabilidad.total_creditos.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        } else {
+          cardCont.classList.add('hidden');
+          tbodyCont.innerHTML = '';
+        }
+
+        // Render Ventas
+        const cardVtas = document.getElementById('aud-card-ventas');
+        const tbodyVtas = document.getElementById('aud-tbody-ventas');
+        if (d.ventas) {
+          cardVtas.classList.remove('hidden');
+          const vDate = formatearFechaLocal(d.ventas.fecha);
+          document.getElementById('aud-lbl-venta-cliente').textContent = `Cliente: ${d.ventas.cliente_nombre || 'Mostrador'} | Fecha: ${vDate} | Pago: ${d.ventas.metodo_pago || '—'}`;
+
+          const badgeEst = document.getElementById('aud-badge-venta-estado');
+          const estStr = d.ventas.estado || 'registrado';
+          badgeEst.textContent = estStr.toUpperCase();
+          if (estStr === 'anulado') {
+            badgeEst.className = 'text-xs font-bold px-3 py-1 rounded-full bg-red-100 text-red-800';
+          } else {
+            badgeEst.className = 'text-xs font-bold px-3 py-1 rounded-full bg-emerald-100 text-emerald-800';
+          }
+
+          tbodyVtas.innerHTML = d.ventas.items.map(item => `
+            <tr class="hover:bg-slate-50 transition-colors">
+              <td class="py-2.5 px-4 font-semibold text-slate-800">${item.nombre_producto}</td>
+              <td class="py-2.5 px-4 text-right font-mono">${item.cantidad.toLocaleString('es-CO')}</td>
+              <td class="py-2.5 px-4 text-right font-mono">$${item.precio_unitario.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+              <td class="py-2.5 px-4 text-right font-mono font-bold text-slate-900">$${item.subtotal.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+            </tr>
+          `).join('');
+        } else {
+          cardVtas.classList.add('hidden');
+          tbodyVtas.innerHTML = '';
+        }
+
+        resultados.classList.remove('hidden');
+        resultados.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } catch(e) {
+        console.error(e);
+        toast(e.message || 'Error al obtener detalles del documento', false);
+        vacio.classList.remove('hidden');
+      } finally {
+        loader.classList.add('hidden');
+      }
+    }
+
+    function modificarDocumentoAuditor() {
+      let sel = auditorDocumentoSeleccionado;
+      if (!sel) {
+        const urlParams = new URLSearchParams(window.location.search);
+        const qTipo = urlParams.get('tipo_documento') || document.getElementById('auditor-filtro-tipo')?.value;
+        const qNum = urlParams.get('documento_numero') || document.getElementById('auditor-directo-num')?.value;
+        const qTercero = urlParams.get('tercero_id') || '';
+        if (qNum) {
+          sel = { tipo: qTipo, numero: qNum, terceroId: qTercero, has_inventario: true };
+        }
+      }
+      if (!sel) {
+        toast('No se ha seleccionado ningún documento para modificar.', false);
+        return;
+      }
+      const { tipo, numero, terceroId, terceroNombre, tipo_movimiento, has_inventario, comprobante_id } = sel;
+
+      const tipoLower = String(tipo || '').toLowerCase();
+      const movLower = String(tipo_movimiento || '').toLowerCase();
+      if (movLower === 'venta' || tipoLower === 'pedido_venta' || tipoLower === 'ventas') {
+        toast('Las facturas de venta no se pueden modificar directamente desde aquí.', false);
+        return;
+      }
+
+      if (movLower === 'produccion' || tipoLower === 'produccion') {
+        window.location.href = `/produccion/${NEGOCIO_ID}`;
+        return;
+      }
+
+      if (has_inventario || movLower === 'entrada') {
+        window.location.href = `/entradas/${NEGOCIO_ID}?tipo_doc=${encodeURIComponent(tipo || '')}&num_doc=${encodeURIComponent(numero || '')}&prov_id=${encodeURIComponent(terceroId || '')}&prov_nom=${encodeURIComponent(terceroNombre || '')}`;
+      } else {
+        let extra = '';
+        if (comprobante_id) {
+          extra = `&comprobante_id=${comprobante_id}`;
+        }
+        window.location.href = `/admin/contabilidad/${NEGOCIO_ID}?tab=manual&tipo_doc=${encodeURIComponent(tipo || '')}&num_doc=${encodeURIComponent(numero || '')}${extra}`;
+      }
+    }
+
+    async function anularDocumentoAuditor() {
+      if (!auditorDocumentoSeleccionado) return;
+      const { tipo, numero, terceroId } = auditorDocumentoSeleccionado;
+
+      const confirmed = confirm(`¿ESTÁS SEGURO de que deseas ANULAR el documento "${numero}"?\n\nEsta acción eliminará sus movimientos contables y de Kardex, y marcará el pedido como ANULADO en el historial. El consecutivo fiscal se conservará como anulado.`);
+      if (!confirmed) return;
+
+      const btn = document.getElementById('btn-aud-anular');
+      btn.disabled = true;
+      btn.textContent = 'Anulando...';
+
+      try {
+        const r = await fetch(`/api/inventario/${NEGOCIO_ID}/mantenimiento/anular-documento`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            tipo_documento: tipo,
+            documento_numero: numero,
+            proveedor_id: terceroId
+          })
+        });
+        const d = await r.json();
+        if (d.ok) {
+          toast('Documento y todos sus registros anulados con éxito');
+          if (terceroId) {
+            cargarDocumentosTercero(terceroId);
+          }
+        } else {
+          toast(d.error || 'Error al anular documento', false);
+        }
+      } catch (e) {
+        console.error(e);
+        toast('Error de red al anular documento', false);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span>🚫</span> <span>Anular Documento</span>';
+      }
+    }
+
+    async function eliminarDocumentoAuditor() {
+      if (!auditorDocumentoSeleccionado) return;
+      const { tipo, numero, terceroId } = auditorDocumentoSeleccionado;
+
+      const confirmed = confirm(`¿ESTÁS SEGURO de que deseas ELIMINAR COMPLETAMENTE el documento "${numero}"?\n\nEsta acción borrará definitivamente el registro de la base de datos y liberará el número de consecutivo para que vuelva a estar disponible.`);
+      if (!confirmed) return;
+
+      const btn = document.getElementById('btn-aud-eliminar');
+      btn.disabled = true;
+      btn.textContent = 'Eliminando...';
+
+      try {
+        const r = await fetch(`/api/inventario/${NEGOCIO_ID}/mantenimiento/anular-documento`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            tipo_documento: tipo,
+            documento_numero: numero,
+            proveedor_id: terceroId,
+            accion: 'eliminar'
+          })
+        });
+        const d = await r.json();
+        if (d.ok) {
+          toast(d.consecutivo_liberado ? 'Documento eliminado y consecutivo liberado con éxito' : 'Documento eliminado con éxito');
+          document.getElementById('auditor-resultados').classList.add('hidden');
+          document.getElementById('auditor-vacio').classList.remove('hidden');
+          if (terceroId) {
+            cargarDocumentosTercero(terceroId);
+          }
+        } else {
+          toast(d.error || 'Error al eliminar documento', false);
+        }
+      } catch (e) {
+        console.error(e);
+        toast('Error de red al eliminar documento', false);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span>🗑️</span> <span>Eliminar y Liberar</span>';
+      }
+    }
+
+    async function guardarCambiosAuditoriaDocumento() {
+      if (!auditorDocumentoSeleccionado) return;
+      const { tipo, numero, terceroId } = auditorDocumentoSeleccionado;
+
+      const nuevaFecha = document.getElementById('aud-edit-fecha').value;
+      const nuevoTerceroId = parseInt(document.getElementById('aud-edit-tercero-id').value) || null;
+
+      if (!nuevaFecha && !nuevoTerceroId) {
+        toast('Debe especificar al menos un campo a modificar (fecha o tercero)', false);
+        return;
+      }
+
+      const btn = document.getElementById('btn-aud-guardar-cambios');
+      btn.disabled = true;
+      btn.textContent = 'Guardando cambios...';
+
+      try {
+        const resp = await fetch(`/api/inventario/${NEGOCIO_ID}/mantenimiento/modificar-documento`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            tipo_documento: tipo,
+            documento_numero: numero,
+            nueva_fecha: nuevaFecha || null,
+            nuevo_tercero_id: nuevoTerceroId
+          })
+        });
+
+        const data = await resp.json();
+        if (data.ok) {
+          toast(data.mensaje || 'Documento modificado con éxito');
+          await consultarDocumentoDetalle(tipo, numero, nuevoTerceroId || terceroId);
+          if (nuevoTerceroId || terceroId) {
+            cargarDocumentosTercero(nuevoTerceroId || terceroId);
+          }
+        } else {
+          toast(data.error || 'Error al guardar modificaciones del documento', false);
+        }
+      } catch (e) {
+        console.error(e);
+        toast('Error de red al guardar modificaciones', false);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Guardar Cambios de Cabecera';
+      }
+    }
+
+    async function cargarTiposDocumentosFiltro() {
+      try {
+        const r = await fetch(`/api/inventario/${NEGOCIO_ID}/mantenimiento/tipos-documentos`);
+        const d = await r.json();
+        if (d.ok) {
+          const selectRecientes = document.getElementById('aud-filtro-recientes-tipo');
+          const selectDirecto = document.getElementById('auditor-directo-tipo');
+
+          if (selectRecientes) {
+            selectRecientes.innerHTML = `<option value="todos">Todos los tipos</option>`;
+            (d.tipos || []).forEach(t => {
+              selectRecientes.innerHTML += `<option value="${t.id}">${t.nombre}</option>`;
+            });
+          }
+          if (selectDirecto) {
+            selectDirecto.innerHTML = '<option value="">Cualquier tipo</option>';
+            (d.tipos || []).forEach(t => {
+              selectDirecto.innerHTML += `<option value="${t.id}">${t.nombre}</option>`;
+            });
+          }
+        }
+      } catch(e) {
+        console.error('Error al cargar tipos de documentos para filtros:', e);
+      }
+    }
+
+    async function cargarDocumentosRecientes() {
+      const tbody = document.getElementById('aud-tbody-recientes');
+      if (!tbody) return;
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="8" class="text-center text-slate-400 py-8">
+            <div class="inline-block animate-spin text-indigo-500 text-xl mb-1">
+              <i class="bi bi-arrow-repeat"></i>
+            </div>
+            <p>Cargando transacciones recientes...</p>
+          </td>
+        </tr>
+      `;
+      try {
+        const queryParams = new URLSearchParams({
+          page: audFiltros.page,
+          q: audFiltros.q,
+          tipo: audFiltros.tipo,
+          desde: audFiltros.desde,
+          hasta: audFiltros.hasta
+        });
+        const r = await fetch(`/api/inventario/${NEGOCIO_ID}/mantenimiento/documentos-recientes?${queryParams.toString()}`);
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Error al cargar transacciones');
+
+        const docs = d.documentos || [];
+
+        audTotalPages = d.total_paginas || 1;
+        document.getElementById('aud-total-recientes').textContent = d.total_registros || 0;
+        document.getElementById('aud-pag-actual').textContent = d.pagina_actual || 1;
+        document.getElementById('aud-pag-total').textContent = audTotalPages;
+
+        const prevBtn = document.getElementById('btn-aud-recientes-prev');
+        const nextBtn = document.getElementById('btn-aud-recientes-next');
+        if (prevBtn) prevBtn.disabled = (d.pagina_actual <= 1);
+        if (nextBtn) nextBtn.disabled = (d.pagina_actual >= audTotalPages);
+
+        if (!docs.length) {
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="8" class="text-center text-slate-400 py-8">No se encontraron transacciones que coincidan con la búsqueda</td>
+            </tr>
+          `;
+          return;
+        }
+
+        tbody.innerHTML = docs.map(doc => {
+          let typeStr = doc.tipo_documento.toUpperCase();
+          if (doc.tipo_documento === 'comprobante_diario') typeStr = 'Comprobante';
+          else if (doc.tipo_documento === 'movimiento_inventario') typeStr = 'Inventario';
+          else if (doc.tipo_documento === 'pedido_venta') typeStr = 'Venta / Pedido';
+
+          let dateFormatted = doc.fecha || '—';
+          if (dateFormatted !== '—' && dateFormatted.includes('T')) {
+            dateFormatted = dateFormatted.split('T')[0];
+          }
+
+          return `
+            <tr class="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
+              <td class="py-2.5 px-4 text-slate-500">${dateFormatted}</td>
+              <td class="py-2.5 px-4 font-bold text-slate-700">${typeStr}</td>
+              <td class="py-2.5 px-4 font-mono font-bold text-slate-800">${doc.documento_numero}</td>
+              <td class="py-2.5 px-4 text-slate-600">${doc.tercero_nombre || 'Cliente General'}</td>
+              <td class="py-2.5 px-4 text-right font-mono font-semibold text-slate-700">${doc.total_contable != null ? '$' + doc.total_contable.toLocaleString('es-CO') : '—'}</td>
+              <td class="py-2.5 px-4 text-right font-mono font-semibold text-slate-700">${doc.total_inventario != null ? '$' + doc.total_inventario.toLocaleString('es-CO') : '—'}</td>
+              <td class="py-2.5 px-4 text-right font-mono font-semibold text-slate-700">${doc.total_pedidos != null ? '$' + doc.total_pedidos.toLocaleString('es-CO') : '—'}</td>
+              <td class="py-2.5 px-4 text-center">
+                <button onclick="consultarDocumentoDetalle('${doc.tipo_documento}', '${doc.documento_numero_completo || doc.documento_numero}', '${doc.tercero_id || ''}')" 
+                        class="px-3 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 font-bold rounded-lg text-[11px] transition inline-flex items-center gap-1">
+                  <i class="bi bi-search"></i> <span>Auditar</span>
+                </button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      } catch(e) {
+        console.error(e);
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="8" class="text-center text-red-500 py-6">Error: ${e.message}</td>
+          </tr>
+        `;
+      }
+    }
+
+    function aplicarFiltrosAuditoria() {
+      audFiltros.page = 1;
+      audFiltros.q = document.getElementById('aud-filtro-recientes-q').value.trim();
+      audFiltros.tipo = document.getElementById('aud-filtro-recientes-tipo').value;
+      audFiltros.desde = document.getElementById('aud-filtro-recientes-desde').value;
+      audFiltros.hasta = document.getElementById('aud-filtro-recientes-hasta').value;
+      cargarDocumentosRecientes();
+    }
+
+    function limpiarFiltrosAuditoria() {
+      document.getElementById('aud-filtro-recientes-q').value = '';
+      document.getElementById('aud-filtro-recientes-tipo').value = 'todos';
+      document.getElementById('aud-filtro-recientes-desde').value = '';
+      document.getElementById('aud-filtro-recientes-hasta').value = '';
+
+      audFiltros = { page: 1, q: '', tipo: 'todos', desde: '', hasta: '' };
+      cargarDocumentosRecientes();
+    }
+
+    function audPaginaAnterior() {
+      if (audFiltros.page > 1) {
+        audFiltros.page--;
+        cargarDocumentosRecientes();
+      }
+    }
+
+    function audPaginaSiguiente() {
+      if (audFiltros.page < audTotalPages) {
+        audFiltros.page++;
+        cargarDocumentosRecientes();
+      }
+    }
+
+    // Helper autocomplete remoto
+    function setupRemoteAC(inputId, listId, onSelect) {
+      const inp = document.getElementById(inputId);
+      const list = document.getElementById(listId);
+      if (!inp || !list) return;
+
+      let timer = null;
+      let idx = -1;
+
+      inp.addEventListener('input', () => {
+        clearTimeout(timer);
+        idx = -1;
+        const q = inp.value.trim();
+        if (q.length < 2) {
+          list.classList.add('hidden');
+          return;
+        }
+        timer = setTimeout(() => fetchAC(q), 220);
+      });
+
+      inp.addEventListener('keydown', (e) => {
+        const items = list.querySelectorAll('.ac-item');
+        if (!items.length || list.classList.contains('hidden')) return;
+
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          idx = (idx + 1) % items.length;
+          highlightAC(items);
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          idx = (idx - 1 + items.length) % items.length;
+          highlightAC(items);
+        } else if (e.key === 'Enter') {
+          e.preventDefault();
+          if (idx >= 0 && items[idx]) items[idx].click();
+        } else if (e.key === 'Escape') {
+          list.classList.add('hidden');
+        }
+      });
+
+      document.addEventListener('click', (e) => {
+        if (!inp.contains(e.target) && !list.contains(e.target)) {
+          list.classList.add('hidden');
+        }
+      });
+
+      async function fetchAC(q) {
+        try {
+          const r = await fetch(`/api/inventario/terceros/buscar?q=${encodeURIComponent(q)}`);
+          const data = await r.json();
+          if (!data || !data.length) {
+            list.innerHTML = '<div class="p-3 text-xs text-slate-400 italic">Sin resultados</div>';
+            list.classList.remove('hidden');
+            return;
+          }
+          list.innerHTML = '';
+          data.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'ac-item';
+            div.innerHTML = `
+              <div class="font-bold text-slate-800">${item.nombre}</div>
+              <div class="text-[10px] text-slate-400">ID: ${item.id} ${item.nit ? `· NIT/CC: ${item.nit}` : ''}</div>
+            `;
+            div.addEventListener('click', () => {
+              onSelect(item);
+              list.classList.add('hidden');
+            });
+            list.appendChild(div);
+          });
+          list.classList.remove('hidden');
+        } catch(e) {
+          console.error(e);
+        }
+      }
+
+      function highlightAC(items) {
+        items.forEach((el, i) => el.classList.toggle('ac-focus', i === idx));
+        if (idx >= 0) items[idx].scrollIntoView({block: 'nearest'});
+      }
+    }
+
+    // Inicialización y eventos
+    setupRemoteAC('auditor-tercero', 'auditor-tercero-list', ({id, nombre}) => {
+      sincronizarTerceroAuditoria(id, nombre);
+      cargarDocumentosTercero(id, nombre);
+    });
+
+    setupRemoteAC('aud-edit-tercero', 'aud-edit-tercero-list', ({id, nombre}) => {
+      document.getElementById('aud-edit-tercero-id').value = id;
+      document.getElementById('aud-edit-tercero').value = nombre;
+    });
+
+    // Boot inicial
+    document.addEventListener('DOMContentLoaded', async () => {
+      await cargarTiposDocumentosFiltro();
+
+      const urlParams = new URLSearchParams(window.location.search);
+      const deepTipo = urlParams.get('tipo_documento');
+      const deepNum = urlParams.get('documento_numero');
+      const deepTercero = urlParams.get('tercero_id') || '';
+
+      if (deepNum) {
+        // Documento específico a auditar
+        document.getElementById('auditor-directo-num').value = deepNum;
+        if (deepTipo) {
+          document.getElementById('auditor-directo-tipo').value = deepTipo;
+        }
+        await consultarDocumentoDetalle(deepTipo || '', deepNum, deepTercero);
+        if (deepTercero) {
+          cargarDocumentosTercero(deepTercero);
+        }
+      } else if (deepTercero) {
+        // Solo tercero pasado en URL
+        cargarDocumentosTercero(deepTercero);
+      } else {
+        // Carga por defecto: Tercero Ocasional para tener la vista lista
+        initDefaultAuditorTercero();
+      }
+    });
+  </script>
+</body>
+</html>

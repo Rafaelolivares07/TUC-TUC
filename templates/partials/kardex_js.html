@@ -1493,10 +1493,16 @@ function renderizarTablaKardex(d) {
     } else if (cleanType) { docColTipo = cleanType.toLowerCase(); }
     else if (cleanNum) { docColNum = cleanNum; }
     else if (docDisplay) { docColTipo = docDisplay; }
-    const docLinkIcono = docNumRaw ? `<a href="${linkDocUrl}" target="_blank" rel="noopener noreferrer" title="Auditar documento en pestaña nueva" class="text-blue-500 hover:text-blue-700 transition font-bold text-xs inline-flex items-center">↗</a>` : '';
-    const docColumna = (docColTipo || docColNum)
-      ? `<div class="leading-snug"><div class="font-semibold text-gray-800 text-[11px]">${docColTipo}${(!docColNum && docLinkIcono) ? ' ' + docLinkIcono : ''}</div>${docColNum ? `<div class="text-gray-700 text-[11px] flex items-center gap-1 mt-0.5"><span>${docColNum}</span>${docLinkIcono}</div>` : ''}</div>`
+    const docInner = (docColTipo || docColNum)
+      ? `<div class="leading-snug">` +
+          (docColTipo ? `<div class="font-semibold text-[11px]">${docColTipo}</div>` : '') +
+          (docColNum ? `<div class="text-[11px] flex items-center gap-1 mt-0.5"><span>${docColNum}</span><span class="text-blue-500 group-hover:text-blue-700 font-bold text-xs inline-flex items-center">↗</span></div>` : (docColTipo ? `<span class="text-blue-500 group-hover:text-blue-700 font-bold text-xs inline-flex items-center ml-1">↗</span>` : '')) +
+        `</div>`
       : `<div class="text-slate-400 font-mono text-[10px]">#${m.id}</div>`;
+
+    const docColumna = (linkDocUrl && (docColTipo || docColNum))
+      ? `<a href="${linkDocUrl}" target="_blank" rel="noopener noreferrer" title="Auditar documento ${docNumRaw || ''} en pestaña nueva" class="block text-gray-800 hover:text-blue-600 transition group">${docInner}</a>`
+      : docInner;
 
     let docOrProveedorInfo = '';
     if (m.proveedor_nombre) {

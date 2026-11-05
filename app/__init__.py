@@ -272,6 +272,7 @@ def create_app():
                 request.path.startswith('/proyecto/') or request.path.startswith('/solar/proyecto/') or
                 request.path.startswith('/kardex') or request.path.startswith('/entrar') or
                 request.path.startswith('/login') or request.path.startswith('/logout') or
+                request.path.startswith('/admin/') or
                 request.path.startswith('/admin/login')):
             return
 

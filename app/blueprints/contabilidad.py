@@ -2279,14 +2279,25 @@ def api_puc_editar(cuenta_id):
                 curr = conn.execute("SELECT codigo FROM cuentas_puc WHERE id = %s", (cuenta_id,)).fetchone()
                 if curr:
                     curr_cod = str(curr['codigo']).strip()
-                    if len(curr_cod) > 4:
-                        raiz_4 = curr_cod[:4]
-                        if not conn.execute("SELECT 1 FROM cuentas_puc WHERE codigo = %s LIMIT 1", (raiz_4,)).fetchone():
-                            conn.close()
-                            return jsonify({
-                                'ok': False,
-                                'error': f'No se puede activar movimiento en la cuenta {curr_cod} porque no existe su cuenta raíz de 4 caracteres ({raiz_4}). Debe crear primero la cuenta raíz {raiz_4}.'
-                            }), 400
+                    if len(curr_cod) <= 4:
+                        conn.close()
+                        return jsonify({
+                            'ok': False,
+                            'error': f'La cuenta {curr_cod} es una Cuenta Mayor ({len(curr_cod)} dígitos) y no puede aceptar movimiento ni detalle. El registro contable exige mínimo 6 dígitos (subcuenta).'
+                        }), 400
+                    if len(curr_cod) < 6:
+                        conn.close()
+                        return jsonify({
+                            'ok': False,
+                            'error': f'Una cuenta de movimiento o detalle debe tener al menos 6 dígitos (subcuenta estándar) u 8+ (auxiliar). Código inválido: {curr_cod}.'
+                        }), 400
+                    raiz_4 = curr_cod[:4]
+                    if not conn.execute("SELECT 1 FROM cuentas_puc WHERE codigo = %s LIMIT 1", (raiz_4,)).fetchone():
+                        conn.close()
+                        return jsonify({
+                            'ok': False,
+                            'error': f'No se puede activar movimiento en la cuenta {curr_cod} porque no existe su cuenta mayor raíz de 4 caracteres ({raiz_4}).'
+                        }), 400
             fields.append("acepta_movimiento = %s")
             params.append(es_mov)
         if 'maneja_terceros' in data:
@@ -2550,21 +2561,29 @@ def api_puc_nueva():
         _asegurar_tablas(conn)
 
         # Validación de jerarquía y raíz natural para cuentas de movimiento o detalle:
-        if acepta_movimiento:
-            if len(codigo) < 4:
+        if len(codigo) <= 4:
+            if acepta_movimiento:
                 conn.close()
                 return jsonify({
                     'ok': False,
-                    'error': f'Una cuenta con característica de movimiento o detalle debe tener al menos 4 caracteres (código recibido: {codigo}).'
+                    'error': f'La cuenta {codigo} es una Cuenta Mayor o de Agrupación ({len(codigo)} dígitos) y NO puede tener la característica de movimiento ni detalle. El nivel de registro requiere mínimo 6 dígitos (subcuenta).'
                 }), 400
-            if len(codigo) > 4:
+            acepta_movimiento = False
+        else:
+            if acepta_movimiento:
+                if len(codigo) < 6:
+                    conn.close()
+                    return jsonify({
+                        'ok': False,
+                        'error': f'Una cuenta con característica de movimiento o detalle debe tener mínimo 6 dígitos (subcuenta estándar) u 8+ (auxiliar). Código inválido: {codigo}.'
+                    }), 400
                 raiz_4 = codigo[:4]
                 existe_raiz = conn.execute("SELECT 1 FROM cuentas_puc WHERE codigo = %s LIMIT 1", (raiz_4,)).fetchone()
                 if not existe_raiz:
                     conn.close()
                     return jsonify({
                         'ok': False,
-                        'error': f'No se puede crear la cuenta de movimiento {codigo} porque no existe su cuenta raíz de 4 caracteres ({raiz_4}). Debe crear primero la cuenta raíz {raiz_4}.'
+                        'error': f'No se puede crear la cuenta de movimiento {codigo} porque no existe su cuenta mayor raíz de 4 caracteres ({raiz_4}). Debe crear primero la cuenta raíz {raiz_4}.'
                     }), 400
 
         # Inferencia automática de código padre si no fue provisto

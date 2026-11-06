@@ -1232,13 +1232,13 @@
           <option value="credito">Crédito</option>
         </select>
       </div>
-      <label class="flex items-start gap-2.5 p-2.5 rounded-xl bg-blue-50/60 border border-blue-200 cursor-pointer select-none">
+      <div id="mpuc-movimiento-wrap" class="flex items-start gap-2.5 p-2.5 rounded-xl bg-blue-50/60 border border-blue-200 transition-all select-none">
         <input type="checkbox" id="mpuc-movimiento" checked class="w-4 h-4 mt-0.5 accent-blue-600 rounded">
         <div>
           <span class="text-xs font-bold text-blue-900 block">Cuenta de Movimiento / Detalle</span>
-          <span class="text-[11px] text-blue-700 leading-tight block">Permite asentar registros directos (exige que exista la cuenta raíz de 4 caracteres).</span>
+          <span id="mpuc-movimiento-desc" class="text-[11px] text-blue-700 leading-tight block">Permite asentar registros directos (requiere mínimo 6 dígitos y cuenta mayor raíz de 4).</span>
         </div>
-      </label>
+      </div>
       <input id="mpuc-padre" type="text" placeholder="Código padre (opcional, inferido de la raíz)"
              class="border rounded-lg px-3 py-2 text-xs w-full text-gray-600 bg-gray-50">
     </div>
@@ -1690,27 +1690,55 @@ function autoDetectarNivelPUC(val) {
   const clean = (val || '').trim();
   const selNivel = document.getElementById('mpuc-nivel');
   const chkMov = document.getElementById('mpuc-movimiento');
+  const wrapMov = document.getElementById('mpuc-movimiento-wrap');
+  const descMov = document.getElementById('mpuc-movimiento-desc');
   const inpPadre = document.getElementById('mpuc-padre');
   if (!selNivel) return;
+
   if (clean.length <= 4) {
     selNivel.value = '3';
-    if (chkMov) chkMov.checked = false;
+    if (chkMov) {
+      chkMov.checked = false;
+      chkMov.disabled = true;
+    }
+    if (wrapMov) wrapMov.classList.add('opacity-40', 'cursor-not-allowed', 'bg-gray-100', 'border-gray-200');
+    if (descMov) descMov.textContent = 'Las cuentas de 4 dígitos o menos son Cuentas Mayores de agrupación y NO aceptan movimiento.';
     if (inpPadre && clean.length === 4) inpPadre.value = clean.slice(0, 2);
-  } else if (clean.length <= 6) {
-    selNivel.value = '4';
-    if (chkMov) chkMov.checked = true;
-    if (inpPadre) inpPadre.value = clean.slice(0, 4);
   } else {
-    selNivel.value = '5';
-    if (chkMov) chkMov.checked = true;
-    if (inpPadre) inpPadre.value = clean.slice(0, 6);
+    if (clean.length <= 6) {
+      selNivel.value = '4';
+      if (inpPadre) inpPadre.value = clean.slice(0, 4);
+    } else {
+      selNivel.value = '5';
+      if (inpPadre) inpPadre.value = clean.slice(0, 6);
+    }
+    if (chkMov) {
+      chkMov.disabled = false;
+      chkMov.checked = (clean.length >= 6);
+    }
+    if (wrapMov) wrapMov.classList.remove('opacity-40', 'cursor-not-allowed', 'bg-gray-100', 'border-gray-200');
+    if (descMov) descMov.textContent = 'Permite asentar registros directos (requiere mínimo 6 dígitos y cuenta mayor raíz de 4).';
   }
 }
 
 function onCambioNivelPUC(nivelVal) {
   const chkMov = document.getElementById('mpuc-movimiento');
-  if (chkMov) {
-    chkMov.checked = (parseInt(nivelVal) >= 4);
+  const wrapMov = document.getElementById('mpuc-movimiento-wrap');
+  const descMov = document.getElementById('mpuc-movimiento-desc');
+  if (parseInt(nivelVal) <= 3) {
+    if (chkMov) {
+      chkMov.checked = false;
+      chkMov.disabled = true;
+    }
+    if (wrapMov) wrapMov.classList.add('opacity-40', 'cursor-not-allowed', 'bg-gray-100', 'border-gray-200');
+    if (descMov) descMov.textContent = 'Las cuentas de 4 dígitos o menos son Cuentas Mayores de agrupación y NO aceptan movimiento.';
+  } else {
+    if (chkMov) {
+      chkMov.disabled = false;
+      chkMov.checked = true;
+    }
+    if (wrapMov) wrapMov.classList.remove('opacity-40', 'cursor-not-allowed', 'bg-gray-100', 'border-gray-200');
+    if (descMov) descMov.textContent = 'Permite asentar registros directos (requiere mínimo 6 dígitos y cuenta mayor raíz de 4).';
   }
 }
 
@@ -1733,9 +1761,13 @@ async function guardarNuevaCuenta() {
     return;
   }
 
-  // Validación de cuenta raíz en cliente si acepta movimiento:
-  if (acepta_movimiento && codigo.length < 4) {
-    toast('Una cuenta de movimiento o detalle debe tener al menos 4 caracteres', false);
+  // Validación estricta de cuenta mayor vs movimiento en cliente:
+  if (codigo.length <= 4 && acepta_movimiento) {
+    toast('Las cuentas de 4 dígitos o menos son Cuentas Mayores y no pueden aceptar movimiento', false);
+    return;
+  }
+  if (acepta_movimiento && codigo.length < 6) {
+    toast('Las cuentas de movimiento o detalle deben tener al menos 6 dígitos (subcuenta estándar)', false);
     return;
   }
 

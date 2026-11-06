@@ -135,6 +135,7 @@
               <th class="px-3 py-2 text-center bg-gray-50">Mov.</th>
               <th class="px-3 py-2 text-center bg-gray-50">Maneja Terc.</th>
               <th class="px-3 py-2 text-center bg-gray-50">Maneja Doc.</th>
+              <th class="px-3 py-2 text-center bg-gray-50 w-12">Acción</th>
             </tr>
           </thead>
           <tbody id="puc-body"></tbody>
@@ -1394,6 +1395,15 @@ function filaPUCHtml(c) {
                class="w-4 h-4 accent-blue-600 rounded"
                onchange="patchCuentaPUC(${c.id}, {maneja_documentos: this.checked})">
       </td>
+      <td class="px-3 py-2 text-center">
+        <button type="button" onclick="eliminarCuentaPUC(${c.id}, '${c.codigo}', '${escapeHtml(c.nombre)}')" 
+                title="Eliminar cuenta ${c.codigo}"
+                class="text-gray-400 hover:text-rose-600 hover:bg-rose-50 p-1 rounded-lg transition-colors cursor-pointer">
+          <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+          </svg>
+        </button>
+      </td>
     </tr>`;
 }
 
@@ -1441,6 +1451,31 @@ async function patchCuentaPUC(id, payload) {
     }
   } catch (err) {
     toast('Error de red al actualizar cuenta', false);
+  }
+}
+
+async function eliminarCuentaPUC(id, codigo, nombre) {
+  if (!confirm(`¿Está seguro de eliminar la cuenta ${codigo} - ${nombre}?\n\nEl sistema validará que no tenga movimientos ni esté en uso en ningún módulo.`)) {
+    return;
+  }
+  try {
+    const resp = await fetch(`/api/contabilidad/puc/${id}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      toast(data.mensaje || 'Cuenta eliminada');
+      const fila = document.getElementById(`fila-puc-${codigo}`);
+      if (fila) {
+        fila.classList.add('bg-rose-100', 'transition-all', 'duration-500');
+        setTimeout(() => fila.remove(), 400);
+      }
+    } else {
+      alert(`⚠️ NO SE PUEDE ELIMINAR LA CUENTA ${codigo}:\n\n${data.error}`);
+    }
+  } catch(e) {
+    toast('Error de red al intentar eliminar la cuenta', false);
   }
 }
 

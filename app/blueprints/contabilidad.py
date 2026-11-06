@@ -2301,6 +2301,118 @@ def api_puc_editar(cuenta_id):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@bp.route('/api/contabilidad/puc/<int:cuenta_id>', methods=['DELETE'])
+def api_puc_eliminar(cuenta_id):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    from ..db import get_db_connection
+    conn = get_db_connection()
+    try:
+        c = conn.execute("SELECT id, codigo, nombre, nivel, creada_por_negocio_id FROM cuentas_puc WHERE id = %s", (cuenta_id,)).fetchone()
+        if not c:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Cuenta no encontrada'}), 404
+            
+        cod = str(c['codigo']).strip()
+        nombre = str(c['nombre']).strip()
+
+        # 1. Validar subcuentas hijas subordinadas
+        hijas = conn.execute(
+            "SELECT COUNT(*) FROM cuentas_puc WHERE codigo_padre = %s OR (codigo LIKE %s AND id <> %s)",
+            (cod, f"{cod}%", cuenta_id)
+        ).fetchone()[0]
+        if hijas > 0:
+            conn.close()
+            return jsonify({
+                'ok': False,
+                'error': f'No se puede eliminar la cuenta {cod} - {nombre} porque tiene {hijas} subcuenta(s) hija(s) subordinadas. Elimine o reclasifique las subcuentas primero.'
+            }), 400
+
+        # 2. Validar movimientos contables (Libro Diario / Asientos)
+        movs = conn.execute(
+            "SELECT COUNT(*) FROM movimientos_contables WHERE cuenta_id = %s OR cuenta = %s",
+            (cuenta_id, cod)
+        ).fetchone()[0]
+        if movs > 0:
+            conn.close()
+            return jsonify({
+                'ok': False,
+                'error': f'No se puede eliminar la cuenta {cod} - {nombre} porque tiene {movs} movimiento(s) o asiento(s) en el Libro Diario.\n\nPara transferir su historial a otra cuenta antes de eliminarla, utilice la pestaña "Reclasificaciones".'
+            }), 400
+
+        # 3. Validar saldos por documento (Cartera / CxC / CxP)
+        saldos = conn.execute(
+            "SELECT COUNT(*) FROM saldo_por_documentos WHERE cuenta_id = %s",
+            (cuenta_id,)
+        ).fetchone()[0]
+        if saldos > 0:
+            conn.close()
+            return jsonify({
+                'ok': False,
+                'error': f'No se puede eliminar la cuenta {cod} - {nombre} porque tiene {saldos} registro(s) de saldos o cartera en Saldo por Documentos.\n\nTrasládelos primero en la pestaña "Reclasificaciones".'
+            }), 400
+
+        # 4. Validar grupos de inventario
+        grupos = conn.execute("""
+            SELECT COUNT(*) FROM grupos_inventario 
+            WHERE cuenta_inve_id = %s OR cuenta_cos_id = %s OR cuenta_ingre_id = %s 
+               OR cuenta_ajuste_favor_id = %s OR cuenta_ajuste_contra_id = %s
+        """, (cuenta_id, cuenta_id, cuenta_id, cuenta_id, cuenta_id)).fetchone()[0]
+        if grupos > 0:
+            conn.close()
+            return jsonify({
+                'ok': False,
+                'error': f'No se puede eliminar la cuenta {cod} - {nombre} porque está configurada en {grupos} Grupo(s) de Inventario (inventario, costo o ventas).'
+            }), 400
+
+        # 5. Validar métodos de pago (Cajas, Bancos, POS)
+        metodos = conn.execute("""
+            SELECT COUNT(*) FROM parametros_metodos_pago_negocio 
+            WHERE cuenta_id = %s OR cuenta_gastos_id = %s OR cuenta_pago_id = %s 
+               OR cuenta_pago_saldos_id = %s OR cuenta_recaudo_id = %s OR cuenta_recaudo_saldos_id = %s
+        """, (cuenta_id, cuenta_id, cuenta_id, cuenta_id, cuenta_id, cuenta_id)).fetchone()[0]
+        if metodos > 0:
+            conn.close()
+            return jsonify({
+                'ok': False,
+                'error': f'No se puede eliminar la cuenta {cod} - {nombre} porque está vinculada a {metodos} Método(s) de Pago o Cajas del negocio.'
+            }), 400
+
+        # 6. Validar líneas de parametrización de comprobantes
+        lineas_param = conn.execute(
+            "SELECT COUNT(*) FROM parametros_lineas_contables WHERE cuenta_puc_id = %s",
+            (cuenta_id,)
+        ).fetchone()[0]
+        if lineas_param > 0:
+            conn.close()
+            return jsonify({
+                'ok': False,
+                'error': f'No se puede eliminar la cuenta {cod} - {nombre} porque forma parte de {lineas_param} plantilla(s) de contabilización en la pestaña "Parametrización".'
+            }), 400
+
+        # 7. Validar programaciones contables (Amortizaciones recurrentes y Punto de Equilibrio)
+        progs = conn.execute("""
+            SELECT COUNT(*) FROM programaciones_contables 
+            WHERE variables_h::text LIKE %s OR variables_h::text LIKE %s
+        """, (f'%"cuenta_debito": "{cod}"%', f'%"cuenta_credito": "{cod}"%')).fetchone()[0]
+        if progs > 0:
+            conn.close()
+            return jsonify({
+                'ok': False,
+                'error': f'No se puede eliminar la cuenta {cod} - {nombre} porque está asociada a {progs} programación(es) recurrente(s) de amortizaciones o gastos fijos.'
+            }), 400
+
+        # Si supera todas las validaciones: eliminación segura
+        conn.execute("DELETE FROM cuentas_puc WHERE id = %s", (cuenta_id,))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'mensaje': f'Cuenta {cod} - {nombre} eliminada correctamente'})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': f'Error al eliminar cuenta: {str(e)}'}), 500
+
+
 @bp.route('/api/contabilidad/puc/nueva', methods=['POST'])
 def api_puc_nueva():
     if not session.get('usuario_id'):

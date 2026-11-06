@@ -2274,8 +2274,21 @@ def api_puc_editar(cuenta_id):
             fields.append("naturaleza = %s")
             params.append(data['naturaleza'])
         if 'acepta_movimiento' in data:
+            es_mov = bool(data['acepta_movimiento'])
+            if es_mov:
+                curr = conn.execute("SELECT codigo FROM cuentas_puc WHERE id = %s", (cuenta_id,)).fetchone()
+                if curr:
+                    curr_cod = str(curr['codigo']).strip()
+                    if len(curr_cod) > 4:
+                        raiz_4 = curr_cod[:4]
+                        if not conn.execute("SELECT 1 FROM cuentas_puc WHERE codigo = %s LIMIT 1", (raiz_4,)).fetchone():
+                            conn.close()
+                            return jsonify({
+                                'ok': False,
+                                'error': f'No se puede activar movimiento en la cuenta {curr_cod} porque no existe su cuenta raíz de 4 caracteres ({raiz_4}). Debe crear primero la cuenta raíz {raiz_4}.'
+                            }), 400
             fields.append("acepta_movimiento = %s")
-            params.append(bool(data['acepta_movimiento']))
+            params.append(es_mov)
         if 'maneja_terceros' in data:
             fields.append("maneja_terceros = %s")
             params.append(bool(data['maneja_terceros']))
@@ -2301,6 +2314,100 @@ def api_puc_editar(cuenta_id):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@bp.route('/api/contabilidad/puc/<int:cuenta_id>/auditoria', methods=['GET'])
+def api_puc_auditoria(cuenta_id):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    from ..db import get_db_connection
+    conn = get_db_connection()
+    try:
+        c = conn.execute("SELECT id, codigo, nombre, nivel, creada_por_negocio_id FROM cuentas_puc WHERE id = %s", (cuenta_id,)).fetchone()
+        if not c:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Cuenta no encontrada'}), 404
+            
+        cod = str(c['codigo']).strip()
+        nombre = str(c['nombre']).strip()
+
+        # 1. Subcuentas hijas subordinadas (jerarquía por caracteres raíz)
+        # Una cuenta de 5 dígitos no es la raíz natural de cuentas estándar de 6 dígitos (su raíz es cod[:4])
+        if len(cod) == 5:
+            hijas = conn.execute(
+                "SELECT COUNT(*) FROM cuentas_puc WHERE codigo LIKE %s AND id <> %s AND LENGTH(codigo) <> 6",
+                (f"{cod}%", cuenta_id)
+            ).fetchone()[0]
+        else:
+            hijas = conn.execute(
+                "SELECT COUNT(*) FROM cuentas_puc WHERE (codigo_padre = %s OR (codigo LIKE %s AND LENGTH(codigo) > %s)) AND id <> %s",
+                (cod, f"{cod}%", len(cod), cuenta_id)
+            ).fetchone()[0]
+
+        # 2. Libro Diario / Movimientos contables
+        movs = conn.execute(
+            "SELECT COUNT(*) FROM movimientos_contables WHERE cuenta_id = %s OR cuenta = %s",
+            (cuenta_id, cod)
+        ).fetchone()[0]
+
+        # 3. Saldo por Documentos (Cartera CxC / CxP)
+        saldos = conn.execute(
+            "SELECT COUNT(*) FROM saldo_por_documentos WHERE cuenta_id = %s",
+            (cuenta_id,)
+        ).fetchone()[0]
+
+        # 4. Grupos de Inventario
+        grupos = conn.execute("""
+            SELECT COUNT(*) FROM grupos_inventario 
+            WHERE cuenta_inve_id = %s OR cuenta_cos_id = %s OR cuenta_ingre_id = %s 
+               OR cuenta_ajuste_favor_id = %s OR cuenta_ajuste_contra_id = %s
+        """, (cuenta_id, cuenta_id, cuenta_id, cuenta_id, cuenta_id)).fetchone()[0]
+
+        # 5. Métodos de Pago / Cajas
+        metodos = conn.execute("""
+            SELECT COUNT(*) FROM parametros_metodos_pago_negocio 
+            WHERE cuenta_id = %s OR cuenta_gastos_id = %s OR cuenta_pago_id = %s 
+               OR cuenta_pago_saldos_id = %s OR cuenta_recaudo_id = %s OR cuenta_recaudo_saldos_id = %s
+        """, (cuenta_id, cuenta_id, cuenta_id, cuenta_id, cuenta_id, cuenta_id)).fetchone()[0]
+
+        # 6. Plantillas de Parametrización
+        lineas_param = conn.execute(
+            "SELECT COUNT(*) FROM parametros_lineas_contables WHERE cuenta_puc_id = %s",
+            (cuenta_id,)
+        ).fetchone()[0]
+
+        # 7. Programaciones Contables Recurrentes (Amortizaciones)
+        progs = conn.execute("""
+            SELECT COUNT(*) FROM programaciones_contables 
+            WHERE variables_h::text LIKE %s OR variables_h::text LIKE %s
+        """, (f'%"cuenta_debito": "{cod}"%', f'%"cuenta_credito": "{cod}"%')).fetchone()[0]
+
+        conn.close()
+
+        detalles = [
+            {'codigo': 'subcuentas', 'punto': 'Subcuentas Hijas', 'cantidad': hijas, 'ok': hijas == 0, 'desc': 'Subcuentas dependientes por caracteres raíz'},
+            {'codigo': 'asientos', 'punto': 'Libro Diario / Asientos', 'cantidad': movs, 'ok': movs == 0, 'desc': 'Movimientos históricos registrados'},
+            {'codigo': 'cartera', 'punto': 'Cartera y Saldo por Documentos', 'cantidad': saldos, 'ok': saldos == 0, 'desc': 'Saldos pendientes en cartera (CxC / CxP)'},
+            {'codigo': 'inventario', 'punto': 'Grupos de Inventario', 'cantidad': grupos, 'ok': grupos == 0, 'desc': 'Vinculación a inventario, costo o ventas'},
+            {'codigo': 'cajas', 'punto': 'Cajas y Métodos de Pago', 'cantidad': metodos, 'ok': metodos == 0, 'desc': 'Medios de pago, cajas o POS configurados'},
+            {'codigo': 'plantillas', 'punto': 'Plantillas de Parametrización', 'cantidad': lineas_param, 'ok': lineas_param == 0, 'desc': 'Reglas contables predefinidas en comprobantes'},
+            {'codigo': 'amortizaciones', 'punto': 'Amortizaciones y Programaciones', 'cantidad': progs, 'ok': progs == 0, 'desc': 'Gastos recurrentes o cuotas programadas'}
+        ]
+
+        impedimentos = [d for d in detalles if not d['ok']]
+        es_borrable = (len(impedimentos) == 0)
+
+        return jsonify({
+            'ok': True,
+            'cuenta': {'id': c['id'], 'codigo': cod, 'nombre': nombre, 'nivel': c['nivel']},
+            'es_borrable': es_borrable,
+            'total_impedimentos': len(impedimentos),
+            'detalles': detalles
+        })
+    except Exception as e:
+        try: conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': f'Error al auditar cuenta: {str(e)}'}), 500
+
+
 @bp.route('/api/contabilidad/puc/<int:cuenta_id>', methods=['DELETE'])
 def api_puc_eliminar(cuenta_id):
     if not session.get('usuario_id'):
@@ -2316,11 +2423,17 @@ def api_puc_eliminar(cuenta_id):
         cod = str(c['codigo']).strip()
         nombre = str(c['nombre']).strip()
 
-        # 1. Validar subcuentas hijas subordinadas
-        hijas = conn.execute(
-            "SELECT COUNT(*) FROM cuentas_puc WHERE codigo_padre = %s OR (codigo LIKE %s AND id <> %s)",
-            (cod, f"{cod}%", cuenta_id)
-        ).fetchone()[0]
+        # 1. Validar subcuentas hijas subordinadas (jerarquía por caracteres raíz)
+        if len(cod) == 5:
+            hijas = conn.execute(
+                "SELECT COUNT(*) FROM cuentas_puc WHERE codigo LIKE %s AND id <> %s AND LENGTH(codigo) <> 6",
+                (f"{cod}%", cuenta_id)
+            ).fetchone()[0]
+        else:
+            hijas = conn.execute(
+                "SELECT COUNT(*) FROM cuentas_puc WHERE (codigo_padre = %s OR (codigo LIKE %s AND LENGTH(codigo) > %s)) AND id <> %s",
+                (cod, f"{cod}%", len(cod), cuenta_id)
+            ).fetchone()[0]
         if hijas > 0:
             conn.close()
             return jsonify({
@@ -2424,21 +2537,54 @@ def api_puc_nueva():
     codigo_padre = (data.get('codigo_padre') or '').strip() or None
     naturaleza   = data.get('naturaleza', 'debito')
     negocio_id   = data.get('negocio_id')
+    acepta_movimiento = bool(data.get('acepta_movimiento', True))
+    maneja_terceros   = bool(data.get('maneja_terceros', False))
+    maneja_documentos = bool(data.get('maneja_documentos', False))
+
     if not codigo or not nombre or not nivel:
         return jsonify({'ok': False, 'error': 'Código, nombre y nivel son requeridos'}), 400
+
     from ..db import get_db_connection
     try:
         conn = get_db_connection()
         _asegurar_tablas(conn)
+
+        # Validación de jerarquía y raíz natural para cuentas de movimiento o detalle:
+        if acepta_movimiento:
+            if len(codigo) < 4:
+                conn.close()
+                return jsonify({
+                    'ok': False,
+                    'error': f'Una cuenta con característica de movimiento o detalle debe tener al menos 4 caracteres (código recibido: {codigo}).'
+                }), 400
+            if len(codigo) > 4:
+                raiz_4 = codigo[:4]
+                existe_raiz = conn.execute("SELECT 1 FROM cuentas_puc WHERE codigo = %s LIMIT 1", (raiz_4,)).fetchone()
+                if not existe_raiz:
+                    conn.close()
+                    return jsonify({
+                        'ok': False,
+                        'error': f'No se puede crear la cuenta de movimiento {codigo} porque no existe su cuenta raíz de 4 caracteres ({raiz_4}). Debe crear primero la cuenta raíz {raiz_4}.'
+                    }), 400
+
+        # Inferencia automática de código padre si no fue provisto
+        if not codigo_padre:
+            if len(codigo) == 4:
+                codigo_padre = codigo[:2]
+            elif len(codigo) in (5, 6):
+                codigo_padre = codigo[:4]
+            elif len(codigo) > 6:
+                codigo_padre = codigo[:6]
+
         nueva = conn.execute("""
             INSERT INTO cuentas_puc
                 (codigo, nombre, nivel, codigo_padre, naturaleza,
                  acepta_movimiento, maneja_terceros, maneja_documentos,
                  creada_por_negocio_id, revisada)
-            VALUES (%s,%s,%s,%s,%s,TRUE,FALSE,FALSE,%s,FALSE)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,FALSE)
             ON CONFLICT (codigo) DO NOTHING
             RETURNING id, codigo, nombre
-        """, (codigo, nombre, int(nivel), codigo_padre, naturaleza, negocio_id)).fetchone()
+        """, (codigo, nombre, int(nivel), codigo_padre, naturaleza, acepta_movimiento, maneja_terceros, maneja_documentos, negocio_id)).fetchone()
         conn.commit(); conn.close()
         if not nueva:
             return jsonify({'ok': False, 'error': f'El código {codigo} ya existe'}), 409

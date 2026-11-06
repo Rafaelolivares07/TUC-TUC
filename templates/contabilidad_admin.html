@@ -1154,33 +1154,98 @@
 
   </div>
 
+<!-- Modal: Auditoría de Integridad Contable (Eliminación Segura PUC - Opción B) -->
+<div id="modal-auditoria-puc" class="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-gray-100 flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
+    <!-- Header corporativo -->
+    <div class="px-6 py-4 bg-gradient-to-r from-slate-900 via-gray-900 to-slate-900 text-white flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center text-blue-400 text-xl font-bold shadow-inner">
+          🛡️
+        </div>
+        <div>
+          <h3 class="font-bold text-base leading-tight">Auditoría Contable de Integridad</h3>
+          <p class="text-xs text-blue-200 font-mono mt-0.5" id="auditoria-cuenta-titulo">Evaluando cuenta...</p>
+        </div>
+      </div>
+      <button onclick="cerrarModalAuditoriaPUC()" class="text-gray-400 hover:text-white p-1 rounded-lg text-lg leading-none cursor-pointer transition-colors">✕</button>
+    </div>
+
+    <!-- Body dinámico -->
+    <div class="p-6 space-y-4 overflow-y-auto flex-1">
+      <!-- Paso 1: Spinner y Análisis en progreso -->
+      <div id="auditoria-cargando" class="py-8 flex flex-col items-center justify-center space-y-3">
+        <div class="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+        <p class="text-sm font-semibold text-gray-800 animate-pulse">Diagnosticando 7 puntos de control contable en vivo...</p>
+        <p class="text-xs text-gray-500 text-center">Escaneando Libro Diario, Cartera, Grupos de Inventario, Cajas, Parametrización y Amortizaciones.</p>
+      </div>
+
+      <!-- Paso 2: Resultados del Dictamen -->
+      <div id="auditoria-resultado" class="hidden space-y-4">
+        <!-- Alerta o Certificado de estado -->
+        <div id="auditoria-banner" class="rounded-xl p-4 text-sm font-medium border flex items-start gap-3">
+          <span id="auditoria-banner-icon" class="text-2xl shrink-0"></span>
+          <div>
+            <h4 id="auditoria-banner-titulo" class="font-bold text-sm"></h4>
+            <p id="auditoria-banner-desc" class="text-xs mt-1 leading-relaxed"></p>
+          </div>
+        </div>
+
+        <!-- Desglose de los 7 puntos analizados -->
+        <div class="bg-gray-50/90 rounded-xl p-3 border border-gray-200">
+          <div class="text-[11px] font-bold uppercase tracking-wider text-gray-500 px-2 mb-2 flex items-center justify-between">
+            <span>Resultados de los 7 Puntos de Control:</span>
+            <span class="text-[10px] text-gray-400 font-normal">Integridad Referencial</span>
+          </div>
+          <div id="auditoria-lista-detalles" class="space-y-1.5 text-xs">
+            <!-- Renderizado dinámicamente -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer / Acciones -->
+    <div id="auditoria-footer" class="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between gap-3">
+      <!-- Botones renderizados dinámicamente según dictamen -->
+    </div>
+  </div>
+</div>
+
 <!-- Modal: nueva cuenta PUC -->
 <div id="modal-puc" class="fixed inset-0 bg-black/40 z-50 hidden flex items-center justify-center p-4">
   <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
     <h3 class="font-bold text-lg mb-4">Nueva cuenta PUC</h3>
     <div class="space-y-3">
       <input id="mpuc-codigo" type="text" placeholder="Código (ej: 410510)"
-             class="border rounded-lg px-3 py-2 text-sm w-full">
+             class="border rounded-lg px-3 py-2 text-sm w-full font-mono"
+             oninput="autoDetectarNivelPUC(this.value)">
       <input id="mpuc-nombre" type="text" placeholder="Nombre de la cuenta"
              class="border rounded-lg px-3 py-2 text-sm w-full">
       <div class="grid grid-cols-2 gap-3">
-        <select id="mpuc-nivel" class="border rounded-lg px-3 py-2 text-sm">
-          <option value="3">Nivel 3 (cuenta)</option>
-          <option value="4">Nivel 4 (subcuenta)</option>
-          <option value="5">Nivel 5</option>
+        <select id="mpuc-nivel" class="border rounded-lg px-3 py-2 text-sm" onchange="onCambioNivelPUC(this.value)">
+          <option value="3">Nivel 3 (cuenta mayor)</option>
+          <option value="4" selected>Nivel 4 (subcuenta)</option>
+          <option value="5">Nivel 5 (auxiliar)</option>
         </select>
         <select id="mpuc-naturaleza" class="border rounded-lg px-3 py-2 text-sm">
           <option value="debito">Débito</option>
           <option value="credito">Crédito</option>
         </select>
       </div>
-      <input id="mpuc-padre" type="text" placeholder="Código padre (ej: 4105)"
-             class="border rounded-lg px-3 py-2 text-sm w-full">
+      <label class="flex items-start gap-2.5 p-2.5 rounded-xl bg-blue-50/60 border border-blue-200 cursor-pointer select-none">
+        <input type="checkbox" id="mpuc-movimiento" checked class="w-4 h-4 mt-0.5 accent-blue-600 rounded">
+        <div>
+          <span class="text-xs font-bold text-blue-900 block">Cuenta de Movimiento / Detalle</span>
+          <span class="text-[11px] text-blue-700 leading-tight block">Permite asentar registros directos (exige que exista la cuenta raíz de 4 caracteres).</span>
+        </div>
+      </label>
+      <input id="mpuc-padre" type="text" placeholder="Código padre (opcional, inferido de la raíz)"
+             class="border rounded-lg px-3 py-2 text-xs w-full text-gray-600 bg-gray-50">
     </div>
     <div class="flex gap-3 justify-end mt-5">
-      <button onclick="cerrarModalPUC()" class="text-gray-500 text-sm font-semibold px-4 py-2">Cancelar</button>
+      <button onclick="cerrarModalPUC()" class="text-gray-500 text-sm font-semibold px-4 py-2 hover:text-gray-700">Cancelar</button>
       <button onclick="guardarNuevaCuenta()"
-              class="bg-blue-600 text-white font-bold px-5 py-2 rounded-lg text-sm">Guardar</button>
+              class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-5 py-2 rounded-lg text-sm transition-colors cursor-pointer">Guardar</button>
     </div>
   </div>
 </div>
@@ -1454,10 +1519,141 @@ async function patchCuentaPUC(id, payload) {
   }
 }
 
-async function eliminarCuentaPUC(id, codigo, nombre) {
-  if (!confirm(`¿Está seguro de eliminar la cuenta ${codigo} - ${nombre}?\n\nEl sistema validará que no tenga movimientos ni esté en uso en ningún módulo.`)) {
-    return;
+// ── AUDITORÍA DE INTEGRIDAD EN VIVO (Opción B: Eliminación Segura) ──────
+let _cuentaAuditoriaActiva = null;
+
+function eliminarCuentaPUC(id, codigo, nombre) {
+  abrirModalAuditoriaPUC(id, codigo, nombre);
+}
+
+function abrirModalAuditoriaPUC(id, codigo, nombre) {
+  _cuentaAuditoriaActiva = { id, codigo, nombre };
+  const modal = document.getElementById('modal-auditoria-puc');
+  if (!modal) return;
+
+  document.getElementById('auditoria-cuenta-titulo').textContent = `${codigo} - ${nombre}`;
+  document.getElementById('auditoria-cargando').classList.remove('hidden');
+  document.getElementById('auditoria-resultado').classList.add('hidden');
+  document.getElementById('auditoria-footer').innerHTML = `
+    <button onclick="cerrarModalAuditoriaPUC()" class="text-gray-500 hover:text-gray-700 font-semibold text-sm px-4 py-2">Cancelar</button>
+  `;
+
+  modal.classList.remove('hidden');
+
+  fetch(`/api/contabilidad/puc/${id}/auditoria`)
+    .then(r => r.json())
+    .then(data => {
+      document.getElementById('auditoria-cargando').classList.add('hidden');
+      document.getElementById('auditoria-resultado').classList.remove('hidden');
+
+      const banner = document.getElementById('auditoria-banner');
+      const icon = document.getElementById('auditoria-banner-icon');
+      const titulo = document.getElementById('auditoria-banner-titulo');
+      const desc = document.getElementById('auditoria-banner-desc');
+      const footer = document.getElementById('auditoria-footer');
+
+      if (!data.ok) {
+        banner.className = 'rounded-xl p-4 text-sm font-medium border flex items-start gap-3 bg-rose-50 border-rose-200 text-rose-900';
+        icon.textContent = '⚠️';
+        titulo.textContent = 'Error al ejecutar auditoría';
+        desc.textContent = data.error || 'No se pudo completar el análisis de la cuenta.';
+        footer.innerHTML = `<button onclick="cerrarModalAuditoriaPUC()" class="text-gray-600 font-semibold text-sm px-4 py-2">Cerrar</button>`;
+        return;
+      }
+
+      const esBorrable = data.es_borrable;
+
+      if (esBorrable) {
+        banner.className = 'rounded-xl p-4 text-sm font-medium border flex items-start gap-3 bg-emerald-50 border-emerald-200 text-emerald-900';
+        icon.textContent = '🛡️';
+        titulo.textContent = 'Cuenta Inactiva sin Dependencias';
+        desc.textContent = `Se verificaron los 7 controles contables. La cuenta ${codigo} no registra transacciones, saldos ni vínculos. Es seguro proceder con su eliminación definitiva.`;
+
+        footer.innerHTML = `
+          <button onclick="cerrarModalAuditoriaPUC()" class="text-gray-600 hover:text-gray-800 font-semibold text-sm px-4 py-2">
+            Cancelar
+          </button>
+          <button id="btn-confirmar-eliminar-puc" onclick="ejecutarEliminacionPUC(${id}, '${codigo}')"
+                  class="bg-rose-600 hover:bg-rose-700 text-white font-bold px-5 py-2.5 rounded-xl text-sm shadow-sm transition-colors flex items-center gap-2 cursor-pointer">
+            <span>🗑️ Eliminar Definitivamente</span>
+          </button>
+        `;
+      } else {
+        banner.className = 'rounded-xl p-4 text-sm font-medium border flex items-start gap-3 bg-rose-50 border-rose-200 text-rose-900';
+        icon.textContent = '⛔';
+        titulo.textContent = 'Cuenta Activa con Dependencias Contables';
+        desc.textContent = `La cuenta ${codigo} posee ${data.total_impedimentos} control(es) con registros vinculados. Para retirarla del PUC sin perder la trazabilidad, traslade sus movimientos mediante el Centro de Reclasificaciones.`;
+
+        footer.innerHTML = `
+          <button onclick="cerrarModalAuditoriaPUC()" class="text-gray-600 hover:text-gray-800 font-semibold text-sm px-4 py-2">
+            Cerrar
+          </button>
+          <button onclick="irAReclasificacionesDesdeAuditoria('${codigo}')"
+                  class="bg-violet-700 hover:bg-violet-800 text-white font-bold px-5 py-2.5 rounded-xl text-sm shadow-sm transition-colors flex items-center gap-2 cursor-pointer">
+            <span>🔄 Ir a Reclasificaciones</span>
+          </button>
+        `;
+      }
+
+      // Renderizar los 7 detalles
+      const contenedorDetalles = document.getElementById('auditoria-lista-detalles');
+      contenedorDetalles.innerHTML = (data.detalles || []).map(d => `
+        <div class="flex items-center justify-between p-2 rounded-lg ${d.ok ? 'bg-white/90 border border-gray-100' : 'bg-rose-50/80 border border-rose-200'}">
+          <div class="flex items-center gap-2.5">
+            <span class="text-sm">${d.ok ? '✅' : '⚠️'}</span>
+            <div>
+              <span class="font-bold ${d.ok ? 'text-gray-700' : 'text-rose-900'}">${d.punto}</span>
+              <span class="text-[11px] text-gray-500 block leading-tight">${d.desc}</span>
+            </div>
+          </div>
+          <div>
+            ${d.ok 
+              ? '<span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800">0 registros</span>'
+              : `<span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-100 text-rose-800">${d.cantidad} registro(s)</span>`
+            }
+          </div>
+        </div>
+      `).join('');
+    })
+    .catch(err => {
+      document.getElementById('auditoria-cargando').classList.add('hidden');
+      document.getElementById('auditoria-resultado').classList.remove('hidden');
+      const banner = document.getElementById('auditoria-banner');
+      banner.className = 'rounded-xl p-4 text-sm font-medium border flex items-start gap-3 bg-rose-50 border-rose-200 text-rose-900';
+      document.getElementById('auditoria-banner-icon').textContent = '⚠️';
+      document.getElementById('auditoria-banner-titulo').textContent = 'Error de conexión';
+      document.getElementById('auditoria-banner-desc').textContent = 'No fue posible conectar con el servidor para auditar la cuenta.';
+    });
+}
+
+function cerrarModalAuditoriaPUC() {
+  const modal = document.getElementById('modal-auditoria-puc');
+  if (modal) modal.classList.add('hidden');
+  _cuentaAuditoriaActiva = null;
+}
+
+function irAReclasificacionesDesdeAuditoria(codigo) {
+  cerrarModalAuditoriaPUC();
+  cambiarTab('reclasificaciones');
+  setTimeout(() => {
+    const inp = document.getElementById('inp-reclas-origen-txt');
+    if (inp) {
+      inp.value = codigo;
+      inp.focus();
+      if (typeof onInputReclasAutocomplete === 'function') {
+        onInputReclasAutocomplete('origen', inp);
+      }
+    }
+  }, 250);
+}
+
+async function ejecutarEliminacionPUC(id, codigo) {
+  const btn = document.getElementById('btn-confirmar-eliminar-puc');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="animate-spin inline-block mr-1">⌛</span> Eliminando...';
   }
+
   try {
     const resp = await fetch(`/api/contabilidad/puc/${id}`, {
       method: 'DELETE',
@@ -1465,21 +1661,63 @@ async function eliminarCuentaPUC(id, codigo, nombre) {
     });
     const data = await resp.json();
     if (data.ok) {
-      toast(data.mensaje || 'Cuenta eliminada');
+      cerrarModalAuditoriaPUC();
+      toast(data.mensaje || `Cuenta ${codigo} eliminada correctamente`);
+
       const fila = document.getElementById(`fila-puc-${codigo}`);
       if (fila) {
-        fila.classList.add('bg-rose-100', 'transition-all', 'duration-500');
-        setTimeout(() => fila.remove(), 400);
+        fila.classList.add('bg-rose-100', 'transition-all', 'duration-500', 'opacity-0', 'scale-95');
+        setTimeout(() => fila.remove(), 450);
       }
     } else {
       alert(`⚠️ NO SE PUEDE ELIMINAR LA CUENTA ${codigo}:\n\n${data.error}`);
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<span>🗑️ Eliminar Definitivamente</span>';
+      }
     }
   } catch(e) {
-    toast('Error de red al intentar eliminar la cuenta', false);
+    toast('Error de red al eliminar la cuenta', false);
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<span>🗑️ Eliminar Definitivamente</span>';
+    }
   }
 }
 
-function abrirModalPUC() { document.getElementById('modal-puc').classList.remove('hidden'); }
+// ── CREACIÓN Y EDICIÓN DE CUENTAS PUC ────────────────────────────────
+function autoDetectarNivelPUC(val) {
+  const clean = (val || '').trim();
+  const selNivel = document.getElementById('mpuc-nivel');
+  const chkMov = document.getElementById('mpuc-movimiento');
+  const inpPadre = document.getElementById('mpuc-padre');
+  if (!selNivel) return;
+  if (clean.length <= 4) {
+    selNivel.value = '3';
+    if (chkMov) chkMov.checked = false;
+    if (inpPadre && clean.length === 4) inpPadre.value = clean.slice(0, 2);
+  } else if (clean.length <= 6) {
+    selNivel.value = '4';
+    if (chkMov) chkMov.checked = true;
+    if (inpPadre) inpPadre.value = clean.slice(0, 4);
+  } else {
+    selNivel.value = '5';
+    if (chkMov) chkMov.checked = true;
+    if (inpPadre) inpPadre.value = clean.slice(0, 6);
+  }
+}
+
+function onCambioNivelPUC(nivelVal) {
+  const chkMov = document.getElementById('mpuc-movimiento');
+  if (chkMov) {
+    chkMov.checked = (parseInt(nivelVal) >= 4);
+  }
+}
+
+function abrirModalPUC() { 
+  document.getElementById('modal-puc').classList.remove('hidden'); 
+  document.getElementById('mpuc-codigo').focus();
+}
 function cerrarModalPUC() { document.getElementById('modal-puc').classList.add('hidden'); }
 
 async function guardarNuevaCuenta() {
@@ -1488,9 +1726,16 @@ async function guardarNuevaCuenta() {
   const nivel = parseInt(document.getElementById('mpuc-nivel').value);
   const naturaleza = document.getElementById('mpuc-naturaleza').value;
   const codigo_padre = document.getElementById('mpuc-padre').value.trim() || null;
+  const acepta_movimiento = document.getElementById('mpuc-movimiento') ? document.getElementById('mpuc-movimiento').checked : true;
 
   if (!codigo || !nombre || !nivel) {
     toast('Código, nombre y nivel son requeridos', false);
+    return;
+  }
+
+  // Validación de cuenta raíz en cliente si acepta movimiento:
+  if (acepta_movimiento && codigo.length < 4) {
+    toast('Una cuenta de movimiento o detalle debe tener al menos 4 caracteres', false);
     return;
   }
 
@@ -1500,6 +1745,7 @@ async function guardarNuevaCuenta() {
     nivel,
     naturaleza,
     codigo_padre,
+    acepta_movimiento,
     negocio_id: NEGOCIO_ID
   };
 
@@ -1524,7 +1770,7 @@ async function guardarNuevaCuenta() {
         nombre: (data.cuenta && data.cuenta.nombre) || nombre,
         nivel: nivel,
         naturaleza: naturaleza,
-        acepta_movimiento: true,
+        acepta_movimiento: acepta_movimiento,
         maneja_terceros: false,
         maneja_documentos: false
       };

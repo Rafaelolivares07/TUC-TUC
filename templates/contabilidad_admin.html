@@ -1358,39 +1358,72 @@ function buscarPUC() {
     const data = await resp.json();
     if (!data.ok) return;
     
-    document.getElementById('puc-body').innerHTML = data.cuentas.map(c => `
-      <tr class="border-b border-gray-100 hover:bg-blue-50/50">
-        <td class="px-3 py-2 font-mono text-blue-700 font-bold">${c.codigo}</td>
-        <td class="px-3 py-2">
-          <input type="text" value="${c.nombre}" 
-                 class="w-full bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:bg-white px-1 py-0.5 rounded outline-none text-sm transition-all"
-                 onchange="patchCuentaPUC(${c.id}, {nombre: this.value})">
-        </td>
-        <td class="px-3 py-2 text-center text-gray-400 font-semibold">${c.nivel}</td>
-        <td class="px-3 py-2 text-center">
-          <select onchange="patchCuentaPUC(${c.id}, {naturaleza: this.value})"
-                  class="border rounded px-2 py-0.5 text-xs outline-none bg-white font-medium">
-            <option value="debito" ${c.naturaleza==='debito'?'selected':''}>Débito</option>
-            <option value="credito" ${c.naturaleza==='credito'?'selected':''}>Crédito</option>
-          </select>
-        </td>
-        <td class="px-3 py-2 text-center">
-          <input type="checkbox" ${c.acepta_movimiento?'checked':''} 
-                 class="w-4 h-4 accent-blue-600 rounded"
-                 onchange="patchCuentaPUC(${c.id}, {acepta_movimiento: this.checked})">
-        </td>
-        <td class="px-3 py-2 text-center">
-          <input type="checkbox" ${c.maneja_terceros?'checked':''} 
-                 class="w-4 h-4 accent-blue-600 rounded"
-                 onchange="patchCuentaPUC(${c.id}, {maneja_terceros: this.checked})">
-        </td>
-        <td class="px-3 py-2 text-center">
-          <input type="checkbox" ${c.maneja_documentos?'checked':''} 
-                 class="w-4 h-4 accent-blue-600 rounded"
-                 onchange="patchCuentaPUC(${c.id}, {maneja_documentos: this.checked})">
-        </td>
-      </tr>`).join('');
+    document.getElementById('puc-body').innerHTML = data.cuentas.map(c => filaPUCHtml(c)).join('');
   }, 280);
+}
+
+function filaPUCHtml(c) {
+  return `
+    <tr class="border-b border-gray-100 hover:bg-blue-50/50 transition-colors duration-1000" data-id="${c.id}" data-codigo="${c.codigo}" id="fila-puc-${c.codigo}">
+      <td class="px-3 py-2 font-mono text-blue-700 font-bold">${c.codigo}</td>
+      <td class="px-3 py-2">
+        <input type="text" value="${c.nombre}" 
+               class="w-full bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:bg-white px-1 py-0.5 rounded outline-none text-sm transition-all"
+               onchange="patchCuentaPUC(${c.id}, {nombre: this.value})">
+      </td>
+      <td class="px-3 py-2 text-center text-gray-400 font-semibold">${c.nivel}</td>
+      <td class="px-3 py-2 text-center">
+        <select onchange="patchCuentaPUC(${c.id}, {naturaleza: this.value})"
+                class="border rounded px-2 py-0.5 text-xs outline-none bg-white font-medium">
+          <option value="debito" ${c.naturaleza==='debito'?'selected':''}>Débito</option>
+          <option value="credito" ${c.naturaleza==='credito'?'selected':''}>Crédito</option>
+        </select>
+      </td>
+      <td class="px-3 py-2 text-center">
+        <input type="checkbox" ${c.acepta_movimiento?'checked':''} 
+               class="w-4 h-4 accent-blue-600 rounded"
+               onchange="patchCuentaPUC(${c.id}, {acepta_movimiento: this.checked})">
+      </td>
+      <td class="px-3 py-2 text-center">
+        <input type="checkbox" ${c.maneja_terceros?'checked':''} 
+               class="w-4 h-4 accent-blue-600 rounded"
+               onchange="patchCuentaPUC(${c.id}, {maneja_terceros: this.checked})">
+      </td>
+      <td class="px-3 py-2 text-center">
+        <input type="checkbox" ${c.maneja_documentos?'checked':''} 
+               class="w-4 h-4 accent-blue-600 rounded"
+               onchange="patchCuentaPUC(${c.id}, {maneja_documentos: this.checked})">
+      </td>
+    </tr>`;
+}
+
+function insertarCuentaEnPUC(c) {
+  const tbody = document.getElementById('puc-body');
+  if (!tbody) return;
+
+  const existente = document.getElementById(`fila-puc-${c.codigo}`);
+  if (existente) existente.remove();
+
+  const temp = document.createElement('tbody');
+  temp.innerHTML = filaPUCHtml(c);
+  const nuevaFila = temp.firstElementChild;
+  if (!nuevaFila) return;
+
+  const filas = Array.from(tbody.querySelectorAll('tr[data-codigo]'));
+  const siguienteFila = filas.find(tr => tr.dataset.codigo > c.codigo);
+
+  if (siguienteFila) {
+    tbody.insertBefore(nuevaFila, siguienteFila);
+  } else {
+    tbody.appendChild(nuevaFila);
+  }
+
+  nuevaFila.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  nuevaFila.classList.add('bg-blue-100');
+  setTimeout(() => {
+    nuevaFila.classList.remove('bg-blue-100');
+  }, 2200);
 }
 
 async function patchCuentaPUC(id, payload) {
@@ -1415,18 +1448,58 @@ function abrirModalPUC() { document.getElementById('modal-puc').classList.remove
 function cerrarModalPUC() { document.getElementById('modal-puc').classList.add('hidden'); }
 
 async function guardarNuevaCuenta() {
+  const codigo = document.getElementById('mpuc-codigo').value.trim();
+  const nombre = document.getElementById('mpuc-nombre').value.trim();
+  const nivel = parseInt(document.getElementById('mpuc-nivel').value);
+  const naturaleza = document.getElementById('mpuc-naturaleza').value;
+  const codigo_padre = document.getElementById('mpuc-padre').value.trim() || null;
+
+  if (!codigo || !nombre || !nivel) {
+    toast('Código, nombre y nivel son requeridos', false);
+    return;
+  }
+
   const body = {
-    codigo: document.getElementById('mpuc-codigo').value.trim(),
-    nombre: document.getElementById('mpuc-nombre').value.trim(),
-    nivel:  parseInt(document.getElementById('mpuc-nivel').value),
-    naturaleza: document.getElementById('mpuc-naturaleza').value,
-    codigo_padre: document.getElementById('mpuc-padre').value.trim()||null,
+    codigo,
+    nombre,
+    nivel,
+    naturaleza,
+    codigo_padre,
     negocio_id: NEGOCIO_ID
   };
-  const resp = await fetch('/api/contabilidad/puc/nueva', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
-  const data = await resp.json();
-  if (data.ok) { toast('Cuenta creada'); cerrarModalPUC(); }
-  else toast(data.error, false);
+
+  try {
+    const resp = await fetch('/api/contabilidad/puc/nueva', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      toast('Cuenta creada');
+      cerrarModalPUC();
+
+      document.getElementById('mpuc-codigo').value = '';
+      document.getElementById('mpuc-nombre').value = '';
+      document.getElementById('mpuc-padre').value = '';
+
+      const nuevaCuenta = {
+        id: (data.cuenta && data.cuenta.id) || Date.now(),
+        codigo: (data.cuenta && data.cuenta.codigo) || codigo,
+        nombre: (data.cuenta && data.cuenta.nombre) || nombre,
+        nivel: nivel,
+        naturaleza: naturaleza,
+        acepta_movimiento: true,
+        maneja_terceros: false,
+        maneja_documentos: false
+      };
+      insertarCuentaEnPUC(nuevaCuenta);
+    } else {
+      toast(data.error || 'Error al crear la cuenta', false);
+    }
+  } catch(e) {
+    toast('Error de red al crear la cuenta', false);
+  }
 }
 
 // ── TAB: TIPOS DOC ────────────────────────────────────────────

@@ -2280,14 +2280,18 @@ def api_buscador_omni():
     res = buscar_omni(q, negocio_id=negocio_id, slug=slug, otorgados=otorgados,
                       manuales_otorgados=manuales)
     datos = []
+    terceros = []
+    notas = []
     extras = {'sueltos': [], 'sueltos_total': 0}
     if negocio_id and len(q) >= 2:
-        from ..buscador_motor import buscar_datos_producto, buscar_sueltos
+        from ..buscador_motor import buscar_datos_producto, buscar_sueltos, buscar_datos_terceros, buscar_datos_notas
         from ..db import get_db_connection
         try:
             _c2 = get_db_connection()
             try:
                 datos = buscar_datos_producto(_c2, q, negocio_id, slug)
+                terceros = buscar_datos_terceros(_c2, q, negocio_id, slug)
+                notas = buscar_datos_notas(_c2, q, negocio_id)
                 if datos:
                     _s = buscar_sueltos(_c2, negocio_id)
                     extras = {'sueltos': _s['items'], 'sueltos_total': _s['total']}
@@ -2295,7 +2299,11 @@ def api_buscador_omni():
                 _c2.close()
         except Exception:
             datos = []
+            terceros = []
+            notas = []
     res['datos'] = datos
+    res['terceros'] = terceros
+    res['notas'] = notas
     res['extras'] = extras
     return jsonify(res)
 

@@ -219,20 +219,36 @@
       speechSynthesis.speak(u);
     } catch (e) {}
   }
-  function omniGuiaPaisaje(q, rutas, ayuda, datos) {
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function omniGuiaPaisaje(q, rutas, ayuda, datos, terceros, notas) {
+    terceros = terceros || [];
+    notas = notas || [];
     const partes = [];
     if (rutas.length) partes.push(rutas.length + (rutas.length === 1 ? ' pantalla' : ' pantallas'));
     if (ayuda.length) partes.push(ayuda.length + (ayuda.length === 1 ? ' ayuda' : ' ayudas'));
+    if (terceros.length) partes.push(terceros.length + (terceros.length === 1 ? ' tercero' : ' terceros'));
+    if (notas.length) partes.push(notas.length + (notas.length === 1 ? ' nota' : ' notas'));
     let txt = 'Busqué \'' + q + '\': ';
     if (!partes.length && !datos.length) return txt + 'no encontré nada sobre eso. Prueba con otra palabra.';
     if (!partes.length) txt += 'no encontré pantallas ni ayudas sobre eso, ';
-    else txt += 'encontré ' + partes.join(' y ') + (datos.length ? ', ' : '. ');
+    else txt += 'encontré ' + partes.join(', ') + (datos.length ? ', ' : '. ');
     if (datos.length) {
       const ord = datos.slice().sort((a, b) => (((b.disponible ? 1 : 0) - (a.disponible ? 1 : 0)) || ('' + (a.nombre || '')).localeCompare(b.nombre || '')));
       txt += (partes.length ? 'y ' : 'pero sí ') + datos.length + (datos.length === 1 ? ' producto' : ' productos');
       if (ord.length === 1) txt += ': ' + ord[0].nombre + '. ';
       else txt += ', como ' + ord[0].nombre + ' y ' + ord[1].nombre + '. ';
       txt += (ord.length === 1 ? 'Ahí tienes sus opciones.' : 'Escoge uno si quieres ver su información.');
+    } else if (terceros.length) {
+      txt += 'Revisa la radiografía financiera y comercial del tercero en pantalla.';
     } else if (partes.length) {
       txt += 'Elige una opción para ir.';
     }
@@ -611,17 +627,19 @@
       const rutas = d.rutas || [];
       const ayuda = d.ayuda || [];
       const datos = d.datos || [];
+      const terceros = d.terceros || [];
+      const notas = d.notas || [];
       datosProductos = datos;
       datosExtras = d.extras || null;
 
-      if (rutas.length === 0 && ayuda.length === 0 && datos.length === 0) {
+      if (rutas.length === 0 && ayuda.length === 0 && datos.length === 0 && terceros.length === 0 && notas.length === 0) {
         resultsBody.innerHTML = `
           <div class="py-8 text-center text-gray-400">
             <p class="text-xs font-bold text-gray-600">No encontramos resultados para "${q}"</p>
             <p class="text-[11px] text-gray-400 mt-0.5">Prueba con palabras como "puc", "gasto", "kardex", "receta", "auditor" o "iva".</p>
           </div>
         `;
-        let txtVacio = omniGuiaPaisaje(q, rutas, ayuda, datos);
+        let txtVacio = omniGuiaPaisaje(q, rutas, ayuda, datos, terceros, notas);
         if (!obtenerContextoNegocioId()) txtVacio += ' Elige un negocio para buscar sus productos.';
         omniHablar(txtVacio);
         return;
@@ -711,7 +729,52 @@
         html += `</div></div>`;
       }
 
-      omniHablar(omniGuiaPaisaje(q, rutas, ayuda, datos));
+      // 4. Grupo de Terceros (Ficha Contable y Comercial Integral)
+      if (terceros.length > 0) {
+        html += `
+          <div>
+            <div class="px-2 py-1 text-[11px] font-bold text-violet-700 uppercase tracking-wider flex items-center justify-between">
+              <span>Terceros (${terceros.length}): Clientes / Proveedores</span>
+            </div>
+            <div class="mt-1 space-y-2">
+        `;
+        terceros.forEach((t) => {
+          html += omniTarjetaTercero(t);
+        });
+        html += `</div></div>`;
+      }
+
+      // 5. Grupo de Notas y Observaciones encontradas
+      if (notas.length > 0) {
+        html += `
+          <div>
+            <div class="px-2 py-1 text-[11px] font-bold text-amber-700 uppercase tracking-wider flex items-center justify-between">
+              <span>Notas y Observaciones encontradas (${notas.length})</span>
+            </div>
+            <div class="mt-1 space-y-1.5">
+        `;
+        notas.forEach((n) => {
+          const nIdx = omniPushDato({ tipo: 'dato-fila', titulo: n.origen, modulo: n.modulo, icono: n.icono, url: n.url });
+          html += `
+            <div data-omni-index="${nIdx}" onclick="omniDatoIr(${nIdx})"
+                 class="omni-item p-2.5 rounded-xl cursor-pointer bg-white hover:bg-amber-50/70 border border-gray-100 hover:border-amber-200 transition">
+              <div class="flex items-center justify-between gap-2 mb-1">
+                <div class="flex items-center gap-2 truncate">
+                  <span class="text-sm">${n.icono || '📝'}</span>
+                  <span class="text-xs font-bold text-gray-900 truncate">${escapeHtml(n.origen)}</span>
+                  ${n.monto > 0 ? `<span class="text-[10px] font-mono font-bold text-amber-700">$${omniFmt(n.monto)}</span>` : ''}
+                </div>
+                <span class="text-[9px] font-bold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0">${escapeHtml(n.modulo)}</span>
+              </div>
+              <p class="text-[11px] text-gray-600 leading-snug line-clamp-2 italic font-serif">"${escapeHtml(n.extracto)}"</p>
+              ${n.fecha ? `<div class="text-[9px] text-gray-400 mt-1 font-mono">Fecha: ${n.fecha}</div>` : ''}
+            </div>
+          `;
+        });
+        html += `</div></div>`;
+      }
+
+      omniHablar(omniGuiaPaisaje(q, rutas, ayuda, datos, terceros, notas));
       resultsBody.innerHTML = html;
       ajustarDropdownViewport();
       resaltarElemento(0);
@@ -742,6 +805,158 @@
         <span class="text-[10px] font-bold text-sky-600 bg-sky-50 px-2 py-0.5 rounded-md shrink-0">${badge}</span>
       </div>
     `;
+  }
+
+  function omniTarjetaTercero(t) {
+    let h = `
+      <div class="p-3 rounded-2xl bg-gradient-to-b from-white to-violet-50/20 border border-violet-100 hover:border-violet-300 shadow-2xs transition-all space-y-2.5">
+        <!-- Encabezado del Tercero -->
+        <div class="flex items-start justify-between gap-2">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <div class="w-8 h-8 rounded-xl bg-violet-600 text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-inner">
+              👥
+            </div>
+            <div class="min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-black text-gray-900 truncate">${escapeHtml(t.nombre)}</span>
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-violet-100 text-violet-800 shrink-0">${escapeHtml(t.rol)}</span>
+              </div>
+              <div class="text-[10px] text-gray-500 font-mono mt-0.5 truncate">
+                ${t.identificacion ? 'NIT/CC: ' + escapeHtml(t.identificacion) + ' · ' : ''}
+                ${t.telefono ? 'Tel: ' + escapeHtml(t.telefono) + ' · ' : ''}
+                ${t.ciudad ? escapeHtml(t.ciudad) : ''}
+              </div>
+            </div>
+          </div>
+          <div class="flex items-center gap-1 shrink-0">
+            <a href="${t.urls.saldos}" target="_blank" class="px-2 py-1 rounded-lg text-[10px] font-bold bg-white border border-gray-200 text-gray-700 hover:bg-violet-50 hover:text-violet-700 no-underline transition" title="Ver Cartera y Saldos">
+              Cartera ➔
+            </a>
+          </div>
+        </div>
+
+        <!-- Radiografía Financiera (Grid de indicadores) -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+          <!-- A) Cuentas por Cobrar (CxC / Cartera - Clase 13) -->
+          <div class="p-2.5 rounded-xl ${t.cxc_total > 0 ? 'bg-emerald-50/70 border border-emerald-200/80' : 'bg-gray-50/80 border border-gray-100'}">
+            <div class="flex items-center justify-between text-[11px] mb-1">
+              <span class="font-bold text-emerald-950 flex items-center gap-1">
+                <span>📈 Por Cobrar (CxC)</span>
+              </span>
+              <span class="font-mono font-black ${t.cxc_total > 0 ? 'text-emerald-700' : 'text-gray-400'}">
+                $${omniFmt(t.cxc_total)}
+              </span>
+            </div>
+            ${t.cxc_docs && t.cxc_docs.length > 0 ? `
+              <div class="space-y-1 mt-1.5 border-t border-emerald-200/50 pt-1">
+                ${t.cxc_docs.map(d => `
+                  <div class="flex items-center justify-between text-[10px] text-emerald-900">
+                    <span class="truncate font-mono">${escapeHtml(d.numero)}${d.vencimiento ? ' · Vence: ' + d.vencimiento : ''}</span>
+                    <a href="${d.url}" target="_blank" class="font-bold text-emerald-700 hover:underline shrink-0 ms-1">$${omniFmt(d.saldo)} ↗</a>
+                  </div>
+                `).join('')}
+                ${t.cxc_adicional > 0 ? `
+                  <div class="text-[10px] text-emerald-600 font-medium italic pt-0.5">
+                    + $${omniFmt(t.cxc_adicional)} en saldo contable cta 13 (sin desglose doc)
+                  </div>
+                ` : ''}
+              </div>
+            ` : (t.cxc_total > 0 ? `
+              <div class="text-[10px] text-emerald-700 font-medium italic">
+                Saldo contable en cuenta 13 (sin facturas individuales)
+              </div>
+            ` : `
+              <div class="text-[10px] text-gray-400">Sin saldo pendiente por cobrar</div>
+            `)}
+          </div>
+
+          <!-- B) Cuentas por Pagar (CxP / Proveedores - Clases 22 / 23) -->
+          <div class="p-2.5 rounded-xl ${t.cxp_total > 0 ? 'bg-rose-50/70 border border-rose-200/80' : 'bg-gray-50/80 border border-gray-100'}">
+            <div class="flex items-center justify-between text-[11px] mb-1">
+              <span class="font-bold text-rose-950 flex items-center gap-1">
+                <span>📉 Por Pagar (CxP)</span>
+              </span>
+              <span class="font-mono font-black ${t.cxp_total > 0 ? 'text-rose-700' : 'text-gray-400'}">
+                $${omniFmt(t.cxp_total)}
+              </span>
+            </div>
+            ${t.cxp_docs && t.cxp_docs.length > 0 ? `
+              <div class="space-y-1 mt-1.5 border-t border-rose-200/50 pt-1">
+                ${t.cxp_docs.map(d => `
+                  <div class="flex items-center justify-between text-[10px] text-rose-900">
+                    <span class="truncate font-mono">${escapeHtml(d.numero)}${d.vencimiento ? ' · Vence: ' + d.vencimiento : ''}</span>
+                    <a href="${d.url}" target="_blank" class="font-bold text-rose-700 hover:underline shrink-0 ms-1">$${omniFmt(d.saldo)} ↗</a>
+                  </div>
+                `).join('')}
+                ${t.cxp_adicional > 0 ? `
+                  <div class="text-[10px] text-rose-600 font-medium italic pt-0.5">
+                    + $${omniFmt(t.cxp_adicional)} en saldo contable ctas 22/23
+                  </div>
+                ` : ''}
+              </div>
+            ` : (t.cxp_total > 0 ? `
+              <div class="text-[10px] text-rose-700 font-medium italic">
+                Saldo contable en ctas 22/23 (sin facturas individuales)
+              </div>
+            ` : `
+              <div class="text-[10px] text-gray-400">Sin saldo pendiente por pagar</div>
+            `)}
+          </div>
+        </div>
+
+        <!-- C) Ventas Históricas y Pedidos No Facturados (Inteligencia comercial) -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+          <!-- Histórico Ventas (41) -->
+          <div class="p-2 rounded-xl bg-blue-50/50 border border-blue-100 text-[11px]">
+            <div class="text-gray-500 font-medium">Facturado Acumulado (Ventas 41):</div>
+            <div class="font-bold text-blue-900 font-mono mt-0.5">
+              ${t.ventas_total > 0 ? '$' + omniFmt(t.ventas_total) + ' (' + t.ventas_cant + ' facturas)' : 'Sin facturas registradas'}
+            </div>
+            ${t.ultima_venta ? `<div class="text-[10px] text-gray-400 mt-0.5">Última factura: ${t.ultima_venta}</div>` : ''}
+          </div>
+
+          <!-- Pedidos No Facturados / Intenciones -->
+          <div class="p-2 rounded-xl ${t.pedidos_pendientes_total > 0 ? 'bg-amber-50/70 border border-amber-200' : 'bg-gray-50/50 border border-gray-100'} text-[11px]">
+            <div class="flex items-center justify-between">
+              <span class="font-medium ${t.pedidos_pendientes_total > 0 ? 'text-amber-950 font-bold' : 'text-gray-500'}">
+                🎯 Pedidos No Facturados:
+              </span>
+              <span class="font-mono font-bold ${t.pedidos_pendientes_total > 0 ? 'text-amber-700' : 'text-gray-400'}">
+                $${omniFmt(t.pedidos_pendientes_total)}
+              </span>
+            </div>
+            ${t.pedidos_pendientes && t.pedidos_pendientes.length > 0 ? `
+              <div class="mt-1 space-y-0.5">
+                ${t.pedidos_pendientes.map(p => `
+                  <div class="flex items-center justify-between text-[10px] text-amber-900">
+                    <span class="truncate">Pedido #${p.id} (${escapeHtml(p.estado)})</span>
+                    <a href="${p.url}" target="_blank" class="font-bold text-amber-800 hover:underline shrink-0 ms-1">$${omniFmt(p.total)} ↗</a>
+                  </div>
+                `).join('')}
+              </div>
+            ` : `
+              <div class="text-[10px] text-gray-400 mt-0.5">Sin pedidos pendientes de entrega</div>
+            `}
+          </div>
+        </div>
+
+        <!-- D) Notas y Observaciones asociadas al tercero -->
+        ${t.notas && t.notas.length > 0 ? `
+          <div class="p-2 rounded-xl bg-violet-50/60 border border-violet-100 text-[11px] space-y-1">
+            <div class="text-violet-900 font-bold flex items-center gap-1">
+              <span>📝 Observaciones del Tercero:</span>
+            </div>
+            ${t.notas.map(n => `
+              <div class="text-[10px] text-slate-700 leading-tight">
+                <span class="font-semibold text-violet-800">${escapeHtml(n.origen)}:</span>
+                <span class="italic">"${escapeHtml(n.nota)}"</span>
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
+      </div>
+    `;
+    return h;
   }
 
   function omniFilasProducto(p, extras) {

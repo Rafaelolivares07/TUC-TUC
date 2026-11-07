@@ -575,3 +575,353 @@ def buscar_sueltos(conn, negocio_id, limite=10):
                 'total': int((tot or {}).get('total') or 0)}
     except Exception:
         return {'items': [], 'total': 0}
+
+
+def buscar_datos_terceros(conn, q, negocio_id, slug=None, limite=5):
+    """Busca terceros y extrae su radiografia financiera y comercial completa:
+    - Rol dinamico (Cliente, Proveedor, Mixto)
+    - Cuentas por Cobrar con especificidad (saldo_por_documentos cobro) y saldo contable residual (13%)
+    - Cuentas por Pagar con especificidad (saldo_por_documentos pago) y saldo contable residual (22%/23%)
+    - Ventas historicas acumuladas (41%)
+    - Pedidos pendientes / no facturados (intenciones de compra no cerradas)
+    - Notas y observaciones asociadas
+    """
+    q_limpio = (q or '').strip()
+    if len(q_limpio) < 2 or not negocio_id:
+        return []
+    try:
+        nid = int(negocio_id)
+    except (TypeError, ValueError):
+        return []
+    
+    like = f"%{q_limpio}%"
+    try:
+        rows = conn.execute("""
+            SELECT t.id, t.nombre, t.identificacion, t.telefono, t.email, t.direccion, t.ciudad,
+                   t.tipo_tercero, t.es_cliente, t.es_proveedor, t.es_empleado
+            FROM terceros t
+            WHERE (t.nombre ILIKE %s OR COALESCE(t.identificacion, '') ILIKE %s 
+                   OR COALESCE(t.telefono, '') ILIKE %s OR COALESCE(t.email, '') ILIKE %s)
+              AND (EXISTS (SELECT 1 FROM terceros_negocios tn WHERE tn.tercero_id = t.id AND tn.negocio_id = %s)
+                   OR EXISTS (SELECT 1 FROM movimientos_contables mc WHERE mc.tercero_id = t.id AND mc.negocio_id = %s)
+                   OR EXISTS (SELECT 1 FROM saldo_por_documentos spd WHERE spd.tercero_id = t.id AND spd.negocio_id = %s)
+                   OR EXISTS (SELECT 1 FROM pedidos ped WHERE ped.cliente_tercero_id = t.id AND ped.negocio_id = %s)
+                   OR t.tipo_tercero = 'admin')
+            ORDER BY (LOWER(t.nombre) = LOWER(%s)) DESC, t.nombre ASC
+            LIMIT %s
+        """, (like, like, like, like, nid, nid, nid, nid, q_limpio, limite)).fetchall()
+        
+        if not rows:
+            rows = conn.execute("""
+                SELECT t.id, t.nombre, t.identificacion, t.telefono, t.email, t.direccion, t.ciudad,
+                       t.tipo_tercero, t.es_cliente, t.es_proveedor, t.es_empleado
+                FROM terceros t
+                WHERE (t.nombre ILIKE %s OR COALESCE(t.identificacion, '') ILIKE %s 
+                       OR COALESCE(t.telefono, '') ILIKE %s OR COALESCE(t.email, '') ILIKE %s)
+                ORDER BY (LOWER(t.nombre) = LOWER(%s)) DESC, t.nombre ASC
+                LIMIT %s
+            """, (like, like, like, like, q_limpio, limite)).fetchall()
+    except Exception:
+        return []
+
+    if not rows:
+        return []
+
+    terceros_out = []
+    for t in rows:
+        tid = t['id']
+        t_nombre = t['nombre'] or 'Sin nombre'
+
+        # A) Cuentas por Cobrar (CxC):
+        docs_cxc = []
+        total_cxc_docs = 0.0
+        try:
+            r_cxc = conn.execute("""
+                SELECT id, numero_documento, total_documento, saldo_pendiente, 
+                       TO_CHAR(fecha, 'YYYY-MM-DD') AS fecha,
+                       TO_CHAR(fecha_vencimiento, 'YYYY-MM-DD') AS fecha_vencimiento,
+                       notas
+                FROM saldo_por_documentos
+                WHERE negocio_id = %s AND tercero_id = %s AND tipo_movimiento = 'cobro' AND saldo_pendiente > 0
+                ORDER BY fecha ASC LIMIT 5
+            """, (nid, tid)).fetchall()
+            for d in r_cxc:
+                sp = float(d['saldo_pendiente'] or 0)
+                total_cxc_docs += sp
+                docs_cxc.append({
+                    'id': d['id'],
+                    'numero': d['numero_documento'] or f"Doc #{d['id']}",
+                    'total': float(d['total_documento'] or 0),
+                    'saldo': sp,
+                    'fecha': d['fecha'],
+                    'vencimiento': d['fecha_vencimiento'],
+                    'notas': d['notas'] or '',
+                    'url': f"/admin/saldos-documentos/{nid}?tercero_id={tid}&doc_id={d['id']}"
+                })
+        except Exception:
+            docs_cxc = []
+
+        saldo_conta_13 = 0.0
+        try:
+            r13 = conn.execute("""
+                SELECT COALESCE(SUM(CASE WHEN tipo = 'debito' THEN monto ELSE -monto END), 0) AS saldo
+                FROM movimientos_contables
+                WHERE negocio_id = %s AND tercero_id = %s AND cuenta LIKE '13%'
+            """, (nid, tid)).fetchone()
+            if r13:
+                saldo_conta_13 = float(r13['saldo'] or 0)
+        except Exception:
+            saldo_conta_13 = 0.0
+
+        cxc_adicional = max(0.0, round(saldo_conta_13 - total_cxc_docs, 2)) if total_cxc_docs > 0 else max(0.0, round(saldo_conta_13, 2))
+
+        # B) Cuentas por Pagar (CxP):
+        docs_cxp = []
+        total_cxp_docs = 0.0
+        try:
+            r_cxp = conn.execute("""
+                SELECT id, numero_documento, total_documento, saldo_pendiente, 
+                       TO_CHAR(fecha, 'YYYY-MM-DD') AS fecha,
+                       TO_CHAR(fecha_vencimiento, 'YYYY-MM-DD') AS fecha_vencimiento,
+                       notas
+                FROM saldo_por_documentos
+                WHERE negocio_id = %s AND tercero_id = %s AND tipo_movimiento = 'pago' AND saldo_pendiente > 0
+                ORDER BY fecha ASC LIMIT 5
+            """, (nid, tid)).fetchall()
+            for d in r_cxp:
+                sp = float(d['saldo_pendiente'] or 0)
+                total_cxp_docs += sp
+                docs_cxp.append({
+                    'id': d['id'],
+                    'numero': d['numero_documento'] or f"Doc #{d['id']}",
+                    'total': float(d['total_documento'] or 0),
+                    'saldo': sp,
+                    'fecha': d['fecha'],
+                    'vencimiento': d['fecha_vencimiento'],
+                    'notas': d['notas'] or '',
+                    'url': f"/tesoreria/{nid}?tercero_id={tid}&doc_id={d['id']}"
+                })
+        except Exception:
+            docs_cxp = []
+
+        saldo_conta_22_23 = 0.0
+        try:
+            r22 = conn.execute("""
+                SELECT COALESCE(SUM(CASE WHEN tipo = 'credito' THEN monto ELSE -monto END), 0) AS saldo
+                FROM movimientos_contables
+                WHERE negocio_id = %s AND tercero_id = %s AND (cuenta LIKE '22%' OR cuenta LIKE '23%')
+            """, (nid, tid)).fetchone()
+            if r22:
+                saldo_conta_22_23 = float(r22['saldo'] or 0)
+        except Exception:
+            saldo_conta_22_23 = 0.0
+
+        cxp_adicional = max(0.0, round(saldo_conta_22_23 - total_cxp_docs, 2)) if total_cxp_docs > 0 else max(0.0, round(saldo_conta_22_23, 2))
+
+        # C) Ventas Facturadas (Clase 41):
+        ventas_total = 0.0
+        ventas_cant = 0
+        ultima_venta = None
+        try:
+            rv = conn.execute("""
+                SELECT COALESCE(SUM(monto), 0) AS total, COUNT(DISTINCT comprobante_id) AS cant,
+                       TO_CHAR(MAX(fecha), 'YYYY-MM-DD') AS ult
+                FROM movimientos_contables
+                WHERE negocio_id = %s AND tercero_id = %s AND cuenta LIKE '41%' AND tipo = 'credito'
+            """, (nid, tid)).fetchone()
+            if rv:
+                ventas_total = float(rv['total'] or 0)
+                ventas_cant = int(rv['cant'] or 0)
+                ultima_venta = rv['ult']
+        except Exception:
+            pass
+
+        # D) Pedidos e Intenciones de Compra No Facturados:
+        pedidos_pendientes = []
+        total_pedidos_pend = 0.0
+        try:
+            rp = conn.execute("""
+                SELECT id, total, estado, TO_CHAR(fecha, 'YYYY-MM-DD') AS fecha, notas
+                FROM pedidos
+                WHERE negocio_id = %s AND (cliente_tercero_id = %s OR nombre_cliente ILIKE %s)
+                  AND LOWER(estado) NOT IN ('facturado', 'completado', 'entregado', 'finalizado')
+                ORDER BY id DESC LIMIT 5
+            """, (nid, tid, t_nombre)).fetchall()
+            for p in rp:
+                tot_p = float(p['total'] or 0)
+                total_pedidos_pend += tot_p
+                pedidos_pendientes.append({
+                    'id': p['id'],
+                    'total': tot_p,
+                    'estado': p['estado'] or 'pendiente',
+                    'fecha': p['fecha'],
+                    'notas': p['notas'] or '',
+                    'url': f"/ventas-costos/{nid}?pedido_id={p['id']}"
+                })
+        except Exception:
+            pass
+
+        # E) Notas registradas vinculadas a este tercero:
+        notas_tercero = []
+        try:
+            for nd in conn.execute("""
+                SELECT numero_documento AS origen, notas, tipo_movimiento
+                FROM saldo_por_documentos
+                WHERE negocio_id = %s AND tercero_id = %s AND notas IS NOT NULL AND TRIM(notas) <> ''
+                LIMIT 3
+            """, (nid, tid)).fetchall():
+                notas_tercero.append({
+                    'origen': f"Cartera Doc #{nd['origen']}",
+                    'nota': nd['notas']
+                })
+            for np in conn.execute("""
+                SELECT id AS origen, notas, estado
+                FROM pedidos
+                WHERE negocio_id = %s AND (cliente_tercero_id = %s OR nombre_cliente ILIKE %s)
+                  AND notas IS NOT NULL AND TRIM(notas) <> ''
+                LIMIT 3
+            """, (nid, tid, t_nombre)).fetchall():
+                notas_tercero.append({
+                    'origen': f"Pedido #{np['origen']} ({np['estado']})",
+                    'nota': np['notas']
+                })
+        except Exception:
+            pass
+
+        # F) Deteccion de Rol:
+        roles = []
+        if total_cxc_docs > 0 or saldo_conta_13 > 0 or ventas_total > 0 or len(pedidos_pendientes) > 0 or bool(t.get('es_cliente')):
+            roles.append('Cliente')
+        if total_cxp_docs > 0 or saldo_conta_22_23 > 0 or bool(t.get('es_proveedor')):
+            roles.append('Proveedor')
+        if bool(t.get('es_empleado')):
+            roles.append('Empleado')
+        if not roles:
+            roles.append(t.get('tipo_tercero') or 'Contacto')
+
+        rol_str = ' / '.join(roles)
+
+        terceros_out.append({
+            'id': tid,
+            'nombre': t_nombre,
+            'identificacion': t.get('identificacion') or '',
+            'telefono': t.get('telefono') or '',
+            'email': t.get('email') or '',
+            'direccion': t.get('direccion') or '',
+            'ciudad': t.get('ciudad') or '',
+            'rol': rol_str,
+            'es_cliente': 'Cliente' in roles,
+            'es_proveedor': 'Proveedor' in roles,
+            'cxc_total': round(total_cxc_docs + cxc_adicional, 2),
+            'cxc_docs': docs_cxc,
+            'cxc_adicional': cxc_adicional,
+            'cxp_total': round(total_cxp_docs + cxp_adicional, 2),
+            'cxp_docs': docs_cxp,
+            'cxp_adicional': cxp_adicional,
+            'ventas_total': ventas_total,
+            'ventas_cant': ventas_cant,
+            'ultima_venta': ultima_venta,
+            'pedidos_pendientes': pedidos_pendientes,
+            'pedidos_pendientes_total': round(total_pedidos_pend, 2),
+            'notas': notas_tercero,
+            'urls': {
+                'saldos': f"/admin/saldos-documentos/{nid}?tercero_id={tid}",
+                'tesoreria': f"/tesoreria/{nid}?tercero_id={tid}",
+                'unificar': f"/admin/mantenimiento/{nid}?tool=unificar-terceros&tercero_id={tid}"
+            }
+        })
+
+    return terceros_out
+
+
+def buscar_datos_notas(conn, q, negocio_id, limite=10):
+    """Busqueda transversal de notas y observaciones en:
+    1. Comprobantes contables / Desembolsos (comprobantes_contables.notas)
+    2. Cartera / Documentos (saldo_por_documentos.notas)
+    3. Pedidos (pedidos.notas)
+    """
+    q_limpio = (q or '').strip()
+    if len(q_limpio) < 2 or not negocio_id:
+        return []
+    try:
+        nid = int(negocio_id)
+    except (TypeError, ValueError):
+        return []
+    
+    like = f"%{q_limpio}%"
+    notas_out = []
+
+    # 1. Comprobantes contables / Desembolsos / Tesoreria
+    try:
+        r_comp = conn.execute("""
+            SELECT id, numero_comprobante, tipo, TO_CHAR(fecha, 'YYYY-MM-DD') AS fecha,
+                   descripcion, notas, total_debitos
+            FROM comprobantes_contables
+            WHERE negocio_id = %s AND (notas ILIKE %s OR descripcion ILIKE %s)
+            ORDER BY id DESC LIMIT 5
+        """, (nid, like, like)).fetchall()
+        for c in r_comp:
+            texto_nota = c['notas'] if (c['notas'] and q_limpio.lower() in c['notas'].lower()) else (c['descripcion'] or '')
+            notas_out.append({
+                'tipo': 'comprobante',
+                'origen': f"Comprobante #{c['numero_comprobante'] or c['id']} ({c['tipo'] or 'Asiento'})",
+                'modulo': 'Tesoreria / Desembolsos',
+                'icono': '📄',
+                'fecha': c['fecha'],
+                'monto': float(c['total_debitos'] or 0),
+                'extracto': texto_nota[:160] + ('...' if len(texto_nota) > 160 else ''),
+                'url': f"/contabilidad/{nid}?tab=comps&comp_id={c['id']}"
+            })
+    except Exception:
+        pass
+
+    # 2. Saldo por documentos (Cartera / CxP)
+    try:
+        r_doc = conn.execute("""
+            SELECT id, numero_documento, tipo_movimiento, TO_CHAR(fecha, 'YYYY-MM-DD') AS fecha,
+                   saldo_pendiente, total_documento, notas
+            FROM saldo_por_documentos
+            WHERE negocio_id = %s AND notas ILIKE %s
+            ORDER BY id DESC LIMIT 5
+        """, (nid, like)).fetchall()
+        for d in r_doc:
+            texto_nota = d['notas'] or ''
+            tipo_label = 'CxC Cobro' if d['tipo_movimiento'] == 'cobro' else 'CxP Pago'
+            notas_out.append({
+                'tipo': 'cartera',
+                'origen': f"Documento #{d['numero_documento'] or d['id']} ({tipo_label})",
+                'modulo': 'Saldos por Documento',
+                'icono': '💳',
+                'fecha': d['fecha'],
+                'monto': float(d['saldo_pendiente'] or 0),
+                'extracto': texto_nota[:160] + ('...' if len(texto_nota) > 160 else ''),
+                'url': f"/admin/saldos-documentos/{nid}?doc_id={d['id']}"
+            })
+    except Exception:
+        pass
+
+    # 3. Pedidos
+    try:
+        r_ped = conn.execute("""
+            SELECT id, nombre_cliente, estado, TO_CHAR(fecha, 'YYYY-MM-DD') AS fecha,
+                   total, notas
+            FROM pedidos
+            WHERE negocio_id = %s AND notas ILIKE %s
+            ORDER BY id DESC LIMIT 5
+        """, (nid, like)).fetchall()
+        for p in r_ped:
+            texto_nota = p['notas'] or ''
+            notas_out.append({
+                'tipo': 'pedido',
+                'origen': f"Pedido #{p['id']} - {p['nombre_cliente'] or 'Cliente'} ({p['estado']})",
+                'modulo': 'Ventas / Pedidos',
+                'icono': '📦',
+                'fecha': p['fecha'],
+                'monto': float(p['total'] or 0),
+                'extracto': texto_nota[:160] + ('...' if len(texto_nota) > 160 else ''),
+                'url': f"/ventas-costos/{nid}?pedido_id={p['id']}"
+            })
+    except Exception:
+        pass
+
+    return notas_out[:limite]

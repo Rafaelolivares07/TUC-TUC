@@ -999,20 +999,21 @@
       `);
     }
 
-    // 4. Pedidos Pendientes
+    // 4. Pedidos Abiertos / No Facturados
     if (t.pedidos_pendientes_total > 0 || pp.length > 0) {
       metricas.push(`
         <div class="p-2.5 rounded-xl bg-white border border-purple-100 shadow-3xs flex flex-col justify-between">
           <div>
-            <div class="text-[10px] font-bold text-gray-500 uppercase flex items-center justify-between">
-              <span>🎯 Pedidos Pendientes</span>
-              <span class="font-mono text-purple-700 font-bold">$${omniFmt(t.pedidos_pendientes_total || 0)}</span>
+            <div class="flex items-center justify-between gap-1">
+              <span class="text-[10px] font-bold text-gray-700 uppercase tracking-tight">🎯 Pedidos No Facturados</span>
+              <span class="font-mono text-purple-700 font-bold text-xs">$${omniFmt(t.pedidos_pendientes_total || 0)}</span>
             </div>
-            <div class="text-[10px] text-gray-500 mt-1 space-y-0.5">
+            <div class="text-[9px] text-gray-400 mt-0.5 leading-tight font-medium">Órdenes operativas abiertas sin factura de venta emitida:</div>
+            <div class="text-[10px] text-gray-500 mt-1.5 space-y-1">
               ${pp.map(p => `
-                <div class="flex items-center justify-between text-[9px] font-mono">
-                  <span class="truncate">Pedido #${p.id} (${escapeHtml(p.estado)})</span>
-                  <span class="font-bold text-purple-700">$${omniFmt(p.total)}</span>
+                <div class="flex items-center justify-between text-[10px] font-mono bg-purple-50/60 px-1.5 py-0.5 rounded border border-purple-100/50">
+                  <span class="truncate text-gray-700">Orden #${p.id} <span class="text-[9px] text-purple-600 font-sans">(${escapeHtml(p.estado || 'en proceso')})</span></span>
+                  <span class="font-bold text-purple-700 shrink-0">$${omniFmt(p.total)}</span>
                 </div>
               `).join('')}
             </div>

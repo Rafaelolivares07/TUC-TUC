@@ -884,6 +884,121 @@
       `;
     }
 
+    // Tarjetas de metricas financieras (SOLO si tienen valor > 0 o documentos reales)
+    const metricas = [];
+
+    // 1. Por Cobrar (CxC)
+    if (t.cxc_total > 0 || cxcDocs.length > 0) {
+      metricas.push(`
+        <div class="p-2.5 rounded-xl bg-white border border-blue-100 shadow-3xs flex flex-col justify-between">
+          <div>
+            <div class="text-[10px] font-bold text-gray-500 uppercase flex items-center justify-between">
+              <span>📈 Por Cobrar (CxC)</span>
+              <span class="font-mono text-blue-700 font-bold">$${omniFmt(t.cxc_total || 0)}</span>
+            </div>
+            <div class="text-[10px] text-gray-500 mt-1 space-y-0.5">
+              ${cxcDocs.map(d => `<div class="truncate font-mono text-[9px] text-blue-800">· ${escapeHtml(d.numero)}: $${omniFmt(d.saldo)}</div>`).join('')}
+              ${t.cxc_adicional > 0 ? `<div class="text-[9px] text-amber-700 font-medium">+ $${omniFmt(t.cxc_adicional)} contable cta 13</div>` : ''}
+            </div>
+          </div>
+        </div>
+      `);
+    }
+
+    // 2. Por Pagar (CxP)
+    if (t.cxp_total > 0 || cxpDocs.length > 0) {
+      metricas.push(`
+        <div class="p-2.5 rounded-xl bg-white border border-rose-100 shadow-3xs flex flex-col justify-between">
+          <div>
+            <div class="text-[10px] font-bold text-gray-500 uppercase flex items-center justify-between">
+              <span>📉 Por Pagar (CxP)</span>
+              <span class="font-mono text-rose-700 font-bold">$${omniFmt(t.cxp_total || 0)}</span>
+            </div>
+            <div class="text-[10px] text-gray-500 mt-1 space-y-0.5">
+              ${cxpDocs.map(d => `<div class="truncate font-mono text-[9px] text-rose-800">· ${escapeHtml(d.numero)}: $${omniFmt(d.saldo)}</div>`).join('')}
+              ${t.cxp_adicional > 0 ? `<div class="text-[9px] text-amber-700 font-medium">+ $${omniFmt(t.cxp_adicional)} contable ctas 22/23</div>` : ''}
+            </div>
+          </div>
+        </div>
+      `);
+    }
+
+    // 3. Ventas Facturadas (Clase 41)
+    if (t.ventas_total > 0) {
+      metricas.push(`
+        <div class="p-2.5 rounded-xl bg-white border border-emerald-100 shadow-3xs flex flex-col justify-between">
+          <div>
+            <div class="text-[10px] font-bold text-gray-500 uppercase flex items-center justify-between">
+              <span>💰 Ventas Facturadas (41)</span>
+              <span class="font-mono text-emerald-700 font-bold">$${omniFmt(t.ventas_total)}</span>
+            </div>
+            <div class="text-[10px] text-gray-500 mt-1">
+              <div>${t.ventas_cant} factura(s)</div>
+              ${t.ultima_venta ? `<div class="text-[9px] text-gray-400 font-mono">Última: ${escapeHtml(t.ultima_venta)}</div>` : ''}
+            </div>
+          </div>
+        </div>
+      `);
+    }
+
+    // 4. Pedidos Pendientes
+    if (t.pedidos_pendientes_total > 0 || pp.length > 0) {
+      metricas.push(`
+        <div class="p-2.5 rounded-xl bg-white border border-purple-100 shadow-3xs flex flex-col justify-between">
+          <div>
+            <div class="text-[10px] font-bold text-gray-500 uppercase flex items-center justify-between">
+              <span>🎯 Pedidos Pendientes</span>
+              <span class="font-mono text-purple-700 font-bold">$${omniFmt(t.pedidos_pendientes_total || 0)}</span>
+            </div>
+            <div class="text-[10px] text-gray-500 mt-1 space-y-0.5">
+              ${pp.map(p => `
+                <div class="flex items-center justify-between text-[9px] font-mono">
+                  <span class="truncate">Pedido #${p.id} (${escapeHtml(p.estado)})</span>
+                  <span class="font-bold text-purple-700">$${omniFmt(p.total)}</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+      `);
+    }
+
+    let gridMetricasHtml = '';
+    if (metricas.length > 0) {
+      const colClass = metricas.length === 1 ? 'grid-cols-1' : (metricas.length === 2 ? 'grid-cols-1 sm:grid-cols-2' : (metricas.length === 3 ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-2 md:grid-cols-4'));
+      gridMetricasHtml = `
+        <div class="grid ${colClass} gap-2 text-xs">
+          ${metricas.join('')}
+        </div>
+      `;
+    }
+
+    let historialGastosHtml = '';
+    if (t.gastos_total > 0 || cv.length > 0 || um.length > 0) {
+      historialGastosHtml = `
+        <div class="p-2.5 rounded-xl bg-purple-50/70 border border-purple-200/80">
+          <div class="flex items-center justify-between text-[11px] font-bold text-purple-900 mb-1">
+            <span class="flex items-center gap-1.5">
+              <span>💼</span>
+              <span>Historial y Cuentas Vinculadas: <strong class="text-purple-700 font-mono">$${omniFmt(t.gastos_total || 0)}</strong> en compras/gastos</span>
+            </span>
+            <span class="text-[10px] text-purple-600 font-medium">${cv.length} cuenta(s) en movimientos</span>
+          </div>
+          ${cuentasChips}
+          ${movsTerceroHtml}
+        </div>
+      `;
+    }
+
+    let sinDatosHtml = '';
+    if (metricas.length === 0 && !historialGastosHtml) {
+      sinDatosHtml = `
+        <div class="p-2 rounded-xl bg-gray-50 text-[11px] text-gray-500 italic text-center border border-gray-100">
+          Tercero registrado sin saldos de cartera ni movimientos contables en este negocio.
+        </div>
+      `;
+    }
+
     let h = `
       <div class="p-3 rounded-2xl bg-gradient-to-b from-white to-violet-50/20 border border-violet-100 hover:border-violet-300 shadow-2xs transition-all space-y-2.5">
         <!-- Encabezado del Tercero -->
@@ -910,96 +1025,9 @@
           </div>
         </div>
 
-        <!-- Radiografia Contable y Comercial -->
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-          <!-- 1. Cuentas por Cobrar (CxC) -->
-          <div class="p-2 rounded-xl bg-white border border-gray-100 shadow-3xs flex flex-col justify-between">
-            <div>
-              <div class="text-[10px] font-bold text-gray-500 uppercase flex items-center justify-between">
-                <span>📈 Por Cobrar (CxC)</span>
-                <span class="font-mono text-blue-700 font-bold">$${omniFmt(t.cxc_total || 0)}</span>
-              </div>
-              <div class="text-[10px] text-gray-500 mt-1">
-                ${cxcDocs.length > 0 ? cxcDocs.map(d => `<div class="truncate font-mono text-[9px] text-blue-800">· ${escapeHtml(d.numero)}: $${omniFmt(d.saldo)}</div>`).join('') : '<span class="text-gray-400 italic">Sin saldo pendiente por cobrar</span>'}
-                ${t.cxc_adicional > 0 ? `<div class="text-[9px] text-amber-700 font-medium">+ $${omniFmt(t.cxc_adicional)} saldo contable cta 13</div>` : ''}
-              </div>
-            </div>
-          </div>
-
-          <!-- 2. Cuentas por Pagar (CxP) -->
-          <div class="p-2 rounded-xl bg-white border border-gray-100 shadow-3xs flex flex-col justify-between">
-            <div>
-              <div class="text-[10px] font-bold text-gray-500 uppercase flex items-center justify-between">
-                <span>📉 Por Pagar (CxP)</span>
-                <span class="font-mono text-rose-700 font-bold">$${omniFmt(t.cxp_total || 0)}</span>
-              </div>
-              <div class="text-[10px] text-gray-500 mt-1">
-                ${cxpDocs.length > 0 ? cxpDocs.map(d => `<div class="truncate font-mono text-[9px] text-rose-800">· ${escapeHtml(d.numero)}: $${omniFmt(d.saldo)}</div>`).join('') : '<span class="text-gray-400 italic">Sin saldo pendiente por pagar</span>'}
-                ${t.cxp_adicional > 0 ? `<div class="text-[9px] text-amber-700 font-medium">+ $${omniFmt(t.cxp_adicional)} saldo contable ctas 22/23</div>` : ''}
-              </div>
-            </div>
-          </div>
-
-          <!-- 3. Ventas Facturadas (Clase 41) -->
-          <div class="p-2 rounded-xl bg-white border border-gray-100 shadow-3xs flex flex-col justify-between">
-            <div>
-              <div class="text-[10px] font-bold text-gray-500 uppercase">Facturado Acumulado (Ventas 41):</div>
-              <div class="mt-1">
-                ${t.ventas_total > 0 ? `
-                  <div class="font-extrabold text-gray-900 font-mono">$${omniFmt(t.ventas_total)}</div>
-                  <div class="text-[9px] text-gray-500">${t.ventas_cant} factura(s) · Últ: ${t.ultima_venta || 'N/A'}</div>
-                ` : '<div class="text-[11px] font-semibold text-gray-700">Sin facturas registradas</div>'}
-              </div>
-            </div>
-          </div>
-
-          <!-- 4. Pedidos No Facturados -->
-          <div class="p-2 rounded-xl bg-white border border-gray-100 shadow-3xs flex flex-col justify-between">
-            <div>
-              <div class="text-[10px] font-bold text-gray-500 uppercase flex items-center justify-between">
-                <span>🎯 Pedidos No Facturados:</span>
-                <span class="font-mono text-purple-700 font-bold">$${omniFmt(t.pedidos_pendientes_total || 0)}</span>
-              </div>
-              <div class="text-[10px] text-gray-500 mt-1">
-                ${pp.length > 0 ? pp.map(p => `
-                  <div class="flex items-center justify-between text-[9px] font-mono">
-                    <span class="truncate">Pedido #${p.id} (${escapeHtml(p.estado)})</span>
-                    <span class="font-bold text-purple-700">$${omniFmt(p.total)}</span>
-                  </div>
-                `).join('') : '<span class="text-gray-400 italic">Sin pedidos pendientes de entrega</span>'}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 5. Transacciones Contables / Gastos / Compras Operacionales Vinculadas -->
-        ${(t.gastos_total > 0 || cv.length > 0 || um.length > 0) ? `
-          <div class="p-2.5 rounded-xl bg-purple-50/40 border border-purple-100 space-y-1.5">
-            <div class="flex items-center justify-between text-[11px]">
-              <span class="font-bold text-purple-900 flex items-center gap-1.5">
-                <span>💼 Historial y Cuentas Vinculadas:</span>
-                ${t.gastos_total > 0 ? `<span class="font-mono text-purple-800 font-extrabold">$${omniFmt(t.gastos_total)} en compras/gastos</span>` : ''}
-              </span>
-              <span class="text-[10px] text-purple-600 font-semibold font-mono">${cv.length} cuenta(s) en movimientos</span>
-            </div>
-            ${cuentasChips}
-            ${movsTerceroHtml}
-          </div>
-        ` : ''}
-
-        <!-- 6. Notas y Observaciones registradas del Tercero -->
-        ${t.notas && t.notas.length > 0 ? `
-          <div class="p-2 rounded-xl bg-amber-50/50 border border-amber-100 text-[11px] space-y-1">
-            <div class="font-bold text-amber-800 text-[10px] uppercase">Observaciones y Notas vinculadas:</div>
-            ${t.notas.map(n => `
-              <div class="text-gray-700 flex items-start gap-1">
-                <span class="text-amber-600">📝</span>
-                <span class="font-semibold text-gray-800">${escapeHtml(n.origen)}:</span>
-                <span class="italic font-serif">"${escapeHtml(n.nota)}"</span>
-              </div>
-            `).join('')}
-          </div>
-        ` : ''}
+        ${gridMetricasHtml}
+        ${historialGastosHtml}
+        ${sinDatosHtml}
       </div>
     `;
     return h;
@@ -1332,9 +1360,6 @@
   omniPintarMute();
   omniPintarMic();
   omniPintarVozDespliegue();
-  omniGuiaActividad();
-})();
-
 
 function omniTarjetaCuenta(c) {
   const movs = c.ultimos_movimientos || [];
@@ -1427,4 +1452,6 @@ function omniTarjetaTipoDoc(td) {
   `;
 }
 
+  omniGuiaActividad();
+})();
 </script>

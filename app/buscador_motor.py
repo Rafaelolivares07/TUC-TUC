@@ -878,7 +878,7 @@ def buscar_datos_terceros(conn, q, negocio_id, slug=None, limite=5):
                     'fecha': um['fecha'],
                     'tipo': um['tipo'],
                     'monto': float(um['monto'] or 0),
-                    'concepto': um['concepto'] or '',
+                    'concepto': (um['concepto'] or '').replace('\r', ' ').replace('\n', ' ').strip(),
                     'cuenta': f"{um['cuenta']} {um['cuenta_nombre']}".strip(),
                     'doc': f"{um['tipo_documento'] or 'Doc'} #{um['numero_documento'] or um['id']}",
                     'comprobante_id': um['comprobante_id']
@@ -1135,7 +1135,7 @@ def buscar_datos_cuentas_puc(conn, q, negocio_id, limite=5):
                         'fecha': m['fecha'],
                         'tipo': m['tipo'],
                         'monto': float(m['monto'] or 0),
-                        'concepto': m['concepto'] or '',
+                        'concepto': (m['concepto'] or '').replace('\r', ' ').replace('\n', ' ').strip(),
                         'doc': f"{m['tipo_documento'] or 'Doc'} #{m['numero_documento'] or m['id']}",
                         'tercero': m['tercero_nombre'] or ''
                     })

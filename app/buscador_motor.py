@@ -823,6 +823,69 @@ def buscar_datos_terceros(conn, q, negocio_id, slug=None, limite=5):
         except Exception:
             pass
 
+        # E2) Movimientos Contables Generales y Cuentas Vinculadas a este Tercero:
+        cuentas_vinculadas = []
+        gastos_total = 0.0
+        ultimos_movs_tercero = []
+        try:
+            sql_cg = """
+                SELECT mc.cuenta, COALESCE(c.nombre, 'Sin nombre') AS cuenta_nombre,
+                       COUNT(*) AS total_movs,
+                       SUM(CASE WHEN mc.tipo = 'debito' THEN mc.monto ELSE 0 END) AS debs,
+                       SUM(CASE WHEN mc.tipo = 'credito' THEN mc.monto ELSE 0 END) AS creds,
+                       SUM(mc.monto) AS total_acumulado
+                FROM movimientos_contables mc
+                LEFT JOIN cuentas_puc c ON c.codigo = mc.cuenta
+                WHERE mc.tercero_id = %s
+            """
+            p_cg = [tid]
+            if nid:
+                sql_cg += " AND mc.negocio_id = %s"
+                p_cg.append(nid)
+            sql_cg += " GROUP BY mc.cuenta, c.nombre ORDER BY total_acumulado DESC LIMIT 5"
+            
+            r_cg = conn.execute(sql_cg, tuple(p_cg)).fetchall()
+            for cg in r_cg:
+                c_cod = cg['cuenta'] or ''
+                c_tot = float(cg['total_acumulado'] or 0)
+                if c_cod.startswith(('5', '6')):
+                    gastos_total += float(cg['debs'] or 0)
+                cuentas_vinculadas.append({
+                    'codigo': c_cod,
+                    'nombre': cg['cuenta_nombre'],
+                    'movs': int(cg['total_movs'] or 0),
+                    'total': c_tot
+                })
+
+            sql_um = """
+                SELECT mc.id, TO_CHAR(mc.fecha, 'YYYY-MM-DD') AS fecha, mc.cuenta,
+                       COALESCE(c.nombre, '') AS cuenta_nombre, mc.tipo, mc.monto,
+                       mc.concepto, mc.tipo_documento, mc.numero_documento, mc.comprobante_id
+                FROM movimientos_contables mc
+                LEFT JOIN cuentas_puc c ON c.codigo = mc.cuenta
+                WHERE mc.tercero_id = %s
+            """
+            p_um = [tid]
+            if nid:
+                sql_um += " AND mc.negocio_id = %s"
+                p_um.append(nid)
+            sql_um += " ORDER BY mc.fecha DESC, mc.id DESC LIMIT 5"
+            
+            r_um = conn.execute(sql_um, tuple(p_um)).fetchall()
+            for um in r_um:
+                ultimos_movs_tercero.append({
+                    'id': um['id'],
+                    'fecha': um['fecha'],
+                    'tipo': um['tipo'],
+                    'monto': float(um['monto'] or 0),
+                    'concepto': um['concepto'] or '',
+                    'cuenta': f"{um['cuenta']} {um['cuenta_nombre']}".strip(),
+                    'doc': f"{um['tipo_documento'] or 'Doc'} #{um['numero_documento'] or um['id']}",
+                    'comprobante_id': um['comprobante_id']
+                })
+        except Exception:
+            pass
+
         # F) Deteccion de Rol:
         roles = []
         if total_cxc_docs > 0 or saldo_conta_13 > 0 or ventas_total > 0 or len(pedidos_pendientes) > 0:
@@ -855,6 +918,9 @@ def buscar_datos_terceros(conn, q, negocio_id, slug=None, limite=5):
             'ventas_total': ventas_total,
             'ventas_cant': ventas_cant,
             'ultima_venta': ultima_venta,
+            'gastos_total': round(gastos_total, 2),
+            'cuentas_vinculadas': cuentas_vinculadas,
+            'ultimos_movimientos': ultimos_movs_tercero,
             'pedidos_pendientes': pedidos_pendientes,
             'pedidos_pendientes_total': round(total_pedidos_pend, 2),
             'notas': notas_tercero,
@@ -887,13 +953,16 @@ def buscar_datos_notas(conn, q, negocio_id, limite=10):
 
     # 1. Comprobantes contables / Desembolsos / Tesoreria
     try:
+        # Solo notas humanas reales, excluyendo textos de sistema autogenerados como 'FACTURA_DE_VENTA'
         sql_comp = """
             SELECT id, numero_comprobante, tipo, TO_CHAR(fecha, 'YYYY-MM-DD') AS fecha,
                    descripcion, notas, total_debitos
             FROM comprobantes_contables
-            WHERE (notas ILIKE %s OR descripcion ILIKE %s)
+            WHERE notas IS NOT NULL AND TRIM(notas) <> ''
+              AND notas ILIKE %s
+              AND LOWER(TRIM(notas)) NOT IN ('factura_de_venta', 'factura de venta', 'asiento', 'comprobante', 'automatico')
         """
-        p_comp = [like, like]
+        p_comp = [like]
         if nid:
             sql_comp += " AND negocio_id = %s"
             p_comp.append(nid)
@@ -901,12 +970,29 @@ def buscar_datos_notas(conn, q, negocio_id, limite=10):
         
         r_comp = conn.execute(sql_comp, tuple(p_comp)).fetchall()
         for c in r_comp:
-            texto_nota = c['notas'] if (c['notas'] and q_limpio.lower() in c['notas'].lower()) else (c['descripcion'] or '')
+            t_tipo = (c['tipo'] or '').upper()
+            if 'VENTA' in t_tipo or 'FAC' in t_tipo:
+                mod_label = 'Ventas / Facturación'
+                ico = '🧾'
+            elif 'EGRESO' in t_tipo or 'GASTO' in t_tipo or 'DESEMBOLSO' in t_tipo:
+                mod_label = 'Tesorería / Desembolsos'
+                ico = '💸'
+            elif 'CAJA' in t_tipo or 'COBRO' in t_tipo:
+                mod_label = 'Caja / Recaudos'
+                ico = '🪙'
+            elif 'PROD' in t_tipo:
+                mod_label = 'Producción'
+                ico = '⚙️'
+            else:
+                mod_label = 'Contabilidad'
+                ico = '📄'
+
+            texto_nota = c['notas'] or ''
             notas_out.append({
                 'tipo': 'comprobante',
                 'origen': f"Comprobante #{c['numero_comprobante'] or c['id']} ({c['tipo'] or 'Asiento'})",
-                'modulo': 'Tesoreria / Desembolsos',
-                'icono': '📄',
+                'modulo': mod_label,
+                'icono': ico,
                 'fecha': c['fecha'],
                 'monto': float(c['total_debitos'] or 0),
                 'extracto': texto_nota[:160] + ('...' if len(texto_nota) > 160 else ''),
@@ -977,3 +1063,141 @@ def buscar_datos_notas(conn, q, negocio_id, limite=10):
         pass
 
     return notas_out[:limite]
+
+
+
+def buscar_datos_cuentas_puc(conn, q, negocio_id, limite=5):
+    """Busca cuentas contables en el PUC y calcula su saldo neto real acumulado
+    segun naturaleza (credito o debito) a partir de movimientos_contables,
+    junto con sus ultimos 5 movimientos.
+    """
+    q_limpio = (q or '').strip()
+    if len(q_limpio) < 2:
+        return []
+    try:
+        nid = int(negocio_id) if negocio_id else None
+    except (TypeError, ValueError):
+        nid = None
+    
+    like = f"%{q_limpio}%"
+    try:
+        rows = conn.execute("""
+            SELECT c.id, c.codigo, c.nombre, c.naturaleza, c.nivel
+            FROM cuentas_puc c
+            WHERE (c.codigo ILIKE %s OR c.nombre ILIKE %s) AND c.activo = true
+            ORDER BY (LOWER(c.codigo) = LOWER(%s) OR LOWER(c.nombre) = LOWER(%s)) DESC, c.codigo ASC
+            LIMIT %s
+        """, (like, like, q_limpio, q_limpio, limite)).fetchall()
+    except Exception:
+        return []
+
+    cuentas_out = []
+    for c in rows:
+        cod = c['codigo']
+        c_nom = c['nombre'] or 'Sin nombre'
+        c_nat = (c['naturaleza'] or 'debito').lower()
+
+        debs = 0.0
+        creds = 0.0
+        tot_movs = 0
+        movimientos = []
+        if nid:
+            try:
+                r_bal = conn.execute("""
+                    SELECT 
+                        COALESCE(SUM(CASE WHEN tipo = 'debito' THEN monto ELSE 0 END), 0) AS debs,
+                        COALESCE(SUM(CASE WHEN tipo = 'credito' THEN monto ELSE 0 END), 0) AS creds,
+                        COUNT(*) AS cnt
+                    FROM movimientos_contables
+                    WHERE negocio_id = %s AND (cuenta = %s OR cuenta LIKE %s)
+                """, (nid, cod, f"{cod}%")).fetchone()
+                if r_bal:
+                    debs = float(r_bal['debs'] or 0)
+                    creds = float(r_bal['creds'] or 0)
+                    tot_movs = int(r_bal['cnt'] or 0)
+            except Exception:
+                pass
+
+            try:
+                r_movs = conn.execute("""
+                    SELECT mc.id, TO_CHAR(mc.fecha, 'YYYY-MM-DD') AS fecha, mc.tipo, mc.monto,
+                           mc.concepto, mc.numero_documento, mc.tipo_documento,
+                           t.nombre AS tercero_nombre
+                    FROM movimientos_contables mc
+                    LEFT JOIN terceros t ON t.id = mc.tercero_id
+                    WHERE negocio_id = %s AND (cuenta = %s OR cuenta LIKE %s)
+                    ORDER BY mc.fecha DESC, mc.id DESC
+                    LIMIT 5
+                """, (nid, cod, f"{cod}%")).fetchall()
+                for m in r_movs:
+                    movimientos.append({
+                        'id': m['id'],
+                        'fecha': m['fecha'],
+                        'tipo': m['tipo'],
+                        'monto': float(m['monto'] or 0),
+                        'concepto': m['concepto'] or '',
+                        'doc': f"{m['tipo_documento'] or 'Doc'} #{m['numero_documento'] or m['id']}",
+                        'tercero': m['tercero_nombre'] or ''
+                    })
+            except Exception:
+                pass
+
+        es_cred = (c_nat == 'credito') or (cod.startswith(('2', '3', '4')))
+        saldo = (creds - debs) if es_cred else (debs - creds)
+
+        cuentas_out.append({
+            'id': c['id'],
+            'codigo': cod,
+            'nombre': c_nom,
+            'naturaleza': 'Crédito' if es_cred else 'Débito',
+            'saldo': round(saldo, 2),
+            'debitos': round(debs, 2),
+            'creditos': round(creds, 2),
+            'total_movimientos': tot_movs,
+            'ultimos_movimientos': movimientos,
+            'url': f"/contabilidad/{nid or 0}?tab=libro&cuenta={cod}"
+        })
+
+    return cuentas_out
+
+
+def buscar_datos_tipos_doc(conn, q, negocio_id, limite=5):
+    """Busca tipos de documento configurados para el negocio (tipos_documento_negocio)."""
+    q_limpio = (q or '').strip()
+    if len(q_limpio) < 2:
+        return []
+    try:
+        nid = int(negocio_id) if negocio_id else None
+    except (TypeError, ValueError):
+        nid = None
+    
+    like = f"%{q_limpio}%"
+    try:
+        sql = """
+            SELECT id, codigo, nombre, tipo_movimiento, mueve_inventario, consecutivo, numero_inicio
+            FROM tipos_documento_negocio
+            WHERE activo = true AND (codigo ILIKE %s OR nombre ILIKE %s)
+        """
+        params = [like, like]
+        if nid:
+            sql += " AND negocio_id = %s"
+            params.append(nid)
+        sql += " ORDER BY (LOWER(codigo) = LOWER(%s) OR LOWER(nombre) = LOWER(%s)) DESC, nombre ASC LIMIT %s"
+        params.extend([q_limpio, q_limpio, limite])
+        
+        rows = conn.execute(sql, tuple(params)).fetchall()
+        tipos_out = []
+        for r in rows:
+            tipos_out.append({
+                'id': r['id'],
+                'codigo': r['codigo'],
+                'nombre': r['nombre'],
+                'tipo_movimiento': r['tipo_movimiento'] or 'Operativo',
+                'mueve_inventario': bool(r['mueve_inventario']),
+                'consecutivo': r['consecutivo'] or 0,
+                'proximo_numero': (r['consecutivo'] or 0) + 1,
+                'url': f"/contabilidad/{nid or 0}?tab=tipos_doc"
+            })
+        return tipos_out
+    except Exception:
+        return []

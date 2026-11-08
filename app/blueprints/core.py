@@ -2282,9 +2282,14 @@ def api_buscador_omni():
     datos = []
     terceros = []
     notas = []
+    cuentas = []
+    tipos_doc = []
     extras = {'sueltos': [], 'sueltos_total': 0}
     if negocio_id and len(q) >= 2:
-        from ..buscador_motor import buscar_datos_producto, buscar_sueltos, buscar_datos_terceros, buscar_datos_notas
+        from ..buscador_motor import (
+            buscar_datos_producto, buscar_sueltos, buscar_datos_terceros,
+            buscar_datos_notas, buscar_datos_cuentas_puc, buscar_datos_tipos_doc
+        )
         from ..db import get_db_connection
         try:
             _c2 = get_db_connection()
@@ -2292,6 +2297,8 @@ def api_buscador_omni():
                 datos = buscar_datos_producto(_c2, q, negocio_id, slug)
                 terceros = buscar_datos_terceros(_c2, q, negocio_id, slug)
                 notas = buscar_datos_notas(_c2, q, negocio_id)
+                cuentas = buscar_datos_cuentas_puc(_c2, q, negocio_id)
+                tipos_doc = buscar_datos_tipos_doc(_c2, q, negocio_id)
                 if datos:
                     _s = buscar_sueltos(_c2, negocio_id)
                     extras = {'sueltos': _s['items'], 'sueltos_total': _s['total']}
@@ -2301,9 +2308,13 @@ def api_buscador_omni():
             datos = []
             terceros = []
             notas = []
+            cuentas = []
+            tipos_doc = []
     res['datos'] = datos
     res['terceros'] = terceros
     res['notas'] = notas
+    res['cuentas'] = cuentas
+    res['tipos_doc'] = tipos_doc
     res['extras'] = extras
     return jsonify(res)
 

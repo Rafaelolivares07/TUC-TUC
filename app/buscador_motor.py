@@ -951,7 +951,8 @@ def buscar_datos_terceros(conn, q, negocio_id, slug=None, limite=5):
                     'codigo': c_cod,
                     'nombre': cg['cuenta_nombre'],
                     'movs': int(cg['total_movs'] or 0),
-                    'total': c_tot
+                    'total': c_tot,
+                    'url': f"/contabilidad/{nid or 0}?tab=libro&cuenta={c_cod}"
                 })
 
             sql_um = """
@@ -998,6 +999,7 @@ def buscar_datos_terceros(conn, q, negocio_id, slug=None, limite=5):
         terceros_out.append({
             'id': tid,
             'nombre': t_nombre,
+            'negocio_id': nid,
             'identificacion': t.get('documento') or '',
             'telefono': t.get('telefono') or '',
             'email': '',
@@ -1024,7 +1026,10 @@ def buscar_datos_terceros(conn, q, negocio_id, slug=None, limite=5):
             'urls': {
                 'saldos': f"/admin/saldos-documentos/{nid or 0}?tercero_id={tid}",
                 'tesoreria': f"/tesoreria/{nid or 0}?tercero_id={tid}",
-                'unificar': f"/admin/mantenimiento/{nid or 0}?tool=unificar-terceros&tercero_id={tid}"
+                'unificar': f"/admin/mantenimiento/{nid or 0}?tool=unificar-terceros&tercero_id={tid}",
+                'contabilidad_cxp': f"/contabilidad/{nid or 0}?tab=libro&cuenta=23",
+                'contabilidad_cxc': f"/contabilidad/{nid or 0}?tab=libro&cuenta=13",
+                'contabilidad_ventas': f"/contabilidad/{nid or 0}?tab=libro&cuenta=41"
             }
         })
 

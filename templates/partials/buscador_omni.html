@@ -913,11 +913,15 @@
       cuentasChips = `
         <div class="flex flex-wrap gap-1 mt-1">
           ${cv.map(c => `
-            <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-white border border-purple-200 text-purple-900 shadow-2xs font-mono">
+            <a href="${escapeHtml(c.url || `/contabilidad/${t.negocio_id || 0}?tab=libro&cuenta=${c.codigo}`)}" 
+               target="_blank" rel="noopener noreferrer"
+               class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-white border border-purple-200 text-purple-900 shadow-2xs font-mono hover:bg-purple-100/70 hover:border-purple-400 transition"
+               title="Ver libro auxiliar de la cuenta ${escapeHtml(c.codigo)}">
               <strong class="font-bold text-purple-700">${escapeHtml(c.codigo)}</strong>
               <span class="text-gray-700 font-sans">${escapeHtml(c.nombre)}</span>
               <span class="text-purple-600 font-bold">$${omniFmt(c.total)}</span>
-            </span>
+              <span class="text-[9px] text-purple-400">➔</span>
+            </a>
           `).join('')}
         </div>
       `;
@@ -959,6 +963,10 @@
               ${t.cxc_adicional > 0 ? `<div class="text-[9px] text-amber-700 font-medium">+ $${omniFmt(t.cxc_adicional)} contable cta 13</div>` : ''}
             </div>
           </div>
+          <div class="mt-2 pt-1 border-t border-blue-50 flex flex-col gap-0.5">
+            ${cxcDocs.length > 0 && t.urls && t.urls.saldos ? `<a href="${t.urls.saldos}" target="_blank" rel="noopener noreferrer" class="text-[9px] font-bold text-blue-700 hover:text-blue-900 hover:underline inline-flex items-center gap-0.5"><span>Ver facturas de cartera</span> <span>➔</span></a>` : ''}
+            ${t.cxc_adicional > 0 ? `<a href="${(t.urls && t.urls.contabilidad_cxc) || `/contabilidad/${t.negocio_id || 0}?tab=libro&cuenta=13`}" target="_blank" rel="noopener noreferrer" class="text-[9px] font-bold text-blue-700 hover:text-blue-900 hover:underline inline-flex items-center gap-0.5"><span>Ver desglose contable (Cta. 13)</span> <span>➔</span></a>` : ''}
+          </div>
         </div>
       `);
     }
@@ -977,23 +985,32 @@
               ${t.cxp_adicional > 0 ? `<div class="text-[9px] text-amber-700 font-medium">+ $${omniFmt(t.cxp_adicional)} contable ctas 22/23</div>` : ''}
             </div>
           </div>
+          <div class="mt-2 pt-1 border-t border-rose-50 flex flex-col gap-0.5">
+            ${cxpDocs.length > 0 && t.urls && t.urls.tesoreria ? `<a href="${t.urls.tesoreria}" target="_blank" rel="noopener noreferrer" class="text-[9px] font-bold text-rose-700 hover:text-rose-900 hover:underline inline-flex items-center gap-0.5"><span>Ver documentos en tesorería</span> <span>➔</span></a>` : ''}
+            ${t.cxp_adicional > 0 ? `<a href="${(t.urls && t.urls.contabilidad_cxp) || `/contabilidad/${t.negocio_id || 0}?tab=libro&cuenta=23`}" target="_blank" rel="noopener noreferrer" class="text-[9px] font-bold text-rose-700 hover:text-rose-900 hover:underline inline-flex items-center gap-0.5"><span>Ver desglose contable (Ctas. 22/23)</span> <span>➔</span></a>` : ''}
+          </div>
         </div>
       `);
     }
 
-    // 3. Ventas Facturadas (Clase 41)
+    // 3. Ventas Facturadas (Cuenta PUC 41)
     if (t.ventas_total > 0) {
       metricas.push(`
         <div class="p-2.5 rounded-xl bg-white border border-emerald-100 shadow-3xs flex flex-col justify-between">
           <div>
             <div class="text-[10px] font-bold text-gray-500 uppercase flex items-center justify-between">
-              <span>💰 Ventas Facturadas (41)</span>
+              <span>💰 Ventas Facturadas (Cuenta PUC 41)</span>
               <span class="font-mono text-emerald-700 font-bold">$${omniFmt(t.ventas_total)}</span>
             </div>
             <div class="text-[10px] text-gray-500 mt-1">
               <div>${t.ventas_cant} factura(s)</div>
               ${t.ultima_venta ? `<div class="text-[9px] text-gray-400 font-mono">Última: ${escapeHtml(t.ultima_venta)}</div>` : ''}
             </div>
+          </div>
+          <div class="mt-2 pt-1 border-t border-emerald-50">
+            <a href="${(t.urls && t.urls.contabilidad_ventas) || `/contabilidad/${t.negocio_id || 0}?tab=libro&cuenta=41`}" target="_blank" rel="noopener noreferrer" class="text-[9px] font-bold text-emerald-700 hover:text-emerald-900 hover:underline inline-flex items-center gap-0.5">
+              <span>Ver ventas contables (Cta. 41)</span> <span>➔</span>
+            </a>
           </div>
         </div>
       `);
@@ -1079,8 +1096,12 @@
             </div>
           </div>
           <div class="flex items-center gap-1 shrink-0">
-            ${(t.cxc_total > 0 || cxcDocs.length > 0) && t.urls && t.urls.saldos ? `<a href="${t.urls.saldos}" class="px-2 py-1 rounded-lg text-[10px] font-bold bg-blue-50 text-blue-700 hover:bg-blue-100 hover:underline">Cartera ➔</a>` : ''}
-            ${(t.cxp_total > 0 || cxpDocs.length > 0) && t.urls && t.urls.tesoreria ? `<a href="${t.urls.tesoreria}" class="px-2 py-1 rounded-lg text-[10px] font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 hover:underline">Tesorería ➔</a>` : ''}
+            ${cxcDocs.length > 0 && t.urls && t.urls.saldos ? 
+              `<a href="${t.urls.saldos}" target="_blank" rel="noopener noreferrer" class="px-2 py-1 rounded-lg text-[10px] font-bold bg-blue-50 text-blue-700 hover:bg-blue-100 hover:underline">Cartera (${cxcDocs.length}) ➔</a>` : 
+              (t.cxc_adicional > 0 ? `<a href="${(t.urls && t.urls.contabilidad_cxc) || `/contabilidad/${t.negocio_id || 0}?tab=libro&cuenta=13`}" target="_blank" rel="noopener noreferrer" class="px-2 py-1 rounded-lg text-[10px] font-bold bg-blue-50 text-blue-700 hover:bg-blue-100 hover:underline">Contabilidad (Cta 13) ➔</a>` : '')}
+            ${cxpDocs.length > 0 && t.urls && t.urls.tesoreria ? 
+              `<a href="${t.urls.tesoreria}" target="_blank" rel="noopener noreferrer" class="px-2 py-1 rounded-lg text-[10px] font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 hover:underline">Tesorería (${cxpDocs.length}) ➔</a>` : 
+              (t.cxp_adicional > 0 ? `<a href="${(t.urls && t.urls.contabilidad_cxp) || `/contabilidad/${t.negocio_id || 0}?tab=libro&cuenta=23`}" target="_blank" rel="noopener noreferrer" class="px-2 py-1 rounded-lg text-[10px] font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 hover:underline">Contabilidad (Cta 23) ➔</a>` : '')}
           </div>
         </div>
 
@@ -1250,38 +1271,35 @@
       }
     } catch(err) {}
 
-    // Si estamos en el menú principal (/portal), abrir en una nueva pestaña
-    // para dejar la pestaña del menú principal abierta
-    const rutaMenu = window.location.pathname.replace(/\/+$/, "") || "/";
+    // Regla de oro: En Desk (estación de trabajo operativa) y en el Menú Principal (/portal),
+    // NUNCA se reemplaza la página actual. Todos los enlaces abren pestañas adicionales (_blank).
+    const host = window.location.hostname.toLowerCase();
+    const path = window.location.pathname.toLowerCase();
+    const esDesk = host.includes('desk') || 
+                   path === '/desk' || 
+                   path.startsWith('/desk/') || 
+                   (document.body && document.body.dataset && document.body.dataset.page === 'desk');
+
+    const rutaMenu = path.replace(/\/+$/, "") || "/";
     const esMenuPrincipal = rutaMenu === '/portal' ||
                             rutaMenu === '/' ||
-                            document.body.dataset.page === 'portal';
+                            (document.body && document.body.dataset && document.body.dataset.page === 'portal');
 
-    if (esMenuPrincipal) {
+    if (esDesk || esMenuPrincipal) {
       input.value = '';
-      const win = window.open(url, '_blank');
+      const win = window.open(url, '_blank', 'noopener,noreferrer');
       if (win) {
         try { win.focus(); } catch (e) {}
         return;
       }
-      // La tablet bloquea window.open pero respeta enlaces reales: navegar como enlace.
+      // Si el navegador bloqueó window.open, forzar enlace con target="_blank"
       const aEnlace = document.createElement('a');
       aEnlace.href = url;
       aEnlace.target = '_blank';
-      aEnlace.rel = 'noopener';
+      aEnlace.rel = 'noopener noreferrer';
       document.body.appendChild(aEnlace);
       aEnlace.click();
       aEnlace.remove();
-      // Ultimo recurso: si nada se abrio (sigue visible y enfocada), misma pestana.
-      let omniSalio = false;
-      const omniMarcarSalida = () => { omniSalio = true; };
-      document.addEventListener('visibilitychange', omniMarcarSalida, { once: true });
-      window.addEventListener('blur', omniMarcarSalida, { once: true });
-      setTimeout(() => {
-        document.removeEventListener('visibilitychange', omniMarcarSalida);
-        window.removeEventListener('blur', omniMarcarSalida);
-        if (!omniSalio) window.location.href = url;
-      }, 900);
       return;
     }
 
@@ -1480,7 +1498,7 @@ function omniTarjetaCuenta(c) {
       </div>
       ${movsHtml}
       <div class="flex items-center justify-end mt-2 pt-1.5 border-t border-gray-100">
-        <a href="${escapeHtml(c.url)}" class="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:text-emerald-900 hover:underline">
+        <a href="${escapeHtml(c.url)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:text-emerald-900 hover:underline">
           <span>Ver Libro Auxiliar Completo</span>
           <span>➔</span>
         </a>
@@ -1505,7 +1523,7 @@ function omniTarjetaTipoDoc(td) {
           </div>
         </div>
       </div>
-      <a href="${escapeHtml(td.url)}" class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-sky-50 text-sky-700 hover:bg-sky-100 hover:text-sky-900 shrink-0 transition">
+      <a href="${escapeHtml(td.url)}" target="_blank" rel="noopener noreferrer" class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-sky-50 text-sky-700 hover:bg-sky-100 hover:text-sky-900 shrink-0 transition">
         Ver ➔
       </a>
     </div>

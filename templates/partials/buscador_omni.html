@@ -1078,8 +1078,8 @@
             </div>
           </div>
           <div class="flex items-center gap-1 shrink-0">
-            ${t.urls && t.urls.saldos ? `<a href="${t.urls.saldos}" class="px-2 py-1 rounded-lg text-[10px] font-bold bg-violet-50 text-violet-700 hover:bg-violet-100 hover:underline">Cartera ➔</a>` : ''}
-            ${t.urls && t.urls.tesoreria ? `<a href="${t.urls.tesoreria}" class="px-2 py-1 rounded-lg text-[10px] font-bold bg-gray-50 text-gray-700 hover:bg-gray-100 hover:underline">Tesorería ➔</a>` : ''}
+            ${(t.cxc_total > 0 || cxcDocs.length > 0) && t.urls && t.urls.saldos ? `<a href="${t.urls.saldos}" class="px-2 py-1 rounded-lg text-[10px] font-bold bg-blue-50 text-blue-700 hover:bg-blue-100 hover:underline">Cartera ➔</a>` : ''}
+            ${(t.cxp_total > 0 || cxpDocs.length > 0) && t.urls && t.urls.tesoreria ? `<a href="${t.urls.tesoreria}" class="px-2 py-1 rounded-lg text-[10px] font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 hover:underline">Tesorería ➔</a>` : ''}
           </div>
         </div>
 

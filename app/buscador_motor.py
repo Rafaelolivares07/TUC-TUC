@@ -767,7 +767,7 @@ def buscar_datos_terceros(conn, q, negocio_id, slug=None, limite=5):
             sql_13 = """
                 SELECT COALESCE(SUM(CASE WHEN tipo = 'debito' THEN monto ELSE -monto END), 0) AS saldo
                 FROM movimientos_contables
-                WHERE tercero_id = %s AND cuenta LIKE '13%'
+                WHERE tercero_id = %s AND LEFT(cuenta, 2) = '13'
             """
             p_13 = [tid]
             if nid:
@@ -822,7 +822,7 @@ def buscar_datos_terceros(conn, q, negocio_id, slug=None, limite=5):
             sql_22 = """
                 SELECT COALESCE(SUM(CASE WHEN tipo = 'credito' THEN monto ELSE -monto END), 0) AS saldo
                 FROM movimientos_contables
-                WHERE tercero_id = %s AND (cuenta LIKE '22%' OR cuenta LIKE '23%')
+                WHERE tercero_id = %s AND (LEFT(cuenta, 2) = '22' OR LEFT(cuenta, 2) = '23')
             """
             p_22 = [tid]
             if nid:
@@ -845,7 +845,7 @@ def buscar_datos_terceros(conn, q, negocio_id, slug=None, limite=5):
                 SELECT COALESCE(SUM(monto), 0) AS total, COUNT(DISTINCT comprobante_id) AS cant,
                        TO_CHAR(MAX(fecha), 'YYYY-MM-DD') AS ult
                 FROM movimientos_contables
-                WHERE tercero_id = %s AND cuenta LIKE '41%' AND tipo = 'credito'
+                WHERE tercero_id = %s AND LEFT(cuenta, 2) = '41' AND tipo = 'credito'
             """
             p_v = [tid]
             if nid:
@@ -867,7 +867,8 @@ def buscar_datos_terceros(conn, q, negocio_id, slug=None, limite=5):
                 SELECT id, total, estado, TO_CHAR(created_at, 'YYYY-MM-DD') AS fecha, notas
                 FROM pedidos
                 WHERE (id_tercero = %s OR cliente_id = %s OR nombre_cliente ILIKE %s)
-                  AND LOWER(COALESCE(estado, '')) NOT IN ('facturado', 'completado', 'entregado', 'finalizado', 'anulado')
+                  AND (numero_documento IS NULL OR TRIM(numero_documento) = '')
+                  AND LOWER(COALESCE(estado, '')) NOT IN ('facturado', 'completado', 'entregado', 'finalizado', 'anulado', 'pagado')
             """
             p_p = [tid, tid, t_nombre]
             if nid:

@@ -2277,8 +2277,9 @@ def api_buscador_omni():
                 _c1.close()
         except Exception:
             manuales = set()
+    incluir_manuales = request.args.get('incluir_manuales', '1') not in ('0', 'false', 'no')
     res = buscar_omni(q, negocio_id=negocio_id, slug=slug, otorgados=otorgados,
-                      manuales_otorgados=manuales)
+                      manuales_otorgados=manuales, incluir_manuales=incluir_manuales)
     datos = []
     terceros = []
     notas = []

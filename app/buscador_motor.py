@@ -82,6 +82,7 @@ def _cargar_indice_manuales():
                 'resumen': preview or 'Ver detalle y pasos en el manual',
                 'url': f'/docs/{slug}#{anchor}',
                 'slug': slug,
+                'cuerpo_completo': full_txt,
                 'busqueda': f"{quitar_tildes(titulo)} {quitar_tildes(nombre_manual)} {quitar_tildes(full_txt)}"
             })
 
@@ -265,12 +266,74 @@ def _obtener_catalogo_base(negocio_id=None, slug=None, otorgados=None, filas=Non
     return out
 
 
-def buscar_omni(q, negocio_id=None, slug=None, otorgados=None, filas=None, manuales_otorgados=None):
+
+def _obtener_mapa_tipos_doc(conn, negocio_id):
+    """Mapea codigos internos y slugs de tipos de documento a sus nombres reales
+    configurados por el usuario en tipos_documento_negocio.
+    """
+    mapa = {}
+    if not negocio_id:
+        return mapa
+    try:
+        rows = conn.execute(
+            "SELECT codigo, nombre FROM tipos_documento_negocio WHERE negocio_id = %s",
+            (negocio_id,)
+        ).fetchall()
+        for r in rows:
+            cod = (r['codigo'] or '').strip()
+            nom = (r['nombre'] or '').strip()
+            if cod and nom:
+                mapa[cod.lower()] = nom
+                mapa[cod.upper()] = nom
+                mapa[cod] = nom
+                mapa[cod.replace('_', ' ').lower()] = nom
+    except Exception:
+        pass
+    return mapa
+
+def _formatear_nombre_doc(tipo_doc, mapa_docs):
+    """Traduce un slug o codigo interno al nombre real del documento configurado
+    por el negocio. Si no esta registrado, elimina guiones bajos y aplica formato legible.
+    """
+    if not tipo_doc:
+        return 'Documento'
+    t_clean = str(tipo_doc).strip()
+    if t_clean in mapa_docs:
+        return mapa_docs[t_clean]
+    if t_clean.lower() in mapa_docs:
+        return mapa_docs[t_clean.lower()]
+    return t_clean.replace('_', ' ').strip().title()
+
+def _extraer_fragmento_coincidente(texto, tokens, radio=55):
+    """Extrae un extracto de texto centrado en la primera coincidencia de palabra."""
+    if not texto or not tokens:
+        return ''
+    norm_txt = quitar_tildes(texto).lower()
+    for t in tokens:
+        if len(t) < 3:
+            continue
+        m = re.search(r'\b' + re.escape(t), norm_txt)
+        if m:
+            start = max(0, m.start() - radio)
+            end = min(len(texto), m.end() + radio)
+            while start > 0 and texto[start] not in ' .;,\n':
+                start -= 1
+            while end < len(texto) and texto[end] not in ' .;,\n':
+                end += 1
+            frag = texto[start:end].strip()
+            if start > 0:
+                frag = '...' + frag
+            if end < len(texto):
+                frag = frag + '...'
+            return frag
+    return ''
+
+def buscar_omni(q, negocio_id=None, slug=None, otorgados=None, filas=None, manuales_otorgados=None, incluir_manuales=True):
     q_limpio = (q or '').strip()
-    q_norm = quitar_tildes(q_limpio)
+    q_norm = quitar_tildes(q_limpio).lower()
     
     rutas_base = _obtener_catalogo_base(negocio_id=negocio_id, slug=slug, otorgados=otorgados, filas=filas)
-    secciones_manuales = _cargar_indice_manuales()
+    secciones_manuales = _cargar_indice_manuales() if incluir_manuales else []
 
     if not q_norm:
         # Sin consulta: sugeridos del catalogo (ya filtrados por otorgados)
@@ -287,9 +350,9 @@ def buscar_omni(q, negocio_id=None, slug=None, otorgados=None, filas=None, manua
     tokens = q_norm.split()
 
     for item in rutas_base:
-        tit_norm = quitar_tildes(item['titulo'])
-        mod_norm = quitar_tildes(item['modulo'])
-        keys_norm = ' '.join(quitar_tildes(k) for k in item['keywords'])
+        tit_norm = quitar_tildes(item['titulo']).lower()
+        mod_norm = quitar_tildes(item['modulo']).lower()
+        keys_norm = ' '.join(quitar_tildes(k).lower() for k in item['keywords'])
         full_text = f"{tit_norm} {mod_norm} {keys_norm}"
 
         score = 0
@@ -301,7 +364,7 @@ def buscar_omni(q, negocio_id=None, slug=None, otorgados=None, filas=None, manua
             score += 50
         elif q_norm in mod_norm:
             score += 30
-        elif any(q_norm in k for k in item['keywords']):
+        elif any(q_norm in k.lower() for k in item['keywords']):
             score += 25
         elif all(t in full_text for t in tokens):
             score += 15
@@ -313,30 +376,61 @@ def buscar_omni(q, negocio_id=None, slug=None, otorgados=None, filas=None, manua
 
     resultados_rutas.sort(key=lambda x: x['score'], reverse=True)
 
-    # 2. Búsqueda en Manuales y Secciones de Ayuda
+    # 2. Búsqueda en Manuales y Secciones de Ayuda (Con límites de palabra estrictos)
     resultados_ayuda = []
-    for item in secciones_manuales:
-        if manuales_otorgados is not None and item.get('slug') not in manuales_otorgados:
-            continue
-        tit_norm = quitar_tildes(item['titulo'])
-        full_text = item['busqueda']
+    if incluir_manuales:
+        for item in secciones_manuales:
+            if manuales_otorgados is not None and item.get('slug') not in manuales_otorgados:
+                continue
+            tit_norm = quitar_tildes(item['titulo']).lower()
+            man_norm = quitar_tildes(item['manual']).lower()
+            full_text = item['busqueda'].lower()
 
-        score = 0
-        if q_norm in tit_norm:
-            score += 40
-        elif all(t in full_text for t in tokens):
-            score += 20
-        elif any(t in full_text for t in tokens):
-            score += 10
+            score = 0
+            if q_norm == tit_norm:
+                score += 120
+            elif tit_norm.startswith(q_norm):
+                score += 90
+            elif q_norm in tit_norm:
+                score += 70
+            elif q_norm in man_norm:
+                score += 50
+            else:
+                # Coincidencias token a token exigiendo limites de palabra ()
+                tokens_tit = [t for t in tokens if re.search(r'' + re.escape(t), tit_norm)]
+                tokens_man = [t for t in tokens if re.search(r'' + re.escape(t), man_norm)]
+                tokens_cuerpo = [t for t in tokens if re.search(r'' + re.escape(t), full_text)]
 
-        if score > 0:
-            item_copy = dict(item)
-            item_copy['score'] = score
-            resultados_ayuda.append(item_copy)
+                if len(tokens) == 1:
+                    t = tokens[0]
+                    if t in tokens_tit:
+                        score += 60
+                    elif t in tokens_man:
+                        score += 40
+                    elif len(t) >= 3 and t in tokens_cuerpo:
+                        score += 25
+                else:
+                    # Multi-token: Si todos los tokens coinciden como palabras en el contenido
+                    if len(tokens_cuerpo) == len(tokens):
+                        score += 45
+                        if len(tokens_tit) > 0:
+                            score += 25
+                    elif len(tokens_tit) == len(tokens):
+                        score += 70
 
-    resultados_ayuda.sort(key=lambda x: x['score'], reverse=True)
+            if score > 0:
+                item_copy = dict(item)
+                item_copy['score'] = score
+                # Si coincidió en el cuerpo y no en el título, traer el fragmento del match
+                if score < 70 and 'cuerpo_completo' in item:
+                    frag = _extraer_fragmento_coincidente(item['cuerpo_completo'], tokens)
+                    if frag:
+                        item_copy['resumen'] = frag
+                resultados_ayuda.append(item_copy)
 
-    # Limpiar scores internos antes de responder
+        resultados_ayuda.sort(key=lambda x: x['score'], reverse=True)
+
+    # Limpiar campos internos antes de responder
     for r in resultados_rutas:
         r.pop('score', None)
         r.pop('keywords', None)
@@ -344,6 +438,7 @@ def buscar_omni(q, negocio_id=None, slug=None, otorgados=None, filas=None, manua
         a.pop('score', None)
         a.pop('busqueda', None)
         a.pop('slug', None)
+        a.pop('cuerpo_completo', None)
 
     return {
         'ok': True,
@@ -578,6 +673,7 @@ def buscar_sueltos(conn, negocio_id, limite=10):
 
 
 def buscar_datos_terceros(conn, q, negocio_id, slug=None, limite=5):
+    mapa_docs = _obtener_mapa_tipos_doc(conn, negocio_id)
     """Busca terceros y extrae su radiografia financiera y comercial completa:
     - Rol dinamico (Cliente, Proveedor, Mixto)
     - Cuentas por Cobrar con especificidad (saldo_por_documentos cobro) y saldo contable residual (13%)
@@ -635,7 +731,7 @@ def buscar_datos_terceros(conn, q, negocio_id, slug=None, limite=5):
         total_cxc_docs = 0.0
         try:
             sql_cxc = """
-                SELECT s.id, s.numero_documento, s.monto_original, s.saldo, 
+                SELECT s.id, s.numero_documento, s.monto_original, s.saldo, s.tipo_documento, 
                        TO_CHAR(COALESCE(s.fecha_hora, s.created_at), 'YYYY-MM-DD') AS fecha,
                        s.notas, c.codigo AS cuenta_codigo
                 FROM saldo_por_documentos s
@@ -655,7 +751,7 @@ def buscar_datos_terceros(conn, q, negocio_id, slug=None, limite=5):
                 total_cxc_docs += sp
                 docs_cxc.append({
                     'id': d['id'],
-                    'numero': d['numero_documento'] or f"Doc #{d['id']}",
+                    'numero': f"{_formatear_nombre_doc(d.get('tipo_documento'), mapa_docs)} #{d['numero_documento']}" if d.get('numero_documento') else f"{_formatear_nombre_doc(d.get('tipo_documento'), mapa_docs)} #{d['id']}",
                     'total': float(d['monto_original'] or 0),
                     'saldo': sp,
                     'fecha': d['fecha'],
@@ -690,7 +786,7 @@ def buscar_datos_terceros(conn, q, negocio_id, slug=None, limite=5):
         total_cxp_docs = 0.0
         try:
             sql_cxp = """
-                SELECT s.id, s.numero_documento, s.monto_original, s.saldo, 
+                SELECT s.id, s.numero_documento, s.monto_original, s.saldo, s.tipo_documento, 
                        TO_CHAR(COALESCE(s.fecha_hora, s.created_at), 'YYYY-MM-DD') AS fecha,
                        s.notas, c.codigo AS cuenta_codigo
                 FROM saldo_por_documentos s
@@ -710,7 +806,7 @@ def buscar_datos_terceros(conn, q, negocio_id, slug=None, limite=5):
                 total_cxp_docs += sp
                 docs_cxp.append({
                     'id': d['id'],
-                    'numero': d['numero_documento'] or f"Doc #{d['id']}",
+                    'numero': f"{_formatear_nombre_doc(d.get('tipo_documento'), mapa_docs)} #{d['numero_documento']}" if d.get('numero_documento') else f"{_formatear_nombre_doc(d.get('tipo_documento'), mapa_docs)} #{d['id']}",
                     'total': float(d['monto_original'] or 0),
                     'saldo': sp,
                     'fecha': d['fecha'],
@@ -880,7 +976,7 @@ def buscar_datos_terceros(conn, q, negocio_id, slug=None, limite=5):
                     'monto': float(um['monto'] or 0),
                     'concepto': (um['concepto'] or '').replace('\r', ' ').replace('\n', ' ').strip(),
                     'cuenta': f"{um['cuenta']} {um['cuenta_nombre']}".strip(),
-                    'doc': f"{um['tipo_documento'] or 'Doc'} #{um['numero_documento'] or um['id']}",
+                    'doc': f"{_formatear_nombre_doc(um.get('tipo_documento'), mapa_docs)} #{um.get('numero_documento') or um['id']}",
                     'comprobante_id': um['comprobante_id']
                 })
         except Exception:
@@ -935,6 +1031,7 @@ def buscar_datos_terceros(conn, q, negocio_id, slug=None, limite=5):
 
 
 def buscar_datos_notas(conn, q, negocio_id, limite=10):
+    mapa_docs = _obtener_mapa_tipos_doc(conn, negocio_id)
     """Busqueda transversal de notas y observaciones en:
     1. Comprobantes contables / Desembolsos (comprobantes_contables.notas)
     2. Cartera / Documentos (saldo_por_documentos.notas)
@@ -1018,7 +1115,7 @@ def buscar_datos_notas(conn, q, negocio_id, limite=10):
         r_doc = conn.execute(sql_doc, tuple(p_doc)).fetchall()
         for d in r_doc:
             texto_nota = d['notas'] or ''
-            tipo_label = d['tipo_documento'] or 'Documento'
+            tipo_label = _formatear_nombre_doc(d.get('tipo_documento'), mapa_docs)
             notas_out.append({
                 'tipo': 'cartera',
                 'origen': f"Documento #{d['numero_documento'] or d['id']} ({tipo_label})",
@@ -1067,6 +1164,7 @@ def buscar_datos_notas(conn, q, negocio_id, limite=10):
 
 
 def buscar_datos_cuentas_puc(conn, q, negocio_id, limite=5):
+    mapa_docs = _obtener_mapa_tipos_doc(conn, negocio_id)
     """Busca cuentas contables en el PUC y calcula su saldo neto real acumulado
     segun naturaleza (credito o debito) a partir de movimientos_contables,
     junto con sus ultimos 5 movimientos.
@@ -1136,7 +1234,7 @@ def buscar_datos_cuentas_puc(conn, q, negocio_id, limite=5):
                         'tipo': m['tipo'],
                         'monto': float(m['monto'] or 0),
                         'concepto': (m['concepto'] or '').replace('\r', ' ').replace('\n', ' ').strip(),
-                        'doc': f"{m['tipo_documento'] or 'Doc'} #{m['numero_documento'] or m['id']}",
+                        'doc': f"{_formatear_nombre_doc(m.get('tipo_documento'), mapa_docs)} #{m.get('numero_documento') or m['id']}",
                         'tercero': m['tercero_nombre'] or ''
                     })
             except Exception:

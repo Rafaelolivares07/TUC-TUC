@@ -59,6 +59,11 @@
         <option value="salome">Salome</option>
         <option value="gonzalo">Gonzalo</option>
       </select>
+      <button type="button" id="omni-manuales-toggle" title="Manuales y explicaciones: Activo / Inactivo"
+              class="shrink-0 ms-1 px-1.5 py-0.5 rounded-lg border border-slate-200 text-[10px] font-bold text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition cursor-pointer flex items-center gap-1 select-none">
+        <span>📖</span>
+        <span id="omni-manuales-badge">ON</span>
+      </button>
     </div>
   </div>
 
@@ -236,7 +241,7 @@
     tipos_doc = tipos_doc || [];
     const partes = [];
     if (rutas.length) partes.push(rutas.length + (rutas.length === 1 ? ' pantalla' : ' pantallas'));
-    if (ayuda.length) partes.push(ayuda.length + (ayuda.length === 1 ? ' ayuda' : ' ayudas'));
+    if (ayuda.length && omniManualesActivo()) partes.push(ayuda.length + (ayuda.length === 1 ? ' ayuda' : ' ayudas'));
     if (terceros.length) partes.push(terceros.length + (terceros.length === 1 ? ' tercero' : ' terceros'));
     if (cuentas.length) partes.push(cuentas.length + (cuentas.length === 1 ? ' cuenta contable' : ' cuentas contables'));
     if (tipos_doc.length) partes.push(tipos_doc.length + (tipos_doc.length === 1 ? ' tipo de documento' : ' tipos de documento'));
@@ -349,6 +354,7 @@
     ev.stopPropagation();
     omniGuardarPref(OMNI_KEY_VOZ_ABIERTO, omniPref(OMNI_KEY_VOZ_ABIERTO, '0') === '1' ? '0' : '1');
     omniPintarVozDespliegue();
+  omniPintarToggleManuales();
   });
 
 
@@ -614,7 +620,8 @@
 
     try {
       const nid = obtenerContextoNegocioId();
-      const resp = await fetch('/api/buscador/omni?q=' + encodeURIComponent(q) + '&negocio_id=' + encodeURIComponent(nid));
+      const incMan = omniManualesActivo() ? '1' : '0';
+      const resp = await fetch('/api/buscador/omni?q=' + encodeURIComponent(q) + '&negocio_id=' + encodeURIComponent(nid) + '&incluir_manuales=' + incMan);
       const d = await resp.json();
       loading.classList.add('hidden');
       if (q !== input.value.trim()) return; // Respuesta tardia: ya escribio otra cosa
@@ -697,10 +704,10 @@
             <div data-omni-index="${itemIdx}" onclick="omniNavegarA('${a.url}', '${a.titulo}', '${a.manual}', '')"
                  class="omni-item p-2.5 rounded-xl cursor-pointer hover:bg-emerald-50/70 border border-gray-100 hover:border-emerald-200 transition">
               <div class="flex items-center justify-between gap-2 mb-1">
-                <span class="text-xs font-bold text-gray-900 truncate">${a.titulo}</span>
-                <span class="text-[9px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0">${a.manual}</span>
+                <span class="text-xs font-bold text-gray-900 truncate">${omniResaltarMatch(a.titulo, q)}</span>
+                <span class="text-[9px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0">${escapeHtml(a.manual)}</span>
               </div>
-              <p class="text-[11px] text-gray-500 leading-snug line-clamp-2">${a.resumen}</p>
+              <p class="text-[11px] text-gray-600 leading-snug line-clamp-2">${omniResaltarMatch(a.resumen, q)}</p>
             </div>
           `;
         });
@@ -818,6 +825,57 @@
       loading.classList.add('hidden');
       resultsBody.innerHTML = `<div class="p-4 text-center text-red-500 text-xs">Error de conexión con el buscador</div>`;
     }
+  }
+
+    function omniResaltarMatch(texto, query) {
+    if (!texto) return '';
+    if (!query) return escapeHtml(texto);
+    const toks = query.trim().split(/\s+/).filter(t => t.length >= 2);
+    if (toks.length === 0) return escapeHtml(texto);
+    let safe = escapeHtml(texto);
+    toks.forEach(tk => {
+      const escapedTk = escapeHtml(tk);
+      const re = new RegExp(`(^|\\b)(${escapedTk})`, 'gi');
+      safe = safe.replace(re, (m, p1, p2) => `${p1}<mark class="bg-amber-200/90 text-amber-950 font-bold px-1 py-0.2 rounded">${p2}</mark>`);
+    });
+    return safe;
+  }
+
+  const OMNI_KEY_MANUALES = 'omni_incluir_manuales';
+  const btnToggleManuales = document.getElementById('omni-manuales-toggle');
+  const badgeToggleManuales = document.getElementById('omni-manuales-badge');
+
+  function omniManualesActivo() {
+    return omniPref(OMNI_KEY_MANUALES, '1') === '1';
+  }
+
+  function omniPintarToggleManuales() {
+    if (!btnToggleManuales || !badgeToggleManuales) return;
+    const activo = omniManualesActivo();
+    if (activo) {
+      badgeToggleManuales.textContent = 'ON';
+      badgeToggleManuales.className = 'text-[9px] font-bold text-emerald-700 bg-emerald-100 px-1 py-0.2 rounded';
+      btnToggleManuales.title = 'Manuales ACTIVOS (haz clic para ocultarlos)';
+      btnToggleManuales.classList.remove('opacity-50');
+    } else {
+      badgeToggleManuales.textContent = 'OFF';
+      badgeToggleManuales.className = 'text-[9px] font-bold text-rose-700 bg-rose-100 px-1 py-0.2 rounded';
+      btnToggleManuales.title = 'Manuales APAGADOS (haz clic para incluirlos)';
+      btnToggleManuales.classList.add('opacity-50');
+    }
+  }
+
+  if (btnToggleManuales) {
+    btnToggleManuales.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const nuevo = omniManualesActivo() ? '0' : '1';
+      localStorage.setItem(OMNI_KEY_MANUALES, nuevo);
+      omniPintarToggleManuales();
+      const q = input.value.trim();
+      if (q.length >= 2) {
+        ejecutarBusqueda(q);
+      }
+    });
   }
 
   function omniFmt(n) {
@@ -1360,6 +1418,7 @@
   omniPintarMute();
   omniPintarMic();
   omniPintarVozDespliegue();
+  omniPintarToggleManuales();
 
 function omniTarjetaCuenta(c) {
   const movs = c.ultimos_movimientos || [];

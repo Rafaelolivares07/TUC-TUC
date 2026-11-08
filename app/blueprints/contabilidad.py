@@ -2135,12 +2135,15 @@ def admin_contabilidad(negocio_id, tab_name=None):
         tab_pedido = (tab_name or request.args.get('tab', '')).lower()
         if tab_pedido in ('desembolsos', 'gastos', 'tesoreria', 'tesorería'):
             return __import__('flask').redirect(f'/tesoreria/{negocio_id}')
-
-        if tab_name == 'gastos':
+        if tab_pedido in ('libro', 'movimientos', 'auxiliar', 'consulta'):
+            tab_name = 'consulta'
+        elif tab_name == 'gastos':
             tab_name = 'desembolsos'
         elif not tab_name:
             tab_name = request.args.get('tab', '')
-            if tab_name == 'gastos':
+            if tab_name in ('libro', 'movimientos', 'auxiliar'):
+                tab_name = 'consulta'
+            elif tab_name == 'gastos':
                 tab_name = 'desembolsos'
 
         return render_template('contabilidad_admin.html',
@@ -5203,11 +5206,17 @@ def api_reporte_movimientos(negocio_id):
         where_periodo = ["m.negocio_id = %s", "m.fecha >= %s", "m.fecha <= %s"]
         params_periodo = [negocio_id, desde, hasta]
 
+        cuenta_filtro = (request.args.get('cuenta') or request.args.get('cuenta_codigo') or '').strip()
         if cuenta_id:
             where_anterior.append("m.cuenta_id = %s")
             params_anterior.append(cuenta_id)
             where_periodo.append("m.cuenta_id = %s")
             params_periodo.append(cuenta_id)
+        elif cuenta_filtro:
+            where_anterior.append("(m.cuenta LIKE %s OR p.codigo LIKE %s)")
+            params_anterior.extend([f"{cuenta_filtro}%", f"{cuenta_filtro}%"])
+            where_periodo.append("(m.cuenta LIKE %s OR p.codigo LIKE %s)")
+            params_periodo.extend([f"{cuenta_filtro}%", f"{cuenta_filtro}%"])
 
         if tercero_id:
             where_anterior.append("m.tercero_id = %s")
@@ -5241,6 +5250,7 @@ def api_reporte_movimientos(negocio_id):
                     COALESCE(SUM(CASE WHEN m.tipo IN ('credito', 'C') THEN m.monto ELSE 0 END), 0) AS total_credits
                 FROM movimientos_contables m
                 LEFT JOIN comprobantes_contables cc ON cc.id = m.comprobante_id
+                LEFT JOIN cuentas_puc p ON p.id = m.cuenta_id
                 WHERE {" AND ".join(where_anterior)}
             """, params_anterior).fetchone()
 

@@ -1,3 +1,4 @@
+import urllib.parse
 # app/buscador_motor.py
 # Motor omnibox unificado de rutas, pestanas y manuales de ayuda para TUC TUC V2
 
@@ -952,7 +953,7 @@ def buscar_datos_terceros(conn, q, negocio_id, slug=None, limite=5):
                     'nombre': cg['cuenta_nombre'],
                     'movs': int(cg['total_movs'] or 0),
                     'total': c_tot,
-                    'url': f"/contabilidad/{nid or 0}?tab=libro&cuenta={c_cod}"
+                    'url': f"/contabilidad/{nid or 0}?tab=consulta&tercero_id={tid}&tercero_nombre={urllib.parse.quote(t_nombre)}&cuenta={c_cod}&desde=2026-01-01"
                 })
 
             sql_um = """
@@ -1027,9 +1028,9 @@ def buscar_datos_terceros(conn, q, negocio_id, slug=None, limite=5):
                 'saldos': f"/admin/saldos-documentos/{nid or 0}?tercero_id={tid}",
                 'tesoreria': f"/tesoreria/{nid or 0}?tercero_id={tid}",
                 'unificar': f"/admin/mantenimiento/{nid or 0}?tool=unificar-terceros&tercero_id={tid}",
-                'contabilidad_cxp': f"/contabilidad/{nid or 0}?tab=libro&cuenta=23",
-                'contabilidad_cxc': f"/contabilidad/{nid or 0}?tab=libro&cuenta=13",
-                'contabilidad_ventas': f"/contabilidad/{nid or 0}?tab=libro&cuenta=41"
+                'contabilidad_cxp': f"/contabilidad/{nid or 0}?tab=consulta&tercero_id={tid}&tercero_nombre={urllib.parse.quote(t_nombre)}&cuenta=23&desde=2026-01-01",
+                'contabilidad_cxc': f"/contabilidad/{nid or 0}?tab=consulta&tercero_id={tid}&tercero_nombre={urllib.parse.quote(t_nombre)}&cuenta=13&desde=2026-01-01",
+                'contabilidad_ventas': f"/contabilidad/{nid or 0}?tab=consulta&tercero_id={tid}&tercero_nombre={urllib.parse.quote(t_nombre)}&cuenta=41&desde=2026-01-01"
             }
         })
 
@@ -1259,7 +1260,7 @@ def buscar_datos_cuentas_puc(conn, q, negocio_id, limite=5):
             'creditos': round(creds, 2),
             'total_movimientos': tot_movs,
             'ultimos_movimientos': movimientos,
-            'url': f"/contabilidad/{nid or 0}?tab=libro&cuenta={cod}"
+            'url': f"/contabilidad/{nid or 0}?tab=consulta&cuenta={cod}&cuenta_id={c['id']}&desde=2026-01-01"
         })
 
     return cuentas_out

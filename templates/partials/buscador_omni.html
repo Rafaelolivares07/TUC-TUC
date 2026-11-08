@@ -913,7 +913,7 @@
       cuentasChips = `
         <div class="flex flex-wrap gap-1 mt-1">
           ${cv.map(c => `
-            <a href="${escapeHtml(c.url || `/contabilidad/${t.negocio_id || 0}?tab=libro&cuenta=${c.codigo}`)}" 
+            <a href="${escapeHtml(c.url || `/contabilidad/${t.negocio_id || 0}?tab=consulta&desde=2026-01-01&cuenta=${c.codigo}`)}" 
                target="_blank" rel="noopener noreferrer"
                class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-white border border-purple-200 text-purple-900 shadow-2xs font-mono hover:bg-purple-100/70 hover:border-purple-400 transition"
                title="Ver libro auxiliar de la cuenta ${escapeHtml(c.codigo)}">
@@ -965,7 +965,7 @@
           </div>
           <div class="mt-2 pt-1 border-t border-blue-50 flex flex-col gap-0.5">
             ${cxcDocs.length > 0 && t.urls && t.urls.saldos ? `<a href="${t.urls.saldos}" target="_blank" rel="noopener noreferrer" class="text-[9px] font-bold text-blue-700 hover:text-blue-900 hover:underline inline-flex items-center gap-0.5"><span>Ver facturas de cartera</span> <span>➔</span></a>` : ''}
-            ${t.cxc_adicional > 0 ? `<a href="${(t.urls && t.urls.contabilidad_cxc) || `/contabilidad/${t.negocio_id || 0}?tab=libro&cuenta=13`}" target="_blank" rel="noopener noreferrer" class="text-[9px] font-bold text-blue-700 hover:text-blue-900 hover:underline inline-flex items-center gap-0.5"><span>Ver desglose contable (Cta. 13)</span> <span>➔</span></a>` : ''}
+            ${t.cxc_adicional > 0 ? `<a href="${(t.urls && t.urls.contabilidad_cxc) || `/contabilidad/${t.negocio_id || 0}?tab=consulta&cuenta=13&desde=2026-01-01`}" target="_blank" rel="noopener noreferrer" class="text-[9px] font-bold text-blue-700 hover:text-blue-900 hover:underline inline-flex items-center gap-0.5"><span>Ver desglose contable (Cta. 13)</span> <span>➔</span></a>` : ''}
           </div>
         </div>
       `);
@@ -987,7 +987,7 @@
           </div>
           <div class="mt-2 pt-1 border-t border-rose-50 flex flex-col gap-0.5">
             ${cxpDocs.length > 0 && t.urls && t.urls.tesoreria ? `<a href="${t.urls.tesoreria}" target="_blank" rel="noopener noreferrer" class="text-[9px] font-bold text-rose-700 hover:text-rose-900 hover:underline inline-flex items-center gap-0.5"><span>Ver documentos en tesorería</span> <span>➔</span></a>` : ''}
-            ${t.cxp_adicional > 0 ? `<a href="${(t.urls && t.urls.contabilidad_cxp) || `/contabilidad/${t.negocio_id || 0}?tab=libro&cuenta=23`}" target="_blank" rel="noopener noreferrer" class="text-[9px] font-bold text-rose-700 hover:text-rose-900 hover:underline inline-flex items-center gap-0.5"><span>Ver desglose contable (Ctas. 22/23)</span> <span>➔</span></a>` : ''}
+            ${t.cxp_adicional > 0 ? `<a href="${(t.urls && t.urls.contabilidad_cxp) || `/contabilidad/${t.negocio_id || 0}?tab=consulta&cuenta=23&desde=2026-01-01`}" target="_blank" rel="noopener noreferrer" class="text-[9px] font-bold text-rose-700 hover:text-rose-900 hover:underline inline-flex items-center gap-0.5"><span>Ver desglose contable (Ctas. 22/23)</span> <span>➔</span></a>` : ''}
           </div>
         </div>
       `);
@@ -1008,7 +1008,7 @@
             </div>
           </div>
           <div class="mt-2 pt-1 border-t border-emerald-50">
-            <a href="${(t.urls && t.urls.contabilidad_ventas) || `/contabilidad/${t.negocio_id || 0}?tab=libro&cuenta=41`}" target="_blank" rel="noopener noreferrer" class="text-[9px] font-bold text-emerald-700 hover:text-emerald-900 hover:underline inline-flex items-center gap-0.5">
+            <a href="${(t.urls && t.urls.contabilidad_ventas) || `/contabilidad/${t.negocio_id || 0}?tab=consulta&cuenta=41&desde=2026-01-01`}" target="_blank" rel="noopener noreferrer" class="text-[9px] font-bold text-emerald-700 hover:text-emerald-900 hover:underline inline-flex items-center gap-0.5">
               <span>Ver ventas contables (Cta. 41)</span> <span>➔</span>
             </a>
           </div>
@@ -1098,10 +1098,10 @@
           <div class="flex items-center gap-1 shrink-0">
             ${cxcDocs.length > 0 && t.urls && t.urls.saldos ? 
               `<a href="${t.urls.saldos}" target="_blank" rel="noopener noreferrer" class="px-2 py-1 rounded-lg text-[10px] font-bold bg-blue-50 text-blue-700 hover:bg-blue-100 hover:underline">Cartera (${cxcDocs.length}) ➔</a>` : 
-              (t.cxc_adicional > 0 ? `<a href="${(t.urls && t.urls.contabilidad_cxc) || `/contabilidad/${t.negocio_id || 0}?tab=libro&cuenta=13`}" target="_blank" rel="noopener noreferrer" class="px-2 py-1 rounded-lg text-[10px] font-bold bg-blue-50 text-blue-700 hover:bg-blue-100 hover:underline">Contabilidad (Cta 13) ➔</a>` : '')}
+              (t.cxc_adicional > 0 ? `<a href="${(t.urls && t.urls.contabilidad_cxc) || `/contabilidad/${t.negocio_id || 0}?tab=consulta&cuenta=13&desde=2026-01-01`}" target="_blank" rel="noopener noreferrer" class="px-2 py-1 rounded-lg text-[10px] font-bold bg-blue-50 text-blue-700 hover:bg-blue-100 hover:underline">Contabilidad (Cta 13) ➔</a>` : '')}
             ${cxpDocs.length > 0 && t.urls && t.urls.tesoreria ? 
               `<a href="${t.urls.tesoreria}" target="_blank" rel="noopener noreferrer" class="px-2 py-1 rounded-lg text-[10px] font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 hover:underline">Tesorería (${cxpDocs.length}) ➔</a>` : 
-              (t.cxp_adicional > 0 ? `<a href="${(t.urls && t.urls.contabilidad_cxp) || `/contabilidad/${t.negocio_id || 0}?tab=libro&cuenta=23`}" target="_blank" rel="noopener noreferrer" class="px-2 py-1 rounded-lg text-[10px] font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 hover:underline">Contabilidad (Cta 23) ➔</a>` : '')}
+              (t.cxp_adicional > 0 ? `<a href="${(t.urls && t.urls.contabilidad_cxp) || `/contabilidad/${t.negocio_id || 0}?tab=consulta&cuenta=23&desde=2026-01-01`}" target="_blank" rel="noopener noreferrer" class="px-2 py-1 rounded-lg text-[10px] font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 hover:underline">Contabilidad (Cta 23) ➔</a>` : '')}
           </div>
         </div>
 

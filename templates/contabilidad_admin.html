@@ -3823,7 +3823,9 @@ async function consultarMovimientos() {
   loadingDiv.classList.remove('hidden');
 
   try {
+    const cuentaTxt = (document.getElementById('cons-cuenta-txt')?.value || '').trim();
     let url = `/api/contabilidad/${NEGOCIO_ID}/reporte-movimientos?desde=${desde}&hasta=${hasta}&cuenta_id=${cuentaId}&tercero_id=${terceroId}&agrupar=${agrupar}`;
+    if (cuentaTxt && !cuentaId) url += `&cuenta=${encodeURIComponent(cuentaTxt)}`;
     if (centroId) url += `&centro_utilidad_id=${encodeURIComponent(centroId)}`;
     if (nota) url += `&nota=${encodeURIComponent(nota)}`;
     const resp = await fetch(url);
@@ -5076,27 +5078,41 @@ cargarCentrosUtilidadContabilidad();
 const urlParams = new URLSearchParams(window.location.search);
 let activeTab = TAB_INICIAL_SERVER || urlParams.get('tab');
 if (activeTab === 'gastos') activeTab = 'desembolsos';
+if (activeTab === 'libro' || activeTab === 'movimientos' || activeTab === 'auxiliar') activeTab = 'consulta';
 if (activeTab && TABS.includes(activeTab)) {
   cambiarTab(activeTab);
   if (activeTab === 'consulta') {
+    inicializarFechasConsulta();
     const desde = urlParams.get('desde');
     const hasta = urlParams.get('hasta');
     const cuentaId = urlParams.get('cuenta_id');
-    const cuentaCodigo = urlParams.get('cuenta_codigo');
+    const cuentaCodigo = urlParams.get('cuenta_codigo') || urlParams.get('cuenta');
     const cuentaNombre = urlParams.get('cuenta_nombre');
+    const terceroId = urlParams.get('tercero_id');
+    const terceroNombre = urlParams.get('tercero_nombre') || urlParams.get('tercero');
     
-    if (desde) document.getElementById('cons-desde').value = desde;
+    if (desde) {
+      document.getElementById('cons-desde').value = desde;
+    } else if (terceroId || cuentaCodigo || cuentaId) {
+      document.getElementById('cons-desde').value = `${new Date().getFullYear()}-01-01`;
+    }
     if (hasta) document.getElementById('cons-hasta').value = hasta;
     if (cuentaId) {
       document.getElementById('cons-cuenta-id').value = cuentaId;
-      document.getElementById('cons-cuenta-txt').value = `${cuentaCodigo} - ${cuentaNombre}`;
+      document.getElementById('cons-cuenta-txt').value = cuentaCodigo ? `${cuentaCodigo} - ${cuentaNombre || ''}` : cuentaId;
+    } else if (cuentaCodigo) {
+      document.getElementById('cons-cuenta-txt').value = cuentaCodigo;
+    }
+    if (terceroId) {
+      document.getElementById('cons-tercero-id').value = terceroId;
+      document.getElementById('cons-tercero-txt').value = terceroNombre || `Tercero #${terceroId}`;
     }
     const qNota = urlParams.get('nota');
     if (qNota && document.getElementById('cons-nota')) {
       document.getElementById('cons-nota').value = qNota;
     }
     
-    setTimeout(consultarMovimientos, 150);
+    setTimeout(consultarMovimientos, 200);
   } else if (activeTab === 'manual') {
     const compId = urlParams.get('comprobante_id');
     const tipoDoc = urlParams.get('tipo_documento') || '';

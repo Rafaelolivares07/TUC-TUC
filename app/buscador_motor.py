@@ -587,42 +587,40 @@ def buscar_datos_terceros(conn, q, negocio_id, slug=None, limite=5):
     - Notas y observaciones asociadas
     """
     q_limpio = (q or '').strip()
-    if len(q_limpio) < 2 or not negocio_id:
+    if len(q_limpio) < 2:
         return []
     try:
-        nid = int(negocio_id)
+        nid = int(negocio_id) if negocio_id else None
     except (TypeError, ValueError):
-        return []
+        nid = None
     
     like = f"%{q_limpio}%"
+    rows = []
     try:
-        rows = conn.execute("""
-            SELECT t.id, t.nombre, t.identificacion, t.telefono, t.email, t.direccion, t.ciudad,
-                   t.tipo_tercero, t.es_cliente, t.es_proveedor, t.es_empleado
-            FROM terceros t
-            WHERE (t.nombre ILIKE %s OR COALESCE(t.identificacion, '') ILIKE %s 
-                   OR COALESCE(t.telefono, '') ILIKE %s OR COALESCE(t.email, '') ILIKE %s)
-              AND (EXISTS (SELECT 1 FROM terceros_negocios tn WHERE tn.tercero_id = t.id AND tn.negocio_id = %s)
-                   OR EXISTS (SELECT 1 FROM movimientos_contables mc WHERE mc.tercero_id = t.id AND mc.negocio_id = %s)
-                   OR EXISTS (SELECT 1 FROM saldo_por_documentos spd WHERE spd.tercero_id = t.id AND spd.negocio_id = %s)
-                   OR EXISTS (SELECT 1 FROM pedidos ped WHERE ped.cliente_tercero_id = t.id AND ped.negocio_id = %s)
-                   OR t.tipo_tercero = 'admin')
-            ORDER BY (LOWER(t.nombre) = LOWER(%s)) DESC, t.nombre ASC
-            LIMIT %s
-        """, (like, like, like, like, nid, nid, nid, nid, q_limpio, limite)).fetchall()
+        if nid:
+            rows = conn.execute("""
+                SELECT t.id, t.nombre, t.documento, t.telefono, t.direccion, t.tipo_tercero, t.contacto
+                FROM terceros t
+                WHERE (t.nombre ILIKE %s OR COALESCE(t.documento, '') ILIKE %s OR COALESCE(t.telefono, '') ILIKE %s)
+                  AND (EXISTS (SELECT 1 FROM terceros_negocios tn WHERE tn.tercero_id = t.id AND tn.negocio_id = %s)
+                       OR EXISTS (SELECT 1 FROM movimientos_contables mc WHERE mc.tercero_id = t.id AND mc.negocio_id = %s)
+                       OR EXISTS (SELECT 1 FROM saldo_por_documentos spd WHERE spd.tercero_id = t.id AND spd.negocio_id = %s)
+                       OR EXISTS (SELECT 1 FROM pedidos ped WHERE (ped.id_tercero = t.id OR ped.cliente_id = t.id) AND ped.negocio_id = %s)
+                       OR t.tipo_tercero = 'admin')
+                ORDER BY (LOWER(t.nombre) = LOWER(%s)) DESC, t.nombre ASC
+                LIMIT %s
+            """, (like, like, like, nid, nid, nid, nid, q_limpio, limite)).fetchall()
         
         if not rows:
             rows = conn.execute("""
-                SELECT t.id, t.nombre, t.identificacion, t.telefono, t.email, t.direccion, t.ciudad,
-                       t.tipo_tercero, t.es_cliente, t.es_proveedor, t.es_empleado
+                SELECT t.id, t.nombre, t.documento, t.telefono, t.direccion, t.tipo_tercero, t.contacto
                 FROM terceros t
-                WHERE (t.nombre ILIKE %s OR COALESCE(t.identificacion, '') ILIKE %s 
-                       OR COALESCE(t.telefono, '') ILIKE %s OR COALESCE(t.email, '') ILIKE %s)
+                WHERE (t.nombre ILIKE %s OR COALESCE(t.documento, '') ILIKE %s OR COALESCE(t.telefono, '') ILIKE %s)
                 ORDER BY (LOWER(t.nombre) = LOWER(%s)) DESC, t.nombre ASC
                 LIMIT %s
-            """, (like, like, like, like, q_limpio, limite)).fetchall()
+            """, (like, like, like, q_limpio, limite)).fetchall()
     except Exception:
-        return []
+        rows = []
 
     if not rows:
         return []
@@ -636,38 +634,50 @@ def buscar_datos_terceros(conn, q, negocio_id, slug=None, limite=5):
         docs_cxc = []
         total_cxc_docs = 0.0
         try:
-            r_cxc = conn.execute("""
-                SELECT id, numero_documento, total_documento, saldo_pendiente, 
-                       TO_CHAR(fecha, 'YYYY-MM-DD') AS fecha,
-                       TO_CHAR(fecha_vencimiento, 'YYYY-MM-DD') AS fecha_vencimiento,
-                       notas
-                FROM saldo_por_documentos
-                WHERE negocio_id = %s AND tercero_id = %s AND tipo_movimiento = 'cobro' AND saldo_pendiente > 0
-                ORDER BY fecha ASC LIMIT 5
-            """, (nid, tid)).fetchall()
+            sql_cxc = """
+                SELECT s.id, s.numero_documento, s.monto_original, s.saldo, 
+                       TO_CHAR(COALESCE(s.fecha_hora, s.created_at), 'YYYY-MM-DD') AS fecha,
+                       s.notas, c.codigo AS cuenta_codigo
+                FROM saldo_por_documentos s
+                LEFT JOIN cuentas_puc c ON c.id = s.cuenta_id
+                WHERE s.tercero_id = %s AND s.saldo > 0
+                  AND (c.codigo LIKE '13%' OR s.tipo_documento ILIKE '%cobro%' OR s.tipo_documento ILIKE '%factura%')
+            """
+            params_cxc = [tid]
+            if nid:
+                sql_cxc += " AND s.negocio_id = %s"
+                params_cxc.append(nid)
+            sql_cxc += " ORDER BY s.id DESC LIMIT 5"
+
+            r_cxc = conn.execute(sql_cxc, tuple(params_cxc)).fetchall()
             for d in r_cxc:
-                sp = float(d['saldo_pendiente'] or 0)
+                sp = float(d['saldo'] or 0)
                 total_cxc_docs += sp
                 docs_cxc.append({
                     'id': d['id'],
                     'numero': d['numero_documento'] or f"Doc #{d['id']}",
-                    'total': float(d['total_documento'] or 0),
+                    'total': float(d['monto_original'] or 0),
                     'saldo': sp,
                     'fecha': d['fecha'],
-                    'vencimiento': d['fecha_vencimiento'],
+                    'vencimiento': None,
                     'notas': d['notas'] or '',
-                    'url': f"/admin/saldos-documentos/{nid}?tercero_id={tid}&doc_id={d['id']}"
+                    'url': f"/admin/saldos-documentos/{nid or 0}?tercero_id={tid}&doc_id={d['id']}"
                 })
         except Exception:
             docs_cxc = []
 
         saldo_conta_13 = 0.0
         try:
-            r13 = conn.execute("""
+            sql_13 = """
                 SELECT COALESCE(SUM(CASE WHEN tipo = 'debito' THEN monto ELSE -monto END), 0) AS saldo
                 FROM movimientos_contables
-                WHERE negocio_id = %s AND tercero_id = %s AND cuenta LIKE '13%'
-            """, (nid, tid)).fetchone()
+                WHERE tercero_id = %s AND cuenta LIKE '13%'
+            """
+            p_13 = [tid]
+            if nid:
+                sql_13 += " AND negocio_id = %s"
+                p_13.append(nid)
+            r13 = conn.execute(sql_13, tuple(p_13)).fetchone()
             if r13:
                 saldo_conta_13 = float(r13['saldo'] or 0)
         except Exception:
@@ -679,38 +689,50 @@ def buscar_datos_terceros(conn, q, negocio_id, slug=None, limite=5):
         docs_cxp = []
         total_cxp_docs = 0.0
         try:
-            r_cxp = conn.execute("""
-                SELECT id, numero_documento, total_documento, saldo_pendiente, 
-                       TO_CHAR(fecha, 'YYYY-MM-DD') AS fecha,
-                       TO_CHAR(fecha_vencimiento, 'YYYY-MM-DD') AS fecha_vencimiento,
-                       notas
-                FROM saldo_por_documentos
-                WHERE negocio_id = %s AND tercero_id = %s AND tipo_movimiento = 'pago' AND saldo_pendiente > 0
-                ORDER BY fecha ASC LIMIT 5
-            """, (nid, tid)).fetchall()
+            sql_cxp = """
+                SELECT s.id, s.numero_documento, s.monto_original, s.saldo, 
+                       TO_CHAR(COALESCE(s.fecha_hora, s.created_at), 'YYYY-MM-DD') AS fecha,
+                       s.notas, c.codigo AS cuenta_codigo
+                FROM saldo_por_documentos s
+                LEFT JOIN cuentas_puc c ON c.id = s.cuenta_id
+                WHERE s.tercero_id = %s AND s.saldo > 0
+                  AND (c.codigo LIKE '22%' OR c.codigo LIKE '23%' OR s.tipo_documento ILIKE '%pago%' OR s.tipo_documento ILIKE '%egreso%' OR s.tipo_documento ILIKE '%cuenta%pagar%')
+            """
+            params_cxp = [tid]
+            if nid:
+                sql_cxp += " AND s.negocio_id = %s"
+                params_cxp.append(nid)
+            sql_cxp += " ORDER BY s.id DESC LIMIT 5"
+
+            r_cxp = conn.execute(sql_cxp, tuple(params_cxp)).fetchall()
             for d in r_cxp:
-                sp = float(d['saldo_pendiente'] or 0)
+                sp = float(d['saldo'] or 0)
                 total_cxp_docs += sp
                 docs_cxp.append({
                     'id': d['id'],
                     'numero': d['numero_documento'] or f"Doc #{d['id']}",
-                    'total': float(d['total_documento'] or 0),
+                    'total': float(d['monto_original'] or 0),
                     'saldo': sp,
                     'fecha': d['fecha'],
-                    'vencimiento': d['fecha_vencimiento'],
+                    'vencimiento': None,
                     'notas': d['notas'] or '',
-                    'url': f"/tesoreria/{nid}?tercero_id={tid}&doc_id={d['id']}"
+                    'url': f"/tesoreria/{nid or 0}?tercero_id={tid}&doc_id={d['id']}"
                 })
         except Exception:
             docs_cxp = []
 
         saldo_conta_22_23 = 0.0
         try:
-            r22 = conn.execute("""
+            sql_22 = """
                 SELECT COALESCE(SUM(CASE WHEN tipo = 'credito' THEN monto ELSE -monto END), 0) AS saldo
                 FROM movimientos_contables
-                WHERE negocio_id = %s AND tercero_id = %s AND (cuenta LIKE '22%' OR cuenta LIKE '23%')
-            """, (nid, tid)).fetchone()
+                WHERE tercero_id = %s AND (cuenta LIKE '22%' OR cuenta LIKE '23%')
+            """
+            p_22 = [tid]
+            if nid:
+                sql_22 += " AND negocio_id = %s"
+                p_22.append(nid)
+            r22 = conn.execute(sql_22, tuple(p_22)).fetchone()
             if r22:
                 saldo_conta_22_23 = float(r22['saldo'] or 0)
         except Exception:
@@ -723,12 +745,17 @@ def buscar_datos_terceros(conn, q, negocio_id, slug=None, limite=5):
         ventas_cant = 0
         ultima_venta = None
         try:
-            rv = conn.execute("""
+            sql_v = """
                 SELECT COALESCE(SUM(monto), 0) AS total, COUNT(DISTINCT comprobante_id) AS cant,
                        TO_CHAR(MAX(fecha), 'YYYY-MM-DD') AS ult
                 FROM movimientos_contables
-                WHERE negocio_id = %s AND tercero_id = %s AND cuenta LIKE '41%' AND tipo = 'credito'
-            """, (nid, tid)).fetchone()
+                WHERE tercero_id = %s AND cuenta LIKE '41%' AND tipo = 'credito'
+            """
+            p_v = [tid]
+            if nid:
+                sql_v += " AND negocio_id = %s"
+                p_v.append(nid)
+            rv = conn.execute(sql_v, tuple(p_v)).fetchone()
             if rv:
                 ventas_total = float(rv['total'] or 0)
                 ventas_cant = int(rv['cant'] or 0)
@@ -740,13 +767,19 @@ def buscar_datos_terceros(conn, q, negocio_id, slug=None, limite=5):
         pedidos_pendientes = []
         total_pedidos_pend = 0.0
         try:
-            rp = conn.execute("""
-                SELECT id, total, estado, TO_CHAR(fecha, 'YYYY-MM-DD') AS fecha, notas
+            sql_p = """
+                SELECT id, total, estado, TO_CHAR(created_at, 'YYYY-MM-DD') AS fecha, notas
                 FROM pedidos
-                WHERE negocio_id = %s AND (cliente_tercero_id = %s OR nombre_cliente ILIKE %s)
-                  AND LOWER(estado) NOT IN ('facturado', 'completado', 'entregado', 'finalizado')
-                ORDER BY id DESC LIMIT 5
-            """, (nid, tid, t_nombre)).fetchall()
+                WHERE (id_tercero = %s OR cliente_id = %s OR nombre_cliente ILIKE %s)
+                  AND LOWER(COALESCE(estado, '')) NOT IN ('facturado', 'completado', 'entregado', 'finalizado', 'anulado')
+            """
+            p_p = [tid, tid, t_nombre]
+            if nid:
+                sql_p += " AND negocio_id = %s"
+                p_p.append(nid)
+            sql_p += " ORDER BY id DESC LIMIT 5"
+
+            rp = conn.execute(sql_p, tuple(p_p)).fetchall()
             for p in rp:
                 tot_p = float(p['total'] or 0)
                 total_pedidos_pend += tot_p
@@ -756,7 +789,7 @@ def buscar_datos_terceros(conn, q, negocio_id, slug=None, limite=5):
                     'estado': p['estado'] or 'pendiente',
                     'fecha': p['fecha'],
                     'notas': p['notas'] or '',
-                    'url': f"/ventas-costos/{nid}?pedido_id={p['id']}"
+                    'url': f"/ventas-costos/{nid or 0}?pedido_id={p['id']}"
                 })
         except Exception:
             pass
@@ -764,23 +797,25 @@ def buscar_datos_terceros(conn, q, negocio_id, slug=None, limite=5):
         # E) Notas registradas vinculadas a este tercero:
         notas_tercero = []
         try:
-            for nd in conn.execute("""
-                SELECT numero_documento AS origen, notas, tipo_movimiento
-                FROM saldo_por_documentos
-                WHERE negocio_id = %s AND tercero_id = %s AND notas IS NOT NULL AND TRIM(notas) <> ''
-                LIMIT 3
-            """, (nid, tid)).fetchall():
+            sql_nt1 = "SELECT numero_documento AS origen, notas, tipo_documento FROM saldo_por_documentos WHERE tercero_id = %s AND notas IS NOT NULL AND TRIM(notas) <> ''"
+            p_nt1 = [tid]
+            if nid:
+                sql_nt1 += " AND negocio_id = %s"
+                p_nt1.append(nid)
+            sql_nt1 += " LIMIT 3"
+            for nd in conn.execute(sql_nt1, tuple(p_nt1)).fetchall():
                 notas_tercero.append({
-                    'origen': f"Cartera Doc #{nd['origen']}",
+                    'origen': f"Cartera Doc #{nd['origen'] or ''}",
                     'nota': nd['notas']
                 })
-            for np in conn.execute("""
-                SELECT id AS origen, notas, estado
-                FROM pedidos
-                WHERE negocio_id = %s AND (cliente_tercero_id = %s OR nombre_cliente ILIKE %s)
-                  AND notas IS NOT NULL AND TRIM(notas) <> ''
-                LIMIT 3
-            """, (nid, tid, t_nombre)).fetchall():
+
+            sql_nt2 = "SELECT id AS origen, notas, estado FROM pedidos WHERE (id_tercero = %s OR cliente_id = %s OR nombre_cliente ILIKE %s) AND notas IS NOT NULL AND TRIM(notas) <> ''"
+            p_nt2 = [tid, tid, t_nombre]
+            if nid:
+                sql_nt2 += " AND negocio_id = %s"
+                p_nt2.append(nid)
+            sql_nt2 += " LIMIT 3"
+            for np in conn.execute(sql_nt2, tuple(p_nt2)).fetchall():
                 notas_tercero.append({
                     'origen': f"Pedido #{np['origen']} ({np['estado']})",
                     'nota': np['notas']
@@ -790,25 +825,24 @@ def buscar_datos_terceros(conn, q, negocio_id, slug=None, limite=5):
 
         # F) Deteccion de Rol:
         roles = []
-        if total_cxc_docs > 0 or saldo_conta_13 > 0 or ventas_total > 0 or len(pedidos_pendientes) > 0 or bool(t.get('es_cliente')):
+        if total_cxc_docs > 0 or saldo_conta_13 > 0 or ventas_total > 0 or len(pedidos_pendientes) > 0:
             roles.append('Cliente')
-        if total_cxp_docs > 0 or saldo_conta_22_23 > 0 or bool(t.get('es_proveedor')):
+        if total_cxp_docs > 0 or saldo_conta_22_23 > 0:
             roles.append('Proveedor')
-        if bool(t.get('es_empleado')):
-            roles.append('Empleado')
         if not roles:
-            roles.append(t.get('tipo_tercero') or 'Contacto')
+            t_tipo = t.get('tipo_tercero') or ''
+            roles.append(t_tipo.capitalize() if t_tipo else 'Tercero')
 
         rol_str = ' / '.join(roles)
 
         terceros_out.append({
             'id': tid,
             'nombre': t_nombre,
-            'identificacion': t.get('identificacion') or '',
+            'identificacion': t.get('documento') or '',
             'telefono': t.get('telefono') or '',
-            'email': t.get('email') or '',
+            'email': '',
             'direccion': t.get('direccion') or '',
-            'ciudad': t.get('ciudad') or '',
+            'ciudad': '',
             'rol': rol_str,
             'es_cliente': 'Cliente' in roles,
             'es_proveedor': 'Proveedor' in roles,
@@ -825,9 +859,9 @@ def buscar_datos_terceros(conn, q, negocio_id, slug=None, limite=5):
             'pedidos_pendientes_total': round(total_pedidos_pend, 2),
             'notas': notas_tercero,
             'urls': {
-                'saldos': f"/admin/saldos-documentos/{nid}?tercero_id={tid}",
-                'tesoreria': f"/tesoreria/{nid}?tercero_id={tid}",
-                'unificar': f"/admin/mantenimiento/{nid}?tool=unificar-terceros&tercero_id={tid}"
+                'saldos': f"/admin/saldos-documentos/{nid or 0}?tercero_id={tid}",
+                'tesoreria': f"/tesoreria/{nid or 0}?tercero_id={tid}",
+                'unificar': f"/admin/mantenimiento/{nid or 0}?tool=unificar-terceros&tercero_id={tid}"
             }
         })
 
@@ -841,25 +875,31 @@ def buscar_datos_notas(conn, q, negocio_id, limite=10):
     3. Pedidos (pedidos.notas)
     """
     q_limpio = (q or '').strip()
-    if len(q_limpio) < 2 or not negocio_id:
+    if len(q_limpio) < 2:
         return []
     try:
-        nid = int(negocio_id)
+        nid = int(negocio_id) if negocio_id else None
     except (TypeError, ValueError):
-        return []
+        nid = None
     
     like = f"%{q_limpio}%"
     notas_out = []
 
     # 1. Comprobantes contables / Desembolsos / Tesoreria
     try:
-        r_comp = conn.execute("""
+        sql_comp = """
             SELECT id, numero_comprobante, tipo, TO_CHAR(fecha, 'YYYY-MM-DD') AS fecha,
                    descripcion, notas, total_debitos
             FROM comprobantes_contables
-            WHERE negocio_id = %s AND (notas ILIKE %s OR descripcion ILIKE %s)
-            ORDER BY id DESC LIMIT 5
-        """, (nid, like, like)).fetchall()
+            WHERE (notas ILIKE %s OR descripcion ILIKE %s)
+        """
+        p_comp = [like, like]
+        if nid:
+            sql_comp += " AND negocio_id = %s"
+            p_comp.append(nid)
+        sql_comp += " ORDER BY id DESC LIMIT 5"
+        
+        r_comp = conn.execute(sql_comp, tuple(p_comp)).fetchall()
         for c in r_comp:
             texto_nota = c['notas'] if (c['notas'] and q_limpio.lower() in c['notas'].lower()) else (c['descripcion'] or '')
             notas_out.append({
@@ -870,45 +910,57 @@ def buscar_datos_notas(conn, q, negocio_id, limite=10):
                 'fecha': c['fecha'],
                 'monto': float(c['total_debitos'] or 0),
                 'extracto': texto_nota[:160] + ('...' if len(texto_nota) > 160 else ''),
-                'url': f"/contabilidad/{nid}?tab=comps&comp_id={c['id']}"
+                'url': f"/contabilidad/{nid or 0}?tab=comps&comp_id={c['id']}"
             })
     except Exception:
         pass
 
     # 2. Saldo por documentos (Cartera / CxP)
     try:
-        r_doc = conn.execute("""
-            SELECT id, numero_documento, tipo_movimiento, TO_CHAR(fecha, 'YYYY-MM-DD') AS fecha,
-                   saldo_pendiente, total_documento, notas
+        sql_doc = """
+            SELECT id, numero_documento, tipo_documento, TO_CHAR(COALESCE(fecha_hora, created_at), 'YYYY-MM-DD') AS fecha,
+                   saldo, monto_original, notas
             FROM saldo_por_documentos
-            WHERE negocio_id = %s AND notas ILIKE %s
-            ORDER BY id DESC LIMIT 5
-        """, (nid, like)).fetchall()
+            WHERE notas ILIKE %s
+        """
+        p_doc = [like]
+        if nid:
+            sql_doc += " AND negocio_id = %s"
+            p_doc.append(nid)
+        sql_doc += " ORDER BY id DESC LIMIT 5"
+
+        r_doc = conn.execute(sql_doc, tuple(p_doc)).fetchall()
         for d in r_doc:
             texto_nota = d['notas'] or ''
-            tipo_label = 'CxC Cobro' if d['tipo_movimiento'] == 'cobro' else 'CxP Pago'
+            tipo_label = d['tipo_documento'] or 'Documento'
             notas_out.append({
                 'tipo': 'cartera',
                 'origen': f"Documento #{d['numero_documento'] or d['id']} ({tipo_label})",
                 'modulo': 'Saldos por Documento',
                 'icono': '💳',
                 'fecha': d['fecha'],
-                'monto': float(d['saldo_pendiente'] or 0),
+                'monto': float(d['saldo'] or 0),
                 'extracto': texto_nota[:160] + ('...' if len(texto_nota) > 160 else ''),
-                'url': f"/admin/saldos-documentos/{nid}?doc_id={d['id']}"
+                'url': f"/admin/saldos-documentos/{nid or 0}?doc_id={d['id']}"
             })
     except Exception:
         pass
 
     # 3. Pedidos
     try:
-        r_ped = conn.execute("""
-            SELECT id, nombre_cliente, estado, TO_CHAR(fecha, 'YYYY-MM-DD') AS fecha,
+        sql_ped = """
+            SELECT id, nombre_cliente, estado, TO_CHAR(created_at, 'YYYY-MM-DD') AS fecha,
                    total, notas
             FROM pedidos
-            WHERE negocio_id = %s AND notas ILIKE %s
-            ORDER BY id DESC LIMIT 5
-        """, (nid, like)).fetchall()
+            WHERE notas ILIKE %s
+        """
+        p_ped = [like]
+        if nid:
+            sql_ped += " AND negocio_id = %s"
+            p_ped.append(nid)
+        sql_ped += " ORDER BY id DESC LIMIT 5"
+
+        r_ped = conn.execute(sql_ped, tuple(p_ped)).fetchall()
         for p in r_ped:
             texto_nota = p['notas'] or ''
             notas_out.append({
@@ -919,7 +971,7 @@ def buscar_datos_notas(conn, q, negocio_id, limite=10):
                 'fecha': p['fecha'],
                 'monto': float(p['total'] or 0),
                 'extracto': texto_nota[:160] + ('...' if len(texto_nota) > 160 else ''),
-                'url': f"/ventas-costos/{nid}?pedido_id={p['id']}"
+                'url': f"/ventas-costos/{nid or 0}?pedido_id={p['id']}"
             })
     except Exception:
         pass

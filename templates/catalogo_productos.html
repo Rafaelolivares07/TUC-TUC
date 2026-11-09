@@ -4006,7 +4006,7 @@ async function guardarTarjeta() {
     }
     cerrarModalTarjeta();
     cargarProductos();
-    cargarTarjetasResumen();
+    if (typeof cargarTarjetasResumen === 'function') cargarTarjetasResumen();
   } else {
     toast(d.error || 'Error al guardar tarjeta', false);
   }

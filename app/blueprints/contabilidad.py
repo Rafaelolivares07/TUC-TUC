@@ -861,7 +861,7 @@ def _ejecutar_asiento_amortizacion(conn, prog_row, vars_dict):
     return new_comp_id
 
 
-def _ejecutar_asiento_gasto_recurrente(conn, prog_row, vars_dict):
+def _ejecutar_asiento_gasto_recurrente(conn, prog_row, vars_dict, fecha_override=None):
     """
     Ejecuta la causación periódica de un gasto fijo / suscripción sin desembolso previo.
     Genera:
@@ -903,7 +903,7 @@ def _ejecutar_asiento_gasto_recurrente(conn, prog_row, vars_dict):
     numero_documento_str = f"{tipo_doc_codigo}-{num_doc}"
     new_comp_id = conn.execute("SELECT nextval('seq_comprobante_id')").fetchone()[0]
     
-    hoy = date.today()
+    hoy = fecha_override or date.today()
     concepto = vars_dict.get('concepto') or prog_row['descripcion'] or 'Gasto Fijo Recurrente'
     tercero_id = vars_dict.get('tercero_id')
     centro_utilidad_id = vars_dict.get('centro_utilidad_id') or 1
@@ -1116,12 +1116,27 @@ def verificar_y_ejecutar_programaciones(conn=None, app=None, forzar=False):
                         _cerrar_reporte_programacion(conn, p)
 
                 elif vars_dict.get('tipo_programacion') == 'gasto_fijo_recurrente' or vars_dict.get('monto_recurrente'):
-                    comp_id = _ejecutar_asiento_gasto_recurrente(conn, p, vars_dict)
-                    conn.commit()
-                    if comp_id:
-                        resultado = f'ok comp={comp_id}'
-                        proximo = _calcular_proximo(p['frecuencia'], p['dia_semana'], p['dia_mes'], p['hora'])
+                    # Catch-up: ejecutar todos los vencimientos atrasados (tope 36),
+                    # cada asiento fechado a su vencimiento, periodo por periodo.
+                    ejecutados_gf = []
+                    _guard_gf = 0
+                    _venc_gf = p['proximo_ejecutado']
+                    while _venc_gf is not None and _venc_gf <= ahora and _guard_gf < 36:
+                        _guard_gf += 1
+                        _f_gf = _venc_gf.date() if hasattr(_venc_gf, 'date') else _venc_gf
+                        _comp_gf = _ejecutar_asiento_gasto_recurrente(conn, p, vars_dict, fecha_override=_f_gf)
+                        conn.commit()
+                        if not _comp_gf:
+                            break
+                        ejecutados_gf.append(_comp_gf)
+                        _venc_gf = _calcular_proximo(p['frecuencia'], p['dia_semana'], p['dia_mes'], p['hora'], desde=_venc_gf)
+                    if ejecutados_gf:
+                        resultado = f'ok comp={",".join(map(str, ejecutados_gf))}'
+                        proximo = _venc_gf
                         _cerrar_reporte_programacion(conn, p)
+                    elif _venc_gf is not None and _venc_gf > ahora:
+                        resultado = 'al_dia'
+                        proximo = _venc_gf
                     else:
                         # Sin comprobante (monto o cuentas invalidos): no avanzar,
                         # conservar el vencimiento para reintentar y dejar error visible.
@@ -1135,16 +1150,21 @@ def verificar_y_ejecutar_programaciones(conn=None, app=None, forzar=False):
                         descripcion_override=p['descripcion']
                     )
                     conn.commit()
-                    resultado = f'ok comp={comp_id}' if comp_id else 'sin_parametrizacion'
                     if comp_id:
+                        resultado = f'ok comp={comp_id}'
+                        # Avanzar un periodo desde el vencimiento: catch-up progresivo
+                        proximo = _calcular_proximo(p['frecuencia'], p['dia_semana'], p['dia_mes'], p['hora'], desde=p['proximo_ejecutado'])
                         _cerrar_reporte_programacion(conn, p)
-                    proximo = _calcular_proximo(p['frecuencia'], p['dia_semana'], p['dia_mes'], p['hora'])
+                    else:
+                        resultado = 'sin_parametrizacion'
+                        proximo = p['proximo_ejecutado']
+                        _reportar_fallo_programacion(conn, p, resultado)
 
             except Exception as e:
                 try: conn.rollback()
                 except Exception: pass
                 resultado = f'error: {str(e)[:80]}'
-                proximo = _calcular_proximo(p['frecuencia'], p['dia_semana'], p['dia_mes'], p['hora'])
+                proximo = p['proximo_ejecutado']
                 _reportar_fallo_programacion(conn, p, resultado)
 
             conn.execute(

@@ -4409,6 +4409,93 @@ def api_programaciones_ejecutar(negocio_id, pid):
         except Exception: pass
 # ── API: Suscripciones y Gastos Fijos Recurrentes ───────────────
 
+@bp.route('/api/contabilidad/<int:negocio_id>/cxp/cuentas/buscar', methods=['GET'])
+def api_cxp_cuentas_buscar(negocio_id):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    from ..db import get_db_connection
+    q = (request.args.get('q') or '').strip().lower()
+    try:
+        conn = get_db_connection()
+        query = """
+            SELECT DISTINCT p.id AS cuenta_puc_id, p.codigo AS cuenta_codigo, p.nombre AS cuenta_nombre,
+                   COALESCE(p.maneja_terceros, false) AS maneja_terceros
+            FROM cuentas_puc p
+            WHERE (p.creada_por_negocio_id = %s OR p.creada_por_negocio_id IS NULL)
+              AND p.acepta_movimiento = true
+              AND p.activo = true
+              AND p.codigo LIKE '2%%'
+        """
+        params = [negocio_id]
+        if q:
+            query += " AND (LOWER(p.nombre) LIKE %s OR p.codigo LIKE %s)"
+            params.extend([f"%{q}%", f"%{q}%"])
+        query += " ORDER BY p.codigo ASC LIMIT 35"
+        rows = conn.execute(query, tuple(params)).fetchall()
+        conn.close()
+        return jsonify([{
+            'cuenta_puc_id': r['cuenta_puc_id'],
+            'cuenta_codigo': r['cuenta_codigo'],
+            'cuenta_nombre': r['cuenta_nombre'],
+            'maneja_terceros': bool(r['maneja_terceros'])
+        } for r in rows])
+    except Exception:
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return jsonify([])
+
+
+@bp.route('/api/contabilidad/<int:negocio_id>/cxp/cuentas', methods=['POST'])
+def api_cxp_cuentas_crear(negocio_id):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    data = request.get_json() or {}
+    nombre = (data.get('nombre') or '').strip().upper()
+    codigo = (data.get('codigo') or '233525').strip()
+    if not nombre:
+        return jsonify({'ok': False, 'error': 'El nombre de la cuenta es requerido'}), 400
+    if not codigo.startswith('2335') or len(codigo) != 6 or not codigo.isdigit():
+        return jsonify({'ok': False, 'error': 'El codigo debe ser 2335XX (6 digitos)'}), 400
+    from ..db import get_db_connection
+    try:
+        conn = get_db_connection()
+        dup = conn.execute(
+            "SELECT id FROM cuentas_puc WHERE codigo = %s AND (creada_por_negocio_id = %s OR creada_por_negocio_id IS NULL) LIMIT 1",
+            (codigo, negocio_id)).fetchone()
+        if dup:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'La cuenta %s ya existe: seleccionela en la lista.' % codigo}), 400
+        padre = conn.execute(
+            "SELECT id FROM cuentas_puc WHERE codigo = '2335' AND (creada_por_negocio_id = %s OR creada_por_negocio_id IS NULL) LIMIT 1",
+            (negocio_id,)).fetchone()
+        if not padre:
+            conn.execute("""
+                INSERT INTO cuentas_puc
+                    (codigo, nombre, nivel, codigo_padre, naturaleza, acepta_movimiento,
+                     maneja_terceros, maneja_documentos, creada_por_negocio_id, revisada, activo)
+                VALUES ('2335', 'Costos y Gastos por Pagar', 3, '23', 'credito', false, false, false, NULL, false, true)
+            """)
+        row = conn.execute("""
+            INSERT INTO cuentas_puc
+                (codigo, nombre, nivel, codigo_padre, naturaleza, acepta_movimiento,
+                 maneja_terceros, maneja_documentos, creada_por_negocio_id, revisada, activo)
+            VALUES (%s, %s, 4, '2335', 'credito', true, true, true, %s, false, true)
+            RETURNING id
+        """, (codigo, nombre, negocio_id)).fetchone()
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'cuenta_puc_id': row['id'], 'cuenta_codigo': codigo, 'cuenta_nombre': nombre})
+    except Exception as e:
+        try:
+            conn.rollback()
+            conn.close()
+        except Exception:
+            pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @bp.route('/api/contabilidad/<int:negocio_id>/suscripciones', methods=['GET', 'POST'])
 def api_suscripciones_gastos(negocio_id):
     if not session.get('usuario_id'):
@@ -4441,6 +4528,11 @@ def api_suscripciones_gastos(negocio_id):
             centros_map = {r['id']: r['nombre'] for r in conn.execute("SELECT id, nombre FROM centros_utilidad WHERE negocio_id = %s", (negocio_id,)).fetchall()}
 
             suscripciones = []
+            _cods_cred = sorted({str((r['variables_h'] or {}).get('cuenta_credito') or '') for r in rows if (r['variables_h'] or {}).get('cuenta_credito')})
+            _nom_cred = {}
+            if _cods_cred:
+                for _cr in conn.execute("SELECT codigo, nombre FROM cuentas_puc WHERE codigo = ANY(%s) AND (creada_por_negocio_id = %s OR creada_por_negocio_id IS NULL)", (_cods_cred, negocio_id)).fetchall():
+                    _nom_cred.setdefault(_cr['codigo'], _cr['nombre'])
             for r in rows:
                 d = dict(r)
                 vars_h = d.get('variables_h') or {}
@@ -4454,6 +4546,7 @@ def api_suscripciones_gastos(negocio_id):
                 else:
                     d['centro_nombre'] = centros_map.get(cu_id, f'Sede #{cu_id}')
                 d['monto_recurrente'] = float(vars_h.get('monto_recurrente') or vars_h.get('monto') or 0.0)
+                d['cuenta_credito_nombre'] = _nom_cred.get(str(vars_h.get('cuenta_credito') or ''), '')
                 d['concepto'] = vars_h.get('concepto') or d['descripcion'] or 'Gasto Fijo'
                 d['nota'] = vars_h.get('nota') or ''
                 for k in ('ultimo_ejecutado', 'proximo_ejecutado'):
@@ -4536,11 +4629,30 @@ def api_suscripciones_gastos(negocio_id):
                 elif 'HONORAR' in concepto or 'ASESOR' in concepto:
                     cta_deb_cod = '511010'
 
-            cta_cred_cod = '233525' # Costos y Gastos por Pagar
-            _cred_ok = conn.execute("SELECT id FROM cuentas_puc WHERE codigo = %s AND (creada_por_negocio_id = %s OR creada_por_negocio_id IS NULL) LIMIT 1", (cta_cred_cod, negocio_id)).fetchone()
-            if not _cred_ok:
+            # Contrapartida (CxP): la escoge el usuario; 233525 solo como respaldo
+            _cred_id = data.get('cuenta_credito_id')
+            _cred_cod = (data.get('cuenta_credito') or '').strip()
+            if _cred_id:
+                _cred_row = conn.execute("SELECT id, codigo FROM cuentas_puc WHERE id = %s AND (creada_por_negocio_id = %s OR creada_por_negocio_id IS NULL) AND acepta_movimiento = true AND activo = true LIMIT 1", (_cred_id, negocio_id)).fetchone()
+                if not _cred_row:
+                    conn.close()
+                    return jsonify({'ok': False, 'error': 'La cuenta contrapartida elegida no existe o no acepta movimientos'}), 400
+                cta_cred_cod = _cred_row['codigo']
+            elif _cred_cod:
+                _cred_row = conn.execute("SELECT id, codigo FROM cuentas_puc WHERE codigo = %s AND (creada_por_negocio_id = %s OR creada_por_negocio_id IS NULL) AND acepta_movimiento = true AND activo = true LIMIT 1", (_cred_cod, negocio_id)).fetchone()
+                if not _cred_row:
+                    conn.close()
+                    return jsonify({'ok': False, 'error': 'La cuenta por pagar %s no existe en el plan contable: creela en Cuentas PUC antes de programar.' % _cred_cod}), 400
+                cta_cred_cod = _cred_row['codigo']
+            else:
+                cta_cred_cod = '233525' # Costos y Gastos por Pagar (respaldo)
+                _cred_ok = conn.execute("SELECT id FROM cuentas_puc WHERE codigo = %s AND (creada_por_negocio_id = %s OR creada_por_negocio_id IS NULL) LIMIT 1", (cta_cred_cod, negocio_id)).fetchone()
+                if not _cred_ok:
+                    conn.close()
+                    return jsonify({'ok': False, 'error': 'La cuenta por pagar %s no existe en el plan contable: creela en Cuentas PUC antes de programar.' % cta_cred_cod}), 400
+            if not str(cta_cred_cod).startswith('2'):
                 conn.close()
-                return jsonify({'ok': False, 'error': 'La cuenta por pagar %s no existe en el plan contable: creela en Cuentas PUC antes de programar.' % cta_cred_cod}), 400
+                return jsonify({'ok': False, 'error': 'La contrapartida debe ser una cuenta del pasivo (clase 2)'}), 400
 
             vars_h = {
                 'tipo_programacion': 'gasto_fijo_recurrente',
@@ -4552,6 +4664,7 @@ def api_suscripciones_gastos(negocio_id):
                 'cuenta_debito': cta_deb_cod,
                 'cuenta_puc_id': int(cuenta_puc_id) if cuenta_puc_id else None,
                 'cuenta_credito': cta_cred_cod,
+                'cuenta_puc_credito_id': int(_cred_id) if _cred_id else None,
                 'nota': nota
             }
 

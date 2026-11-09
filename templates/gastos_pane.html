@@ -67,6 +67,7 @@
               <th class="px-3 py-2.5">Sede / Centro</th>
               <th class="px-3 py-2.5">Frecuencia / Día</th>
               <th class="px-3 py-2.5 text-right">Monto Cuota</th>
+              <th class="px-3 py-2.5">Contrapartida (CxP)</th>
               <th class="px-3 py-2.5 text-center">Próximo Vencimiento</th>
               <th class="px-3 py-2.5 text-center">Estado</th>
               <th class="px-3 py-2.5 text-center w-32">Acciones</th>
@@ -74,7 +75,7 @@
           </thead>
           <tbody id="suscripciones-body" class="divide-y divide-gray-100">
             <tr>
-              <td colspan="8" class="text-center text-gray-400 py-6">Cargando compromisos recurrentes...</td>
+              <td colspan="9" class="text-center text-gray-400 py-6">Cargando compromisos recurrentes...</td>
             </tr>
           </tbody>
         </table>
@@ -589,6 +590,24 @@
           <input type="hidden" id="modal-suscripcion-concepto-id">
           <input type="hidden" id="modal-suscripcion-concepto-cod">
           <div id="modal-suscripcion-concepto-ac" class="ac-drop hidden"></div>
+        </div>
+
+        <!-- Cuenta Contrapartida CxP (Buscador Autocomplete Dropdown) -->
+        <div class="relative">
+          <div class="flex justify-between items-center mb-1">
+            <label class="block text-xs font-semibold text-gray-600 uppercase">Cuenta Contrapartida (CxP) <span class="text-rose-500">*</span></label>
+            <button type="button" onclick="crearSuscripcionCxP(document.getElementById('modal-suscripcion-cxp-txt').value.trim())" class="text-[10px] text-indigo-600 hover:text-indigo-800 font-bold hover:underline flex items-center gap-0.5 cursor-pointer">
+              <span>✨+</span> Nueva Cuenta
+            </button>
+          </div>
+          <input id="modal-suscripcion-cxp-txt" type="text" placeholder="Escriba para buscar o crear cuenta por pagar..."
+                 autocomplete="off"
+                 class="border border-gray-200 rounded-xl pl-3 pr-8 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none uppercase font-semibold text-gray-800"
+                 oninput="onSuscripcionCxPInput()" onfocus="onSuscripcionCxPInput()" onkeydown="navSuscripcionCxPAC(event)">
+          <button onclick="clearSuscripcionCxP()" type="button" class="absolute right-2 top-[26px] text-gray-400 hover:text-gray-600 focus:outline-none text-lg cursor-pointer">&times;</button>
+          <input type="hidden" id="modal-suscripcion-cxp-id">
+          <input type="hidden" id="modal-suscripcion-cxp-cod">
+          <div id="modal-suscripcion-cxp-ac" class="ac-drop hidden"></div>
         </div>
 
         <!-- Proveedor / Tercero (Buscador Autocomplete Dropdown) -->
@@ -3769,7 +3788,7 @@
       const res = await fetch(`/api/contabilidad/${NEGOCIO_ID}/suscripciones`);
       const data = await res.json();
       if (!data.ok) {
-        tb.innerHTML = `<tr><td colspan="8" class="text-center text-rose-500 py-4">${data.error || 'Error al cargar'}</td></tr>`;
+        tb.innerHTML = `<tr><td colspan="9" class="text-center text-rose-500 py-4">${data.error || 'Error al cargar'}</td></tr>`;
         return;
       }
 
@@ -3795,7 +3814,7 @@
       if (progs.length === 0) {
         tb.innerHTML = `
           <tr>
-            <td colspan="8" class="text-center text-gray-400 py-6">
+            <td colspan="9" class="text-center text-gray-400 py-6">
               No tiene suscripciones o gastos fijos programados. Haga clic en <strong>"+ Programar Gasto Fijo"</strong> para agregar arriendos, servicios, seguros, etc.
             </td>
           </tr>
@@ -3845,6 +3864,10 @@
             </td>
             <td class="px-3 py-2.5 text-right font-mono font-bold text-rose-700">
               $${parseFloat(p.monto_recurrente || 0).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+            </td>
+            <td class="px-3 py-2.5 text-gray-600">
+              <span class="block font-mono text-[11px] font-bold text-gray-700">${escapeHtml(((p.variables_h || {}).cuenta_credito) || '')}</span>
+              <span class="block text-[10px] text-gray-400">${escapeHtml(p.cuenta_credito_nombre || '')}</span>
             </td>
             <td class="px-3 py-2.5 text-center font-mono text-gray-600 text-[11px]">
               ${proxStr}
@@ -4235,6 +4258,174 @@
   }
 
   // ═══ GESTIÓN DE DISTRIBUCIÓN MULTI-CENTRO EN SUSCRIPCIONES ═══
+  // AUTOCOMPLETE CUENTA CONTRAPARTIDA (CxP) EN SUSCRIPCIONES
+  let _suscripcionCxPTimer = null;
+  let _suscripcionCxPIdx = -1;
+
+  function onSuscripcionCxPInput() {
+    clearTimeout(_suscripcionCxPTimer);
+    _suscripcionCxPTimer = setTimeout(() => renderSuscripcionCxPAC(), 120);
+  }
+
+  function renderSuscripcionCxPAC() {
+    const inp = document.getElementById('modal-suscripcion-cxp-txt');
+    const list = document.getElementById('modal-suscripcion-cxp-ac');
+    if (!inp || !list) return;
+
+    const rawQ = inp.value.trim();
+
+    fetch(`/api/contabilidad/${NEGOCIO_ID}/cxp/cuentas/buscar?q=${encodeURIComponent(rawQ)}`)
+      .then(r => r.json())
+      .then(remoteList => {
+        _suscripcionCxPIdx = -1;
+        const combined = Array.isArray(remoteList) ? remoteList : [];
+
+        if (combined.length === 0 && rawQ.length > 0) {
+          list.innerHTML = `
+            <div class="px-3 py-2 text-xs text-gray-400 italic">No existe la cuenta "${escapeGasHtml(rawQ)}"</div>
+            <div class="p-2.5 border-t border-gray-100 bg-rose-50/90 hover:bg-rose-100 cursor-pointer text-xs text-rose-700 font-bold flex items-center justify-between transition modal-sus-crear-cxp-opt">
+              <span class="flex items-center gap-1.5">
+                <span>✨</span> Crear cuenta por pagar: <strong class="underline font-bold">${escapeGasHtml(rawQ)}</strong>
+              </span>
+              <span class="text-[10px] bg-rose-200/80 text-rose-800 px-1.5 py-0.5 rounded font-bold">+ Crear</span>
+            </div>
+          `;
+          const btnCrear = list.querySelector('.modal-sus-crear-cxp-opt');
+          if (btnCrear) {
+            btnCrear.addEventListener('mousedown', e => {
+              e.preventDefault();
+              crearSuscripcionCxP(rawQ);
+            });
+          }
+          list.classList.remove('hidden');
+          return;
+        }
+
+        let html = combined.slice(0, 15).map(c => {
+          return `
+            <div class="ac-item px-3 py-2.5 hover:bg-indigo-50 cursor-pointer text-xs border-b border-gray-100 last:border-b-0 flex justify-between items-center transition"
+                 data-id="${c.cuenta_puc_id}" data-cod="${c.cuenta_codigo || ''}" data-nombre="${(c.cuenta_nombre || '').replace(/"/g, '&quot;')}">
+              <div>
+                <span class="font-bold text-gray-800 block">${escapeGasHtml(c.cuenta_nombre)}</span>
+                ${c.cuenta_codigo ? `<span class="text-[10px] text-gray-400 font-mono">PUC: ${c.cuenta_codigo}</span>` : ''}
+              </div>
+              <div class="flex items-center gap-1.5">
+                <span class="text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-bold">CxP</span>
+                <span class="text-[10px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded font-bold border border-indigo-100">Seleccionar</span>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        if (rawQ.length > 0) {
+          html += `
+            <div class="p-2.5 border-t border-gray-100 bg-rose-50/80 hover:bg-rose-100 cursor-pointer text-xs text-rose-700 font-bold flex items-center justify-between transition modal-sus-crear-cxp-opt">
+              <span class="flex items-center gap-1.5">
+                <span>✨</span> Crear cuenta por pagar: <strong class="underline font-bold">${escapeGasHtml(rawQ)}</strong>
+              </span>
+              <span class="text-[10px] bg-rose-200/80 text-rose-800 px-1.5 py-0.5 rounded font-bold">+ Crear</span>
+            </div>
+          `;
+        }
+
+        list.innerHTML = html;
+
+        const btnCrear = list.querySelector('.modal-sus-crear-cxp-opt');
+        if (btnCrear) {
+          btnCrear.addEventListener('mousedown', e => {
+            e.preventDefault();
+            crearSuscripcionCxP(rawQ);
+          });
+        }
+
+        list.querySelectorAll('.ac-item').forEach(el => {
+          el.addEventListener('mousedown', e => {
+            e.preventDefault();
+            selectSuscripcionCxP(el.dataset.id, el.dataset.nombre, el.dataset.cod);
+          });
+        });
+
+        list.classList.remove('hidden');
+      })
+      .catch(() => {
+        _suscripcionCxPIdx = -1;
+        list.classList.add('hidden');
+      });
+  }
+
+  function selectSuscripcionCxP(id, nombre, cod) {
+    document.getElementById('modal-suscripcion-cxp-txt').value = nombre;
+    document.getElementById('modal-suscripcion-cxp-id').value = id || '';
+    document.getElementById('modal-suscripcion-cxp-cod').value = cod || '';
+    const list = document.getElementById('modal-suscripcion-cxp-ac');
+    if (list) list.classList.add('hidden');
+    document.getElementById('modal-suscripcion-tercero-txt')?.focus();
+  }
+
+  function clearSuscripcionCxP() {
+    document.getElementById('modal-suscripcion-cxp-txt').value = '';
+    document.getElementById('modal-suscripcion-cxp-id').value = '';
+    document.getElementById('modal-suscripcion-cxp-cod').value = '';
+    const list = document.getElementById('modal-suscripcion-cxp-ac');
+    if (list) list.classList.add('hidden');
+  }
+
+  async function crearSuscripcionCxP(nombreSugerido = '') {
+    const nombre = (nombreSugerido || document.getElementById('modal-suscripcion-cxp-txt').value).trim().toUpperCase();
+    if (!nombre) {
+      toast('Escriba el nombre de la cuenta por pagar', false);
+      return;
+    }
+    try {
+      const res = await fetch(`/api/contabilidad/${NEGOCIO_ID}/cxp/cuentas`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({nombre})
+      });
+      const d = await res.json();
+      if (d.ok) {
+        selectSuscripcionCxP(d.cuenta_puc_id, d.cuenta_nombre, d.cuenta_codigo);
+        toast(`Cuenta ${d.cuenta_codigo} creada`);
+      } else {
+        toast(d.error || 'No se pudo crear la cuenta', false);
+      }
+    } catch(e) {
+      toast('Error de red al crear la cuenta', false);
+    }
+  }
+
+  function navSuscripcionCxPAC(e) {
+    const list = document.getElementById('modal-suscripcion-cxp-ac');
+    if (!list) return;
+    const abierto = !list.classList.contains('hidden');
+    if (!abierto) {
+      if (e.key === 'ArrowDown') { onSuscripcionCxPInput(); e.preventDefault(); }
+      return;
+    }
+    const items = list.querySelectorAll('.ac-item');
+    if (e.key === 'ArrowDown') {
+      _suscripcionCxPIdx = Math.min(_suscripcionCxPIdx + 1, items.length - 1);
+      items.forEach((el, i) => el.classList.toggle('ac-focus', i === _suscripcionCxPIdx));
+      if (_suscripcionCxPIdx >= 0 && items[_suscripcionCxPIdx]) items[_suscripcionCxPIdx].scrollIntoView({block: 'nearest'});
+      e.preventDefault();
+    } else if (e.key === 'ArrowUp') {
+      _suscripcionCxPIdx = Math.max(_suscripcionCxPIdx - 1, 0);
+      items.forEach((el, i) => el.classList.toggle('ac-focus', i === _suscripcionCxPIdx));
+      if (_suscripcionCxPIdx >= 0 && items[_suscripcionCxPIdx]) items[_suscripcionCxPIdx].scrollIntoView({block: 'nearest'});
+      e.preventDefault();
+    } else if (e.key === 'Enter') {
+      if (_suscripcionCxPIdx >= 0 && items[_suscripcionCxPIdx]) {
+        const el = items[_suscripcionCxPIdx];
+        selectSuscripcionCxP(el.dataset.id, el.dataset.nombre, el.dataset.cod);
+      } else if (items.length > 0) {
+        selectSuscripcionCxP(items[0].dataset.id, items[0].dataset.nombre, items[0].dataset.cod);
+      }
+      e.preventDefault();
+    } else if (e.key === 'Escape' || e.key === 'Tab') {
+      list.classList.add('hidden');
+    }
+  }
+
   let _suscripcionModoDist = 'iguales'; // 'iguales' | 'porcentaje' | 'monto'
   let _suscripcionCentrosList = []; // Array de { id, codigo, nombre, color, checked, porcentaje, monto }
 
@@ -4525,6 +4716,7 @@
   function abrirModalNuevaSuscripcion() {
     document.getElementById('modal-suscripcion-id').value = '';
     clearSuscripcionConcepto();
+    clearSuscripcionCxP();
     clearSuscripcionTercero();
     document.getElementById('modal-suscripcion-monto').value = '';
     document.getElementById('modal-suscripcion-frecuencia').value = 'mensual';
@@ -4571,6 +4763,8 @@
     const concepto = document.getElementById('modal-suscripcion-concepto-txt').value.trim();
     const cuentaPucId = document.getElementById('modal-suscripcion-concepto-id').value;
     const cuentaDebito = document.getElementById('modal-suscripcion-concepto-cod').value;
+    const cxpId = document.getElementById('modal-suscripcion-cxp-id').value;
+    const cxpCod = document.getElementById('modal-suscripcion-cxp-cod').value;
     const terceroId = document.getElementById('modal-suscripcion-tercero-id').value;
     const montoRaw = document.getElementById('modal-suscripcion-monto').value.replace(/[^0-9.]/g, '');
     const monto = parseFloat(montoRaw || 0);
@@ -4582,6 +4776,10 @@
 
     if (!concepto) {
       toast('Por favor ingrese el nombre o concepto del gasto', false);
+      return;
+    }
+    if (!cxpId) {
+      toast('Por favor seleccione la cuenta contrapartida (CxP)', false);
       return;
     }
     if (!terceroId) {
@@ -4632,6 +4830,8 @@
           concepto,
           cuenta_puc_id: cuentaPucId ? parseInt(cuentaPucId) : null,
           cuenta_debito: cuentaDebito || null,
+          cuenta_credito_id: cxpId ? parseInt(cxpId) : null,
+          cuenta_credito: cxpCod || null,
           tercero_id: parseInt(terceroId),
           monto,
           frecuencia,
@@ -4721,6 +4921,10 @@
     if (!e.target.closest('#modal-suscripcion-concepto-txt') && !e.target.closest('#modal-suscripcion-concepto-ac')) {
       const ac = document.getElementById('modal-suscripcion-concepto-ac');
       if (ac) ac.classList.add('hidden');
+    }
+    if (!e.target.closest('#modal-suscripcion-cxp-txt') && !e.target.closest('#modal-suscripcion-cxp-ac')) {
+      const acCxp = document.getElementById('modal-suscripcion-cxp-ac');
+      if (acCxp) acCxp.classList.add('hidden');
     }
     if (!e.target.closest('#modal-suscripcion-tercero-txt') && !e.target.closest('#modal-suscripcion-tercero-ac')) {
       const ac = document.getElementById('modal-suscripcion-tercero-ac');

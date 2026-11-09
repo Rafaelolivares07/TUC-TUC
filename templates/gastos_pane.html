@@ -67,6 +67,7 @@
               <th class="px-3 py-2.5">Sede / Centro</th>
               <th class="px-3 py-2.5">Frecuencia / Día</th>
               <th class="px-3 py-2.5 text-right">Monto Cuota</th>
+              <th class="px-3 py-2.5">Cuenta del Gasto</th>
               <th class="px-3 py-2.5">Contrapartida (CxP)</th>
               <th class="px-3 py-2.5 text-center">Próximo Vencimiento</th>
               <th class="px-3 py-2.5 text-center">Estado</th>
@@ -75,7 +76,7 @@
           </thead>
           <tbody id="suscripciones-body" class="divide-y divide-gray-100">
             <tr>
-              <td colspan="9" class="text-center text-gray-400 py-6">Cargando compromisos recurrentes...</td>
+              <td colspan="10" class="text-center text-gray-400 py-6">Cargando compromisos recurrentes...</td>
             </tr>
           </tbody>
         </table>
@@ -3798,7 +3799,7 @@
       const res = await fetch(`/api/contabilidad/${NEGOCIO_ID}/suscripciones`);
       const data = await res.json();
       if (!data.ok) {
-        tb.innerHTML = `<tr><td colspan="9" class="text-center text-rose-500 py-4">${data.error || 'Error al cargar'}</td></tr>`;
+        tb.innerHTML = `<tr><td colspan="10" class="text-center text-rose-500 py-4">${data.error || 'Error al cargar'}</td></tr>`;
         return;
       }
 
@@ -3824,7 +3825,7 @@
       if (progs.length === 0) {
         tb.innerHTML = `
           <tr>
-            <td colspan="9" class="text-center text-gray-400 py-6">
+            <td colspan="10" class="text-center text-gray-400 py-6">
               No tiene suscripciones o gastos fijos programados. Haga clic en <strong>"+ Programar Gasto Fijo"</strong> para agregar arriendos, servicios, seguros, etc.
             </td>
           </tr>
@@ -3876,6 +3877,10 @@
               $${parseFloat(p.monto_recurrente || 0).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
             </td>
             <td class="px-3 py-2.5 text-gray-600">
+              <span class="block font-mono text-[11px] font-bold text-gray-700">${escapeHtml(((p.variables_h || {}).cuenta_debito) || '')}</span>
+              <span class="block text-[10px] text-gray-400">${escapeHtml(p.cuenta_debito_nombre || '')}</span>
+            </td>
+            <td class="px-3 py-2.5 text-gray-600">
               <span class="block font-mono text-[11px] font-bold text-gray-700">${escapeHtml(((p.variables_h || {}).cuenta_credito) || '')}</span>
               <span class="block text-[10px] text-gray-400">${escapeHtml(p.cuenta_credito_nombre || '')}</span>
             </td>
@@ -3910,7 +3915,7 @@
 
     } catch (e) {
       console.error(e);
-      if (tb) tb.innerHTML = `<tr><td colspan="8" class="text-center text-rose-500 py-4">Error de conexión al cargar</td></tr>`;
+      if (tb) tb.innerHTML = `<tr><td colspan="10" class="text-center text-rose-500 py-4">Error de conexión al cargar</td></tr>`;
     }
   }
 

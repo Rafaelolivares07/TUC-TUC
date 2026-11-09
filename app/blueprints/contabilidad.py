@@ -4550,9 +4550,11 @@ def api_suscripciones_gastos(negocio_id):
 
             suscripciones = []
             _cods_cred = sorted({str((r['variables_h'] or {}).get('cuenta_credito') or '') for r in rows if (r['variables_h'] or {}).get('cuenta_credito')})
+            _cods_deb = sorted({str((r['variables_h'] or {}).get('cuenta_debito') or '') for r in rows if (r['variables_h'] or {}).get('cuenta_debito')})
             _nom_cred = {}
-            if _cods_cred:
-                for _cr in conn.execute("SELECT codigo, nombre FROM cuentas_puc WHERE codigo = ANY(%s) AND (creada_por_negocio_id = %s OR creada_por_negocio_id IS NULL)", (_cods_cred, negocio_id)).fetchall():
+            _cods_todas = sorted(set(_cods_cred) | set(_cods_deb))
+            if _cods_todas:
+                for _cr in conn.execute("SELECT codigo, nombre FROM cuentas_puc WHERE codigo = ANY(%s) AND (creada_por_negocio_id = %s OR creada_por_negocio_id IS NULL)", (_cods_todas, negocio_id)).fetchall():
                     _nom_cred.setdefault(_cr['codigo'], _cr['nombre'])
             for r in rows:
                 d = dict(r)
@@ -4568,6 +4570,7 @@ def api_suscripciones_gastos(negocio_id):
                     d['centro_nombre'] = centros_map.get(cu_id, f'Sede #{cu_id}')
                 d['monto_recurrente'] = float(vars_h.get('monto_recurrente') or vars_h.get('monto') or 0.0)
                 d['cuenta_credito_nombre'] = _nom_cred.get(str(vars_h.get('cuenta_credito') or ''), '')
+                d['cuenta_debito_nombre'] = _nom_cred.get(str(vars_h.get('cuenta_debito') or ''), '')
                 d['concepto'] = vars_h.get('concepto') or d['descripcion'] or 'Gasto Fijo'
                 d['nota'] = vars_h.get('nota') or ''
                 for k in ('ultimo_ejecutado', 'proximo_ejecutado'):

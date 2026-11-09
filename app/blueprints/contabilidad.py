@@ -969,6 +969,66 @@ def _ejecutar_asiento_gasto_recurrente(conn, prog_row, vars_dict):
 
 _last_prog_check_time = 0
 
+def _reportar_fallo_programacion(conn, prog, motivo):
+    """Reporta a la agenda (una vez al dia) una programacion que no pudo ejecutarse."""
+    import json
+    try:
+        from .agenda import _asegurar_tabla as _asegurar_agenda
+        try:
+            _asegurar_agenda()
+        except Exception:
+            pass
+        marca = '[prog:%s]' % prog['id']
+        hoy = _dt.now().date().isoformat()
+        vars_dict = dict(prog['variables_h'] or {})
+        if vars_dict.get('ultimo_reporte_fallo') == hoy:
+            return
+        venc = prog['proximo_ejecutado']
+        try:
+            base_venc = venc.date() if hasattr(venc, 'date') else venc
+            dias = max(1, (_dt.now().date() - base_venc).days + 1)
+            venc_str = base_venc.isoformat()
+        except Exception:
+            dias = 1
+            venc_str = '?'
+        desc = prog['descripcion'] or ('programacion %s' % prog['id'])
+        texto = 'Sin causar: %s (vencia %s, dia %d intentando): %s %s' % (desc, venc_str, dias, motivo, marca)
+        row = conn.execute(
+            "SELECT id FROM agenda_items WHERE categoria = 'tesoreria' AND texto LIKE %s "
+            "AND completado = FALSE LIMIT 1", ('%' + marca + '%',)).fetchone()
+        if row:
+            conn.execute("UPDATE agenda_items SET texto = %s WHERE id = %s", (texto, row['id']))
+        else:
+            conn.execute("INSERT INTO agenda_items (texto, categoria) VALUES (%s, 'tesoreria')", (texto,))
+        vars_dict['ultimo_reporte_fallo'] = hoy
+        conn.execute("UPDATE programaciones_contables SET variables_h = %s WHERE id = %s",
+                     (json.dumps(vars_dict), prog['id']))
+        conn.commit()
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        print('[programaciones_contables] no se pudo reportar fallo prog %s: %s' % (prog['id'], e))
+
+
+def _cerrar_reporte_programacion(conn, prog):
+    """Cierra el pendiente de agenda si la programacion ya ejecuto OK."""
+    try:
+        marca = '[prog:%s]' % prog['id']
+        row = conn.execute(
+            "SELECT id FROM agenda_items WHERE categoria = 'tesoreria' AND texto LIKE %s "
+            "AND completado = FALSE LIMIT 1", ('%' + marca + '%',)).fetchone()
+        if row:
+            conn.execute("UPDATE agenda_items SET completado = TRUE, completado_en = NOW() WHERE id = %s", (row['id'],))
+            conn.commit()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+
+
 def verificar_y_ejecutar_programaciones(conn=None, app=None, forzar=False):
     """
     Verifica y ejecuta de forma segura e idempotente las amortizaciones, suscripciones recurrentes y asientos programados.
@@ -1052,6 +1112,8 @@ def verificar_y_ejecutar_programaciones(conn=None, app=None, forzar=False):
                     else:
                         proximo = None
                     resultado = f"ok comp={','.join(map(str, ejecutados))}" if ejecutados else "amortizacion_al_dia"
+                    if ejecutados:
+                        _cerrar_reporte_programacion(conn, p)
 
                 elif vars_dict.get('tipo_programacion') == 'gasto_fijo_recurrente' or vars_dict.get('monto_recurrente'):
                     comp_id = _ejecutar_asiento_gasto_recurrente(conn, p, vars_dict)
@@ -1059,11 +1121,13 @@ def verificar_y_ejecutar_programaciones(conn=None, app=None, forzar=False):
                     if comp_id:
                         resultado = f'ok comp={comp_id}'
                         proximo = _calcular_proximo(p['frecuencia'], p['dia_semana'], p['dia_mes'], p['hora'])
+                        _cerrar_reporte_programacion(conn, p)
                     else:
                         # Sin comprobante (monto o cuentas invalidos): no avanzar,
                         # conservar el vencimiento para reintentar y dejar error visible.
                         resultado = 'error_sin_comprobante (verificar monto y cuentas)'
                         proximo = p['proximo_ejecutado']
+                        _reportar_fallo_programacion(conn, p, resultado)
                 else:
                     comp_id = _ejecutar_asiento_automatico(
                         conn, p['negocio_id'], p['tipo_codigo'],
@@ -1072,6 +1136,8 @@ def verificar_y_ejecutar_programaciones(conn=None, app=None, forzar=False):
                     )
                     conn.commit()
                     resultado = f'ok comp={comp_id}' if comp_id else 'sin_parametrizacion'
+                    if comp_id:
+                        _cerrar_reporte_programacion(conn, p)
                     proximo = _calcular_proximo(p['frecuencia'], p['dia_semana'], p['dia_mes'], p['hora'])
 
             except Exception as e:
@@ -1079,6 +1145,7 @@ def verificar_y_ejecutar_programaciones(conn=None, app=None, forzar=False):
                 except Exception: pass
                 resultado = f'error: {str(e)[:80]}'
                 proximo = _calcular_proximo(p['frecuencia'], p['dia_semana'], p['dia_mes'], p['hora'])
+                _reportar_fallo_programacion(conn, p, resultado)
 
             conn.execute(
                 "UPDATE programaciones_contables "
@@ -4470,6 +4537,10 @@ def api_suscripciones_gastos(negocio_id):
                     cta_deb_cod = '511010'
 
             cta_cred_cod = '233525' # Costos y Gastos por Pagar
+            _cred_ok = conn.execute("SELECT id FROM cuentas_puc WHERE codigo = %s AND (creada_por_negocio_id = %s OR creada_por_negocio_id IS NULL) LIMIT 1", (cta_cred_cod, negocio_id)).fetchone()
+            if not _cred_ok:
+                conn.close()
+                return jsonify({'ok': False, 'error': 'La cuenta por pagar %s no existe en el plan contable: creela en Cuentas PUC antes de programar.' % cta_cred_cod}), 400
 
             vars_h = {
                 'tipo_programacion': 'gasto_fijo_recurrente',

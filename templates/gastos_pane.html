@@ -694,7 +694,7 @@
           <!-- Frecuencia -->
           <div>
             <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">¿Cada cuánto se repite? <span class="text-rose-500">*</span></label>
-            <select id="modal-suscripcion-frecuencia"
+            <select id="modal-suscripcion-frecuencia" onchange="actualizarSuscripcionInicio()"
                     class="border border-gray-200 bg-white rounded-xl px-3 py-2 text-xs font-bold w-full focus:ring-2 focus:ring-indigo-500 outline-none text-gray-800 h-[38px]">
               <option value="mensual" selected>🗓️ Cada mes (Mensual)</option>
               <option value="bimestral">🗓️ Cada 2 meses (Bimestral)</option>
@@ -707,7 +707,7 @@
           <!-- Día del Mes -->
           <div>
             <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Día del mes programado <span class="text-rose-500">*</span></label>
-            <select id="modal-suscripcion-dia-mes"
+            <select id="modal-suscripcion-dia-mes" onchange="actualizarSuscripcionInicio()"
                     class="border border-gray-200 bg-white rounded-xl px-3 py-2 text-xs font-bold w-full focus:ring-2 focus:ring-indigo-500 outline-none text-gray-800 h-[38px]">
               <option value="1">Día 1 de cada mes</option>
               <option value="5" selected>Día 5 de cada mes</option>
@@ -718,6 +718,16 @@
               <option value="28">Día 28 (Fin de mes)</option>
             </select>
           </div>
+        </div>
+
+        <!-- Primera causación -->
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Primera causación (opcional)</label>
+          <input id="modal-suscripcion-inicio" type="date"
+                 class="border border-gray-200 rounded-xl px-3 py-2 text-xs w-full bg-white focus:ring-2 focus:ring-indigo-500 outline-none text-gray-700"
+                 onchange="actualizarSuscripcionInicio()">
+          <p class="text-[10px] text-gray-400 mt-1">Vacío = arranca en el próximo día programado. Fecha pasada = el motor se pone al día solo. Fecha futura = espera hasta entonces.</p>
+          <p id="modal-suscripcion-arranca" class="text-[11px] text-indigo-700 font-bold mt-1"></p>
         </div>
 
         <!-- Nota / Observación -->
@@ -4713,6 +4723,25 @@
     }
   }
 
+  function actualizarSuscripcionInicio() {
+    const el = document.getElementById('modal-suscripcion-arranca');
+    if (!el) return;
+    const frec = document.getElementById('modal-suscripcion-frecuencia').value;
+    const dia = parseInt(document.getElementById('modal-suscripcion-dia-mes').value || 5);
+    const iniVal = document.getElementById('modal-suscripcion-inicio').value;
+    const salto = {mensual: 1, bimestral: 2, trimestral: 3, semestral: 6, anual: 12}[frec] || 1;
+    const base = iniVal ? new Date(iniVal + 'T00:00:00') : new Date();
+    const cand = new Date(base.getFullYear(), base.getMonth(), Math.min(dia, 28), 8, 0, 0);
+    const p = cand > base ? cand : new Date(cand.getFullYear(), cand.getMonth() + salto, Math.min(dia, 28), 8, 0, 0);
+    const fmt = p.toLocaleDateString('es-CO', {day: 'numeric', month: 'short', year: 'numeric'});
+    let extra = '';
+    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+    const b0 = new Date(base); b0.setHours(0, 0, 0, 0);
+    if (iniVal && b0 < hoy) extra = ' (atrasado: se pondrá al día solo)';
+    else if (iniVal && b0 > hoy) extra = ' (espera hasta entonces)';
+    el.textContent = `Arranca: ${fmt} 8:00am${extra}`;
+  }
+
   function abrirModalNuevaSuscripcion() {
     document.getElementById('modal-suscripcion-id').value = '';
     clearSuscripcionConcepto();
@@ -4722,6 +4751,8 @@
     document.getElementById('modal-suscripcion-frecuencia').value = 'mensual';
     document.getElementById('modal-suscripcion-dia-mes').value = '5';
     document.getElementById('modal-suscripcion-nota').value = '';
+    document.getElementById('modal-suscripcion-inicio').value = '';
+    actualizarSuscripcionInicio();
 
     // Resetear distribución multi-centro
     const toggleMulti = document.getElementById('modal-suscripcion-toggle-multicentro');
@@ -4772,6 +4803,7 @@
     const diaMes = parseInt(document.getElementById('modal-suscripcion-dia-mes').value || 5);
     const centroId = document.getElementById('modal-suscripcion-centro-id').value || 1;
     const nota = document.getElementById('modal-suscripcion-nota').value.trim();
+    const primeraFecha = document.getElementById('modal-suscripcion-inicio').value || null;
     const isMultiCentro = document.getElementById('modal-suscripcion-toggle-multicentro')?.checked;
 
     if (!concepto) {
@@ -4836,6 +4868,7 @@
           monto,
           frecuencia,
           dia_mes: diaMes,
+          primera_fecha: primeraFecha,
           centro_utilidad_id: parseInt(centroId),
           distribucion_centros: distribucionCentrosPayload,
           nota

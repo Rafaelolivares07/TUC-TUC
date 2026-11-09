@@ -629,16 +629,17 @@ def _calcular_proximo(frecuencia, dia_semana, dia_mes, hora_val, desde=None):
         p = (base + _td(days=dias)).replace(hour=h, minute=m, second=0, microsecond=0)
         if p <= base:
             p += _td(weeks=1)
-    else:  # mensual
+    else:  # mensual y multiplos (bimestral, trimestral, semestral, anual)
         dia = int(dia_mes or 1)
+        salto = {'mensual': 1, 'bimestral': 2, 'trimestral': 3, 'semestral': 6, 'anual': 12}.get(frecuencia, 1)
         try:
             p = base.replace(day=dia, hour=h, minute=m, second=0, microsecond=0)
         except ValueError:
             p = base.replace(day=28, hour=h, minute=m, second=0, microsecond=0)
         if p <= base:
-            mes, ano = base.month + 1, base.year
-            if mes > 12:
-                mes, ano = 1, ano + 1
+            mes, ano = base.month + salto, base.year
+            while mes > 12:
+                mes, ano = mes - 12, ano + 1
             try:
                 p = p.replace(year=ano, month=mes)
             except ValueError:
@@ -4689,7 +4690,16 @@ def api_suscripciones_gastos(negocio_id):
             }
 
             hora_val = _datetime.time(8, 0)
-            proximo = _calcular_proximo(frecuencia, None, dia_mes, hora_val)
+            _primera = (data.get('primera_fecha') or '').strip()
+            if _primera:
+                try:
+                    _desde = _datetime.datetime.strptime(_primera[:10], '%Y-%m-%d')
+                except Exception:
+                    conn.close()
+                    return jsonify({'ok': False, 'error': 'Primera fecha invalida (use YYYY-MM-DD)'}), 400
+                proximo = _calcular_proximo(frecuencia, None, dia_mes, hora_val, desde=_desde)
+            else:
+                proximo = _calcular_proximo(frecuencia, None, dia_mes, hora_val)
 
             row = conn.execute("""
                 INSERT INTO programaciones_contables

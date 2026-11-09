@@ -39,9 +39,11 @@
       backdrop-filter: blur(2px);
       z-index: 50;
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       justify-content: center;
-      padding: 1rem;
+      padding: 32px 16px;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
     }
     .overlay.hidden {
       display: none !important;
@@ -49,11 +51,13 @@
     .modal {
       background: white;
       border-radius: 1.25rem;
-      max-width: 100%;
+      width: 100%;
+      max-width: 52rem;
       box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
       border: 1px solid #e2e8f0;
-      overflow: hidden;
-      padding: 1.5rem;
+      padding: 1.75rem;
+      position: relative;
+      margin: 0 auto 2rem auto;
     }
 
     /* Toast */
@@ -467,7 +471,12 @@
 
   <div class="modal">
 
-    <h3 class="text-lg font-bold mb-5" id="modal-producto-titulo">Nuevo producto</h3>
+    <div class="flex items-center justify-between pb-3 mb-5 border-b border-gray-100">
+      <h3 class="text-lg font-bold text-gray-900" id="modal-producto-titulo">Nuevo producto</h3>
+      <button type="button" onclick="cerrarModalProducto()" class="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition" title="Cerrar">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
 
     <input type="hidden" id="mp-id">
 

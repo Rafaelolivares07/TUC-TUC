@@ -152,6 +152,8 @@
 
     }
 
+    #overlay-producto .modal { max-width: 52rem; margin-bottom: 2rem; }
+
     input, select, textarea {
 
       border: 1px solid #d1d5db; border-radius: 8px;
@@ -505,7 +507,12 @@
 
   <div class="modal">
 
-    <h3 class="text-lg font-bold mb-5" id="modal-producto-titulo">Nuevo producto</h3>
+    <div class="flex items-center justify-between pb-3 mb-5 border-b border-gray-100">
+      <h3 class="text-lg font-bold text-gray-900" id="modal-producto-titulo">Nuevo producto</h3>
+      <button type="button" onclick="cerrarModalProducto()" class="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition" title="Cerrar">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
 
     <input type="hidden" id="mp-id">
 

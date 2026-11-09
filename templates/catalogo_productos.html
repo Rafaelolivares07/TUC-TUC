@@ -3522,6 +3522,100 @@ async function cargarTarjeta(productoId) {
   }
 }
 
+let _tarjetasDecimalesMoneda = parseInt(localStorage.getItem('tarjetas_decimales_moneda') ?? '2', 10);
+if (isNaN(_tarjetasDecimalesMoneda) || _tarjetasDecimalesMoneda < 0) _tarjetasDecimalesMoneda = 2;
+if (_tarjetasDecimalesMoneda > 6) _tarjetasDecimalesMoneda = 6;
+
+let _tarjetasDecimalesCantidad = parseInt(localStorage.getItem('tarjetas_decimales_cantidad') ?? '2', 10);
+if (isNaN(_tarjetasDecimalesCantidad) || _tarjetasDecimalesCantidad < 0) _tarjetasDecimalesCantidad = 2;
+if (_tarjetasDecimalesCantidad > 4) _tarjetasDecimalesCantidad = 4;
+
+// Backward-compatibility alias
+let _tarjetasDecimales = _tarjetasDecimalesMoneda;
+
+function _fmtTarjetasMon(n) {
+  if (n == null || isNaN(n)) return '—';
+  const val = Number(n);
+  return '$ ' + val.toLocaleString('es-CO', {
+    minimumFractionDigits: _tarjetasDecimalesMoneda,
+    maximumFractionDigits: _tarjetasDecimalesMoneda
+  });
+}
+
+function cambiarDecimalesTarjetasMoneda(val) {
+  let d = parseInt(val, 10);
+  if (isNaN(d)) return;
+  d = Math.max(0, Math.min(6, d));
+  _tarjetasDecimalesMoneda = d;
+  _tarjetasDecimales = d;
+  try { localStorage.setItem('tarjetas_decimales_moneda', d); } catch(e) {}
+
+  // Sincronizar inputs de moneda en vistas y modal
+  ['tarjetas-dec-mon-input', 'insumos-dec-mon-input', 'modal-tarjetas-dec-mon'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el && parseInt(el.value, 10) !== d) el.value = d;
+  });
+
+  if (typeof renderTarjetasTable === 'function') renderTarjetasTable();
+  if (typeof renderInsumosTable === 'function') renderInsumosTable();
+  if (typeof renderLineasTarjeta === 'function') {
+    const ov = document.getElementById('overlay-tarjeta');
+    if (ov && !ov.classList.contains('hidden')) {
+      renderLineasTarjeta();
+    }
+  }
+}
+
+function validarDecimalesTarjetasMonedaInput(inputEl) {
+  let d = parseInt(inputEl.value, 10);
+  if (isNaN(d) || d < 0) d = 2;
+  if (d > 6) d = 6;
+  inputEl.value = d;
+  cambiarDecimalesTarjetasMoneda(d);
+}
+
+function cambiarDecimalesTarjetasCantidad(val) {
+  let d = parseInt(val, 10);
+  if (isNaN(d)) return;
+  d = Math.max(0, Math.min(4, d));
+  _tarjetasDecimalesCantidad = d;
+  try { localStorage.setItem('tarjetas_decimales_cantidad', d); } catch(e) {}
+
+  // Sincronizar inputs de cantidad en vistas y modal
+  ['tarjetas-dec-cant-input', 'insumos-dec-cant-input', 'modal-tarjetas-dec-cant'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el && parseInt(el.value, 10) !== d) el.value = d;
+  });
+
+  if (typeof renderTarjetasTable === 'function') renderTarjetasTable();
+  if (typeof renderInsumosTable === 'function') renderInsumosTable();
+  if (typeof renderLineasTarjeta === 'function') {
+    const ov = document.getElementById('overlay-tarjeta');
+    if (ov && !ov.classList.contains('hidden')) {
+      renderLineasTarjeta();
+    }
+  }
+}
+
+function validarDecimalesTarjetasCantidadInput(inputEl) {
+  let d = parseInt(inputEl.value, 10);
+  if (isNaN(d) || d < 0) d = 2;
+  if (d > 4) d = 4;
+  inputEl.value = d;
+  cambiarDecimalesTarjetasCantidad(d);
+}
+
+function inicializarDecimalesTarjetas() {
+  ['tarjetas-dec-mon-input', 'insumos-dec-mon-input', 'modal-tarjetas-dec-mon'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = _tarjetasDecimalesMoneda;
+  });
+  ['tarjetas-dec-cant-input', 'insumos-dec-cant-input', 'modal-tarjetas-dec-cant'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = _tarjetasDecimalesCantidad;
+  });
+}
+
 let modalSortCol = 'nombre';
 
 let modalSortAsc = true;
@@ -5085,6 +5179,7 @@ async function eliminarEquivalencia(id) {
     // ── Inicialización Reactiva al Cargar la Página ──
     document.addEventListener('DOMContentLoaded', async () => {
       inicializarDecimalesProductos();
+      inicializarDecimalesTarjetas();
 
       // Cargar Unidades y Productos
       await cargarUnidadesYEquivalencias();

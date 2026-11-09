@@ -762,12 +762,12 @@
         html += `</div></div>`;
       }
 
-      // 5. Grupo de Notas y Observaciones encontradas
+      // 5. Grupo de Documentos y Conceptos encontrados
       if (notas.length > 0) {
         html += `
           <div>
-            <div class="px-2 py-1 text-[11px] font-bold text-amber-700 uppercase tracking-wider flex items-center justify-between">
-              <span>Documentos, Notas y Conceptos encontrados (${notas.length})</span>
+            <div class="px-2 py-1 text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center justify-between">
+              <span>Documentos y Conceptos (${notas.length})</span>
             </div>
             <div class="mt-1 space-y-1.5">
         `;
@@ -775,17 +775,16 @@
           const nIdx = omniPushDato({ tipo: 'dato-fila', titulo: n.origen, modulo: n.modulo, icono: n.icono, url: n.url });
           html += `
             <div data-omni-index="${nIdx}" onclick="omniDatoIr(${nIdx})"
-                 class="omni-item p-2.5 rounded-xl cursor-pointer bg-white hover:bg-amber-50/70 border border-gray-100 hover:border-amber-200 transition">
-              <div class="flex items-center justify-between gap-2 mb-1">
+                 class="omni-item p-3 rounded-xl cursor-pointer bg-white hover:bg-slate-50 border border-gray-200/80 hover:border-slate-300 transition">
+              <div class="flex items-center justify-between gap-2">
                 <div class="flex items-center gap-2 truncate">
-                  <span class="text-sm">${n.icono || '📝'}</span>
                   <span class="text-xs font-bold text-gray-900 truncate">${escapeHtml(n.origen)}</span>
-                  ${n.monto > 0 ? `<span class="text-[10px] font-mono font-bold text-amber-700">$${omniFmt(n.monto)}</span>` : ''}
+                  ${n.monto > 0 ? `<span class="text-xs font-mono font-bold text-gray-800 shrink-0">$${omniFmt(n.monto)}</span>` : ''}
                 </div>
-                <span class="text-[9px] font-bold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0">${escapeHtml(n.modulo)}</span>
+                <span class="text-[9px] font-semibold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0">${escapeHtml(n.modulo)}</span>
               </div>
-              <p class="text-[11px] text-gray-600 leading-snug line-clamp-2 italic font-serif">"${escapeHtml(n.extracto)}"</p>
-              ${n.fecha ? `<div class="text-[9px] text-gray-400 mt-1 font-mono">Fecha: ${n.fecha}</div>` : ''}
+              <p class="text-[11px] text-gray-600 leading-snug line-clamp-2 mt-1 font-sans">${escapeHtml(n.extracto)}</p>
+              ${n.fecha ? `<div class="text-[10px] text-gray-400 mt-1.5 font-mono">Fecha: ${escapeHtml(n.fecha)}</div>` : ''}
             </div>
           `;
         });
@@ -826,7 +825,7 @@
       omniHablar(txtGuia);
       resultsBody.innerHTML = html;
       ajustarDropdownViewport();
-      resaltarElemento(0);
+      selectedIndex = -1;
       if (!vistaDetalle && datos.length > 1) {
         cacheVistaPrevia = {
           q: q,
@@ -1443,12 +1442,12 @@
 
   function resaltarElemento(index) {
     const elementos = resultsBody.querySelectorAll('.omni-item');
-    elementos.forEach(el => el.classList.remove('bg-indigo-100', 'bg-emerald-100', 'ring-2', 'ring-indigo-300'));
+    elementos.forEach(el => el.classList.remove('bg-slate-100/90', 'ring-1', 'ring-slate-300', 'bg-indigo-100', 'bg-emerald-100', 'ring-2', 'ring-indigo-300'));
 
     if (index >= 0 && index < elementos.length) {
       selectedIndex = index;
       const el = elementos[index];
-      el.classList.add('bg-indigo-100', 'ring-2', 'ring-indigo-300');
+      el.classList.add('bg-slate-100/90', 'ring-1', 'ring-slate-300');
       try {
         const cBox = dropdown.getBoundingClientRect();
         const eBox = el.getBoundingClientRect();

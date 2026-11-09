@@ -247,7 +247,7 @@
     if (terceros.length) partes.push(terceros.length + (terceros.length === 1 ? ' tercero' : ' terceros'));
     if (cuentas.length) partes.push(cuentas.length + (cuentas.length === 1 ? ' cuenta contable' : ' cuentas contables'));
     if (tipos_doc.length) partes.push(tipos_doc.length + (tipos_doc.length === 1 ? ' tipo de documento' : ' tipos de documento'));
-    if (notas.length) partes.push(notas.length + (notas.length === 1 ? ' nota' : ' notas'));
+    if (notas.length) partes.push(notas.length + (notas.length === 1 ? ' documento/concepto' : ' documentos/conceptos'));
     let txt = 'Busqué \'' + q + '\': ';
     if (!partes.length && !datos.length) return txt + 'no encontré nada sobre eso. Prueba con otra palabra.';
     if (!partes.length) txt += 'no encontré pantallas ni ayudas sobre eso, ';
@@ -767,7 +767,7 @@
         html += `
           <div>
             <div class="px-2 py-1 text-[11px] font-bold text-amber-700 uppercase tracking-wider flex items-center justify-between">
-              <span>Notas y Observaciones encontradas (${notas.length})</span>
+              <span>Documentos, Notas y Conceptos encontrados (${notas.length})</span>
             </div>
             <div class="mt-1 space-y-1.5">
         `;

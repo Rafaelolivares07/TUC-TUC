@@ -1194,6 +1194,51 @@ def buscar_datos_notas(conn, q, negocio_id, limite=10):
     except Exception:
         pass
 
+    # 4. Movimientos contables (Conceptos de Desembolsos, Gastos y Tesoreria)
+    try:
+        sql_movs = """
+            SELECT 
+                mc.tipo_documento,
+                mc.numero_documento,
+                TO_CHAR(MAX(mc.fecha), 'YYYY-MM-DD') AS fecha,
+                COALESCE(NULLIF(MAX(mc.descripcion_general), ''), 'Relación de Desembolsos') AS descripcion_general,
+                STRING_AGG(DISTINCT mc.concepto, ' · ') AS extracto,
+                MAX(t.nombre) AS tercero_nombre,
+                SUM(CASE WHEN mc.tipo = 'debito' THEN mc.monto ELSE 0 END) AS total_monto
+            FROM movimientos_contables mc
+            LEFT JOIN terceros t ON t.id = mc.tercero_id
+            WHERE mc.concepto ILIKE %s
+        """
+        p_movs = [like]
+        if nid:
+            sql_movs += " AND mc.negocio_id = %s"
+            p_movs.append(nid)
+        sql_movs += """
+            GROUP BY mc.tipo_documento, mc.numero_documento
+            ORDER BY MAX(mc.fecha) DESC, MAX(mc.id) DESC
+            LIMIT 5
+        """
+        r_movs = conn.execute(sql_movs, tuple(p_movs)).fetchall()
+        for rm in r_movs:
+            td_nombre = _formatear_nombre_doc(rm.get('tipo_documento'), mapa_docs) or rm.get('descripcion_general') or 'Desembolso'
+            num = rm.get('numero_documento') or ''
+            tercero = rm.get('tercero_nombre') or ''
+            f_desde = rm.get('fecha') or '2026-01-01'
+            texto_ext = rm.get('extracto') or ''
+            notas_out.append({
+                'tipo': 'desembolso',
+                'origen': f"{td_nombre} #{num}" + (f" · {tercero}" if tercero else ''),
+                'modulo': 'Tesorería / Desembolsos',
+                'icono': '💸',
+                'fecha': rm['fecha'],
+                'monto': float(rm['total_monto'] or 0),
+                'extracto': texto_ext[:160] + ('...' if len(texto_ext) > 160 else ''),
+                'url': f"/contabilidad/{nid or 0}?tab=consulta&documento={num}&desde={f_desde}"
+            })
+    except Exception:
+        pass
+
+    notas_out.sort(key=lambda x: x.get('fecha') or '', reverse=True)
     return notas_out[:limite]
 
 

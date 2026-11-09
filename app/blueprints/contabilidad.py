@@ -1056,8 +1056,14 @@ def verificar_y_ejecutar_programaciones(conn=None, app=None, forzar=False):
                 elif vars_dict.get('tipo_programacion') == 'gasto_fijo_recurrente' or vars_dict.get('monto_recurrente'):
                     comp_id = _ejecutar_asiento_gasto_recurrente(conn, p, vars_dict)
                     conn.commit()
-                    resultado = f'ok comp={comp_id}' if comp_id else 'causacion_ejecutada'
-                    proximo = _calcular_proximo(p['frecuencia'], p['dia_semana'], p['dia_mes'], p['hora'])
+                    if comp_id:
+                        resultado = f'ok comp={comp_id}'
+                        proximo = _calcular_proximo(p['frecuencia'], p['dia_semana'], p['dia_mes'], p['hora'])
+                    else:
+                        # Sin comprobante (monto o cuentas invalidos): no avanzar,
+                        # conservar el vencimiento para reintentar y dejar error visible.
+                        resultado = 'error_sin_comprobante (verificar monto y cuentas)'
+                        proximo = p['proximo_ejecutado']
                 else:
                     comp_id = _ejecutar_asiento_automatico(
                         conn, p['negocio_id'], p['tipo_codigo'],

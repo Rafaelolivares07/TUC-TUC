@@ -542,19 +542,42 @@ def buscar_datos_producto(conn, q, negocio_id, slug=None, limite=20):
     except Exception:
         tops, rankv, rankv_total = {}, {}, 0
     try:
-        for s in conn.execute(
-                "/* ventas30 */ SELECT producto_id, SUM(cant) AS cant FROM ("
-                "  SELECT i.producto_id, SUM(i.cantidad) AS cant"
-                "  FROM pedido_items i JOIN pedidos p ON p.id = i.pedido_id"
-                "  WHERE p.negocio_id = %s AND i.producto_id = ANY(%s) AND i.created_at >= NOW() - INTERVAL '30 days'"
-                "  GROUP BY 1"
-                "  UNION ALL "
-                "  SELECT i.producto_id, SUM(i.cantidad)"
-                "  FROM items_pedido_tienda i JOIN pedidos_tienda p ON p.id = i.pedido_id"
-                "  JOIN tiendas t ON t.id = p.tienda_id"
-                "  WHERE t.tercero_id = %s AND i.producto_id = ANY(%s) AND i.created_at >= NOW() - INTERVAL '30 days'"
-                "  GROUP BY 1) x GROUP BY 1",
-                (nid, ids, nid, ids)).fetchall():
+        sql_v30 = """
+            /* rotacion30 */
+            WITH movs AS (
+                SELECT producto_id, SUM(cantidad) AS cant
+                FROM movimientos_inventario
+                WHERE negocio_id = %s AND producto_id = ANY(%s) 
+                  AND tipo = 'salida' 
+                  AND created_at >= NOW() - INTERVAL '30 days'
+                GROUP BY producto_id
+            ),
+            peds AS (
+                SELECT i.producto_id, SUM(i.cantidad) AS cant
+                FROM pedido_items i 
+                JOIN pedidos p ON p.id = i.pedido_id
+                WHERE p.negocio_id = %s AND i.producto_id = ANY(%s) 
+                  AND i.created_at >= NOW() - INTERVAL '30 days'
+                GROUP BY i.producto_id
+                UNION ALL
+                SELECT i.producto_id, SUM(i.cantidad) AS cant
+                FROM items_pedido_tienda i 
+                JOIN pedidos_tienda p ON p.id = i.pedido_id
+                JOIN tiendas t ON t.id = p.tienda_id
+                WHERE t.tercero_id = %s AND i.producto_id = ANY(%s) 
+                  AND i.created_at >= NOW() - INTERVAL '30 days'
+                GROUP BY i.producto_id
+            ),
+            peds_tot AS (
+                SELECT producto_id, SUM(cant) AS cant FROM peds GROUP BY producto_id
+            )
+            SELECT u.id AS producto_id, 
+                   GREATEST(COALESCE(m.cant, 0), COALESCE(pt.cant, 0)) AS cant
+            FROM UNNEST(%s::int[]) AS u(id)
+            LEFT JOIN movs m ON m.producto_id = u.id
+            LEFT JOIN peds_tot pt ON pt.producto_id = u.id
+        """
+        for s in conn.execute(sql_v30, (nid, ids, nid, ids, nid, ids, ids)).fetchall():
             v30[s['producto_id']] = float(s['cant'] or 0)
     except Exception:
         v30 = {}

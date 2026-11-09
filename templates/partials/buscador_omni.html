@@ -113,6 +113,8 @@
   let datosProductos = []; // Matches de producto (grupo Datos)
   let datosExtras = null; // Sueltos global (fila 14)
   let vistaDetalle = false; // Entro al detalle: no tapar con respuestas tardias
+  let queryUltimaBusqueda = ''; // Query previa para volver de la vista detalle
+  let cacheVistaPrevia = null; // Snapshot de resultados multielemento para volver instantaneamente
   // -- VOZ V6: microfono + guia hablada/escrita + silencio -------------
   // Dos ajustes independientes en el navegador: omni_mic_on (entrada por
   // voz) y omni_mudo (guia callada). El texto guia siempre se escribe.
@@ -615,6 +617,9 @@
       return;
     }
 
+    if (!vistaDetalle) {
+      queryUltimaBusqueda = q;
+    }
     abrirDropdown();
     loading.classList.remove('hidden');
 
@@ -817,10 +822,21 @@
         html += `</div></div>`;
       }
 
-      omniHablar(omniGuiaPaisaje(q, rutas, ayuda, datos, terceros, notas, cuentas, tipos_doc));
+      const txtGuia = omniGuiaPaisaje(q, rutas, ayuda, datos, terceros, notas, cuentas, tipos_doc);
+      omniHablar(txtGuia);
       resultsBody.innerHTML = html;
       ajustarDropdownViewport();
       resaltarElemento(0);
+      if (!vistaDetalle && datos.length > 1) {
+        cacheVistaPrevia = {
+          q: q,
+          html: html,
+          items: [...itemsColeccion],
+          guia: txtGuia,
+          datos: [...datos],
+          extras: datosExtras
+        };
+      }
     } catch(err) {
       loading.classList.add('hidden');
       resultsBody.innerHTML = `<div class="p-4 text-center text-red-500 text-xs">Error de conexión con el buscador</div>`;
@@ -1206,16 +1222,20 @@
   window.omniElegirProducto = function(i) {
     const p = datosProductos[i];
     if (!p) return;
+    if (!vistaDetalle) {
+      queryUltimaBusqueda = input.value.trim();
+    }
+    const qAnterior = queryUltimaBusqueda || input.value.trim();
     input.value = p.nombre;
     try { if (window.matchMedia && matchMedia('(pointer: coarse)').matches) input.blur(); } catch (e) {}
     itemsColeccion = [];
     let h = `
       <div>
-        <div class="px-2 py-1 text-[11px] font-bold text-sky-600 uppercase tracking-wider"><span>${p.nombre}</span></div>
+        <div class="px-2 py-1 text-[11px] font-bold text-sky-600 uppercase tracking-wider"><span>${escapeHtml(p.nombre)}</span></div>
         <div class="mt-1 space-y-1">
     `;
     h += omniFilasProducto(p, datosExtras);
-    const backIdx = omniPushDato({ tipo: 'dato-back' });
+    const backIdx = omniPushDato({ tipo: 'dato-back', query: qAnterior });
     h += omniFilaDato(backIdx, '\u2190 Ver los ' + datosProductos.length + ' productos', 'volver a la lista', 'Atr\u00e1s');
     h += `</div></div>`;
     resultsBody.innerHTML = h;
@@ -1229,7 +1249,25 @@
     const it = itemsColeccion[idx];
     if (!it) return;
     if (it.tipo === 'dato-pick') { window.omniElegirProducto(it.prodIdx); return; }
-    if (it.tipo === 'dato-back') { vistaDetalle = false; ejecutarBusqueda(input.value.trim()); return; }
+    if (it.tipo === 'dato-back') { 
+      vistaDetalle = false; 
+      const q = it.query || queryUltimaBusqueda || '';
+      input.value = q;
+      if (cacheVistaPrevia && cacheVistaPrevia.q === q) {
+        itemsColeccion = [...cacheVistaPrevia.items];
+        datosProductos = [...cacheVistaPrevia.datos];
+        datosExtras = cacheVistaPrevia.extras;
+        resultsBody.innerHTML = cacheVistaPrevia.html;
+        ajustarDropdownViewport();
+        omniHablar(cacheVistaPrevia.guia);
+        resaltarElemento(0);
+        return;
+      }
+      if (q.length >= 2) {
+        ejecutarBusqueda(q);
+      }
+      return; 
+    }
     if (it.tipo === 'dato-toggle') { window.omniFilaToggle(idx); return; }
     if (it.tipo === 'dato-modal') { window.omniSueltosAbrir(); return; }
     omniNavegarA(it.url, it.titulo, it.modulo || '', it.icono || '');

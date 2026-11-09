@@ -1588,8 +1588,10 @@ function omniTarjetaCuenta(c) {
     `;
     movs.forEach(m => {
       const esDeb = m.tipo === 'debito';
-      const colorMonto = esDeb ? 'text-blue-700' : 'text-purple-700';
-      const badgeTipo = esDeb ? '<span class="px-1 py-0.2 bg-blue-50 text-blue-700 rounded text-[9px]">DÉBITO</span>' : '<span class="px-1 py-0.2 bg-purple-50 text-purple-700 rounded text-[9px]">CRÉDITO</span>';
+      const colorMonto = 'text-gray-800';
+      const badgeTipo = esDeb 
+        ? '<span title="Débito (Debe)" class="px-1 py-0.5 bg-slate-100 text-slate-500 font-mono rounded text-[9px] font-medium tracking-wide">DB</span>' 
+        : '<span title="Crédito (Haber)" class="px-1 py-0.5 bg-slate-100 text-slate-500 font-mono rounded text-[9px] font-medium tracking-wide">CR</span>';
       movsHtml += `
         <div class="flex items-center justify-between gap-2 text-[11px] bg-gray-50/80 hover:bg-gray-100/80 px-2 py-1 rounded-lg transition">
           <div class="flex items-center gap-1.5 truncate">

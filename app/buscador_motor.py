@@ -465,6 +465,7 @@ def buscar_datos_producto(conn, q, negocio_id, slug=None, limite=20):
                       p.categoria, p.dias_max_stock, um.codigo AS unidad,
                       (EXISTS(SELECT 1 FROM pedido_items i WHERE i.producto_id = p.id)
                        OR EXISTS(SELECT 1 FROM items_pedido_tienda i WHERE i.producto_id = p.id)) AS vendido,
+                      EXISTS(SELECT 1 FROM tarjeta_estandar te WHERE te.producto_id = p.id) AS es_receta,
                       COALESCE((SELECT SUM(s.stock) FROM saldos_inventario s
                                 WHERE s.negocio_id = p.negocio_id AND s.producto_id = p.id), 0) AS stock
                FROM productos p LEFT JOIN unidades_medida um ON um.id = p.unidad_medida_id
@@ -615,11 +616,13 @@ def buscar_datos_producto(conn, q, negocio_id, slug=None, limite=20):
         kurl = (f'https://{slug}.tuc-tuc.co/kardex?producto_id={pid}' if slug
                 else f'/inventario/{nid}/kardex?producto_id={pid}')
         al = alertas.get(pid) or {}
+        es_rec = bool(r.get('es_receta'))
         v = v30.get(pid, 0)
         valor = stock * costo
         dmax = r['dias_max_stock'] if r['dias_max_stock'] else 15
-        cob = round(stock / (v / 30), 1) if v > 0 else None
-        sobre = bool(valor > 0 and (cob is None or cob > dmax))
+        cob = round(stock / (v / 30), 1) if (v > 0 and not es_rec) else None
+        sobre = bool(not es_rec and valor > 0 and (cob is None or cob > dmax))
+        agotado = bool(not es_rec and stock <= 0)
         urg_rk = urg.get(pid)
         rm = rankm.get(pid)
         out.append({
@@ -634,9 +637,11 @@ def buscar_datos_producto(conn, q, negocio_id, slug=None, limite=20):
             'unidad': r['unidad'],
             'disponible': bool(r['disponible']),
             'vendido': bool(r['vendido']),
-            'agotado': stock <= 0,
-            'alerta': al.get('estado'),
-            'cobertura': float(al['cobertura_dias']) if al.get('cobertura_dias') is not None else None,
+            'es_receta': es_rec,
+            'ventas_30d': v,
+            'agotado': agotado,
+            'alerta': al.get('estado') if not es_rec else None,
+            'cobertura': float(al['cobertura_dias']) if (not es_rec and al.get('cobertura_dias') is not None) else None,
             'proveedor': provs.get(pid),
             'top_rank': tops.get(pid),
             'rank_ventas': rankv.get(pid),

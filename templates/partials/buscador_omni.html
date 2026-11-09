@@ -908,6 +908,32 @@
     const partes = [];
     const u = omniUnidadProducto(p);
 
+    // 0. Caso producto preparado / receta al pedido
+    if (p.es_receta) {
+      partes.push('<span class="text-sky-700 font-semibold bg-sky-50 px-1.5 py-0.5 rounded">Al pedido</span>');
+      if (p.costo > 0) {
+        partes.push('<span class="text-gray-600 font-medium">Costo receta: $' + omniFmt(p.costo) + '</span>');
+      } else {
+        partes.push('<span class="text-gray-400 italic">Sin costo receta</span>');
+      }
+      if (p.precio > 0) {
+        let pTxt = 'Venta: $' + omniFmt(p.precio);
+        if (p.margen !== null && p.margen !== undefined) {
+          pTxt += ' (Margen: ' + p.margen + '%)';
+        }
+        partes.push('<span class="text-emerald-700 font-semibold">' + pTxt + '</span>');
+      }
+      if (p.ventas_30d > 0) {
+        partes.push('<span class="text-indigo-700 font-medium">Ventas: ' + omniFmt(p.ventas_30d) + ' ' + u + ' (30d)</span>');
+      } else {
+        partes.push('<span class="text-gray-400 italic">Sin ventas 30d</span>');
+      }
+      if (!p.disponible) {
+        partes.push('<span class="text-rose-500 italic">Deshabilitado</span>');
+      }
+      return partes.join(' <span class="text-gray-300">\u00b7</span> ');
+    }
+
     // 1. Stock
     if (p.stock <= 0) {
       partes.push('<span class="text-rose-600 font-semibold">Stock: 0 ' + u + ' (Agotado)</span>');
@@ -1191,9 +1217,19 @@
 
   function omniFilasProducto(p, extras) {
     let h = '';
-    let idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Ver saldo ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.productos });
     const u = omniUnidadProducto(p);
-    h += omniFilaDato(idx, 'Saldo: ' + omniFmt(p.stock) + ' ' + u + ' \u00b7 $' + omniFmt(p.costo) + ' c/u \u00b7 $' + omniFmt(p.stock * p.costo), p.nombre, 'Abrir \u203a');
+    let idx;
+    if (p.es_receta) {
+      idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Receta ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.productos });
+      let txtReceta = 'Ensamble al pedido \u00b7 Costo receta: $' + omniFmt(p.costo);
+      if (p.ventas_30d > 0) {
+        txtReceta += ' \u00b7 Ventas 30d: ' + omniFmt(p.ventas_30d) + ' ' + u;
+      }
+      h += omniFilaDato(idx, txtReceta, p.nombre, 'Receta \u203a');
+    } else {
+      idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Ver saldo ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.productos });
+      h += omniFilaDato(idx, 'Saldo: ' + omniFmt(p.stock) + ' ' + u + ' \u00b7 $' + omniFmt(p.costo) + ' c/u \u00b7 $' + omniFmt(p.stock * p.costo), p.nombre, 'Abrir \u203a');
+    }
     const precioTxt = p.precio > 0 ? ('Venta $' + omniFmt(p.precio) + ((p.margen !== null && p.margen !== undefined) ? ' \u00b7 margen ' + p.margen + '%' : '')) : ('Costo $' + omniFmt(p.costo) + ' \u00b7 sin precio');
     idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Precio ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.editar });
     h += omniFilaDato(idx, precioTxt, p.nombre, 'Abrir \u203a');

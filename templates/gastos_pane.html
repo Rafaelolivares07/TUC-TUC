@@ -727,7 +727,7 @@
                  class="border border-gray-200 rounded-xl px-3 py-2 text-xs w-full bg-white focus:ring-2 focus:ring-indigo-500 outline-none text-gray-700"
                  onchange="actualizarSuscripcionInicio()">
           <p class="text-[10px] text-gray-400 mt-1">Vacío = arranca en el próximo día programado. Fecha pasada = el motor se pone al día solo. Fecha futura = espera hasta entonces.</p>
-          <p id="modal-suscripcion-arranca" class="text-[11px] text-indigo-700 font-bold mt-1"></p>
+          <div id="modal-suscripcion-arranca" class="text-[11px] text-indigo-900 bg-indigo-50 border border-indigo-200 rounded-xl px-3 py-2 mt-1 leading-relaxed"></div>
         </div>
 
         <!-- Nota / Observación -->
@@ -4727,19 +4727,36 @@
     const el = document.getElementById('modal-suscripcion-arranca');
     if (!el) return;
     const frec = document.getElementById('modal-suscripcion-frecuencia').value;
-    const dia = parseInt(document.getElementById('modal-suscripcion-dia-mes').value || 5);
+    const dia = Math.min(parseInt(document.getElementById('modal-suscripcion-dia-mes').value || 5), 28);
     const iniVal = document.getElementById('modal-suscripcion-inicio').value;
     const salto = {mensual: 1, bimestral: 2, trimestral: 3, semestral: 6, anual: 12}[frec] || 1;
+    const ritmo = {mensual: 'cada mes', bimestral: 'cada 2 meses', trimestral: 'cada 3 meses', semestral: 'cada 6 meses', anual: 'cada año'}[frec] || 'cada mes';
     const base = iniVal ? new Date(iniVal + 'T00:00:00') : new Date();
-    const cand = new Date(base.getFullYear(), base.getMonth(), Math.min(dia, 28), 8, 0, 0);
-    const p = cand > base ? cand : new Date(cand.getFullYear(), cand.getMonth() + salto, Math.min(dia, 28), 8, 0, 0);
-    const fmt = p.toLocaleDateString('es-CO', {day: 'numeric', month: 'short', year: 'numeric'});
-    let extra = '';
-    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
-    const b0 = new Date(base); b0.setHours(0, 0, 0, 0);
-    if (iniVal && b0 < hoy) extra = ' (atrasado: se pondrá al día solo)';
-    else if (iniVal && b0 > hoy) extra = ' (espera hasta entonces)';
-    el.textContent = `Arranca: ${fmt} 8:00am${extra}`;
+    const avanzar = (d, n) => new Date(d.getFullYear(), d.getMonth() + n, dia, 8, 0, 0);
+    const cand = new Date(base.getFullYear(), base.getMonth(), dia, 8, 0, 0);
+    const p = cand > base ? cand : avanzar(cand, salto);
+    const fmtC = d => d.toLocaleDateString('es-CO', {day: 'numeric', month: 'short', year: 'numeric'});
+    const fmtS = d => d.toLocaleDateString('es-CO', {day: 'numeric', month: 'short'});
+    const hoy = new Date();
+    const atras = [];
+    let v = new Date(p);
+    while (v <= hoy && atras.length < 36) { atras.push(new Date(v)); v = avanzar(v, salto); }
+    let w = atras.length > 0 ? new Date(v) : avanzar(p, salto);
+    const prox3 = [];
+    for (let i = 0; i < 3; i++) { prox3.push(fmtS(w)); w = avanzar(w, salto); }
+    let html = `<div>Se causa <b>${ritmo}</b>, el día <b>${dia}</b> a las <b>8:00 a. m.</b></div>`;
+    if (atras.length > 0) {
+      const rango = atras.length === 1 ? fmtC(atras[0]) : `${fmtS(atras[0])} ... ${fmtC(atras[atras.length - 1])}`;
+      html += `<div class="mt-1">Trae <b>${atras.length} cuota${atras.length > 1 ? 's atrasadas' : ' atrasada'}</b> (${rango}). Al guardar, se crean todas en los próximos minutos, cada una con su fecha. Después sigue normal: ${prox3.join(' · ')}.</div>`;
+    } else if (iniVal) {
+      const b0 = new Date(base); b0.setHours(0, 0, 0, 0);
+      const h0 = new Date(); h0.setHours(0, 0, 0, 0);
+      if (b0 > h0) html += `<div class="mt-1">Empieza el <b>${fmtC(base)}</b>. Primera causación: <b>${fmtC(p)}</b>. Hasta entonces no se causa nada. Luego: ${prox3.join(' · ')}.</div>`;
+      else html += `<div class="mt-1">Primera causación: <b>${fmtC(p)}</b>. Hoy no se causa nada. Luego: ${prox3.join(' · ')}.</div>`;
+    } else {
+      html += `<div class="mt-1">Primera causación: <b>${fmtC(p)}</b>. Hoy no se causa nada. Luego: ${prox3.join(' · ')}.</div>`;
+    }
+    el.innerHTML = html;
   }
 
   function abrirModalNuevaSuscripcion() {
@@ -4876,7 +4893,15 @@
       });
       const data = await res.json();
       if (data.ok) {
-        toast('Gasto fijo programado exitosamente.');
+        let _msgSave = 'Gasto fijo programado.';
+        try {
+          const _px = data.proximo_ejecutado ? new Date(data.proximo_ejecutado) : null;
+          if (_px && !isNaN(_px)) {
+            if (_px <= new Date()) _msgSave += ' Trae cuotas atrasadas: se están creando ahora, revise en unos minutos.';
+            else _msgSave += ' Primera causación: ' + _px.toLocaleDateString('es-CO', {day: 'numeric', month: 'short', year: 'numeric'}) + ' 8:00 a. m.';
+          }
+        } catch(_e) {}
+        toast(_msgSave);
         cerrarModalNuevaSuscripcion();
         if (!_suscripcionesAbierta) {
           toggleSeccionSuscripciones();

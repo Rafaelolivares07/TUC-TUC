@@ -740,7 +740,7 @@
             <div class="mt-1 space-y-1">
         `;
         lista.forEach((p) => {
-          const meta = 'stock ' + omniFmt(p.stock) + ' \u00b7 $' + omniFmt(p.precio) + (p.disponible ? '' : ' \u00b7 deshabilitado');
+          const meta = omniFormatearMetaProducto(p);
           const pIdx = omniPushDato({ tipo: 'dato-pick', prodIdx: datosProductos.indexOf(p), titulo: p.nombre, modulo: 'Producto', icono: '' });
           html += omniFilaDato(pIdx, p.nombre, meta, 'Elegir \u203a');
         });
@@ -892,6 +892,66 @@
         ejecutarBusqueda(q);
       }
     });
+  }
+
+  function omniUnidadProducto(p) {
+    if (p.unidad && String(p.unidad).trim()) {
+      return escapeHtml(String(p.unidad).trim());
+    }
+    if (p.nombre && p.nombre.toUpperCase().includes('GRS')) {
+      return 'g';
+    }
+    return 'unid';
+  }
+
+  function omniFormatearMetaProducto(p) {
+    const partes = [];
+    const u = omniUnidadProducto(p);
+
+    // 1. Stock
+    if (p.stock <= 0) {
+      partes.push('<span class="text-rose-600 font-semibold">Stock: 0 ' + u + ' (Agotado)</span>');
+    } else {
+      partes.push('<span class="text-gray-800 font-semibold">Stock: ' + omniFmt(p.stock) + ' ' + u + '</span>');
+    }
+
+    // 2. Costo unitario y total
+    const valorTotal = (p.stock || 0) * (p.costo || 0);
+    if (p.costo > 0) {
+      let cTxt = 'Costo: $' + omniFmt(p.costo) + ' c/u';
+      if (p.stock > 0 && valorTotal > 0) {
+        cTxt += ' (Total: $' + omniFmt(valorTotal) + ')';
+      }
+      partes.push('<span class="text-gray-600 font-medium">' + cTxt + '</span>');
+    } else {
+      partes.push('<span class="text-gray-400 italic">Sin costo</span>');
+    }
+
+    // 3. Precio de venta o Rol de insumo/materia prima
+    if (p.precio > 0) {
+      let pTxt = 'Venta: $' + omniFmt(p.precio);
+      if (p.margen !== null && p.margen !== undefined) {
+        pTxt += ' (Margen: ' + p.margen + '%)';
+      }
+      partes.push('<span class="text-emerald-700 font-semibold">' + pTxt + '</span>');
+    } else {
+      const rolTxt = p.categoria ? escapeHtml(p.categoria) : 'Insumo / Materia Prima';
+      partes.push('<span class="text-purple-700 font-medium">' + rolTxt + '</span>');
+    }
+
+    // 4. Días de Cobertura / Rotación
+    if (p.cobertura_calc !== null && p.cobertura_calc !== undefined) {
+      partes.push('<span class="text-sky-700 font-medium">Cobertura: ' + p.cobertura_calc + ' d\u00edas</span>');
+    } else if (p.stock > 0) {
+      partes.push('<span class="text-amber-700 font-medium">Sin rotaci\u00f3n</span>');
+    }
+
+    // 5. Estado (si no está disponible)
+    if (!p.disponible) {
+      partes.push('<span class="text-rose-500 italic">Deshabilitado</span>');
+    }
+
+    return partes.join(' <span class="text-gray-300">\u00b7</span> ');
   }
 
   function omniFmt(n) {
@@ -1132,12 +1192,13 @@
   function omniFilasProducto(p, extras) {
     let h = '';
     let idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Ver saldo ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.productos });
-    h += omniFilaDato(idx, 'Saldo: ' + omniFmt(p.stock) + ' unid \u00b7 $' + omniFmt(p.costo) + ' c/u \u00b7 $' + omniFmt(p.stock * p.costo), p.nombre, 'Abrir \u203a');
+    const u = omniUnidadProducto(p);
+    h += omniFilaDato(idx, 'Saldo: ' + omniFmt(p.stock) + ' ' + u + ' \u00b7 $' + omniFmt(p.costo) + ' c/u \u00b7 $' + omniFmt(p.stock * p.costo), p.nombre, 'Abrir \u203a');
     const precioTxt = p.precio > 0 ? ('Venta $' + omniFmt(p.precio) + ((p.margen !== null && p.margen !== undefined) ? ' \u00b7 margen ' + p.margen + '%' : '')) : ('Costo $' + omniFmt(p.costo) + ' \u00b7 sin precio');
     idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Precio ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.editar });
     h += omniFilaDato(idx, precioTxt, p.nombre, 'Abrir \u203a');
     const mv = p.ult_mov;
-    const movTxt = mv ? ('Movimiento: ' + mv.tipo + (mv.motivo ? ' (' + mv.motivo + ')' : '') + ' ' + (mv.doc || '') + ' \u00b7 ' + mv.fecha + ' \u00b7 ' + omniFmt(mv.cantidad) + ' unid') : 'Movimiento: sin movimientos a\u00fan';
+    const movTxt = mv ? ('Movimiento: ' + mv.tipo + (mv.motivo ? ' (' + mv.motivo + ')' : '') + ' ' + (mv.doc || '') + ' \u00b7 ' + mv.fecha + ' \u00b7 ' + omniFmt(mv.cantidad) + ' ' + u) : 'Movimiento: sin movimientos a\u00fan';
     idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Movimiento ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.kardex });
     h += omniFilaDato(idx, movTxt, p.nombre, 'Kardex \u203a');
     const meta4 = ((p.categoria || '') + (p.unidad ? ' \u00b7 ' + p.unidad : '')) || p.nombre;

@@ -5097,7 +5097,7 @@ async function eliminarEquivalencia(id) {
         document.getElementById('tarjeta-ac-input').classList.add('hidden');
         const chip = document.getElementById('tarjeta-selected-chip');
         if (chip) {
-          chip.querySelector('#tarjeta-selected-nombre').textContent = item.nombre;
+          chip.querySelector('#tarjeta-selected-name').textContent = item.nombre;
           chip.classList.remove('hidden');
         }
         const cantInp = document.getElementById('tarjeta-ac-cant');

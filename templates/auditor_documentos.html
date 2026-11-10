@@ -1242,8 +1242,8 @@
         try {
           const rT = await fetch(`/api/inventario/terceros/buscar?q=${qTercero}`);
           const dT = await rT.json();
-          if (dT && dT.length) {
-            const m = dT.find(x => String(x.id) === String(qTercero)) || dT[0];
+          const m = (dT || []).find(x => String(x.id) === String(qTercero));
+          if (m) {
             appState.terceroNombre = m.nombre;
             document.getElementById('aud-tercero-input').value = m.nombre;
             document.getElementById('aud-tercero-id').value = m.id;

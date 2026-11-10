@@ -32,8 +32,11 @@ from .inventarios import _aplicar_tarjeta, _es_ensamble, _verificar_stock_pedido
 try:
     from .contabilidad import _ejecutar_asiento_automatico as _asiento_auto
     from .contabilidad import obtener_siguiente_consecutivo
+    from .contabilidad import _aplicar_politica_categoria
 except ImportError:
     _asiento_auto = None
+    def _aplicar_politica_categoria(*args, **kwargs):
+        return {'ok': True, 'advertencias': ['politica de grupos no disponible']}
     def obtener_siguiente_consecutivo(*args, **kwargs):
         return None, True
 
@@ -1579,7 +1582,15 @@ def api_tienda_producto_crear(slug):
             nuevo_id = row['id']
             _sync_precio(conn, tienda['tercero_id'], nuevo_id)
         conn.commit()
-        return jsonify({'ok': True, 'id': nuevo_id})
+        grupo_auto = None
+        try:
+            grupo_auto = _aplicar_politica_categoria(conn, int(tienda['tercero_id']), categoria)
+            conn.commit()
+        except Exception as _e:
+            try: conn.rollback()
+            except Exception: pass
+            grupo_auto = {'ok': True, 'advertencias': ["No se pudo autocrear el grupo: %s" % _e]}
+        return jsonify({'ok': True, 'id': nuevo_id, 'grupo_auto': grupo_auto})
     except Exception as e:
         if conn:
             conn.rollback()
@@ -1711,7 +1722,15 @@ def api_tienda_adoptar_producto(slug):
         nuevo_id = conn.fetchone()[0]
         _sync_precio(conn, tienda['tercero_id'], nuevo_id)
         conn.commit()
-        return jsonify({'ok': True})
+        grupo_auto = None
+        try:
+            grupo_auto = _aplicar_politica_categoria(conn, int(tienda['tercero_id']), categoria)
+            conn.commit()
+        except Exception as _e:
+            try: conn.rollback()
+            except Exception: pass
+            grupo_auto = {'ok': True, 'advertencias': ["No se pudo autocrear el grupo: %s" % _e]}
+        return jsonify({'ok': True, 'grupo_auto': grupo_auto})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:

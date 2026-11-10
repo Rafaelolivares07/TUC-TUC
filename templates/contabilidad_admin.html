@@ -273,6 +273,15 @@
 
       </div>
 
+      <div class="bg-white border border-gray-200 rounded-xl p-4 mb-4">
+        <div class="flex items-center justify-between mb-1 gap-2">
+          <span class="font-bold text-gray-800 text-sm">Cuentas para categorias nuevas</span>
+          <button onclick="guardarPoliticaGrupos()" class="bg-blue-600 text-white text-xs font-bold px-3 py-1 rounded-lg flex-shrink-0">Guardar politica</button>
+        </div>
+        <p class="text-[11px] text-gray-500 mb-3">Al crear una categoria, el sistema le asigna estas cuentas. <b>Fija</b> = la misma cuenta siempre. <b>Auto</b> = crea la siguiente libre desde la raiz.</p>
+        <div id="politica-grupos-grid" class="grid grid-cols-1 md:grid-cols-5 gap-3"></div>
+      </div>
+
       <table class="w-full text-sm">
         <thead><tr class="bg-gray-50 text-xs uppercase text-gray-500">
           <th class="px-3 py-2 text-left">Categoría</th>
@@ -1356,7 +1365,7 @@ function cambiarTab(t) {
   if (t === 'pago_metodos')      cargarPagoMetodos();
   if (t === 'tipos')             cargarTiposDocs();
   if (t === 'params')            { cargarTiposDocs(); cargarParametros(); }
-  if (t === 'grupos')            { cargarGrupos(); cargarConfigContable(); }
+  if (t === 'grupos')            { cargarGrupos(); cargarConfigContable(); cargarPoliticaGrupos(); }
   if (t === 'progs')             { progCargarTipos(); progCargarLista(); }
   if (t === 'comps')             { currentCompPage = 1; compSoloDescuadrados = false; cargarComprobantes(); }
   if (t === 'manual')            { setModoComp('libre'); if (!document.querySelectorAll('.linea-manual').length) addLineaManual(); }
@@ -2209,6 +2218,91 @@ async function eliminarGrupo(id) {
   if (!confirm('¿Quitar las cuentas asignadas a esta categoría?')) return;
   await fetch(`/api/contabilidad/${NEGOCIO_ID}/grupos-inventario/${id}`, {method:'DELETE'});
   cargarGrupos();
+}
+
+// -- Politica de cuentas para categorias nuevas --
+const POL_COLS = [
+  {col:'inve', label:'Inventario (14x)', filtro:'14'},
+  {col:'cos', label:'Costo (6x)', filtro:'6'},
+  {col:'ingre', label:'Ingresos (41x)', filtro:'4'},
+  {col:'ajfav', label:'Ajuste favor (+)', filtro:''},
+  {col:'ajcon', label:'Ajuste contra (-)', filtro:''},
+];
+let polTimers = {};
+
+async function cargarPoliticaGrupos() {
+  const grid = document.getElementById('politica-grupos-grid');
+  if (!grid) return;
+  grid.innerHTML = POL_COLS.map(p => `
+    <div class="border border-gray-200 rounded-lg p-2">
+      <div class="text-[11px] font-bold text-gray-700 mb-1">${p.label}</div>
+      <label class="flex items-center gap-1 text-[11px] text-gray-600 mb-1">
+        <input type="checkbox" id="pol-auto-${p.col}" onchange="togglePolModo('${p.col}')"> auto
+      </label>
+      <div class="relative">
+        <input type="text" id="pol-valor-${p.col}" autocomplete="off" placeholder=""
+               class="border rounded-lg px-2 py-1 text-xs w-full font-mono"
+               oninput="acPol('${p.col}')">
+        <div id="ac-pol-${p.col}" class="ac-drop hidden"></div>
+      </div>
+      <div id="pol-hint-${p.col}" class="text-[10px] text-gray-400 mt-1"></div>
+    </div>`).join('');
+  try {
+    const resp = await fetch(`/api/contabilidad/${NEGOCIO_ID}/grupos-politica`);
+    const data = await resp.json();
+    if (!data.ok) return;
+    POL_COLS.forEach(p => {
+      const cfg = (data.politica && data.politica[p.col]) || {};
+      const auto = cfg.modo === 'auto';
+      document.getElementById(`pol-auto-${p.col}`).checked = auto;
+      document.getElementById(`pol-valor-${p.col}`).value = cfg.valor || '';
+      togglePolModo(p.col, true);
+      if (auto && data.sugeridos && data.sugeridos[p.col])
+        document.getElementById(`pol-hint-${p.col}`).textContent = 'siguiente: ' + data.sugeridos[p.col];
+    });
+  } catch(e) {}
+}
+
+function togglePolModo(col, silent) {
+  const auto = document.getElementById(`pol-auto-${col}`).checked;
+  const inp = document.getElementById(`pol-valor-${col}`);
+  inp.placeholder = auto ? 'raiz (ej: 4140)' : 'cuenta auxiliar';
+  document.getElementById(`ac-pol-${col}`).classList.add('hidden');
+  if (!silent) document.getElementById(`pol-hint-${col}`).textContent = '';
+}
+
+function acPol(col) {
+  const auto = document.getElementById(`pol-auto-${col}`).checked;
+  const listEl = document.getElementById(`ac-pol-${col}`);
+  if (auto) { listEl.classList.add('hidden'); return; }
+  clearTimeout(polTimers[col]);
+  polTimers[col] = setTimeout(async () => {
+    const q = document.getElementById(`pol-valor-${col}`).value.trim();
+    if (q.length < 2) { listEl.classList.add('hidden'); return; }
+    const p = POL_COLS.find(x => x.col === col);
+    const cuentas = await fetchPUC(q, p.filtro);
+    renderAC(listEl, cuentas, c => {
+      document.getElementById(`pol-valor-${col}`).value = c.codigo;
+      listEl.classList.add('hidden');
+    });
+  }, 280);
+}
+
+async function guardarPoliticaGrupos() {
+  const politica = {};
+  POL_COLS.forEach(p => {
+    politica[p.col] = {
+      modo: document.getElementById(`pol-auto-${p.col}`).checked ? 'auto' : 'fija',
+      valor: document.getElementById(`pol-valor-${p.col}`).value.trim()
+    };
+  });
+  const resp = await fetch(`/api/contabilidad/${NEGOCIO_ID}/grupos-politica`, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({politica})
+  });
+  const data = await resp.json();
+  if (data.ok) { toast('Politica guardada'); cargarPoliticaGrupos(); }
+  else toast(data.error, false);
 }
 
 // ── TAB: COMPROBANTE MANUAL ───────────────────────────────────

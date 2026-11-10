@@ -169,6 +169,7 @@
                         <input id="cat-iva-custom" type="number" min="0" max="100" step="0.01"
                                placeholder="%" class="hidden border rounded-lg px-2 py-2 text-sm w-20">
                     </div>
+                    <div id="cat-grupo-prev" class="hidden text-[11px] text-gray-500"></div>
                     <textarea id="cat-descripcion" placeholder="Descripción opcional (materiales, tallas disponibles, colores...)" rows="2"
                         class="border rounded-lg px-3 py-2 text-sm w-full resize-none text-gray-600" maxlength="300"></textarea>
                     <div class="flex items-center gap-3">
@@ -1246,6 +1247,7 @@
 
 <script>
 const SLUG = '{{ tienda.slug }}';
+const TIENDA_NEGOCIO_ID = {{ tienda.tercero_id }};
 const TERCERO_ID = {{ ((tienda.tercero_id or tienda.admin_id) if tienda else none) | tojson }};
 const BASE = '/api/tienda/' + SLUG;
 window.VENDEDORES_API_BASE = BASE + '/vendedores';
@@ -3167,6 +3169,7 @@ function onCategoriaSelect() {
         inp.classList.add('hidden');
         inp.value = '';
     }
+    vistaPreviaGrupoTienda(getCategoriaSeleccionada());
 }
 
 function getCategoriaSeleccionada() {
@@ -3334,6 +3337,42 @@ function getIvaPct() {
     return parseFloat(sel.value);
 }
 
+// Vista previa del grupo contable (texto discreto junto a la categoria)
+let _grpPrevTimerT = null;
+async function vistaPreviaGrupoTienda(categoria) {
+  const el = document.getElementById('cat-grupo-prev');
+  if (!el) return;
+  categoria = (categoria || '').trim();
+  if (categoria.length < 2) { el.textContent = ''; el.classList.add('hidden'); return; }
+  try {
+    const r = await fetch(`/api/contabilidad/${TIENDA_NEGOCIO_ID}/grupos-vista-previa?categoria=${encodeURIComponent(categoria)}`);
+    const d = await r.json();
+    if (!d.ok) { el.classList.add('hidden'); return; }
+    const cuentas = d.cuentas || {};
+    const parts = ['inve','cos','ingre','ajfav','ajcon'].filter(k => cuentas[k]).map(k => cuentas[k]);
+    let txt = parts.length ? 'Grupo contable: ' + parts.join(' \u00b7 ') : '';
+    if (d.nuevas && d.nuevas.length) txt += ` (${d.nuevas.length} nueva${d.nuevas.length > 1 ? 's' : ''})`;
+    if (d.advertencias && d.advertencias.length) txt += (txt ? ' \u2014 ' : 'Grupo contable: ') + '\u26a0 ' + d.advertencias[0];
+    el.textContent = txt;
+    el.classList.toggle('hidden', !txt);
+  } catch(e) { el.classList.add('hidden'); }
+}
+(function(){
+  const _nueva = document.getElementById('cat-categoria-nueva');
+  if (_nueva && !_nueva.dataset.grpPrev) {
+    _nueva.dataset.grpPrev = '1';
+    _nueva.addEventListener('input', e => {
+      clearTimeout(_grpPrevTimerT);
+      _grpPrevTimerT = setTimeout(() => vistaPreviaGrupoTienda(e.target.value), 400);
+    });
+  }
+  const _sel = document.getElementById('cat-categoria-sel');
+  if (_sel && !_sel.dataset.grpPrev) {
+    _sel.dataset.grpPrev = '1';
+    _sel.addEventListener('change', () => vistaPreviaGrupoTienda(getCategoriaSeleccionada()));
+  }
+})();
+
 async function guardarProducto() {
     const nombre = document.getElementById('cat-nombre').value.trim();
     const categoria = getCategoriaSeleccionada();
@@ -3377,6 +3416,7 @@ async function guardarProducto() {
             document.getElementById('preview-nuevo').innerHTML = `<svg class="w-6 h-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>`;
             document.getElementById('nombre-foto-nuevo').textContent = 'Sin foto (opcional)';
             document.getElementById('inp-foto-nuevo').value = '';
+            if (data.grupo_auto && data.grupo_auto.advertencias && data.grupo_auto.advertencias.length) toast('Grupo contable: ' + data.grupo_auto.advertencias[0], true);
             toast(esEdicion ? 'Producto actualizado' : 'Producto agregado');
             cargarProductos();
         } else {

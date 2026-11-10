@@ -250,6 +250,18 @@ def _asegurar_tablas(conn):
             try: conn.rollback()
             except Exception: pass
 
+    # politica_grupos_cuentas: politica por columna para autocrear cuentas al nacer una categoria
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS politica_grupos_cuentas (
+            negocio_id INTEGER NOT NULL,
+            columna    VARCHAR(10) NOT NULL,
+            modo       VARCHAR(10) NOT NULL DEFAULT 'fija',
+            valor      VARCHAR(10),
+            PRIMARY KEY (negocio_id, columna)
+        )
+    """)
+    conn.commit()
+
     _seed_puc(conn)
     _seed_puc_subcuentas(conn)
     conn.execute("""
@@ -880,11 +892,11 @@ def _ejecutar_asiento_gasto_recurrente(conn, prog_row, vars_dict, fecha_override
     
     cta_deb = conn.execute("SELECT id FROM cuentas_puc WHERE codigo = %s AND (creada_por_negocio_id = %s OR creada_por_negocio_id IS NULL) LIMIT 1", (cod_deb, negocio_id)).fetchone()
     if not cta_deb:
-        cta_deb = conn.execute("SELECT id FROM cuentas_puc WHERE codigo LIKE '51%%' AND (creada_por_negocio_id = %s OR creada_por_negocio_id IS NULL) ORDER BY codigo ASC LIMIT 1", (negocio_id,)).fetchone()
+        cta_deb = conn.execute("SELECT id FROM cuentas_puc WHERE codigo LIKE '51%%' AND (creada_por_negocio_id = %s OR creada_por_negocio_id IS NULL) AND acepta_movimiento IS TRUE AND LENGTH(codigo) >= 6 ORDER BY codigo ASC LIMIT 1", (negocio_id,)).fetchone()
         
     cta_cred = conn.execute("SELECT id, maneja_documentos FROM cuentas_puc WHERE codigo = %s AND (creada_por_negocio_id = %s OR creada_por_negocio_id IS NULL) LIMIT 1", (cod_cred, negocio_id)).fetchone()
     if not cta_cred:
-        cta_cred = conn.execute("SELECT id, maneja_documentos FROM cuentas_puc WHERE codigo LIKE '2335%%' AND (creada_por_negocio_id = %s OR creada_por_negocio_id IS NULL) ORDER BY codigo ASC LIMIT 1", (negocio_id,)).fetchone()
+        cta_cred = conn.execute("SELECT id, maneja_documentos FROM cuentas_puc WHERE codigo LIKE '2335%%' AND (creada_por_negocio_id = %s OR creada_por_negocio_id IS NULL) AND acepta_movimiento IS TRUE AND LENGTH(codigo) >= 6 ORDER BY codigo ASC LIMIT 1", (negocio_id,)).fetchone()
 
     if not cta_deb or not cta_cred:
         return None
@@ -1446,7 +1458,7 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_identificador, varia
                 if not puc_14_default:
                     rp_14 = conn.execute("""
                         SELECT id, codigo FROM cuentas_puc 
-                        WHERE (creada_por_negocio_id = %s OR creada_por_negocio_id IS NULL) AND codigo LIKE '1405%%'
+                        WHERE (creada_por_negocio_id = %s OR creada_por_negocio_id IS NULL) AND codigo LIKE '1405%%' AND acepta_movimiento IS TRUE AND LENGTH(codigo) >= 6
                         ORDER BY codigo ASC LIMIT 1
                     """, (negocio_id,)).fetchone()
                     puc_14_default = rp_14 if rp_14 else {'id': 131, 'codigo': '140505'}
@@ -1563,7 +1575,7 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_identificador, varia
                             if not puc_14_default:
                                 rp_14 = conn.execute("""
                                     SELECT id, codigo, nombre FROM cuentas_puc 
-                                    WHERE (creada_por_negocio_id = %s OR creada_por_negocio_id IS NULL) AND codigo LIKE '1405%%'
+                                    WHERE (creada_por_negocio_id = %s OR creada_por_negocio_id IS NULL) AND codigo LIKE '1405%%' AND acepta_movimiento IS TRUE AND LENGTH(codigo) >= 6
                                     ORDER BY codigo ASC LIMIT 1
                                 """, (negocio_id,)).fetchone()
                                 puc_14_default = rp_14 if rp_14 else {'id': 131, 'codigo': '140505', 'nombre': 'Materias primas'}
@@ -1600,7 +1612,7 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_identificador, varia
                             if not puc_61_default:
                                 rp_61 = conn.execute("""
                                     SELECT id, codigo, nombre FROM cuentas_puc 
-                                    WHERE (creada_por_negocio_id = %s OR creada_por_negocio_id IS NULL) AND codigo LIKE '6140%%'
+                                    WHERE (creada_por_negocio_id = %s OR creada_por_negocio_id IS NULL) AND codigo LIKE '6140%%' AND acepta_movimiento IS TRUE AND LENGTH(codigo) >= 6
                                     ORDER BY codigo ASC LIMIT 1
                                 """, (negocio_id,)).fetchone()
                                 puc_61_default = rp_61 if rp_61 else {'id': 136, 'codigo': '614005', 'nombre': 'Costo de ventas restaurantes'}
@@ -4241,6 +4253,13 @@ def api_grupos_post(negocio_id):
     try:
         conn = get_db_connection()
         _asegurar_tablas(conn)
+        err = _validar_cuentas_grupo(conn, {
+            'Inventario (14x)': cuenta_inve_id, 'Costo (6x)': cuenta_cos_id,
+            'Ingresos (41x)': cuenta_ingre_id, 'Ajuste favor (+)': cuenta_ajuste_favor_id,
+            'Ajuste contra (-)': cuenta_ajuste_contra_id})
+        if err:
+            conn.rollback(); conn.close()
+            return jsonify({'ok': False, 'error': err}), 400
         row = conn.execute("""
             INSERT INTO grupos_inventario (negocio_id, nombre, cuenta_inve_id, cuenta_cos_id, cuenta_ingre_id, cuenta_ajuste_favor_id, cuenta_ajuste_contra_id)
             VALUES (%s,%s,%s,%s,%s,%s,%s)
@@ -4271,6 +4290,15 @@ def api_grupo_item(negocio_id, gid):
             conn.execute("DELETE FROM grupos_inventario WHERE id=%s AND negocio_id=%s", (gid, negocio_id))
         else:
             data = request.get_json() or {}
+            err = _validar_cuentas_grupo(conn, {
+                'Inventario (14x)': data.get('cuenta_inve_id'),
+                'Costo (6x)': data.get('cuenta_cos_id'),
+                'Ingresos (41x)': data.get('cuenta_ingre_id'),
+                'Ajuste favor (+)': data.get('cuenta_ajuste_favor_id'),
+                'Ajuste contra (-)': data.get('cuenta_ajuste_contra_id')})
+            if err:
+                conn.rollback(); conn.close()
+                return jsonify({'ok': False, 'error': err}), 400
             if 'cuenta_inve_id' in data:
                 conn.execute("UPDATE grupos_inventario SET cuenta_inve_id=%s WHERE id=%s AND negocio_id=%s",
                              (data['cuenta_inve_id'], gid, negocio_id))
@@ -4293,6 +4321,292 @@ def api_grupo_item(negocio_id, gid):
         return jsonify({'ok': True})
     except Exception as e:
         try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# -- Politica de cuentas para categorias nuevas -------------------------
+# Columnas: inve (14x) | cos (6x) | ingre (41x) | ajfav | ajcon
+# modo 'fija': valor = codigo auxiliar exacto escrito por el contable
+# modo 'auto': valor = raiz numerica; el sistema crea la siguiente libre
+_POL_GRUPO_COLS = {
+    'inve':  ('cuenta_inve_id', 'debito'),
+    'cos':   ('cuenta_cos_id', 'debito'),
+    'ingre': ('cuenta_ingre_id', 'credito'),
+    'ajfav': ('cuenta_ajuste_favor_id', 'credito'),
+    'ajcon': ('cuenta_ajuste_contra_id', 'debito'),
+}
+_POL_GRUPO_LABEL = {'inve': 'Inventario (14x)', 'cos': 'Costo (6x)',
+                    'ingre': 'Ingresos (41x)',
+                    'ajfav': 'Ajuste favor (+)', 'ajcon': 'Ajuste contra (-)'}
+
+
+def _siguiente_codigo_libre(conn, prefijo):
+    """Metodologia desembolsos: max(sufijo)+1 a 2 digitos, salto de colisiones."""
+    cuentas = conn.execute(
+        "SELECT codigo FROM cuentas_puc WHERE codigo LIKE %s", (f"{prefijo}%",)).fetchall()
+    max_num = 0
+    for c in cuentas:
+        cod = str(c['codigo']).strip()
+        if cod.startswith(prefijo) and len(cod) > len(prefijo):
+            try:
+                n = int(cod[len(prefijo):])
+                if n > max_num:
+                    max_num = n
+            except ValueError:
+                pass
+    siguiente_int = max_num + 1
+    codigo = f"{prefijo}{siguiente_int:02d}"
+    while conn.execute("SELECT id FROM cuentas_puc WHERE codigo = %s", (codigo,)).fetchone():
+        siguiente_int += 1
+        codigo = f"{prefijo}{siguiente_int:02d}"
+    return codigo
+
+
+def _leer_politica_grupos(conn, negocio_id):
+    _asegurar_tablas(conn)
+    rows = conn.execute(
+        "SELECT columna, modo, valor FROM politica_grupos_cuentas WHERE negocio_id = %s",
+        (negocio_id,)).fetchall()
+    return {r['columna']: {'modo': r['modo'], 'valor': r['valor']} for r in rows}
+
+
+def _validar_cuentas_grupo(conn, mapa):
+    """mapa: {etiqueta: cuenta_id}. Rechaza mayor/subcuenta con mensaje claro."""
+    for etiqueta, cid in (mapa or {}).items():
+        if cid in (None, '', 0):
+            continue
+        try:
+            cid_int = int(cid)
+        except (TypeError, ValueError):
+            return f"{etiqueta}: id de cuenta invalido"
+        cta = conn.execute("SELECT codigo FROM cuentas_puc WHERE id = %s", (cid_int,)).fetchone()
+        if not cta:
+            return f"{etiqueta}: cuenta no existe"
+        if len(str(cta['codigo']).strip()) < 6:
+            return f"{etiqueta}: {cta['codigo']} es mayor/subcuenta, use auxiliar de 6+ digitos"
+    return None
+
+
+def _resolver_columna_politica(conn, negocio_id, col, categoria, politica, crear=False):
+    """Devuelve (cuenta_id, codigo, creada, advertencia). crear=False = dry-run."""
+    _campo, naturaleza = _POL_GRUPO_COLS[col]
+    label = _POL_GRUPO_LABEL[col]
+    pol = (politica or {}).get(col) or {}
+    modo = (pol.get('modo') or '').strip().lower()
+    valor = (pol.get('valor') or '').strip()
+    if modo == 'fija' and valor:
+        cta = conn.execute(
+            "SELECT id, codigo FROM cuentas_puc WHERE codigo = %s LIMIT 1", (valor,)).fetchone()
+        if not cta:
+            return None, None, False, f"{label}: la cuenta {valor} no existe"
+        if len(str(cta['codigo']).strip()) < 6:
+            return None, None, False, f"{label}: {valor} es mayor/subcuenta, use auxiliar de 6+ digitos"
+        return cta['id'], str(cta['codigo']).strip(), False, None
+    if modo == 'auto' and valor:
+        if not valor.isdigit() or len(valor) < 2:
+            return None, None, False, f"{label}: raiz '{valor}' invalida (minimo 2 digitos)"
+        codigo = _siguiente_codigo_libre(conn, valor)
+        if len(codigo) > 10:
+            return None, None, False, f"{label}: raiz {valor} sin cupo"
+        if not crear:
+            return None, codigo, False, None
+        row = conn.execute("""
+            INSERT INTO cuentas_puc
+                (codigo, nombre, nivel, codigo_padre, naturaleza, acepta_movimiento,
+                 maneja_terceros, maneja_documentos, creada_por_negocio_id, revisada, activo)
+            VALUES (%s, %s, 4, %s, %s, true, false, false, %s, false, true)
+            ON CONFLICT (codigo) DO NOTHING
+            RETURNING id
+        """, (codigo, categoria.strip(), valor, naturaleza, negocio_id)).fetchone()
+        if not row:
+            row = conn.execute("SELECT id FROM cuentas_puc WHERE codigo = %s", (codigo,)).fetchone()
+        return (row['id'] if row else None), codigo, True, None
+    return None, None, False, f"{label}: sin politica (configurela en Grupos)"
+
+
+def _aplicar_politica_categoria(conn, negocio_id, categoria):
+    """Crea grupo + auxiliares segun politica. Nunca lanza: devuelve advertencias."""
+    nombre = (categoria or '').strip()
+    res = {'ok': True, 'nombre': nombre, 'nuevo': False, 'grupo_id': None,
+           'cuentas': {}, 'creadas': [], 'advertencias': []}
+    if not nombre:
+        return res
+    try:
+        _asegurar_tablas(conn)
+        g = conn.execute(
+            "SELECT id FROM grupos_inventario WHERE negocio_id = %s AND nombre = %s",
+            (negocio_id, nombre)).fetchone()
+        if g:
+            res['grupo_id'] = g['id']
+            return res
+        politica = _leer_politica_grupos(conn, negocio_id)
+        ids = {}
+        for col in _POL_GRUPO_COLS:
+            cid, cod, creada, adv = _resolver_columna_politica(
+                conn, negocio_id, col, nombre, politica, crear=True)
+            ids[col] = cid
+            if cod:
+                res['cuentas'][col] = cod
+            if creada:
+                res['creadas'].append(cod)
+            if adv:
+                res['advertencias'].append(adv)
+        row = conn.execute("""
+            INSERT INTO grupos_inventario
+                (negocio_id, nombre, cuenta_inve_id, cuenta_cos_id, cuenta_ingre_id,
+                 cuenta_ajuste_favor_id, cuenta_ajuste_contra_id)
+            VALUES (%s,%s,%s,%s,%s,%s,%s)
+            ON CONFLICT (negocio_id, nombre) DO NOTHING
+            RETURNING id
+        """, (negocio_id, nombre, ids['inve'], ids['cos'], ids['ingre'],
+              ids['ajfav'], ids['ajcon'])).fetchone()
+        if row:
+            res['grupo_id'] = row['id']
+            res['nuevo'] = True
+        else:
+            g2 = conn.execute(
+                "SELECT id FROM grupos_inventario WHERE negocio_id = %s AND nombre = %s",
+                (negocio_id, nombre)).fetchone()
+            res['grupo_id'] = g2['id'] if g2 else None
+        return res
+    except Exception as e:
+        res['advertencias'].append(f"No se pudo autocrear el grupo: {e}")
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return res
+
+
+@bp.route('/api/contabilidad/<int:negocio_id>/grupos-politica', methods=['GET'])
+def api_grupos_politica_get(negocio_id):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    from ..db import get_db_connection
+    try:
+        conn = get_db_connection()
+        politica = _leer_politica_grupos(conn, negocio_id)
+        sugeridos = {}
+        for col in _POL_GRUPO_COLS:
+            pol = politica.get(col) or {}
+            raiz = (pol.get('valor') or '').strip()
+            if (pol.get('modo') or '') == 'auto' and raiz.isdigit():
+                try:
+                    sugeridos[col] = _siguiente_codigo_libre(conn, raiz)
+                except Exception:
+                    sugeridos[col] = None
+            else:
+                sugeridos[col] = None
+        conn.close()
+        return jsonify({'ok': True, 'politica': politica, 'sugeridos': sugeridos})
+    except Exception as e:
+        try: conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/contabilidad/<int:negocio_id>/grupos-politica', methods=['POST'])
+def api_grupos_politica_post(negocio_id):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    data = request.get_json() or {}
+    politica = data.get('politica') or {}
+    from ..db import get_db_connection
+    try:
+        conn = get_db_connection()
+        _asegurar_tablas(conn)
+        for col in _POL_GRUPO_COLS:
+            cfg = politica.get(col) or {}
+            modo = (cfg.get('modo') or '').strip().lower()
+            valor = (cfg.get('valor') or '').strip()
+            label = _POL_GRUPO_LABEL[col]
+            if modo not in ('fija', 'auto'):
+                conn.rollback(); conn.close()
+                return jsonify({'ok': False, 'error': f"{label}: modo debe ser fija o auto"}), 400
+            if not valor:
+                conn.rollback(); conn.close()
+                return jsonify({'ok': False, 'error': f"{label}: escriba la cuenta o la raiz"}), 400
+            if modo == 'fija':
+                cta = conn.execute("SELECT codigo FROM cuentas_puc WHERE codigo = %s LIMIT 1",
+                                   (valor,)).fetchone()
+                if not cta:
+                    conn.rollback(); conn.close()
+                    return jsonify({'ok': False, 'error': f"{label}: la cuenta {valor} no existe"}), 400
+                if len(str(cta['codigo']).strip()) < 6:
+                    conn.rollback(); conn.close()
+                    return jsonify(
+                        {'ok': False,
+                         'error': f"{label}: {valor} es mayor/subcuenta, use auxiliar de 6+ digitos"}), 400
+            else:
+                if not valor.isdigit() or len(valor) < 2 or len(valor) > 8:
+                    conn.rollback(); conn.close()
+                    return jsonify({'ok': False, 'error': f"{label}: raiz '{valor}' invalida"}), 400
+                base = conn.execute(
+                    "SELECT 1 FROM cuentas_puc WHERE codigo = %s OR codigo LIKE %s LIMIT 1",
+                    (valor, f"{valor}%")).fetchone()
+                if not base:
+                    conn.rollback(); conn.close()
+                    return jsonify(
+                        {'ok': False,
+                         'error': f"{label}: raiz {valor} sin cuentas en el PUC"}), 400
+            conn.execute("""
+                INSERT INTO politica_grupos_cuentas (negocio_id, columna, modo, valor)
+                VALUES (%s,%s,%s,%s)
+                ON CONFLICT (negocio_id, columna) DO UPDATE SET modo=EXCLUDED.modo, valor=EXCLUDED.valor
+            """, (negocio_id, col, modo, valor))
+        conn.commit(); conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/contabilidad/<int:negocio_id>/grupos-vista-previa', methods=['GET'])
+def api_grupos_vista_previa(negocio_id):
+    """Dry-run: que cuentas le tocan a una categoria (existente o nueva). Sin INSERT."""
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    categoria = (request.args.get('categoria') or '').strip()
+    if not categoria:
+        return jsonify({'ok': False, 'error': 'categoria requerida'}), 400
+    from ..db import get_db_connection
+    try:
+        conn = get_db_connection()
+        _asegurar_tablas(conn)
+        g = conn.execute("""
+            SELECT g.id, pi.codigo AS inve, pc.codigo AS cos, pg.codigo AS ingre,
+                   pf.codigo AS ajfav, pa.codigo AS ajcon
+            FROM grupos_inventario g
+            LEFT JOIN cuentas_puc pi ON pi.id = g.cuenta_inve_id
+            LEFT JOIN cuentas_puc pc ON pc.id = g.cuenta_cos_id
+            LEFT JOIN cuentas_puc pg ON pg.id = g.cuenta_ingre_id
+            LEFT JOIN cuentas_puc pf ON pf.id = g.cuenta_ajuste_favor_id
+            LEFT JOIN cuentas_puc pa ON pa.id = g.cuenta_ajuste_contra_id
+            WHERE g.negocio_id = %s AND g.nombre = %s
+        """, (negocio_id, categoria)).fetchone()
+        if g:
+            conn.close()
+            return jsonify({'ok': True, 'existe': True,
+                            'cuentas': {k: g[k] for k in ('inve', 'cos', 'ingre', 'ajfav', 'ajcon')},
+                            'advertencias': []})
+        politica = _leer_politica_grupos(conn, negocio_id)
+        cuentas, nuevas, advs = {}, [], []
+        for col in _POL_GRUPO_COLS:
+            _cid, cod, _cre, adv = _resolver_columna_politica(
+                conn, negocio_id, col, categoria, politica, crear=False)
+            if cod:
+                cuentas[col] = cod
+                if ((politica.get(col) or {}).get('modo') or '') == 'auto':
+                    nuevas.append(cod)
+            if adv:
+                advs.append(adv)
+        conn.close()
+        return jsonify({'ok': True, 'existe': False, 'cuentas': cuentas,
+                        'nuevas': nuevas, 'advertencias': advs})
+    except Exception as e:
+        try: conn.close()
         except Exception: pass
         return jsonify({'ok': False, 'error': str(e)}), 500
 

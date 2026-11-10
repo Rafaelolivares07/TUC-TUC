@@ -18,8 +18,11 @@ from .auth import admin_required
 from .inventarios import _aplicar_tarjeta, _verificar_stock_pedido, _sync_precio
 try:
     from .contabilidad import _ejecutar_asiento_automatico as _asiento_auto
+    from .contabilidad import _aplicar_politica_categoria
 except ImportError:
     _asiento_auto = None
+    def _aplicar_politica_categoria(*args, **kwargs):
+        return {'ok': True, 'advertencias': ['politica de grupos no disponible']}
 
 bp = Blueprint('restaurantes', __name__)
 
@@ -940,8 +943,16 @@ def api_adoptar_producto(slug):
         nuevo_id = conn.fetchone()[0]
         _sync_precio(conn, rest['tercero_id'], nuevo_id)
         conn.commit()
+        grupo_auto = None
+        try:
+            grupo_auto = _aplicar_politica_categoria(conn, int(rest['tercero_id']), original['tipo'])
+            conn.commit()
+        except Exception as _e:
+            try: conn.rollback()
+            except Exception: pass
+            grupo_auto = {'ok': True, 'advertencias': ["No se pudo autocrear el grupo: %s" % _e]}
         conn.close()
-        return jsonify({'ok': True})
+        return jsonify({'ok': True, 'grupo_auto': grupo_auto})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 
@@ -1007,8 +1018,16 @@ def api_opcion_crear(slug):
             )
             _sync_precio(conn, rest['tercero_id'], r[0])
         conn.commit()
+        grupo_auto = None
+        try:
+            grupo_auto = _aplicar_politica_categoria(conn, int(rest['tercero_id']), tipo)
+            conn.commit()
+        except Exception as _e:
+            try: conn.rollback()
+            except Exception: pass
+            grupo_auto = {'ok': True, 'advertencias': ["No se pudo autocrear el grupo: %s" % _e]}
         conn.close()
-        return jsonify({'ok': True})
+        return jsonify({'ok': True, 'grupo_auto': grupo_auto})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 

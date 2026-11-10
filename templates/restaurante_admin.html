@@ -210,6 +210,7 @@
                         Cancelar
                     </button>
                 </div>
+                <div id="tipo-grupo-prev" class="hidden text-[11px] text-gray-500"></div>
                 <textarea id="cat-descripcion" placeholder="Descripción opcional (ingredientes, acompañamientos...)" rows="2"
                     class="border rounded-lg px-3 py-2 text-sm w-full resize-none mt-2 text-gray-600" maxlength="300"></textarea>
             </div>
@@ -1386,6 +1387,39 @@ async function _guardarOrden() {
     }
 }
 
+// Vista previa del grupo contable (texto discreto junto a la categoria)
+let _grpPrevTimerR = null;
+async function vistaPreviaGrupoRest(categoria) {
+  const el = document.getElementById('tipo-grupo-prev');
+  if (!el) return;
+  categoria = (categoria || '').trim();
+  if (categoria.length < 2) { el.textContent = ''; el.classList.add('hidden'); return; }
+  try {
+    const r = await fetch(`/api/contabilidad/${TERCERO_ID}/grupos-vista-previa?categoria=${encodeURIComponent(categoria)}`);
+    const d = await r.json();
+    if (!d.ok) { el.classList.add('hidden'); return; }
+    const cuentas = d.cuentas || {};
+    const parts = ['inve','cos','ingre','ajfav','ajcon'].filter(k => cuentas[k]).map(k => cuentas[k]);
+    let txt = parts.length ? 'Grupo contable: ' + parts.join(' \u00b7 ') : '';
+    if (d.nuevas && d.nuevas.length) txt += ` (${d.nuevas.length} nueva${d.nuevas.length > 1 ? 's' : ''})`;
+    if (d.advertencias && d.advertencias.length) txt += (txt ? ' \u2014 ' : 'Grupo contable: ') + '\u26a0 ' + d.advertencias[0];
+    el.textContent = txt;
+    el.classList.toggle('hidden', !txt);
+  } catch(e) { el.classList.add('hidden'); }
+}
+(function(){
+  ['cat-tipo', 'cat-tipo-md'].forEach(id => {
+    const _inp = document.getElementById(id);
+    if (!_inp || _inp.dataset.grpPrev) return;
+    _inp.dataset.grpPrev = '1';
+    _inp.addEventListener('input', e => {
+      clearTimeout(_grpPrevTimerR);
+      _grpPrevTimerR = setTimeout(() => vistaPreviaGrupoRest(e.target.value), 400);
+    });
+    _inp.addEventListener('change', e => vistaPreviaGrupoRest(e.target.value));
+  });
+})();
+
 async function guardarOpcion() {
     const tipoEl = TIPO_REST === 'menu_dia'
         ? document.getElementById('cat-tipo-md')
@@ -1452,6 +1486,7 @@ async function guardarOpcion() {
         if (data.ok) {
             const editando = Boolean(_opcionEditandoId);
             limpiarFormCatalogo();
+            if (data.grupo_auto && data.grupo_auto.advertencias && data.grupo_auto.advertencias.length) toast('Grupo contable: ' + data.grupo_auto.advertencias[0], false);
             toast(editando ? 'Cambios guardados' : 'Agregado');
             await cargarCatalogo();
         } else {
@@ -1470,6 +1505,7 @@ function editarOpcion(id) {
         ? document.getElementById('cat-tipo-md')
         : document.getElementById('cat-tipo');
     tipoEl.value = opcion.tipo || '';
+    vistaPreviaGrupoRest(opcion.tipo || '');
     document.getElementById('cat-nombre').value = opcion.nombre || '';
     document.getElementById('cat-descripcion').value = opcion.descripcion || '';
     const esAdicionEl = document.getElementById('cat-es-adicion');

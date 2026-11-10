@@ -497,6 +497,7 @@
         <input id="mp-categoria" type="text" placeholder="Ej: bebida, proteina…" autocomplete="off" class="w-full">
 
         <div id="mp-categoria-list" class="ac-list hidden"></div>
+        <div id="mp-grupo-prev" class="hidden text-[11px] text-gray-500 mt-1"></div>
 
       </div>
 
@@ -3188,6 +3189,7 @@ function abrirModalProducto(pOrId = null) {
   document.getElementById('mp-nombre').value   = p ? (p.nombre || '') : '';
 
   document.getElementById('mp-categoria').value = p ? (p.categoria || '') : '';
+  vistaPreviaGrupo(p ? (p.categoria || '') : '');
 
   document.getElementById('mp-codigo').value   = p ? (p.codigo_barra || '') : '';
 
@@ -3219,6 +3221,36 @@ function cerrarModalProducto() {
   document.getElementById('overlay-producto').classList.add('hidden');
 
 }
+
+// Vista previa del grupo contable (texto discreto junto a la categoria)
+let _grpPrevTimer = null;
+async function vistaPreviaGrupo(categoria) {
+  const el = document.getElementById('mp-grupo-prev');
+  if (!el) return;
+  categoria = (categoria || '').trim();
+  if (categoria.length < 2) { el.textContent = ''; el.classList.add('hidden'); return; }
+  try {
+    const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/grupos-vista-previa?categoria=${encodeURIComponent(categoria)}`);
+    const d = await r.json();
+    if (!d.ok) { el.classList.add('hidden'); return; }
+    const cuentas = d.cuentas || {};
+    const parts = ['inve','cos','ingre','ajfav','ajcon'].filter(k => cuentas[k]).map(k => cuentas[k]);
+    let txt = parts.length ? 'Grupo contable: ' + parts.join(' \u00b7 ') : '';
+    if (d.nuevas && d.nuevas.length) txt += ` (${d.nuevas.length} nueva${d.nuevas.length > 1 ? 's' : ''})`;
+    if (d.advertencias && d.advertencias.length) txt += (txt ? ' \u2014 ' : 'Grupo contable: ') + '\u26a0 ' + d.advertencias[0];
+    el.textContent = txt;
+    el.classList.toggle('hidden', !txt);
+  } catch(e) { el.classList.add('hidden'); }
+}
+(function(){
+  const _cat = document.getElementById('mp-categoria');
+  if (!_cat || _cat.dataset.grpPrev) return;
+  _cat.dataset.grpPrev = '1';
+  _cat.addEventListener('input', e => {
+    clearTimeout(_grpPrevTimer);
+    _grpPrevTimer = setTimeout(() => vistaPreviaGrupo(e.target.value), 400);
+  });
+})();
 
 async function guardarProducto() {
 
@@ -3284,6 +3316,7 @@ async function guardarProducto() {
   if (d.ok) {
 
     toast(id ? 'Producto actualizado' : 'Producto creado');
+    if (d.grupo_auto && d.grupo_auto.advertencias && d.grupo_auto.advertencias.length) toast('Grupo contable: ' + d.grupo_auto.advertencias[0], false);
 
     cerrarModalProducto();
 

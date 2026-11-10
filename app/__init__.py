@@ -362,13 +362,13 @@ def create_app():
     except Exception:
         _mapa_cloud = {}
     if _orig_static is not None and _mapa_cloud:
-        def _static_con_cloud(path):
-            _url = _resolver_static_cloud(path, static_dir, _mapa_cloud)
+        def _static_con_cloud(filename):
+            _url = _resolver_static_cloud(filename, static_dir, _mapa_cloud)
             if _url:
                 _r = redirect(_url, 301)
                 _r.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
                 return _r
-            return _orig_static(path)
+            return _orig_static(filename)
         app.view_functions['static'] = _static_con_cloud
 
     return app

@@ -31,6 +31,7 @@ MAPA_P = os.path.join(ROOT, 'app', 'uploads_cloud_map.json')
 # 1. Marcadores
 check('existe _resolver_static_cloud', 'def _resolver_static_cloud(' in INIT)
 check('wrapper engancha static', "app.view_functions['static']" in INIT)
+check('wrapper firma filename (Flask lo llama por kw)', 'def _static_con_cloud(filename)' in INIT)
 check('redirect 301 cacheable', 'redirect(' in INIT and 'immutable' in INIT)
 check('mapa existe', os.path.exists(MAPA_P))
 try:

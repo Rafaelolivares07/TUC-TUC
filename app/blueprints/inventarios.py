@@ -9367,6 +9367,7 @@ def api_mantenimiento_documentos_tercero(negocio_id, tercero_id):
             }
         # Detalle/nota del usuario: tesoreria la guarda entre parentesis al final
         # del concepto (gas-nota). Se prefiere el concepto con parentesis.
+        import re  # ligado local: esta funcion reimporta re mas abajo
         try:
             rows_not = conn.execute("""
                 SELECT tipo_documento, numero_documento,

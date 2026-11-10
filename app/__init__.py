@@ -368,7 +368,7 @@ def create_app():
                 _r = redirect(_url, 301)
                 _r.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
                 return _r
-            return _orig_static(filename)
+            return _orig_static(filename=filename)
         app.view_functions['static'] = _static_con_cloud
 
     return app

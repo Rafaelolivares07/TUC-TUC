@@ -1209,6 +1209,8 @@
             ${cxpDocs.length > 0 && t.urls && t.urls.tesoreria ? 
               `<a href="${t.urls.tesoreria}" target="_blank" rel="noopener noreferrer" class="px-2 py-1 rounded-lg text-[10px] font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 hover:underline">Tesorería (${cxpDocs.length}) ➔</a>` : 
               (t.cxp_adicional > 0 ? `<a href="${(t.urls && t.urls.contabilidad_cxp) || `/contabilidad/${t.negocio_id || 0}?tab=consulta&cuenta=23&desde=2026-01-01`}" target="_blank" rel="noopener noreferrer" class="px-2 py-1 rounded-lg text-[10px] font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 hover:underline">Contabilidad (Cta 23) ➔</a>` : '')}
+            ${t.urls && t.urls.auditoria ?
+              `<a href="${t.urls.auditoria}" target="_blank" rel="noopener noreferrer" class="px-2 py-1 rounded-lg text-[10px] font-bold bg-zinc-100 text-zinc-700 hover:bg-zinc-200 hover:underline">Auditoría ➔</a>` : ''}
           </div>
         </div>
 

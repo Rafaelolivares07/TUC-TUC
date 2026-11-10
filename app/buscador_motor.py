@@ -1074,7 +1074,8 @@ def buscar_datos_terceros(conn, q, negocio_id, slug=None, limite=5):
                 'unificar': f"/admin/mantenimiento/{nid or 0}?tool=unificar-terceros&tercero_id={tid}",
                 'contabilidad_cxp': f"/contabilidad/{nid or 0}?tab=consulta&tercero_id={tid}&tercero_nombre={urllib.parse.quote(t_nombre)}&cuenta=23&desde=2026-01-01",
                 'contabilidad_cxc': f"/contabilidad/{nid or 0}?tab=consulta&tercero_id={tid}&tercero_nombre={urllib.parse.quote(t_nombre)}&cuenta=13&desde=2026-01-01",
-                'contabilidad_ventas': f"/contabilidad/{nid or 0}?tab=consulta&tercero_id={tid}&tercero_nombre={urllib.parse.quote(t_nombre)}&cuenta=41&desde=2026-01-01"
+                'contabilidad_ventas': f"/contabilidad/{nid or 0}?tab=consulta&tercero_id={tid}&tercero_nombre={urllib.parse.quote(t_nombre)}&cuenta=41&desde=2026-01-01",
+                'auditoria': f"/auditor-documentos/{nid or 0}?tercero_id={tid}",
             }
         })
 

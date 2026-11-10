@@ -83,3 +83,7 @@ remote-assist/telegram_config.json
 # Muse inbox/outbox (estado runtime del wake Telegram)
 muse_inbox.json
 muse_outbox.json
+
+# PyInstaller outputs (regenerables con build_exe.bat; fuera del repo 2026-11-10)
+build/
+remote-assist/build/

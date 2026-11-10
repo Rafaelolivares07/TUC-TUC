@@ -56,7 +56,20 @@ check('sql: total_creditos por lado', 'AS total_creditos' in FN and "WHEN mc.tip
 check('sql: ya no suma puntas', 'SUM(mc.monto) AS total' not in FN)
 check('fila: total_debitos', "'total_debitos': float" in _seg)
 check('fila: total_creditos', "'total_creditos': float" in _seg)
-check('tabla: pinta D/C en contables', "doc.origen === 'contable'" in TPL and 'doc.total_debitos' in TPL and 'doc.total_creditos' in TPL)
+# Ronda columnas (10/11): el hack inline D/C se reemplazó por montosDC + 2 columnas
+check('tabla: montosDC usa D/C explicitos', 'function montosDC(' in TPL and 'doc.total_debitos' in TPL and 'doc.total_creditos' in TPL)
+
+# 3c. Columnas D/C + sumatorias (pedido Rafa 10/11: dos columnas separadas con totales)
+_head = TPL.split('id="aud-tabla-tbody"')[0] if 'id="aud-tabla-tbody"' in TPL else ''
+check('thead: columna Debito', '>Débito</th>' in _head)
+check('thead: columna Credito', '>Crédito</th>' in _head)
+check('thead: fuera Monto Total', 'Monto Total' not in _head)
+check('tabla: helper montosDC', 'function montosDC(' in TPL)
+check('tabla: fila totales', 'TOTALES' in TPL and 'totD' in TPL)
+check('tabla: sin colspan 6', 'colspan="6"' not in TPL)
+check('tabla: fuera hack D/C inline', 'fmtDC' not in TPL)
+check('saldos: lado por cuenta', "startswith(('22', '23'))" in FN)
+check('saldos: expone D/C', FN.count("'total_debitos': float") >= 2 and FN.count("'total_creditos': float") >= 2)
 
 # 4. Saldo desde saldos por documento (misma JOIN que inventario)
 check('saldo: join saldo_por_documentos', FN.count('saldo_por_documentos') >= 3)

@@ -9297,8 +9297,9 @@ def api_mantenimiento_documentos_tercero(negocio_id, tercero_id):
         rows_sal = conn.execute("""
             SELECT s.tipo_documento, s.numero_documento,
                    TO_CHAR(COALESCE(s.fecha_hora, s.created_at), 'YYYY-MM-DD') AS fecha,
-                   s.monto_original, s.saldo
+                   s.monto_original, s.saldo, c.codigo AS cuenta_codigo
             FROM saldo_por_documentos s
+            LEFT JOIN cuentas_puc c ON c.id = s.cuenta_id
             WHERE s.negocio_id = %s AND s.tercero_id = %s
             ORDER BY s.id DESC
         """, (negocio_id, tercero_id)).fetchall()
@@ -9309,6 +9310,10 @@ def api_mantenimiento_documentos_tercero(negocio_id, tercero_id):
             key = (td_name.lower(), pure_num)
             if key in consolidated:
                 continue
+            _cod = (r['cuenta_codigo'] or '')
+            _td = (r['tipo_documento'] or '').lower()
+            _es_cred = _cod.startswith(('22', '23')) or 'pago' in _td or 'egreso' in _td or ('cuenta' in _td and 'pagar' in _td)
+            _tot_sal = float(r['monto_original'] or 0)
             consolidated[key] = {
                 'tipo_documento_id': None,
                 'tipo_documento': td_name,
@@ -9316,7 +9321,9 @@ def api_mantenimiento_documentos_tercero(negocio_id, tercero_id):
                 'documento_numero_completo': doc_num,
                 'fecha': r['fecha'],
                 'origen': 'saldos',
-                'total': float(r['monto_original'] or 0),
+                'total': _tot_sal,
+                'total_debitos': float(0 if _es_cred else _tot_sal),
+                'total_creditos': float(_tot_sal if _es_cred else 0),
                 'saldo_pendiente': float(r['saldo']) if r['saldo'] is not None else None
             }
 

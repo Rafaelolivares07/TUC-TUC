@@ -9300,6 +9300,42 @@ def api_mantenimiento_documentos_tercero(negocio_id, tercero_id):
                 'total': float(r['monto_original'] or 0),
                 'saldo_pendiente': float(r['saldo']) if r['saldo'] is not None else None
             }
+
+        # Documentos contables (movimientos_contables): cubre terceros cuya
+        # actividad vive en comprobantes (CxP/CxC, desembolsos) sin rastro
+        # en inventario, pedidos ni saldos por documento
+        rows_cta = conn.execute("""
+            SELECT mc.tipo_documento, mc.numero_documento,
+                   TO_CHAR(MAX(mc.fecha), 'YYYY-MM-DD') AS fecha,
+                   SUM(mc.monto) AS total,
+                   MIN(sd.saldo) AS saldo_pendiente
+            FROM movimientos_contables mc
+            LEFT JOIN saldo_por_documentos sd ON sd.negocio_id = mc.negocio_id
+                                            AND sd.tercero_id = mc.tercero_id
+                                            AND sd.tipo_documento = mc.tipo_documento
+                                            AND sd.numero_documento = mc.numero_documento
+            WHERE mc.negocio_id = %s AND mc.tercero_id = %s
+              AND mc.tipo_documento IS NOT NULL AND TRIM(mc.tipo_documento) <> ''
+            GROUP BY mc.tipo_documento, mc.numero_documento
+            ORDER BY MAX(mc.fecha) DESC NULLS LAST, mc.numero_documento DESC
+        """, (negocio_id, tercero_id)).fetchall()
+        for r in rows_cta:
+            doc_num = r['numero_documento'] or ''
+            td_name = _nombre_tipo_doc(None, r['tipo_documento'], types_map, types_by_code, types_by_name)
+            pure_num = _num_documento_limpio(doc_num, None, types_code)
+            key = (td_name.lower(), pure_num)
+            if key in consolidated:
+                continue
+            consolidated[key] = {
+                'tipo_documento_id': None,
+                'tipo_documento': td_name,
+                'documento_numero': pure_num,
+                'documento_numero_completo': doc_num,
+                'fecha': r['fecha'],
+                'origen': 'contable',
+                'total': float(r['total'] or 0),
+                'saldo_pendiente': float(r['saldo_pendiente']) if r['saldo_pendiente'] is not None else None
+            }
         # Sort combined documents naturally by date and numeric consecutive descending
         import re
         documentos = list(consolidated.values())

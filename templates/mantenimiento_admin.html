@@ -1004,11 +1004,11 @@
       const tbodyCont = document.getElementById('aud-tbody-contabilidad');
       if (d.contabilidad) {
         cardCont.classList.remove('hidden');
-        if (d.contabilidad.numero_comprobante.includes(d.contabilidad.documento_fisico)) {
-          document.getElementById('aud-badge-cc-numero').textContent = d.contabilidad.numero_comprobante;
-        } else {
-          document.getElementById('aud-badge-cc-numero').textContent = `${d.contabilidad.numero_comprobante} (Doc: ${d.contabilidad.documento_fisico || '—'})`;
-        }
+        const ccTipoTxt = String(d.tipo_documento_nombre || d.tipo_documento || tipo || '');
+        const ccNumTxt = d.contabilidad.numero_comprobante.includes(d.contabilidad.documento_fisico)
+          ? d.contabilidad.numero_comprobante
+          : `${d.contabilidad.numero_comprobante} (Doc: ${d.contabilidad.documento_fisico || '—'})`;
+        document.getElementById('aud-badge-cc-numero').textContent = `${ccTipoTxt} ${ccNumTxt}`;
         
         const badgeSaldo = document.getElementById('aud-badge-cc-saldo');
         if (d.saldo_pendiente !== undefined && d.saldo_pendiente !== null) {
@@ -1018,7 +1018,8 @@
           badgeSaldo.classList.add('hidden');
         }
         
-        document.getElementById('aud-lbl-cc-concepto').textContent = `Fecha: ${formatearFechaLocal(d.contabilidad.fecha)} | Concepto: ${d.contabilidad.descripcion || '—'}`;
+        const ccDesc = d.contabilidad.descripcion || '';
+        document.getElementById('aud-lbl-cc-concepto').textContent = `Fecha: ${formatearFechaLocal(d.contabilidad.fecha)}` + ((ccDesc && ccDesc.toLowerCase() !== ccTipoTxt.toLowerCase()) ? ` | Concepto: ${ccDesc}` : '');
         
         tbodyCont.innerHTML = d.contabilidad.asientos.map(e => `
           <tr class="border-b">

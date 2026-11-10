@@ -939,8 +939,9 @@
         const tbodyCont = document.getElementById('det-tbody-contabilidad');
         if (d.contabilidad) {
           cardCont.classList.remove('hidden');
-          document.getElementById('det-badge-cc-numero').textContent = d.contabilidad.numero_comprobante || 'Diario';
-          document.getElementById('det-lbl-cc-concepto').textContent = `Fecha: ${formatearFechaLocal(d.contabilidad.fecha)} • ${d.contabilidad.descripcion || ''}`;
+          document.getElementById('det-badge-cc-numero').textContent = `${detTipoStr} ${d.contabilidad.numero_comprobante || detNumStr}`;
+          const ccDesc = d.contabilidad.descripcion || '';
+          document.getElementById('det-lbl-cc-concepto').textContent = `Fecha: ${formatearFechaLocal(d.contabilidad.fecha)}` + ((ccDesc && ccDesc.toLowerCase() !== detTipoStr.toLowerCase()) ? ` • ${ccDesc}` : '');
           tbodyCont.innerHTML = d.contabilidad.asientos.map(e => `
             <tr class="hover:bg-zinc-50 transition-colors">
               <td class="py-2 px-3.5 font-mono font-semibold text-zinc-900">${e.cuenta}</td>

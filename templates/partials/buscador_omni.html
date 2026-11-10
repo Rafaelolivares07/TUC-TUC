@@ -236,34 +236,40 @@
       .replace(/'/g, '&#39;');
   }
 
+  function omniGuiaNombres(items, campo) {
+    const noms = (items || []).map((x) => x[campo] || '').filter(Boolean);
+    const resto = noms.length - 2;
+    const base = noms.slice(0, 2);
+    if (!base.length) return '';
+    if (resto > 0) return base.join(', ') + ' y ' + resto + ' más';
+    if (base.length === 1) return base[0];
+    return base[0] + ' y ' + base[1];
+  }
+  function omniGuiaSeg(n, uno, varios, nombres) {
+    const base = (n === 1 ? '1 ' + uno : n + ' ' + varios);
+    return nombres ? base + ': ' + nombres : base;
+  }
   function omniGuiaPaisaje(q, rutas, ayuda, datos, terceros, notas, cuentas, tipos_doc) {
     terceros = terceros || [];
     notas = notas || [];
     cuentas = cuentas || [];
     tipos_doc = tipos_doc || [];
-    const partes = [];
-    if (rutas.length) partes.push(rutas.length + (rutas.length === 1 ? ' pantalla' : ' pantallas'));
-    if (ayuda.length && omniManualesActivo()) partes.push(ayuda.length + (ayuda.length === 1 ? ' ayuda' : ' ayudas'));
-    if (terceros.length) partes.push(terceros.length + (terceros.length === 1 ? ' tercero' : ' terceros'));
-    if (cuentas.length) partes.push(cuentas.length + (cuentas.length === 1 ? ' cuenta contable' : ' cuentas contables'));
-    if (tipos_doc.length) partes.push(tipos_doc.length + (tipos_doc.length === 1 ? ' tipo de documento' : ' tipos de documento'));
-    if (notas.length) partes.push(notas.length + (notas.length === 1 ? ' documento/concepto' : ' documentos/conceptos'));
-    let txt = 'Busqué \'' + q + '\': ';
-    if (!partes.length && !datos.length) return txt + 'no encontré nada sobre eso. Prueba con otra palabra.';
-    if (!partes.length) txt += 'no encontré pantallas ni ayudas sobre eso, ';
-    else txt += 'encontré ' + partes.join(', ') + (datos.length ? ', ' : '. ');
+    const seg = [];
+    const ayudaN = (ayuda.length && omniManualesActivo()) ? ayuda : [];
+    if (rutas.length) seg.push(omniGuiaSeg(rutas.length, 'pantalla', 'pantallas', omniGuiaNombres(rutas, 'titulo')));
+    if (ayudaN.length) seg.push(omniGuiaSeg(ayudaN.length, 'ayuda', 'ayudas', omniGuiaNombres(ayudaN, 'titulo')));
+    if (terceros.length) seg.push(omniGuiaSeg(terceros.length, 'tercero', 'terceros', omniGuiaNombres(terceros, 'nombre')));
+    if (cuentas.length) seg.push(omniGuiaSeg(cuentas.length, 'cuenta', 'cuentas',
+      omniGuiaNombres(cuentas.map((c) => ({nombre: ((c.codigo || '') + ' ' + (c.nombre || '')).trim()})), 'nombre')));
+    if (tipos_doc.length) seg.push(omniGuiaSeg(tipos_doc.length, 'tipo de documento', 'tipos de documento', omniGuiaNombres(tipos_doc, 'nombre')));
+    if (notas.length) seg.push(omniGuiaSeg(notas.length, 'documento', 'documentos', omniGuiaNombres(notas, 'origen')));
     if (datos.length) {
       const ord = datos.slice().sort((a, b) => (((b.disponible ? 1 : 0) - (a.disponible ? 1 : 0)) || ('' + (a.nombre || '')).localeCompare(b.nombre || '')));
-      txt += (partes.length ? 'y ' : 'pero sí ') + datos.length + (datos.length === 1 ? ' producto' : ' productos');
-      if (ord.length === 1) txt += ': ' + ord[0].nombre + '. ';
-      else txt += ', como ' + ord[0].nombre + ' y ' + ord[1].nombre + '. ';
-      txt += (ord.length === 1 ? 'Ahí tienes sus opciones.' : 'Escoge uno si quieres ver su información.');
-    } else if (terceros.length) {
-      txt += 'Revisa la radiografía financiera y comercial del tercero en pantalla.';
-    } else if (partes.length) {
-      txt += 'Elige una opción para ir.';
+      seg.push(omniGuiaSeg(ord.length, 'producto', 'productos', omniGuiaNombres(ord, 'nombre')));
     }
-    return txt;
+    if (!seg.length) return 'Nada con \'' + q + '\'. Prueba con otra palabra.';
+    if (seg.length === 1) return seg[0] + '.';
+    return seg.slice(0, -1).join(', ') + ' y ' + seg[seg.length - 1] + '.';
   }
   function omniPararEscucha() {
     try { if (omniRec) omniRec.stop(); } catch (e) {}

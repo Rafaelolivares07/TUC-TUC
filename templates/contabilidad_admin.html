@@ -2633,13 +2633,13 @@ async function cargarComprobantes() {
     return `
     <tr class="border-b border-gray-100 cursor-pointer transition-all ${rowClass}" onclick="toggleDetalleComprobante(this, '${encodeURIComponent(c.tipo_documento || '')}', '${encodeURIComponent(c.numero_documento || '')}', ${c.comprobante_id || 'null'})">
       <td class="px-3 py-2.5 text-gray-800 text-xs">
-        <div class="font-bold">${c.tipo}</div>
+        <div class="font-bold">${c.tipo_puro || c.tipo}</div>
         ${diffBadge}
         ${causaBadge}
       </td>
       <td class="px-3 py-2.5 font-mono text-xs text-gray-600">
         <div class="flex items-center gap-1.5">
-          <span>${c.numero_documento}</span>
+          <span>${c.numero_puro || c.numero_documento}</span>
           <a href="/auditor-documentos/${NEGOCIO_ID}?tipo_documento=${encodeURIComponent(c.tipo_documento)}&documento_numero=${encodeURIComponent(c.numero_documento)}" 
              target="_blank" 
              rel="noopener noreferrer" 

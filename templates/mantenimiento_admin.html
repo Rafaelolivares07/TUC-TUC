@@ -983,7 +983,7 @@
         const dateRaw = item.documento_fecha || (item.created_at ? item.created_at.split('T')[0] : null);
         const invDate = formatearFechaLocal(dateRaw);
         const terceroLbl = provNombre ? ` | Tercero: ${provNombre}` : '';
-        document.getElementById('aud-lbl-inv-documento').textContent = `Documento: ${tipo}-${numero}${terceroLbl} | Fecha: ${invDate}`;
+        document.getElementById('aud-lbl-inv-documento').textContent = `Documento: ${d.tipo_documento || tipo}-${d.documento_numero_puro || numero}${terceroLbl} | Fecha: ${invDate}`;
         tbodyInv.innerHTML = d.inventario.map(item => `
           <tr class="border-b">
             <td class="py-2 font-semibold text-gray-700">

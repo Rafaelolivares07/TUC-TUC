@@ -846,6 +846,7 @@
         docSeleccionado = {
           tipo: (d.tipo_documento_id || d.tipo_documento || tipo),
           numero,
+          numeroPuro: (d.documento_numero_puro || numDocPuro(numero)),
           terceroId: provId,
           terceroNombre: provNombre,
           tipo_movimiento: d.tipo_movimiento,
@@ -1014,9 +1015,9 @@
 
     async function anularDocumento() {
       if (!docSeleccionado) return;
-      const { tipo, numero, terceroId } = docSeleccionado;
+      const { tipo, numero, numeroPuro, terceroId } = docSeleccionado;
 
-      const confirmed = confirm(`¿Confirmas la anulación del documento "${numero}"?\n\nSe anularán sus movimientos de inventario y asientos de diario contable manteniendo el consecutivo fiscal.`);
+      const confirmed = confirm(`¿Confirmas la anulación del documento "${numeroPuro || numero}"?\n\nSe anularán sus movimientos de inventario y asientos de diario contable manteniendo el consecutivo fiscal.`);
       if (!confirmed) return;
 
       const btn = document.getElementById('btn-doc-anular');
@@ -1051,9 +1052,9 @@
 
     async function eliminarDocumento() {
       if (!docSeleccionado) return;
-      const { tipo, numero, terceroId } = docSeleccionado;
+      const { tipo, numero, numeroPuro, terceroId } = docSeleccionado;
 
-      const confirmed = confirm(`¿Confirmas la ELIMINACIÓN DEFINITIVA del documento "${numero}"?\n\nEsta acción borrará el registro y liberará el número para que vuelva a estar disponible.`);
+      const confirmed = confirm(`¿Confirmas la ELIMINACIÓN DEFINITIVA del documento "${numeroPuro || numero}"?\n\nEsta acción borrará el registro y liberará el número para que vuelva a estar disponible.`);
       if (!confirmed) return;
 
       const btn = document.getElementById('btn-doc-eliminar');

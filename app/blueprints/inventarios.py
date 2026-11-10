@@ -9874,6 +9874,9 @@ def api_auditar_documento(negocio_id):
                     if _cand not in num_variants:
                         num_variants.append(_cand)
         
+        tipos_cod = {tipo_documento_id: tipo_doc_codigo} if (tipo_documento_id and tipo_doc_codigo) else {}
+        num_doc_puro = _num_documento_limpio(num_doc, tipo_documento_id, tipos_cod)
+        
         # Build list of possible string representations of the invoice/consecutive
         doc_codes = list(num_variants)
         if tipo_doc_codigo:
@@ -10065,14 +10068,14 @@ def api_auditar_documento(negocio_id):
             
             comprobante = {
                 'id': comp_row['id'],
-                'numero_comprobante': comp_row['numero_comprobante'],
+                'numero_comprobante': _num_documento_limpio(comp_row['numero_comprobante'], tipo_documento_id, tipos_cod),
                 'tipo': comp_row['tipo'],
                 'fecha': comp_row['fecha'].isoformat() if comp_row['fecha'] else None,
                 'descripcion': comp_row['descripcion'],
                 'total_debitos': float(comp_row['total_debitos'] or 0),
                 'total_creditos': float(comp_row['total_creditos'] or 0),
                 'notas': comp_row['notas'],
-                'documento_fisico': num_doc
+                'documento_fisico': num_doc_puro
             }
             
             # If we don't have detailed entries but we have the comprobante list, render seats
@@ -10163,9 +10166,6 @@ def api_auditar_documento(negocio_id):
             doc_num_int = extraer_consecutivo_num(num_doc)
             if doc_num_int is not None and current_consecutivo == doc_num_int:
                 es_ultimo_consecutivo = True
-
-        tipos_cod = {tipo_documento_id: tipo_doc_codigo} if (tipo_documento_id and tipo_doc_codigo) else {}
-        num_doc_puro = _num_documento_limpio(num_doc, tipo_documento_id, tipos_cod)
                 
         return jsonify({
             'ok': True,

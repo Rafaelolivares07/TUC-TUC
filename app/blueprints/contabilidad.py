@@ -3483,6 +3483,7 @@ def api_comprobantes_get(negocio_id):
     if not session.get('usuario_id'):
         return jsonify({'ok': False, 'error': 'No autorizado'}), 403
     from ..db import get_db_connection
+    from .inventarios import _num_documento_limpio, _nombre_tipo_doc
     try:
         conn = get_db_connection()
         fecha_desde = request.args.get('desde')
@@ -3603,11 +3604,17 @@ def api_comprobantes_get(negocio_id):
         if solo_descuadrados and sort_col == 'fecha':
             order_clause = "ORDER BY diferencia DESC, MAX(mc.fecha) DESC, MAX(mc.created_at) DESC"
 
+        _td_rows = conn.execute("SELECT id, codigo, nombre FROM tipos_documento_negocio WHERE negocio_id = %s", (negocio_id,)).fetchall()
+        _td_nom = {r['id']: r['nombre'] for r in _td_rows}
+        _td_por_cod = {str(r['codigo']).lower(): r['nombre'] for r in _td_rows if r['codigo']}
+        _td_por_nom = {str(r['nombre']).lower(): r['nombre'] for r in _td_rows if r['nombre']}
+
         query_params = params + [limit, offset]
         rows = conn.execute(f"""
             SELECT 
                 mc.comprobante_id,
                 COALESCE(MAX(mc.tipo_documento_id), MAX(td.id), 0) AS tipo_documento_id,
+                MAX(td.codigo) AS td_codigo,
                 COALESCE(MAX(td.nombre), MAX(mc.tipo_documento), 'COMPROBANTE') AS tipo_documento,
                 COALESCE(MAX(td.nombre), MAX(mc.tipo_documento), 'COMPROBANTE') AS tipo,
                 MAX(mc.numero_documento) AS numero_documento,
@@ -3648,6 +3655,10 @@ def api_comprobantes_get(negocio_id):
             if float(d.get('diferencia') or 0) > 0.01:
                 d['causa'] = _diagnosticar_causa_descuadre(
                     conn, negocio_id, d['tipo_documento'], str(d['numero_documento']))
+            _codmap = {d.get('tipo_documento_id'): d.get('td_codigo')} if d.get('tipo_documento_id') else {}
+            d['tipo_puro'] = _nombre_tipo_doc(d.get('tipo_documento_id'), d.get('tipo_documento'), _td_nom, _td_por_cod, _td_por_nom, por_defecto=d.get('tipo_documento'))
+            d['numero_puro'] = _num_documento_limpio(d.get('numero_documento'), d.get('tipo_documento_id'), _codmap)
+            d['numero_comprobante'] = _num_documento_limpio(d.get('numero_comprobante'), None, {})
             comprobantes.append(d)
             
         conn.close()
@@ -5464,6 +5475,12 @@ def api_reporte_movimientos(negocio_id):
         if cuenta_id and tercero_id:
             agrupar = 'sin_agrupar'
 
+        # Nombres puros para mostrar (el slug solo localiza).
+        from .inventarios import _num_documento_limpio, _nombre_tipo_doc
+        _td_rows = conn.execute("SELECT id, codigo, nombre FROM tipos_documento_negocio WHERE negocio_id = %s", (negocio_id,)).fetchall()
+        _td_por_cod = {str(r['codigo']).lower(): r['nombre'] for r in _td_rows if r['codigo']}
+        _td_por_nom = {str(r['nombre']).lower(): r['nombre'] for r in _td_rows if r['nombre']}
+
         blocks = []
 
         if agrupar == 'sin_agrupar':
@@ -5530,8 +5547,8 @@ def api_reporte_movimientos(negocio_id):
                 lineas.append({
                     'id': r['id'],
                     'fecha': r['fecha'].strftime('%Y-%m-%d') if r['fecha'] else '',
-                    'numero_comprobante': r['numero_comprobante'],
-                    'tipo_comprobante': r['tipo_comprobante'],
+                    'numero_comprobante': _num_documento_limpio(r['numero_comprobante'], None, {}),
+                    'tipo_comprobante': (_nombre_tipo_doc(None, r['tipo_comprobante'], {}, _td_por_cod, _td_por_nom) if r['tipo_comprobante'] else r['tipo_comprobante']),
                     'cuenta_id': r['cuenta_id'],
                     'cuenta_codigo': r['cuenta_codigo'],
                     'cuenta_nombre': r['cuenta_nombre'],
@@ -5647,8 +5664,8 @@ def api_reporte_movimientos(negocio_id):
                     lineas.append({
                         'id': r['id'],
                         'fecha': r['fecha'].strftime('%Y-%m-%d') if r['fecha'] else '',
-                        'numero_comprobante': r['numero_comprobante'],
-                        'tipo_comprobante': r['tipo_comprobante'],
+                        'numero_comprobante': _num_documento_limpio(r['numero_comprobante'], None, {}),
+                        'tipo_comprobante': (_nombre_tipo_doc(None, r['tipo_comprobante'], {}, _td_por_cod, _td_por_nom) if r['tipo_comprobante'] else r['tipo_comprobante']),
                         'tercero_id': r['tercero_id'],
                         'tercero_nombre': r['tercero_nombre'] or 'Tercero Ocasional',
                         'concepto': r['concepto'],
@@ -5765,8 +5782,8 @@ def api_reporte_movimientos(negocio_id):
                     lineas.append({
                         'id': r['id'],
                         'fecha': r['fecha'].strftime('%Y-%m-%d') if r['fecha'] else '',
-                        'numero_comprobante': r['numero_comprobante'],
-                        'tipo_comprobante': r['tipo_comprobante'],
+                        'numero_comprobante': _num_documento_limpio(r['numero_comprobante'], None, {}),
+                        'tipo_comprobante': (_nombre_tipo_doc(None, r['tipo_comprobante'], {}, _td_por_cod, _td_por_nom) if r['tipo_comprobante'] else r['tipo_comprobante']),
                         'cuenta_id': r['cuenta_id'],
                         'cuenta_codigo': r['cuenta_codigo'],
                         'cuenta_nombre': r['cuenta_nombre'],

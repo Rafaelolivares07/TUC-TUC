@@ -6,22 +6,22 @@ param(
 
 if (-not (Test-Path $mp3)) { exit 0 }
 
-$lockDir = Join-Path $env:TEMP "tuctuc_voz_playing.lock"
-$staleSec = 600
 $gapSec = 15
-while (Test-Path $lockDir) {
-    try {
-        $edad = ((Get-Date) - (Get-Item $lockDir).LastWriteTime).TotalSeconds
-        if ($edad -gt $staleSec) {
-            Remove-Item -Path $lockDir -Force -Recurse -ErrorAction SilentlyContinue
-            break
-        }
-    } catch { }
-    Start-Sleep -Milliseconds 250
-}
+$mutexName = 'Local\TucTucVoz'
+# Higiene: candado de directorio de la versión vieja (tenía carrera, ya no se usa)
+Remove-Item -Path (Join-Path $env:TEMP "tuctuc_voz_playing.lock") -Force -Recurse -ErrorAction SilentlyContinue
 
-# Marcar inicio de turno de audio
-New-Item -ItemType Directory -Path $lockDir -Force -ErrorAction SilentlyContinue | Out-Null
+# Turno de audio entre terminales: mutex de sesión (atómico; se libera solo si muere el dueño)
+$mutex = [System.Threading.Mutex]::new($false, $mutexName)
+$adquirido = $false
+try {
+    $adquirido = $mutex.WaitOne(300000)
+} catch [System.Threading.AbandonedMutexException] {
+    $adquirido = $true
+}
+if (-not $adquirido) {
+    Write-Warning "muse_voz: turno de audio ocupado 5 min, reproduzco de todos modos"
+}
 
 try {
     $played = $false
@@ -65,7 +65,10 @@ try {
     }
     Start-Sleep -Seconds $gapSec
 } finally {
-    Remove-Item -Path $lockDir -Force -Recurse -ErrorAction SilentlyContinue
+    if ($adquirido) {
+        try { $mutex.ReleaseMutex() } catch { }
+    }
+    try { $mutex.Dispose() } catch { }
     if ($deleteAfter -and (Test-Path $mp3)) {
         Remove-Item $mp3 -Force -ErrorAction SilentlyContinue
     }

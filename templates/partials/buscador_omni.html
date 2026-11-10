@@ -1,6 +1,27 @@
 {# templates/partials/buscador_omni.html #}
 {# Buscador Corporativo Global (Omnibox / Spotlight) para TUC TUC V2 #}
 
+<style>
+  /* Mic escuchando: verde grisáceo suave + ondas (10/11) */
+  #omni-mic { position: relative; }
+  #omni-mic.escuchando { color: #5d8a6b; background-color: #e9f3ec; }
+  #omni-mic.escuchando:hover { color: #5d8a6b; background-color: #e9f3ec; }
+  #omni-mic.escuchando::before,
+  #omni-mic.escuchando::after {
+    content: ''; position: absolute; inset: -3px; border-radius: 9999px;
+    border: 2px solid rgba(93, 138, 107, .5); pointer-events: none;
+    animation: omni-onda 1.6s ease-out infinite;
+  }
+  #omni-mic.escuchando::after { animation-delay: .8s; }
+  @keyframes omni-onda {
+    0% { transform: scale(.75); opacity: .8; }
+    100% { transform: scale(1.4); opacity: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #omni-mic.escuchando::before, #omni-mic.escuchando::after { animation: none; opacity: 0; }
+  }
+</style>
+
 <div id="omni-search-wrapper" class="omni-search-container relative flex-1 w-full max-w-xl mx-2 sm:mx-4 select-none">
   <!-- Barra de entrada corporativa unificada (Clase única) -->
   <div class="relative flex items-center h-10 sm:h-11 w-full bg-slate-100/90 hover:bg-slate-200/60 focus-within:bg-white focus-within:ring-2 focus-within:ring-indigo-500/20 rounded-xl px-3 sm:px-4 transition-all duration-150 shadow-2xs">
@@ -151,7 +172,7 @@
     try {
       if (!micBtn) return;
       micBtn.classList.toggle('opacity-30', !omniMicOn());
-      micBtn.classList.toggle('text-red-500', omniEscuchando);
+      micBtn.classList.toggle('escuchando', omniEscuchando);
       micBtn.classList.toggle('text-slate-400', !omniEscuchando);
     } catch (e) {}
   }

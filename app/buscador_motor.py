@@ -13,6 +13,14 @@ def quitar_tildes(texto):
     texto_str = str(texto)
     return ''.join(c for c in unicodedata.normalize('NFD', texto_str) if unicodedata.category(c) != 'Mn').lower().strip()
 
+_TILDES_DE = 'áéíóúüñàèìòùâêîôûäëïöçãõ'
+_TILDES_A = 'aeiouunaeiouaeiouaeiocao'
+
+
+def _col_plano(col_sql):
+    """Expresion SQL sin tildes ni mayusculas (pareja SQL de quitar_tildes)."""
+    return "translate(LOWER(%s), '%s', '%s')" % (col_sql, _TILDES_DE, _TILDES_A)
+
 def slugify(text):
     text = quitar_tildes(text)
     text = re.sub(r'[^\w\s-]', '', text)
@@ -365,7 +373,7 @@ def buscar_omni(q, negocio_id=None, slug=None, otorgados=None, filas=None, manua
             score += 50
         elif q_norm in mod_norm:
             score += 30
-        elif any(q_norm in k.lower() for k in item['keywords']):
+        elif any(q_norm in quitar_tildes(k).lower() for k in item['keywords']):
             score += 25
         elif all(t in full_text for t in tokens):
             score += 15
@@ -458,7 +466,10 @@ def buscar_datos_producto(conn, q, negocio_id, slug=None, limite=20):
         nid = int(negocio_id)
     except (TypeError, ValueError):
         return []
-    like = '%' + q_limpio + '%'
+    q_plano = quitar_tildes(q_limpio)
+    like = '%' + q_plano + '%'
+    _np = _col_plano('p.nombre')
+    _bp = _col_plano("COALESCE(p.codigo_barra, '')")
     try:
         rows = conn.execute(
             """SELECT p.id, p.nombre, p.precio, p.costo, p.codigo_barra, p.disponible,
@@ -470,19 +481,19 @@ def buscar_datos_producto(conn, q, negocio_id, slug=None, limite=20):
                                 WHERE s.negocio_id = p.negocio_id AND s.producto_id = p.id), 0) AS stock
                FROM productos p LEFT JOIN unidades_medida um ON um.id = p.unidad_medida_id
                WHERE p.negocio_id = %s
-                 AND (p.nombre ILIKE %s OR COALESCE(p.codigo_barra, '') ILIKE %s)
-               ORDER BY p.disponible DESC, (LOWER(p.nombre) = LOWER(%s)) DESC, p.nombre
+                 AND (""" + _np + """ ILIKE %s OR """ + _bp + """ ILIKE %s)
+               ORDER BY p.disponible DESC, (""" + _np + """ = %s) DESC, p.nombre
                LIMIT 20""",
-            (nid, like, like, q_limpio)).fetchall()
+            (nid, like, like, q_plano)).fetchall()
     except Exception:
         return []
     if not rows:
         return []
-    _ql = q_limpio.lower()
+    _ql = q_plano
     try:
         rows = sorted(rows, key=lambda _r: (not bool(_r.get('disponible')),
-                                            ((_r.get('nombre') or '').lower() != _ql),
-                                            (_r.get('nombre') or '').lower()))
+                                            (quitar_tildes(_r.get('nombre') or '') != _ql),
+                                            quitar_tildes(_r.get('nombre') or '')))
     except Exception:
         pass
     ids = [r['id'] for r in rows]
@@ -719,31 +730,36 @@ def buscar_datos_terceros(conn, q, negocio_id, slug=None, limite=5):
     except (TypeError, ValueError):
         nid = None
     
-    like = f"%{q_limpio}%"
+    q_plano = quitar_tildes(q_limpio)
+    like = f"%{q_plano}%"
+    _nt = _col_plano('t.nombre')
+    _dt = _col_plano("COALESCE(t.documento, '')")
+    _tt = _col_plano("COALESCE(t.telefono, '')")
+    _nc = _col_plano('nombre_cliente')
     rows = []
     try:
         if nid:
             rows = conn.execute("""
                 SELECT t.id, t.nombre, t.documento, t.telefono, t.direccion, t.tipo_tercero, t.contacto
                 FROM terceros t
-                WHERE (t.nombre ILIKE %s OR COALESCE(t.documento, '') ILIKE %s OR COALESCE(t.telefono, '') ILIKE %s)
+                WHERE (""" + _nt + """ ILIKE %s OR """ + _dt + """ ILIKE %s OR """ + _tt + """ ILIKE %s)
                   AND (EXISTS (SELECT 1 FROM terceros_negocios tn WHERE tn.tercero_id = t.id AND tn.negocio_id = %s)
                        OR EXISTS (SELECT 1 FROM movimientos_contables mc WHERE mc.tercero_id = t.id AND mc.negocio_id = %s)
                        OR EXISTS (SELECT 1 FROM saldo_por_documentos spd WHERE spd.tercero_id = t.id AND spd.negocio_id = %s)
                        OR EXISTS (SELECT 1 FROM pedidos ped WHERE (ped.id_tercero = t.id OR ped.cliente_id = t.id) AND ped.negocio_id = %s)
                        OR t.tipo_tercero = 'admin')
-                ORDER BY (LOWER(t.nombre) = LOWER(%s)) DESC, t.nombre ASC
+                ORDER BY (""" + _nt + """ = %s) DESC, t.nombre ASC
                 LIMIT %s
-            """, (like, like, like, nid, nid, nid, nid, q_limpio, limite)).fetchall()
+            """, (like, like, like, nid, nid, nid, nid, q_plano, limite)).fetchall()
         
         if not rows:
             rows = conn.execute("""
                 SELECT t.id, t.nombre, t.documento, t.telefono, t.direccion, t.tipo_tercero, t.contacto
                 FROM terceros t
-                WHERE (t.nombre ILIKE %s OR COALESCE(t.documento, '') ILIKE %s OR COALESCE(t.telefono, '') ILIKE %s)
-                ORDER BY (LOWER(t.nombre) = LOWER(%s)) DESC, t.nombre ASC
+                WHERE (""" + _nt + """ ILIKE %s OR """ + _dt + """ ILIKE %s OR """ + _tt + """ ILIKE %s)
+                ORDER BY (""" + _nt + """ = %s) DESC, t.nombre ASC
                 LIMIT %s
-            """, (like, like, like, q_limpio, limite)).fetchall()
+            """, (like, like, like, q_plano, limite)).fetchall()
     except Exception:
         rows = []
 
@@ -895,11 +911,11 @@ def buscar_datos_terceros(conn, q, negocio_id, slug=None, limite=5):
             sql_p = """
                 SELECT id, total, estado, TO_CHAR(created_at, 'YYYY-MM-DD') AS fecha, notas
                 FROM pedidos
-                WHERE (id_tercero = %s OR cliente_id = %s OR nombre_cliente ILIKE %s)
+                WHERE (id_tercero = %s OR cliente_id = %s OR """ + _nc + """ ILIKE %s)
                   AND (numero_documento IS NULL OR TRIM(numero_documento) = '')
                   AND LOWER(COALESCE(estado, '')) NOT IN ('facturado', 'completado', 'entregado', 'finalizado', 'anulado', 'pagado')
             """
-            p_p = [tid, tid, t_nombre]
+            p_p = [tid, tid, quitar_tildes(t_nombre)]
             if nid:
                 sql_p += " AND negocio_id = %s"
                 p_p.append(nid)
@@ -935,8 +951,8 @@ def buscar_datos_terceros(conn, q, negocio_id, slug=None, limite=5):
                     'nota': nd['notas']
                 })
 
-            sql_nt2 = "SELECT id AS origen, notas, estado FROM pedidos WHERE (id_tercero = %s OR cliente_id = %s OR nombre_cliente ILIKE %s) AND notas IS NOT NULL AND TRIM(notas) <> ''"
-            p_nt2 = [tid, tid, t_nombre]
+            sql_nt2 = "SELECT id AS origen, notas, estado FROM pedidos WHERE (id_tercero = %s OR cliente_id = %s OR " + _nc + " ILIKE %s) AND notas IS NOT NULL AND TRIM(notas) <> ''"
+            p_nt2 = [tid, tid, quitar_tildes(t_nombre)]
             if nid:
                 sql_nt2 += " AND negocio_id = %s"
                 p_nt2.append(nid)
@@ -1080,7 +1096,10 @@ def buscar_datos_notas(conn, q, negocio_id, limite=10):
     except (TypeError, ValueError):
         nid = None
     
-    like = f"%{q_limpio}%"
+    q_plano = quitar_tildes(q_limpio)
+    like = f"%{q_plano}%"
+    _nn = _col_plano('notas')
+    _mc = _col_plano('mc.concepto')
     notas_out = []
 
     # 1. Comprobantes contables / Desembolsos / Tesoreria
@@ -1091,7 +1110,7 @@ def buscar_datos_notas(conn, q, negocio_id, limite=10):
                    descripcion, notas, total_debitos
             FROM comprobantes_contables
             WHERE notas IS NOT NULL AND TRIM(notas) <> ''
-              AND notas ILIKE %s
+              AND """ + _nn + """ ILIKE %s
               AND LOWER(TRIM(notas)) NOT IN ('factura_de_venta', 'factura de venta', 'asiento', 'comprobante', 'automatico')
         """
         p_comp = [like]
@@ -1139,7 +1158,7 @@ def buscar_datos_notas(conn, q, negocio_id, limite=10):
             SELECT id, numero_documento, tipo_documento, TO_CHAR(COALESCE(fecha_hora, created_at), 'YYYY-MM-DD') AS fecha,
                    saldo, monto_original, notas
             FROM saldo_por_documentos
-            WHERE notas ILIKE %s
+            WHERE """ + _nn + """ ILIKE %s
         """
         p_doc = [like]
         if nid:
@@ -1170,7 +1189,7 @@ def buscar_datos_notas(conn, q, negocio_id, limite=10):
             SELECT id, nombre_cliente, estado, TO_CHAR(created_at, 'YYYY-MM-DD') AS fecha,
                    total, notas
             FROM pedidos
-            WHERE notas ILIKE %s
+            WHERE """ + _nn + """ ILIKE %s
         """
         p_ped = [like]
         if nid:
@@ -1207,7 +1226,7 @@ def buscar_datos_notas(conn, q, negocio_id, limite=10):
                 SUM(CASE WHEN mc.tipo = 'debito' THEN mc.monto ELSE 0 END) AS total_monto
             FROM movimientos_contables mc
             LEFT JOIN terceros t ON t.id = mc.tercero_id
-            WHERE mc.concepto ILIKE %s
+            WHERE """ + _mc + """ ILIKE %s
         """
         p_movs = [like]
         if nid:
@@ -1257,15 +1276,18 @@ def buscar_datos_cuentas_puc(conn, q, negocio_id, limite=5):
     except (TypeError, ValueError):
         nid = None
     
-    like = f"%{q_limpio}%"
+    q_plano = quitar_tildes(q_limpio)
+    like = f"%{q_plano}%"
+    _cc = _col_plano('c.codigo')
+    _cn = _col_plano('c.nombre')
     try:
         rows = conn.execute("""
             SELECT c.id, c.codigo, c.nombre, c.naturaleza, c.nivel
             FROM cuentas_puc c
-            WHERE (c.codigo ILIKE %s OR c.nombre ILIKE %s) AND c.activo = true
-            ORDER BY (LOWER(c.codigo) = LOWER(%s) OR LOWER(c.nombre) = LOWER(%s)) DESC, c.codigo ASC
+            WHERE (""" + _cc + """ ILIKE %s OR """ + _cn + """ ILIKE %s) AND c.activo = true
+            ORDER BY (""" + _cc + """ = %s OR """ + _cn + """ = %s) DESC, c.codigo ASC
             LIMIT %s
-        """, (like, like, q_limpio, q_limpio, limite)).fetchall()
+        """, (like, like, q_plano, q_plano, limite)).fetchall()
     except Exception:
         return []
 
@@ -1349,19 +1371,22 @@ def buscar_datos_tipos_doc(conn, q, negocio_id, limite=5):
     except (TypeError, ValueError):
         nid = None
     
-    like = f"%{q_limpio}%"
+    q_plano = quitar_tildes(q_limpio)
+    like = f"%{q_plano}%"
+    _tc = _col_plano('codigo')
+    _tn = _col_plano('nombre')
     try:
         sql = """
             SELECT id, codigo, nombre, tipo_movimiento, mueve_inventario, consecutivo, numero_inicio
             FROM tipos_documento_negocio
-            WHERE activo = true AND (codigo ILIKE %s OR nombre ILIKE %s)
+            WHERE activo = true AND (""" + _tc + """ ILIKE %s OR """ + _tn + """ ILIKE %s)
         """
         params = [like, like]
         if nid:
             sql += " AND negocio_id = %s"
             params.append(nid)
-        sql += " ORDER BY (LOWER(codigo) = LOWER(%s) OR LOWER(nombre) = LOWER(%s)) DESC, nombre ASC LIMIT %s"
-        params.extend([q_limpio, q_limpio, limite])
+        sql += " ORDER BY (" + _tc + " = %s OR " + _tn + " = %s) DESC, nombre ASC LIMIT %s"
+        params.extend([q_plano, q_plano, limite])
         
         rows = conn.execute(sql, tuple(params)).fetchall()
         tipos_out = []

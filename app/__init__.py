@@ -1,8 +1,24 @@
+import json
 import os
-from flask import Flask, request
+from flask import Flask, redirect, request
 from .config import Config
 from .db import init_db
 
+
+
+def _resolver_static_cloud(path, static_dir, mapa):
+    """URL Cloudinary para uploads/ ausentes en local, o None."""
+    if not path.startswith('uploads/'):
+        return None
+    nombre = path[len('uploads/'):]
+    if not nombre or '/' in nombre or chr(92) in nombre or nombre in ('.', '..'):
+        return None
+    if os.path.isfile(os.path.join(static_dir, path)):
+        return None
+    ent = mapa.get(nombre)
+    if isinstance(ent, dict):
+        ent = ent.get('url')
+    return ent or None
 
 
 def create_app():
@@ -337,5 +353,22 @@ def create_app():
         return dict(
             APP_VERSION="v2.4.2"
         )
+
+    # Static uploads -> Cloudinary cuando el local ya no existe (fase 2 disco)
+    _orig_static = app.view_functions.get('static')
+    try:
+        with open(os.path.join(os.path.dirname(__file__), 'uploads_cloud_map.json'), encoding='utf-8') as _f:
+            _mapa_cloud = json.load(_f)
+    except Exception:
+        _mapa_cloud = {}
+    if _orig_static is not None and _mapa_cloud:
+        def _static_con_cloud(path):
+            _url = _resolver_static_cloud(path, static_dir, _mapa_cloud)
+            if _url:
+                _r = redirect(_url, 301)
+                _r.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
+                return _r
+            return _orig_static(path)
+        app.view_functions['static'] = _static_con_cloud
 
     return app

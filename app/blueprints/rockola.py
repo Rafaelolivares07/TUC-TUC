@@ -2499,6 +2499,60 @@ def _titulo_youtube(url):
         return 'Video de YouTube'
 
 
+def _canon_youtube(url):
+    """Video ID canonico ('yt:ID') o None si no es URL YouTube."""
+    import urllib.parse
+    try:
+        u = (url or '').strip()
+        if not u:
+            return None
+        h = u if '://' in u else 'https://' + u
+        pa = urllib.parse.urlparse(h)
+        host = (pa.netloc or '').lower().replace('www.', '')
+        if host == 'youtu.be':
+            vid = pa.path.strip('/').split('/')[0].split('?')[0].strip()
+            return 'yt:' + vid if vid else None
+        if host in ('youtube.com', 'm.youtube.com', 'music.youtube.com', 'youtube-nocookie.com'):
+            q = urllib.parse.parse_qs(pa.query)
+            if q.get('v') and q['v'][0].strip():
+                return 'yt:' + q['v'][0].strip()[:32]
+            for pref in ('/shorts/', '/embed/', '/live/', '/v/'):
+                if pa.path.startswith(pref):
+                    vid = pa.path[len(pref):].split('/')[0].split('?')[0].strip()
+                    return 'yt:' + vid if vid else None
+    except Exception:
+        pass
+    return None
+
+
+def _buscar_descarga_existente(sala_id, upload_dir, canon, excluir_id):
+    """Archivo ya descargado del mismo video en la sala, o None."""
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            """
+            SELECT archivo_id, youtube_url FROM rockola_biblioteca
+            WHERE sala_id = %s AND youtube_url IS NOT NULL AND youtube_url <> ''
+            ORDER BY creado_en DESC LIMIT 500
+            """,
+            (sala_id,),
+        ).fetchall()
+    finally:
+        conn.close()
+    for r in rows:
+        aid = r['archivo_id']
+        if not aid or aid == excluir_id:
+            continue
+        if _canon_youtube(r['youtube_url']) != canon:
+            continue
+        for cand in (aid, aid + '.mp3', aid + '.m4a', aid + '.webm'):
+            if '/' in cand or chr(92) in cand:
+                continue
+            if os.path.isfile(os.path.join(upload_dir, cand)):
+                return cand
+    return None
+
+
 @bp.route('/<sala_id>/resolver', methods=['POST'])
 def resolver(sala_id):
     data = request.get_json(silent=True) or {}
@@ -2532,6 +2586,13 @@ def resolver(sala_id):
 
     if not target_url:
         return jsonify(ok=False, error='Sin audio disponible para este item'), 404
+
+    # Dedup: el mismo video ya descargado se reusa, no se baja otra vez
+    canon = _canon_youtube(target_url)
+    if canon:
+        ya = _buscar_descarga_existente(sala_id, upload_dir, canon, item_id)
+        if ya:
+            return jsonify(ok=True, url=f'/rockola/{sala_id}/archivo/{ya}', cache=True)
 
     destino = os.path.join(upload_dir, item_id + '.mp3')
     try:

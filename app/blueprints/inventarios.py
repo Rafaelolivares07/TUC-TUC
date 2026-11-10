@@ -16,10 +16,13 @@ try:
     from .contabilidad import _ejecutar_asiento_automatico as _asiento_auto
     from .contabilidad import obtener_siguiente_consecutivo
     from .contabilidad import _verificar_periodo_cerrado
+    from .contabilidad import _aplicar_politica_categoria
 except ImportError:
     _asiento_costo_mov = None
     _asiento_produccion = None
     _asiento_auto = None
+    def _aplicar_politica_categoria(*args, **kwargs):
+        return {'ok': True, 'advertencias': ['politica de grupos no disponible']}
     def obtener_siguiente_consecutivo(*args, **kwargs):
         return None, True
     def _verificar_periodo_cerrado(*args, **kwargs):
@@ -2473,7 +2476,15 @@ def api_inventario_producto_crear():
         )).fetchone()
         _sync_precio(conn, int(negocio_id), row[0])
         conn.commit()
-        return jsonify({'ok': True, 'id': row[0]})
+        grupo_auto = None
+        try:
+            grupo_auto = _aplicar_politica_categoria(conn, int(negocio_id), data.get('categoria'))
+            conn.commit()
+        except Exception as _e:
+            try: conn.rollback()
+            except Exception: pass
+            grupo_auto = {'ok': True, 'advertencias': [f"No se pudo autocrear el grupo: {_e}"]}
+        return jsonify({'ok': True, 'id': row[0], 'grupo_auto': grupo_auto})
     except Exception as e:
         conn.rollback()
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -4936,7 +4947,7 @@ def _ejecutar_reparacion_sin_descarga(conn, negocio_id, pedido_id, producto_id, 
                               (negocio_id, padre['categoria'])).fetchone()
             cod61 = gi['cod'] if gi and gi['cod'] else None
         if not cod61:
-            r61 = conn.execute("SELECT codigo FROM cuentas_puc WHERE (creada_por_negocio_id = %s OR creada_por_negocio_id IS NULL) AND codigo LIKE '61%%' ORDER BY codigo ASC LIMIT 1", (negocio_id,)).fetchone()
+            r61 = conn.execute("SELECT codigo FROM cuentas_puc WHERE (creada_por_negocio_id = %s OR creada_por_negocio_id IS NULL) AND codigo LIKE '61%%' AND acepta_movimiento IS TRUE AND LENGTH(codigo) >= 6 ORDER BY codigo ASC LIMIT 1", (negocio_id,)).fetchone()
             cod61 = r61['codigo'] if r61 else '614005'
         id61 = conn.execute("SELECT id FROM cuentas_puc WHERE codigo = %s LIMIT 1", (cod61,)).fetchone()
         ins = conn.execute("""
@@ -6565,7 +6576,7 @@ def _reparar_venta(conn, negocio_id, prod_padre_id, numero_doc, td_codigo_map):
         if not cuenta_61_cod:
             rp_61 = conn.execute("""
                 SELECT codigo FROM cuentas_puc 
-                WHERE (creada_por_negocio_id = %s OR creada_por_negocio_id IS NULL) AND codigo LIKE '61%%'
+                WHERE (creada_por_negocio_id = %s OR creada_por_negocio_id IS NULL) AND codigo LIKE '61%%' AND acepta_movimiento IS TRUE AND LENGTH(codigo) >= 6
                 ORDER BY codigo ASC LIMIT 1
             """, (negocio_id,)).fetchone()
             cuenta_61_cod = rp_61['codigo'] if rp_61 else '614005'
@@ -6786,7 +6797,15 @@ def api_inventario_producto_editar(producto_id):
             producto_id,
         ))
         conn.commit()
-        return jsonify({'ok': True})
+        grupo_auto = None
+        try:
+            grupo_auto = _aplicar_politica_categoria(conn, int(negocio_id), data.get('categoria'))
+            conn.commit()
+        except Exception as _e:
+            try: conn.rollback()
+            except Exception: pass
+            grupo_auto = {'ok': True, 'advertencias': [f"No se pudo autocrear el grupo: {_e}"]}
+        return jsonify({'ok': True, 'grupo_auto': grupo_auto})
     except Exception as e:
         conn.rollback()
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -9307,7 +9326,8 @@ def api_mantenimiento_documentos_tercero(negocio_id, tercero_id):
         rows_cta = conn.execute("""
             SELECT mc.tipo_documento, mc.numero_documento,
                    TO_CHAR(MAX(mc.fecha), 'YYYY-MM-DD') AS fecha,
-                   SUM(mc.monto) AS total,
+                   SUM(CASE WHEN mc.tipo IN ('debito', 'D') THEN mc.monto ELSE 0 END) AS total_debitos,
+                   SUM(CASE WHEN mc.tipo IN ('credito', 'C') THEN mc.monto ELSE 0 END) AS total_creditos,
                    MIN(sd.saldo) AS saldo_pendiente
             FROM movimientos_contables mc
             LEFT JOIN saldo_por_documentos sd ON sd.negocio_id = mc.negocio_id
@@ -9333,7 +9353,9 @@ def api_mantenimiento_documentos_tercero(negocio_id, tercero_id):
                 'documento_numero_completo': doc_num,
                 'fecha': r['fecha'],
                 'origen': 'contable',
-                'total': float(r['total'] or 0),
+                'total': float(r['total_debitos'] or 0),
+                'total_debitos': float(r['total_debitos'] or 0),
+                'total_creditos': float(r['total_creditos'] or 0),
                 'saldo_pendiente': float(r['saldo_pendiente']) if r['saldo_pendiente'] is not None else None
             }
         # Sort combined documents naturally by date and numeric consecutive descending

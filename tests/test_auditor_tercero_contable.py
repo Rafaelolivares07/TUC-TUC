@@ -25,6 +25,7 @@ def check(nombre, cond, extra=''):
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PY = open(os.path.join(ROOT, 'app', 'blueprints', 'inventarios.py'), encoding='utf-8').read()
+TPL = open(os.path.join(ROOT, 'templates', 'auditor_documentos.html'), encoding='utf-8').read()
 
 _ini = PY.find('def api_mantenimiento_documentos_tercero(')
 _fin = PY.find('\ndef ', _ini + 10)
@@ -48,6 +49,14 @@ check('fila: numero puro', '_num_documento_limpio(' in FN and FN.rfind('_num_doc
 # 3. No pisa capas previas (dedupe por misma llave)
 _ded = FN.split("'origen': 'contable'", 1)[0][-600:] if "'origen': 'contable'" in FN else ''
 check('dedupe: respeta consolidado previo', 'if key in consolidated:' in _ded and 'continue' in _ded)
+
+# 3b. Contables: debitos y creditos separados (caso Rafa 10/11: el total unico sumaba ambas puntas)
+check('sql: total_debitos por lado', 'AS total_debitos' in FN and "WHEN mc.tipo IN ('debito', 'D')" in FN)
+check('sql: total_creditos por lado', 'AS total_creditos' in FN and "WHEN mc.tipo IN ('credito', 'C')" in FN)
+check('sql: ya no suma puntas', 'SUM(mc.monto) AS total' not in FN)
+check('fila: total_debitos', "'total_debitos': float" in _seg)
+check('fila: total_creditos', "'total_creditos': float" in _seg)
+check('tabla: pinta D/C en contables', "doc.origen === 'contable'" in TPL and 'doc.total_debitos' in TPL and 'doc.total_creditos' in TPL)
 
 # 4. Saldo desde saldos por documento (misma JOIN que inventario)
 check('saldo: join saldo_por_documentos', FN.count('saldo_por_documentos') >= 3)

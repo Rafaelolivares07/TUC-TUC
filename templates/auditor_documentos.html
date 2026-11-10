@@ -716,9 +716,13 @@
         const docTerceroNom = doc.tercero_nombre || appState.terceroNombre || 'General';
         const docTerceroId = doc.tercero_id || appState.terceroId || '';
 
-        // Monto
+        // Monto (contables: debitos y creditos por separado, el total unico mezclaba puntas)
         const totalVal = doc.monto_total || doc.total || doc.total_contable || doc.total_inventario || doc.total_pedidos || 0;
-        const totalStr = totalVal ? '$' + totalVal.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '—';
+        let totalStr = totalVal ? '$' + totalVal.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '—';
+        if (doc.origen === 'contable' && (doc.total_debitos !== undefined || doc.total_creditos !== undefined)) {
+          const fmtDC = v => (v !== null && v !== undefined) ? '$' + Number(v).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '—';
+          totalStr = '<span class="block">D ' + fmtDC(doc.total_debitos) + '</span><span class="block">C ' + fmtDC(doc.total_creditos) + '</span>';
+        }
 
         // Saldo
         const saldoVal = doc.saldo_pendiente !== undefined && doc.saldo_pendiente !== null ? doc.saldo_pendiente : null;

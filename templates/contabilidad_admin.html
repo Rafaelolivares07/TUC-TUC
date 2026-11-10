@@ -477,8 +477,7 @@
         <table class="w-full text-sm border-collapse bg-white">
           <thead>
             <tr class="bg-gray-50 text-[10px] uppercase text-gray-500 sticky top-0 z-10 shadow-xs border-b border-gray-150">
-              <th onclick="ordenarComprobantes('tipo')" class="px-3 py-2 cursor-pointer hover:bg-gray-150/50 select-none transition text-left">Tipo <span id="sort-icon-tipo">↕</span></th>
-              <th onclick="ordenarComprobantes('numero')" class="px-3 py-2 cursor-pointer hover:bg-gray-150/50 select-none transition text-left">Número <span id="sort-icon-numero">↕</span></th>
+              <th onclick="ordenarComprobantes('documento')" class="px-3 py-2 cursor-pointer hover:bg-gray-150/50 select-none transition text-left">Documento <span id="sort-icon-documento">↕</span></th>
               <th class="px-3 py-2 text-left">Centro</th>
               <th onclick="ordenarComprobantes('fecha')" class="px-3 py-2 cursor-pointer hover:bg-gray-150/50 select-none transition text-left">Fecha <span id="sort-icon-fecha">↕</span></th>
               <th onclick="ordenarComprobantes('tercero')" class="px-3 py-2 cursor-pointer hover:bg-gray-150/50 select-none transition text-left">Tercero <span id="sort-icon-tercero">↕</span></th>
@@ -2612,7 +2611,7 @@ async function cargarComprobantes() {
   // Render Rows
   const tbody = document.getElementById('comps-body');
   if (!data.comprobantes || data.comprobantes.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="10" class="text-center text-gray-400 py-4 text-sm">Sin comprobantes.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="text-center text-gray-400 py-4 text-sm">Sin comprobantes.</td></tr>';
     actualizarPaginacionUI(0, 0, 0);
     return;
   }
@@ -2633,13 +2632,11 @@ async function cargarComprobantes() {
     return `
     <tr class="border-b border-gray-100 cursor-pointer transition-all ${rowClass}" onclick="toggleDetalleComprobante(this, '${encodeURIComponent(c.tipo_documento || '')}', '${encodeURIComponent(c.numero_documento || '')}', ${c.comprobante_id || 'null'})">
       <td class="px-3 py-2.5 text-gray-800 text-xs">
-        <div class="font-bold">${c.tipo_puro || c.tipo}</div>
+        <div class="font-bold whitespace-nowrap">${c.tipo_puro || c.tipo} <span class="font-mono">${c.numero_puro || c.numero_documento}</span>
         ${diffBadge}
         ${causaBadge}
-      </td>
-      <td class="px-3 py-2.5 font-mono text-xs text-gray-600">
-        <div class="flex items-center gap-1.5">
-          <span>${c.numero_puro || c.numero_documento}</span>
+
+
           <a href="/auditor-documentos/${NEGOCIO_ID}?tipo_documento=${encodeURIComponent(c.tipo_documento)}&documento_numero=${encodeURIComponent(c.numero_documento)}" 
              target="_blank" 
              rel="noopener noreferrer" 
@@ -2879,7 +2876,7 @@ async function toggleDetalleComprobante(row, tipoDoc, numDoc, compId = null) {
     }
     
     detailTr.innerHTML = `
-      <td colspan="10" class="p-3">
+      <td colspan="9" class="p-3">
         <div class="border border-gray-150 rounded-xl overflow-hidden bg-white shadow-inner max-w-4xl ml-4">
           <div class="bg-gray-50 px-3 py-1.5 border-b border-gray-200 text-[10px] font-bold text-gray-600 uppercase tracking-wider flex justify-between items-center">
             <span>📒 Asientos Contables (${(data.lineas || []).length} líneas)</span>
@@ -3865,9 +3862,8 @@ async function consultarMovimientos() {
                  target="_blank" 
                  class="text-blue-600 hover:text-blue-800 hover:underline font-bold inline-flex items-center gap-0.5" 
                  title="Auditar documento">
-                🔍 ${l.numero_comprobante || ''}
+                🔍 ${l.tipo_comprobante || ''} ${l.numero_comprobante || ''}
               </a>
-              <span class="text-gray-400 text-[10px] uppercase font-bold ml-1">(${l.tipo_comprobante || ''})</span>
               <span class="text-[10px] bg-slate-100 text-slate-700 font-bold px-1.5 py-0.5 rounded font-mono ml-1.5" title="${l.centro_nombre || ''}">
                 ${l.centro_codigo || 'MOV-01'}
               </span>

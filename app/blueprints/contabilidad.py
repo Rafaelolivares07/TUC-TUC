@@ -3588,7 +3588,8 @@ def api_comprobantes_get(negocio_id):
             'tercero': 'COALESCE(MAX(t.nombre), MAX(t_reg.nombre), MAX(u.nombre), \'\')',
             'total_debitos': 'SUM(CASE WHEN mc.tipo IN (\'debito\', \'D\') THEN mc.monto ELSE 0.0 END)',
             'total_creditos': 'SUM(CASE WHEN mc.tipo IN (\'credito\', \'C\') THEN mc.monto ELSE 0.0 END)',
-            'num_lineas': 'COUNT(*)'
+            'num_lineas': 'COUNT(*)',
+            'documento': 'COALESCE(MAX(td.nombre), MAX(mc.tipo_documento))'
         }
         
         sql_sort_expr = sort_map.get(sort_col, 'MAX(mc.fecha)')
@@ -3598,6 +3599,8 @@ def api_comprobantes_get(negocio_id):
             order_clause = f"ORDER BY {sql_sort_expr} {sort_dir.upper()}, MAX(mc.fecha) DESC, MAX(mc.created_at) DESC"
         elif sort_col == 'fecha_grabacion':
             order_clause = f"ORDER BY MAX(mc.created_at) {sort_dir.upper()}, MAX(mc.fecha) {sort_dir.upper()}, mc.comprobante_id {sort_dir.upper()}"
+        elif sort_col == 'documento':
+            order_clause = f"ORDER BY {sql_sort_expr} {sort_dir.upper()}, COALESCE(NULLIF(regexp_replace(MAX(mc.numero_documento), '\\D', '', 'g'), '')::bigint, 0) {sort_dir.upper()}, MAX(mc.fecha) DESC"
         else:
             order_clause = f"ORDER BY {sql_sort_expr} {sort_dir.upper()}, MAX(mc.fecha) DESC, MAX(mc.created_at) DESC"
         
@@ -6267,6 +6270,8 @@ def api_saldos_reporte(negocio_id):
                 c.naturaleza AS cuenta_naturaleza,
                 s.tipo_documento_id,
                 COALESCE(td.nombre, s.tipo_documento) AS tipo_documento_nombre,
+                td.codigo AS td_codigo,
+                s.tipo_documento AS td_crudo,
                 s.numero_documento,
                 s.monto_original,
                 s.saldo,
@@ -6287,13 +6292,25 @@ def api_saldos_reporte(negocio_id):
             params.append(int(cuenta_id))
             
         query += " ORDER BY s.fecha_hora DESC"
-        
+
         rows = conn.execute(query, tuple(params)).fetchall()
+        from .inventarios import _num_documento_limpio, _nombre_tipo_doc
+        _td_rows = conn.execute("SELECT id, codigo, nombre FROM tipos_documento_negocio WHERE negocio_id = %s", (negocio_id,)).fetchall()
+        _td_nom = {r['id']: r['nombre'] for r in _td_rows}
+        _td_por_cod = {str(r['codigo']).lower(): r['nombre'] for r in _td_rows if r['codigo']}
+        _td_por_nom = {str(r['nombre']).lower(): r['nombre'] for r in _td_rows if r['nombre']}
+        _saldos = []
+        for r in rows:
+            d = dict(r)
+            _cm = {d.get('tipo_documento_id'): d.get('td_codigo')} if d.get('tipo_documento_id') else {}
+            d['tipo_documento_nombre'] = _nombre_tipo_doc(d.get('tipo_documento_id'), d.get('td_crudo') or d.get('tipo_documento_nombre'), _td_nom, _td_por_cod, _td_por_nom, por_defecto=d.get('tipo_documento_nombre'))
+            d['numero_documento'] = _num_documento_limpio(d.get('numero_documento'), d.get('tipo_documento_id'), _cm)
+            _saldos.append(d)
         conn.close()
         
         return jsonify({
             'ok': True,
-            'saldos': [dict(r) for r in rows]
+            'saldos': _saldos
         })
     except Exception as e:
         try: conn.close()
@@ -6673,6 +6690,7 @@ def api_saldos_procesar(negocio_id):
             'ok': True,
             'mensaje': f"{'Recaudo' if tipo_movimiento == 'cobro' else 'Egreso'} procesado con éxito como {td_row['nombre']} No. {documento_numero}",
             'tipo_documento': str(td_row['codigo']),
+            'tipo_documento_nombre': str(td_row['nombre']),
             'numero_documento': str(documento_numero)
         })
     except Exception as e:
@@ -7320,6 +7338,7 @@ def api_tesoreria_procesar_pago(negocio_id):
             'mensaje': f"{verbo} procesado con éxito como {td_row['nombre']} No. {documento_numero}",
             'comprobante_id': comp_id,
             'tipo_documento': str(td_row['codigo']),
+            'tipo_documento_nombre': str(td_row['nombre']),
             'numero_documento': str(documento_numero),
             'total_procesado': total_desembolso
         })
@@ -7923,6 +7942,10 @@ def api_gastos_liquidados(negocio_id):
     
     try:
         conn = get_db_connection()
+        from .inventarios import _num_documento_limpio, _nombre_tipo_doc
+        _td_rows = conn.execute("SELECT id, codigo, nombre FROM tipos_documento_negocio WHERE negocio_id = %s", (negocio_id,)).fetchall()
+        _td_por_cod = {str(r['codigo']).lower(): r['nombre'] for r in _td_rows if r['codigo']}
+        _td_por_nom = {str(r['nombre']).lower(): r['nombre'] for r in _td_rows if r['nombre']}
         pms = conn.execute("""
             SELECT metodo_codigo, nombre, icono FROM parametros_metodos_pago_negocio WHERE negocio_id = %s
         """, (negocio_id,)).fetchall()
@@ -7963,8 +7986,10 @@ def api_gastos_liquidados(negocio_id):
             metodo_nombre = metodo_info.get('nombre') or (metodo_cod.replace('_', ' ').title() if metodo_cod else 'Sin especificar')
             metodo_icono = metodo_info.get('icono') or '??'
 
+            _tp = _nombre_tipo_doc(None, r['tipo_documento'], {}, _td_por_cod, _td_por_nom)
+            _np = _num_documento_limpio(r['numero_documento'], 0, {0: r['tipo_documento']})
             if q:
-                match_text = f"{r['numero_documento']} {r['tipo_documento']} {r['terceros'] or ''} {r['conceptos_preview'] or ''} {metodo_nombre}".lower()
+                match_text = f"{r['numero_documento']} {r['tipo_documento']} {_np} {_tp} {r['terceros'] or ''} {r['conceptos_preview'] or ''} {metodo_nombre}".lower()
                 if q not in match_text:
                     continue
 
@@ -7973,6 +7998,8 @@ def api_gastos_liquidados(negocio_id):
             results.append({
                 'tipo_documento': r['tipo_documento'],
                 'numero_documento': r['numero_documento'],
+                'tipo_puro': _tp,
+                'numero_puro': _np,
                 'comprobante_id': r['comprobante_id'],
                 'fecha': fecha_str,
                 'total': tot,
@@ -9631,13 +9658,19 @@ def api_auditoria_contable(negocio_id):
     from ..db import get_db_connection
     try:
         conn = get_db_connection()
+        from .inventarios import _num_documento_limpio, _nombre_tipo_doc
+        _td_rows = conn.execute("SELECT id, codigo, nombre FROM tipos_documento_negocio WHERE negocio_id = %s", (negocio_id,)).fetchall()
+        _td_nom = {r['id']: r['nombre'] for r in _td_rows}
+        _td_cod = {r['id']: r['codigo'] for r in _td_rows}
+        _td_por_cod = {str(r['codigo']).lower(): r['nombre'] for r in _td_rows if r['codigo']}
+        _td_por_nom = {str(r['nombre']).lower(): r['nombre'] for r in _td_rows if r['nombre']}
         reglas = []
 
         # Regla 1: Cuentas padre (codigo < 6 chars) en movimientos
         filas = conn.execute("""
             SELECT m.id, m.cuenta_id, p.codigo, p.nombre, p.nivel,
                    m.concepto, m.tipo, m.monto, m.fecha,
-                   m.tipo_documento, m.numero_documento, m.comprobante_id
+                   m.tipo_documento, m.numero_documento, m.comprobante_id, m.tipo_documento_id AS td_id
             FROM movimientos_contables m
             LEFT JOIN cuentas_puc p ON p.id = m.cuenta_id
             WHERE m.negocio_id = %s
@@ -9653,6 +9686,8 @@ def api_auditoria_contable(negocio_id):
                 d = dict(f)
                 if d.get('fecha'):
                     d['fecha'] = d['fecha'].strftime('%Y-%m-%d') if hasattr(d['fecha'], 'strftime') else str(d['fecha'])
+                d['tipo_documento'] = _nombre_tipo_doc(d.get('td_id'), d.get('tipo_documento'), _td_nom, _td_por_cod, _td_por_nom, por_defecto=d.get('tipo_documento'))
+                d['numero_documento'] = _num_documento_limpio(d.get('numero_documento'), d.get('td_id'), _td_cod)
                 items.append(d)
             reglas.append({
                 'codigo': 'CUENTA_PADRE',
@@ -10536,8 +10571,14 @@ def api_conciliacion_disponible_estado(negocio_id):
         saldos_map = {r['codigo']: float(r['saldo'] or 0) for r in cur_saldos}
         
         # 4. Historial reciente de notas de conciliación
+        from .inventarios import _num_documento_limpio, _nombre_tipo_doc
+        _td_rows = conn.execute("SELECT id, codigo, nombre FROM tipos_documento_negocio WHERE negocio_id = %s", (negocio_id,)).fetchall()
+        _td_nom = {r['id']: r['nombre'] for r in _td_rows}
+        _td_cod = {r['id']: r['codigo'] for r in _td_rows}
+        _td_por_cod = {str(r['codigo']).lower(): r['nombre'] for r in _td_rows if r['codigo']}
+        _td_por_nom = {str(r['nombre']).lower(): r['nombre'] for r in _td_rows if r['nombre']}
         ultimos_ajustes = conn.execute("""
-            SELECT mc.id, mc.comprobante_id, mc.fecha, mc.numero_documento, mc.tipo_documento,
+            SELECT mc.id, mc.comprobante_id, mc.fecha, mc.numero_documento, mc.tipo_documento, mc.tipo_documento_id AS td_id,
                    cp.codigo as cuenta_codigo, cp.nombre as cuenta_nombre,
                    mc.tipo, mc.monto, mc.concepto, mc.created_at
             FROM movimientos_contables mc
@@ -10546,6 +10587,10 @@ def api_conciliacion_disponible_estado(negocio_id):
             ORDER BY mc.id DESC
             LIMIT 20
         """, (negocio_id,)).fetchall()
+
+        for _a in ultimos_ajustes:
+            _a['tipo_documento'] = _nombre_tipo_doc(_a.get('td_id'), _a.get('tipo_documento'), _td_nom, _td_por_cod, _td_por_nom, por_defecto=_a.get('tipo_documento'))
+            _a['numero_documento'] = _num_documento_limpio(_a.get('numero_documento'), _a.get('td_id'), _td_cod)
 
         conn.close()
         return jsonify({

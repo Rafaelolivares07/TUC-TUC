@@ -1495,13 +1495,15 @@ function renderizarTablaKardex(d) {
     else if (docDisplay) { docColTipo = docDisplay; }
     const docInner = (docColTipo || docColNum)
       ? `<div class="leading-snug">` +
-          (docColTipo ? `<div class="font-semibold text-[11px]">${docColTipo}</div>` : '') +
-          (docColNum ? `<div class="text-[11px] flex items-center gap-1 mt-0.5"><span>${docColNum}</span><span class="text-blue-500 group-hover:text-blue-700 font-bold text-xs inline-flex items-center">↗</span></div>` : (docColTipo ? `<span class="text-blue-500 group-hover:text-blue-700 font-bold text-xs inline-flex items-center ml-1">↗</span>` : '')) +
+          `<div class="text-[11px] flex items-center gap-1">` +
+          (docColTipo ? `<span class="font-semibold">${docColTipo.replace(/_/g, ' ')}</span>` : '') +
+          (docColNum ? `<span>${docColNum}</span>` : '') +
+          `<span class="text-blue-500 group-hover:text-blue-700 font-bold text-xs inline-flex items-center">↗</span></div>` +
         `</div>`
       : `<div class="text-slate-400 font-mono text-[10px]">#${m.id}</div>`;
 
     const docColumna = (linkDocUrl && (docColTipo || docColNum))
-      ? `<a href="${linkDocUrl}" target="_blank" rel="noopener noreferrer" title="Auditar documento ${docNumRaw || ''} en pestaña nueva" class="block text-gray-800 hover:text-blue-600 transition group">${docInner}</a>`
+      ? `<a href="${linkDocUrl}" target="_blank" rel="noopener noreferrer" title="Auditar documento ${docColTipo} ${docColNum} en pestaña nueva" class="block text-gray-800 hover:text-blue-600 transition group">${docInner}</a>`
       : docInner;
 
     let docOrProveedorInfo = '';

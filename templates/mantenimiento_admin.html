@@ -322,8 +322,7 @@
             <thead>
               <tr class="border-b text-gray-400">
                 <th class="py-2">Fecha</th>
-                <th class="py-2">Tipo de Doc.</th>
-                <th class="py-2">Número / ID</th>
+                <th class="py-2">Documento</th>
                 <th class="py-2">Tercero Relacionado</th>
                 <th class="py-2 text-right">Total Contable</th>
                 <th class="py-2 text-right">Total Inventario</th>
@@ -333,7 +332,7 @@
             </thead>
             <tbody id="aud-tbody-recientes">
               <tr>
-                <td colspan="6" class="text-center text-gray-400 py-6">Cargando transacciones recientes...</td>
+                <td colspan="7" class="text-center text-gray-400 py-6">Cargando transacciones recientes...</td>
               </tr>
             </tbody>
           </table>
@@ -404,8 +403,7 @@
             <table class="w-full text-left text-xs border-collapse">
               <thead>
                 <tr class="border-b text-gray-400">
-                  <th class="py-2">Tipo de Documento</th>
-                  <th class="py-2">Número de Documento</th>
+                  <th class="py-2">Documento</th>
                   <th class="py-2">Fecha</th>
                   <th class="py-2 text-right">Monto Total</th>
                   <th class="py-2 text-right">Saldo Pendiente</th>
@@ -414,7 +412,7 @@
               </thead>
               <tbody id="aud-tbody-historico">
                 <tr>
-                  <td colspan="6" class="text-center text-gray-400 py-6">Selecciona un tercero para cargar el historial</td>
+                  <td colspan="5" class="text-center text-gray-400 py-6">Selecciona un tercero para cargar el historial</td>
                 </tr>
               </tbody>
             </table>
@@ -785,7 +783,7 @@
     if (!docs.length) {
       tbody.innerHTML = `
         <tr>
-          <td colspan="6" class="text-center text-gray-400 py-6">Sin documentos históricos encontrados para este tercero</td>
+          <td colspan="5" class="text-center text-gray-400 py-6">Sin documentos históricos encontrados para este tercero</td>
         </tr>
       `;
       return;
@@ -805,8 +803,7 @@
       }
       return `
         <tr class="border-b hover:bg-gray-50">
-          <td class="py-2.5 font-bold text-gray-700">${doc.tipo_documento.toUpperCase()}</td>
-          <td class="py-2.5 font-mono text-gray-800">${doc.documento_numero}</td>
+          <td class="py-2.5 whitespace-nowrap"><span class="font-bold text-gray-700">${doc.tipo_documento.toUpperCase()}</span> <span class="font-mono text-gray-800">${doc.documento_numero}</span></td>
           <td class="py-2.5 text-gray-600 font-medium">${formatearFechaLocal(doc.fecha)}</td>
           <td class="py-2.5 text-right font-semibold text-gray-700">$${doc.total.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
           <td class="py-2.5 text-right ${balanceClass}">${balanceStr}</td>
@@ -983,7 +980,7 @@
         const dateRaw = item.documento_fecha || (item.created_at ? item.created_at.split('T')[0] : null);
         const invDate = formatearFechaLocal(dateRaw);
         const terceroLbl = provNombre ? ` | Tercero: ${provNombre}` : '';
-        document.getElementById('aud-lbl-inv-documento').textContent = `Documento: ${d.tipo_documento || tipo}-${d.documento_numero_puro || numero}${terceroLbl} | Fecha: ${invDate}`;
+        document.getElementById('aud-lbl-inv-documento').textContent = `Documento: ${d.tipo_documento || tipo} ${d.documento_numero_puro || numero}${terceroLbl} | Fecha: ${invDate}`;
         tbodyInv.innerHTML = d.inventario.map(item => `
           <tr class="border-b">
             <td class="py-2 font-semibold text-gray-700">
@@ -1529,7 +1526,7 @@
     if (!tbody) return;
     tbody.innerHTML = `
       <tr>
-        <td colspan="8" class="text-center text-gray-400 py-6">Cargando transacciones recientes...</td>
+        <td colspan="7" class="text-center text-gray-400 py-6">Cargando transacciones recientes...</td>
       </tr>
     `;
     try {
@@ -1560,7 +1557,7 @@
       if (!docs.length) {
         tbody.innerHTML = `
           <tr>
-            <td colspan="8" class="text-center text-gray-400 py-6">No se encontraron transacciones que coincidan con la búsqueda</td>
+            <td colspan="7" class="text-center text-gray-400 py-6">No se encontraron transacciones que coincidan con la búsqueda</td>
           </tr>
         `;
         return;
@@ -1578,8 +1575,7 @@
         return `
           <tr class="border-b hover:bg-gray-50">
             <td class="py-2">${dateFormatted}</td>
-            <td class="py-2 font-bold text-gray-700">${typeStr}</td>
-            <td class="py-2 font-mono text-gray-800">${doc.documento_numero}</td>
+            <td class="py-2 whitespace-nowrap"><span class="font-bold text-gray-700">${typeStr}</span> <span class="font-mono text-gray-800">${doc.documento_numero}</span></td>
             <td class="py-2 text-gray-600">${doc.tercero_nombre || 'Cliente General'}</td>
             <td class="py-2 text-right font-semibold text-gray-700">${doc.total_contable != null ? '$' + doc.total_contable.toLocaleString('es-CO') : '—'}</td>
             <td class="py-2 text-right font-semibold text-gray-700">${doc.total_inventario != null ? '$' + doc.total_inventario.toLocaleString('es-CO') : '—'}</td>
@@ -1597,7 +1593,7 @@
       console.error(e);
       tbody.innerHTML = `
         <tr>
-          <td colspan="8" class="text-center text-red-500 py-6">Error: ${e.message}</td>
+          <td colspan="7" class="text-center text-red-500 py-6">Error: ${e.message}</td>
         </tr>
       `;
     }

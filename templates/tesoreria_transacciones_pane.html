@@ -853,7 +853,7 @@ async function tes_ejecutarLiquidacion() {
     // Éxito: Mostrar Modal
     document.getElementById('tes-exito-titulo').textContent = `${(TesoreriaState.modoActual === 'cxc') ? 'Recaudo' : 'Egreso'} Liquidado Exitosamente`;
     document.getElementById('tes-exito-mensaje').textContent = data.mensaje;
-    document.getElementById('tes-exito-doc-num').textContent = `${data.tipo_documento} No. ${data.numero_documento}`;
+    document.getElementById('tes-exito-doc-num').textContent = `${data.tipo_documento_nombre || data.tipo_documento} No. ${data.numero_documento}`;
     document.getElementById('tes-exito-doc-monto').textContent = `$${Number(data.total_procesado).toLocaleString('es-CO', {minimumFractionDigits: 2})}`;
 
     // PDF URL

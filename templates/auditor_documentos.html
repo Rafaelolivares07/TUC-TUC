@@ -259,8 +259,7 @@
           <thead class="sticky top-0 bg-zinc-50 z-10 text-zinc-400 uppercase text-[10px] tracking-wider border-b border-zinc-200">
             <tr>
               <th class="py-2.5 px-3.5 font-bold">Fecha</th>
-              <th class="py-2.5 px-3.5 font-bold">Tipo</th>
-              <th class="py-2.5 px-3.5 font-bold font-mono">Consecutivo</th>
+              <th class="py-2.5 px-3.5 font-bold">Documento</th>
               <th class="py-2.5 px-3.5 font-bold">Tercero</th>
               <th class="py-2.5 px-3.5 font-bold text-right font-mono">Monto Total</th>
               <th class="py-2.5 px-3.5 font-bold text-right font-mono">Saldo Pendiente</th>
@@ -269,7 +268,7 @@
           </thead>
           <tbody id="aud-tabla-tbody" class="divide-y divide-zinc-100 font-medium text-zinc-700">
             <tr>
-              <td colspan="7" class="text-center text-zinc-400 py-12">
+              <td colspan="6" class="text-center text-zinc-400 py-12">
                 <i class="bi bi-clock-history text-xl block mb-1 opacity-40"></i>
                 Cargando transacciones del sistema...
               </td>
@@ -585,7 +584,7 @@
       const tbody = document.getElementById('aud-tabla-tbody');
       tbody.innerHTML = `
         <tr>
-          <td colspan="7" class="text-center text-zinc-400 py-10">
+          <td colspan="6" class="text-center text-zinc-400 py-10">
             <div class="inline-block animate-spin text-zinc-500 text-lg mb-1">
               <i class="bi bi-arrow-repeat"></i>
             </div>
@@ -681,7 +680,7 @@
         console.error(e);
         tbody.innerHTML = `
           <tr>
-            <td colspan="7" class="text-center text-red-500 py-8 text-xs font-semibold">
+            <td colspan="6" class="text-center text-red-500 py-8 text-xs font-semibold">
               Error al consultar transacciones: ${e.message}
             </td>
           </tr>
@@ -696,7 +695,7 @@
       if (!docs.length) {
         tbody.innerHTML = `
           <tr>
-            <td colspan="7" class="text-center text-zinc-400 py-10">
+            <td colspan="6" class="text-center text-zinc-400 py-10">
               No se encontraron documentos con los filtros aplicados.
             </td>
           </tr>
@@ -733,8 +732,7 @@
         return `
           <tr class="hover:bg-zinc-50/80 transition-colors">
             <td class="py-2.5 px-3.5 text-zinc-500 text-[11px] font-mono">${formatearFechaLocal(doc.fecha)}</td>
-            <td class="py-2.5 px-3.5"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-100 text-zinc-700 border border-zinc-200">${typeStr}</span></td>
-            <td class="py-2.5 px-3.5 font-mono font-bold text-zinc-900">${numDoc}</td>
+            <td class="py-2.5 px-3.5 whitespace-nowrap"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-100 text-zinc-700 border border-zinc-200">${typeStr}</span> <span class="font-mono font-bold text-zinc-900">${numDoc}</span></td>
             <td class="py-2.5 px-3.5 text-zinc-700 font-medium">${docTerceroNom}</td>
             <td class="py-2.5 px-3.5 text-right font-mono text-zinc-800">${totalStr}</td>
             <td class="py-2.5 px-3.5 text-right font-mono ${saldoClass}">${saldoStr}</td>
@@ -843,10 +841,18 @@
           provNombre = d.ventas.cliente_nombre || '';
         }
 
+        const detTipoRaw = String(d.tipo_documento_nombre || d.tipo_documento || tipo || '');
+        let detTipoStr = nombreTipoPuro(detTipoRaw);
+        if (detTipoRaw === 'comprobante_diario') detTipoStr = 'COMPROBANTE';
+        else if (detTipoRaw === 'movimiento_inventario') detTipoStr = 'INVENTARIO';
+        else if (detTipoRaw === 'pedido_venta') detTipoStr = 'VENTA';
+        const detNumStr = d.documento_numero_puro || numDocPuro(numero);
+
         docSeleccionado = {
           tipo: (d.tipo_documento_id || d.tipo_documento || tipo),
           numero,
-          numeroPuro: (d.documento_numero_puro || numDocPuro(numero)),
+          numeroPuro: detNumStr,
+          tipoPuro: detTipoStr,
           terceroId: provId,
           terceroNombre: provNombre,
           tipo_movimiento: d.tipo_movimiento,
@@ -854,14 +860,9 @@
           comprobante_id: (d.contabilidad ? d.contabilidad.id : null)
         };
 
-        // Header detalle: nombres y numeros puros (el crudo queda solo para las acciones).
-        document.getElementById('det-doc-numero').textContent = d.documento_numero_puro || numDocPuro(numero);
-        const detTipoRaw = String(d.tipo_documento_nombre || d.tipo_documento || tipo || '');
-        let detTipoStr = nombreTipoPuro(detTipoRaw);
-        if (detTipoRaw === 'comprobante_diario') detTipoStr = 'COMPROBANTE';
-        else if (detTipoRaw === 'movimiento_inventario') detTipoStr = 'INVENTARIO';
-        else if (detTipoRaw === 'pedido_venta') detTipoStr = 'VENTA';
-        document.getElementById('det-doc-tipo-badge').textContent = detTipoStr;
+        // Header detalle: tipo + numero juntos en una linea.
+        document.getElementById('det-doc-numero').textContent = `${detTipoStr} ${detNumStr}`;
+        document.getElementById('det-doc-tipo-badge').classList.add('hidden');
 
         const badgeSaldo = document.getElementById('det-doc-saldo-badge');
         if (d.saldo_pendiente !== undefined && d.saldo_pendiente !== null) {
@@ -1015,9 +1016,9 @@
 
     async function anularDocumento() {
       if (!docSeleccionado) return;
-      const { tipo, numero, numeroPuro, terceroId } = docSeleccionado;
+      const { tipo, numero, numeroPuro, tipoPuro, terceroId } = docSeleccionado;
 
-      const confirmed = confirm(`¿Confirmas la anulación del documento "${numeroPuro || numero}"?\n\nSe anularán sus movimientos de inventario y asientos de diario contable manteniendo el consecutivo fiscal.`);
+      const confirmed = confirm(`¿Confirmas la anulación del documento "${tipoPuro} ${numeroPuro || numero}"?\n\nSe anularán sus movimientos de inventario y asientos de diario contable manteniendo el consecutivo fiscal.`);
       if (!confirmed) return;
 
       const btn = document.getElementById('btn-doc-anular');
@@ -1052,9 +1053,9 @@
 
     async function eliminarDocumento() {
       if (!docSeleccionado) return;
-      const { tipo, numero, numeroPuro, terceroId } = docSeleccionado;
+      const { tipo, numero, numeroPuro, tipoPuro, terceroId } = docSeleccionado;
 
-      const confirmed = confirm(`¿Confirmas la ELIMINACIÓN DEFINITIVA del documento "${numeroPuro || numero}"?\n\nEsta acción borrará el registro y liberará el número para que vuelva a estar disponible.`);
+      const confirmed = confirm(`¿Confirmas la ELIMINACIÓN DEFINITIVA del documento "${tipoPuro} ${numeroPuro || numero}"?\n\nEsta acción borrará el registro y liberará el número para que vuelva a estar disponible.`);
       if (!confirmed) return;
 
       const btn = document.getElementById('btn-doc-eliminar');

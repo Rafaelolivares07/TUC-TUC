@@ -9370,7 +9370,7 @@ def api_mantenimiento_documentos_tercero(negocio_id, tercero_id):
         try:
             rows_not = conn.execute("""
                 SELECT tipo_documento, numero_documento,
-                       MAX(CASE WHEN concepto LIKE '%(%)%' THEN concepto END) AS concepto_nota
+                       MAX(CASE WHEN concepto LIKE '%%(%%)%%' THEN concepto END) AS concepto_nota
                 FROM movimientos_contables
                 WHERE negocio_id = %s AND tercero_id = %s
                   AND tipo_documento IS NOT NULL AND TRIM(tipo_documento) <> ''

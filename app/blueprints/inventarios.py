@@ -9365,6 +9365,31 @@ def api_mantenimiento_documentos_tercero(negocio_id, tercero_id):
                 'total_creditos': float(r['total_creditos'] or 0),
                 'saldo_pendiente': float(r['saldo_pendiente']) if r['saldo_pendiente'] is not None else None
             }
+        # Detalle/nota del usuario: tesoreria la guarda entre parentesis al final
+        # del concepto (gas-nota). Se prefiere el concepto con parentesis.
+        try:
+            rows_not = conn.execute("""
+                SELECT tipo_documento, numero_documento,
+                       MAX(CASE WHEN concepto LIKE '%(%)%' THEN concepto END) AS concepto_nota
+                FROM movimientos_contables
+                WHERE negocio_id = %s AND tercero_id = %s
+                  AND tipo_documento IS NOT NULL AND TRIM(tipo_documento) <> ''
+                GROUP BY tipo_documento, numero_documento
+            """, (negocio_id, tercero_id)).fetchall()
+        except Exception:
+            rows_not = []
+        nota_map = {}
+        for rn in rows_not:
+            cn = rn['concepto_nota'] or ''
+            m = re.search(r'\(([^)]+)\)\s*$', cn)
+            if not m or not m.group(1).strip():
+                continue
+            tdn = _nombre_tipo_doc(None, rn['tipo_documento'], types_map, types_by_code, types_by_name)
+            pn = _num_documento_limpio(rn['numero_documento'] or '', None, types_code)
+            nota_map[(str(tdn or '').lower(), pn)] = m.group(1).strip()
+        for _k, _d in consolidated.items():
+            if _k in nota_map:
+                _d['detalle'] = nota_map[_k]
         # Sort combined documents naturally by date and numeric consecutive descending
         import re
         documentos = list(consolidated.values())

@@ -739,6 +739,7 @@
         const docTerceroId = doc.tercero_id || appState.terceroId || '';
 
         // Débitos / créditos por columna (montosDC reparte según naturaleza)
+        const detTxt = (doc.detalle || '').replace(/[<>&]/g, '');
         const mDC = montosDC(doc);
         const debStr = mDC.d ? '$' + mDC.d.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '—';
         const creStr = mDC.c ? '$' + mDC.c.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '—';
@@ -756,7 +757,7 @@
           <tr class="hover:bg-zinc-50/80 transition-colors">
             <td class="py-2.5 px-3.5 text-zinc-500 text-[11px] font-mono">${formatearFechaLocal(doc.fecha)}</td>
             <td class="py-2.5 px-3.5 whitespace-nowrap"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-100 text-zinc-700 border border-zinc-200">${typeStr}</span> <span class="font-mono font-bold text-zinc-900">${numDoc}</span></td>
-            <td class="py-2.5 px-3.5 text-zinc-700 font-medium">${docTerceroNom}</td>
+            <td class="py-2.5 px-3.5 text-zinc-700 font-medium">${docTerceroNom}${detTxt ? `<div class="text-[10px] text-zinc-400 font-normal truncate max-w-[220px]" title="${detTxt.replace(/"/g, "'")}">${detTxt}</div>` : ''}</td>
             <td class="py-2.5 px-3.5 text-right font-mono text-zinc-800">${debStr}</td>
             <td class="py-2.5 px-3.5 text-right font-mono text-zinc-800">${creStr}</td>
             <td class="py-2.5 px-3.5 text-right font-mono ${saldoClass}">${saldoStr}</td>

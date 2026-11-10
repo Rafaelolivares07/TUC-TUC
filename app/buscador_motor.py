@@ -405,10 +405,10 @@ def buscar_omni(q, negocio_id=None, slug=None, otorgados=None, filas=None, manua
             elif q_norm in man_norm:
                 score += 50
             else:
-                # Coincidencias token a token exigiendo limites de palabra ()
-                tokens_tit = [t for t in tokens if re.search(r'' + re.escape(t), tit_norm)]
-                tokens_man = [t for t in tokens if re.search(r'' + re.escape(t), man_norm)]
-                tokens_cuerpo = [t for t in tokens if re.search(r'' + re.escape(t), full_text)]
+                # Coincidencias token a token exigiendo limites de palabra (\b)
+                tokens_tit = [t for t in tokens if re.search(r'\b' + re.escape(t), tit_norm)]
+                tokens_man = [t for t in tokens if re.search(r'\b' + re.escape(t), man_norm)]
+                tokens_cuerpo = [t for t in tokens if re.search(r'\b' + re.escape(t), full_text)]
 
                 if len(tokens) == 1:
                     t = tokens[0]

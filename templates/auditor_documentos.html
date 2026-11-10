@@ -513,6 +513,56 @@
       return soloFecha;
     }
 
+    // Nombres y numeros puros: el codigo interno del tipo (slug) nunca se muestra.
+    function numDocPuro(num) {
+      if (num === null || num === undefined) return '—';
+      let s = String(num).trim();
+      if (!s) return '—';
+      if (s.includes('-')) {
+        const suf = s.split('-').pop().trim();
+        if (/^\d+$/.test(suf)) return String(parseInt(suf, 10));
+        return s;
+      }
+      if (/^\d+$/.test(s)) return String(parseInt(s, 10));
+      return s;
+    }
+
+    function nombreTipoPuro(t) {
+      if (t === null || t === undefined) return 'OTRO';
+      const s = String(t).trim().replace(/_/g, ' ');
+      return (s || 'OTRO').toUpperCase();
+    }
+
+    // Marca en el combo el tipo que llega por consulta externa (id, nombre o codigo).
+    function seleccionarTipoExterno(qTipo) {
+      const select = document.getElementById('aud-tipo-select');
+      select.value = qTipo;
+      if (String(select.value) !== String(qTipo)) {
+        const q = String(qTipo).trim().toLowerCase();
+        for (let i = 0; i < select.options.length; i++) {
+          const o = select.options[i];
+          const nom = (o.text || '').trim().toLowerCase();
+          const cod = String(o.dataset.codigo || '').trim().toLowerCase();
+          if ((nom && nom === q) || (cod && cod === q)) {
+            select.selectedIndex = i;
+            break;
+          }
+        }
+      }
+      appState.tipo = select.value;
+    }
+
+    // Deja la URL con valores puros para que el slug no se vea ni en recargas.
+    function limpiarUrlAuditor(qNumPuro) {
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.set('documento_numero', qNumPuro);
+        const selTipo = document.getElementById('aud-tipo-select').value;
+        if (selTipo && selTipo !== 'todos') url.searchParams.set('tipo_documento', selTipo);
+        window.history.replaceState(null, '', url.toString());
+      } catch (e) {}
+    }
+
     // ================= CARGA DE TIPOS DE DOCUMENTO =================
     async function cargarTiposDocumentos() {
       try {
@@ -522,7 +572,7 @@
           const select = document.getElementById('aud-tipo-select');
           select.innerHTML = '<option value="todos">Todos los tipos</option>';
           (d.tipos || []).forEach(t => {
-            select.innerHTML += `<option value="${t.id}">${t.nombre}</option>`;
+            select.innerHTML += `<option value="${t.id}" data-codigo="${t.codigo || ''}">${t.nombre}</option>`;
           });
         }
       } catch (e) {
@@ -655,12 +705,15 @@
       }
 
       tbody.innerHTML = docs.map(doc => {
-        let typeStr = (doc.tipo_documento || 'OTRO').toUpperCase();
+        let typeStr = nombreTipoPuro(doc.tipo_documento);
         if (doc.tipo_documento === 'comprobante_diario') typeStr = 'COMPROBANTE';
         else if (doc.tipo_documento === 'movimiento_inventario') typeStr = 'INVENTARIO';
         else if (doc.tipo_documento === 'pedido_venta') typeStr = 'VENTA';
 
-        const numDoc = doc.documento_numero_completo || doc.documento_numero || '—';
+        // Se muestra el numero puro; el crudo solo viaja al backend para localizar.
+        const numDocRaw = doc.documento_numero_completo || doc.documento_numero || '—';
+        const numDoc = doc.documento_numero || numDocPuro(numDocRaw);
+        const tipoParam = (doc.tipo_documento_id !== null && doc.tipo_documento_id !== undefined) ? doc.tipo_documento_id : doc.tipo_documento;
         const docTerceroNom = doc.tercero_nombre || appState.terceroNombre || 'General';
         const docTerceroId = doc.tercero_id || appState.terceroId || '';
 
@@ -686,7 +739,7 @@
             <td class="py-2.5 px-3.5 text-right font-mono text-zinc-800">${totalStr}</td>
             <td class="py-2.5 px-3.5 text-right font-mono ${saldoClass}">${saldoStr}</td>
             <td class="py-2.5 px-3.5 text-center">
-              <button onclick="auditarDocumentoDirecto('${doc.tipo_documento}', '${numDoc}', '${docTerceroId}')"
+              <button onclick="auditarDocumentoDirecto('${tipoParam}', '${numDocRaw}', '${docTerceroId}')"
                       class="px-2.5 py-1 bg-zinc-900 hover:bg-black text-white text-[11px] font-semibold rounded-lg transition-colors shadow-xs">
                 Auditar
               </button>
@@ -800,9 +853,14 @@
           comprobante_id: (d.contabilidad ? d.contabilidad.id : null)
         };
 
-        // Header detalle
-        document.getElementById('det-doc-numero').textContent = numero;
-        document.getElementById('det-doc-tipo-badge').textContent = String(d.tipo_documento_nombre || d.tipo_documento || tipo).toUpperCase();
+        // Header detalle: nombres y numeros puros (el crudo queda solo para las acciones).
+        document.getElementById('det-doc-numero').textContent = d.documento_numero_puro || numDocPuro(numero);
+        const detTipoRaw = String(d.tipo_documento_nombre || d.tipo_documento || tipo || '');
+        let detTipoStr = nombreTipoPuro(detTipoRaw);
+        if (detTipoRaw === 'comprobante_diario') detTipoStr = 'COMPROBANTE';
+        else if (detTipoRaw === 'movimiento_inventario') detTipoStr = 'INVENTARIO';
+        else if (detTipoRaw === 'pedido_venta') detTipoStr = 'VENTA';
+        document.getElementById('det-doc-tipo-badge').textContent = detTipoStr;
 
         const badgeSaldo = document.getElementById('det-doc-saldo-badge');
         if (d.saldo_pendiente !== undefined && d.saldo_pendiente !== null) {
@@ -1192,14 +1250,15 @@
       }
 
       if (qNum) {
-        appState.consecutivo = qNum;
-        document.getElementById('aud-consecutivo-input').value = qNum;
+        const qNumPuro = numDocPuro(qNum);
+        appState.consecutivo = qNumPuro;
+        document.getElementById('aud-consecutivo-input').value = qNumPuro;
         if (qTipo) {
-          appState.tipo = qTipo;
-          document.getElementById('aud-tipo-select').value = qTipo;
+          seleccionarTipoExterno(qTipo);
         }
         await cargarTablaDocumentos();
         await auditarDocumentoDirecto(qTipo || '', qNum, qTercero);
+        limpiarUrlAuditor(qNumPuro);
       } else {
         await cargarTablaDocumentos();
       }

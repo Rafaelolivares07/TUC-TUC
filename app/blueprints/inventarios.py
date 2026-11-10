@@ -9195,6 +9195,8 @@ def api_mantenimiento_documentos_tercero(negocio_id, tercero_id):
         types_rows = conn.execute("SELECT id, nombre, codigo FROM tipos_documento_negocio WHERE negocio_id = %s", (negocio_id,)).fetchall()
         types_map = {r['id']: r['nombre'] for r in types_rows}
         types_code = {r['id']: r['codigo'] for r in types_rows}
+        types_by_code = {str(r['codigo']).lower(): r['nombre'] for r in types_rows if r['codigo']}
+        types_by_name = {str(r['nombre']).lower(): r['nombre'] for r in types_rows if r['nombre']}
 
         # Query unique documents in movimientos_inventario (purchases/entries)
         rows_inv = conn.execute("""
@@ -9213,9 +9215,7 @@ def api_mantenimiento_documentos_tercero(negocio_id, tercero_id):
         consolidated = {}
         for r in rows_inv:
             td_id = r['tipo_documento_id']
-            td_name = r['tipo_documento'] or 'otro'
-            if td_id and td_id in types_map:
-                td_name = types_map[td_id]
+            td_name = _nombre_tipo_doc(td_id, r['tipo_documento'], types_map, types_by_code, types_by_name)
             doc_num = r['documento_numero']
             pure_num = _num_documento_limpio(doc_num, td_id, types_code)
             td_key = td_id if td_id else td_name.lower()
@@ -9306,6 +9306,26 @@ def _num_documento_limpio(num_str, tipo_doc_id, types_code):
     return s
 
 
+def _nombre_tipo_doc(td_id, td_str, types_map, types_by_code, types_by_name, por_defecto='otro'):
+    """Nombre puro del tipo de documento: el vigente en tipos_documento_negocio.
+
+    Si el usuario renombra el tipo, ese es el que sale. El codigo interno (slug)
+    solo sirve para localizar, nunca para mostrar.
+    """
+    if td_id and td_id in types_map:
+        return types_map[td_id]
+    s = (td_str or '').strip()
+    if not s:
+        return por_defecto
+    hit = types_by_code.get(s.lower())
+    if hit:
+        return hit
+    hit = types_by_name.get(s.lower())
+    if hit:
+        return hit
+    return s
+
+
 @bp.route('/api/inventario/<int:negocio_id>/mantenimiento/documentos-recientes', methods=['GET'])
 def api_mantenimiento_documentos_recientes(negocio_id):
     if 'usuario_id' not in session:
@@ -9324,6 +9344,8 @@ def api_mantenimiento_documentos_recientes(negocio_id):
         types_rows = conn.execute("SELECT id, nombre, codigo FROM tipos_documento_negocio WHERE negocio_id = %s", (negocio_id,)).fetchall()
         types_map = {r['id']: r['nombre'] for r in types_rows}
         types_code = {r['id']: r['codigo'] for r in types_rows}
+        types_by_code = {str(r['codigo']).lower(): r['nombre'] for r in types_rows if r['codigo']}
+        types_by_name = {str(r['nombre']).lower(): r['nombre'] for r in types_rows if r['nombre']}
 
         # 1. Fetch recent inventory documents
         sql_inv = """
@@ -9376,9 +9398,7 @@ def api_mantenimiento_documentos_recientes(negocio_id):
             
             pure_num = _num_documento_limpio(doc_num, td_id, types_code)
             
-            td_name = r['tipo_documento'] or 'otro'
-            if td_id and td_id in types_map:
-                td_name = types_map[td_id]
+            td_name = _nombre_tipo_doc(td_id, r['tipo_documento'], types_map, types_by_code, types_by_name)
                 
             p_id = r['proveedor_id']
             td_key = td_id if td_id else td_name.lower()
@@ -9840,6 +9860,19 @@ def api_auditar_documento(negocio_id):
                 v_long_code = f"{td_row['codigo']}-{num_doc}"
                 if v_long_code not in num_variants:
                     num_variants.append(v_long_code)
+
+        # El numero puro tambien localiza filas guardadas con prefijo CODIGO-/NOMBRE-
+        # (las pantallas ya consultan con el consecutivo limpio).
+        if tipo_doc_codigo:
+            for _v in list(num_variants):
+                for _cand in (f"{tipo_doc_codigo}-{_v}", f"{tipo_doc_codigo.upper()}-{_v}", f"{tipo_doc_codigo.lower()}-{_v}"):
+                    if _cand not in num_variants:
+                        num_variants.append(_cand)
+        if tipo_doc_nombre:
+            for _v in list(num_variants):
+                for _cand in (f"{tipo_doc_nombre}-{_v}", f"{tipo_doc_nombre.upper()}-{_v}", f"{tipo_doc_nombre.lower()}-{_v}"):
+                    if _cand not in num_variants:
+                        num_variants.append(_cand)
         
         # Build list of possible string representations of the invoice/consecutive
         doc_codes = list(num_variants)
@@ -10130,6 +10163,9 @@ def api_auditar_documento(negocio_id):
             doc_num_int = extraer_consecutivo_num(num_doc)
             if doc_num_int is not None and current_consecutivo == doc_num_int:
                 es_ultimo_consecutivo = True
+
+        tipos_cod = {tipo_documento_id: tipo_doc_codigo} if (tipo_documento_id and tipo_doc_codigo) else {}
+        num_doc_puro = _num_documento_limpio(num_doc, tipo_documento_id, tipos_cod)
                 
         return jsonify({
             'ok': True,
@@ -10144,6 +10180,7 @@ def api_auditar_documento(negocio_id):
             'tipo_movimiento': tipo_movimiento,
             'tipo_documento_id': tipo_documento_id,
             'tipo_documento': tipo_doc_nombre or tipo_doc,
+            'documento_numero_puro': num_doc_puro,
             'multiples_proveedores': multiples_proveedores,
             'lista_proveedores': lista_proveedores
         })

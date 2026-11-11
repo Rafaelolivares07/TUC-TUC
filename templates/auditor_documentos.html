@@ -719,10 +719,19 @@
           }
         }
       }
-      // Espejo contable: todo documento cuadra D=C; un solo lado conocido se replica
-      if (!d && c) d = c;
-      else if (!c && d) c = d;
+      if ((d === null || c === null) || doc.origen === 'saldos') {
+        // Espejo: un solo lado conocido se replica (totales sueltos o monto unilateral)
+        if (!d && c) d = c;
+        else if (!c && d) c = d;
+      }
       return {d: d, c: c};
+    }
+
+    // Saldo mostrado: cartera si viene; si no, diferencia D-C de lo mostrado.
+    function saldoDoc(doc) {
+      if (doc.saldo_pendiente !== undefined && doc.saldo_pendiente !== null) return Number(doc.saldo_pendiente);
+      const m = montosDC(doc);
+      return (m.d || 0) - (m.c || 0);
     }
 
     function renderFilasTabla(docs, esModoTercero) {
@@ -761,8 +770,7 @@
         const creStr = mDC.c ? '$' + mDC.c.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '—';
 
         // Saldo: cartera real si viene; si no, diferencia D-C calculada (0,00 si cuadra)
-        let saldoVal = (doc.saldo_pendiente !== undefined && doc.saldo_pendiente !== null) ? Number(doc.saldo_pendiente) : null;
-        if (saldoVal === null) saldoVal = (mDC.d || 0) - (mDC.c || 0);
+        let saldoVal = saldoDoc(doc);
         let saldoStr = '—';
         let saldoClass = 'text-zinc-500';
         if (saldoVal !== null) {
@@ -794,8 +802,7 @@
       docs.forEach(x => {
         const m = montosDC(x);
         totD += m.d || 0; totC += m.c || 0;
-        if (x.saldo_pendiente !== undefined && x.saldo_pendiente !== null) totS += Number(x.saldo_pendiente);
-        else totS += (m.d || 0) - (m.c || 0);
+        totS += saldoDoc(x);
       });
       const fmtT = v => '$' + v.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
       tbody.innerHTML += `
@@ -825,7 +832,7 @@
           const m = montosDC(d);
           return [(col === 'credito' ? m.c : m.d) || 0, d.fecha || ''];
         }
-        if (col === 'saldo') return [(d.saldo_pendiente !== undefined && d.saldo_pendiente !== null) ? Number(d.saldo_pendiente) : -1, d.fecha || ''];
+        if (col === 'saldo') return [saldoDoc(d), d.fecha || ''];
         return [d.fecha || '', numInt(d)];
       };
       const cmp = (a, b) => {

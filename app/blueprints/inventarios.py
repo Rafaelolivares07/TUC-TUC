@@ -4903,6 +4903,8 @@ def _ejecutar_reparacion_sin_descarga(conn, negocio_id, pedido_id, producto_id, 
     tipo_doc_id_c = (doc_ref['tipo_documento_id'] if doc_ref and doc_ref['tipo_documento_id'] else None) or tipo_doc_id
     tipo_doc_nombre = (doc_ref['tipo_documento'] if doc_ref and doc_ref['tipo_documento'] else None) or tipo_doc_mov or 'FACTURA_DE_VENTA'
     fecha_ref = (doc_ref['fecha'] if doc_ref and doc_ref.get('fecha') else None) or fecha
+    # F2c: tercero del documento para completar lineas huerfanas
+    tercero_doc = _tercero_del_comprobante(conn, negocio_id, comprobante_id)
     cta14 = conn.execute("SELECT id FROM cuentas_puc WHERE codigo = '140505' LIMIT 1").fetchone()
     cta14_id = cta14['id'] if cta14 else None
     bajas_ids = []
@@ -4964,6 +4966,9 @@ def _ejecutar_reparacion_sin_descarga(conn, negocio_id, pedido_id, producto_id, 
                           (round(total_booked / qty, 2), pedido_id, producto_id))
     n_pi = cur_pi.rowcount if hasattr(cur_pi, 'rowcount') else 0
     credito_total = round(sum(b['costo_total'] for b in booked.values()), 2)
+    _n_terc = _backfill_tercero_voucher(conn, negocio_id, comprobante_id, tercero_doc)
+    if _n_terc:
+        print(f"[reparo] tercero {tercero_doc} imputado a {_n_terc} lineas comp={comprobante_id} (sin_descarga)")
     return {'ok': True, 'reparado': True, 'total': total_booked,
             'propuesto': total, 'contabilizado': total_booked,
             'salidas_ids': salidas_ids, 'bajas_ids': bajas_ids, 'cogs_id': cogs_id,
@@ -6415,6 +6420,8 @@ def _reparar_venta(conn, negocio_id, prod_padre_id, numero_doc, td_codigo_map):
         fecha_ref = kardex_rows[0].get('documento_fecha') or (kardex_rows[0]['created_at'].date() if kardex_rows[0].get('created_at') else None)
     cta_140505_row = conn.execute("SELECT id FROM cuentas_puc WHERE codigo = '140505' LIMIT 1").fetchone()
     cta_140505_id = cta_140505_row['id'] if cta_140505_row else None
+    # F2c: tercero del documento para completar lineas huerfanas
+    tercero_doc = _tercero_del_comprobante(conn, negocio_id, comprobante_id)
 
     # 3. Agrupar salidas de Kardex por insumo (producto_id o nombre) para emparejamiento línea por línea
     from collections import defaultdict
@@ -6642,6 +6649,9 @@ def _reparar_venta(conn, negocio_id, prod_padre_id, numero_doc, td_codigo_map):
             """, (nuevo_costo_und, negocio_id, prod_padre_id, consecutive, numero_doc, ref_id_int))
             pi_modificado = True
 
+    _n_terc = _backfill_tercero_voucher(conn, negocio_id, comprobante_id, tercero_doc)
+    if _n_terc:
+        print(f"[reparo] tercero {tercero_doc} imputado a {_n_terc} lineas comp={comprobante_id}")
     return {
         'numero_doc': numero_doc,
         'producto_padre_id': prod_padre_id,
@@ -9259,8 +9269,42 @@ def _min_grabado_iso(a, b):
     return ia or ib
 
 
+def _clave_tipo_doc(td_id, td_str, types_id_by_code, types_id_by_name):
+    """Llave de fusion por tipo: prefiere el id; si solo hay texto lo resuelve
+    al id vigente por codigo/nombre; si no resuelve, el texto en minusculas."""
+    if td_id:
+        return td_id
+    s = (td_str or '').strip().lower()
+    if not s:
+        return ''
+    return types_id_by_code.get(s) or types_id_by_name.get(s) or s
+
+
+def _tercero_del_comprobante(conn, negocio_id, comprobante_id):
+    """Tercero dominante del comprobante (para completar lineas huerfanas)."""
+    if not comprobante_id:
+        return None
+    r = conn.execute("""
+        SELECT tercero_id FROM movimientos_contables
+        WHERE negocio_id = %s AND comprobante_id = %s AND tercero_id IS NOT NULL
+        GROUP BY tercero_id ORDER BY COUNT(*) DESC LIMIT 1
+    """, (negocio_id, comprobante_id)).fetchone()
+    return r['tercero_id'] if r else None
+
+
+def _backfill_tercero_voucher(conn, negocio_id, comprobante_id, tercero_id):
+    """F2c: las lineas del comprobante sin tercero heredan el del documento."""
+    if not comprobante_id or not tercero_id:
+        return 0
+    cur = conn.execute("""
+        UPDATE movimientos_contables SET tercero_id = %s
+        WHERE negocio_id = %s AND comprobante_id = %s AND tercero_id IS NULL
+    """, (tercero_id, negocio_id, comprobante_id))
+    return cur.rowcount if hasattr(cur, 'rowcount') else 0
+
+
 def _audit_montos_dc(doc):
-    """Replica Python de montosDC + espejo: un solo lado conocido se replica."""
+    """Replica Python de montosDC: par explicito va crudo salvo saldos; espejo solo en totales sueltos."""
     def _f(v):
         try:
             return float(v) if v is not None else None
@@ -9281,11 +9325,24 @@ def _audit_montos_dc(doc):
                 x = _f(doc.get('monto_total') or doc.get('total'))
                 if x is not None:
                     d, c = x, x
-    if not d and c:
-        d = c
-    elif not c and d:
-        c = d
+    if (d is None or c is None) or doc.get('origen') == 'saldos':
+        if not d and c:
+            d = c
+        elif not c and d:
+            c = d
     return (d or 0, c or 0)
+
+
+def _audit_saldo(doc):
+    """Replica Python del saldo mostrado: cartera si viene; si no, D-C."""
+    s = doc.get('saldo_pendiente')
+    if s is not None:
+        try:
+            return float(s)
+        except (TypeError, ValueError):
+            pass
+    d, c = _audit_montos_dc(doc)
+    return d - c
 
 
 @bp.route('/api/inventario/<int:negocio_id>/mantenimiento/documentos-tercero/<int:tercero_id>', methods=['GET'])
@@ -9301,6 +9358,8 @@ def api_mantenimiento_documentos_tercero(negocio_id, tercero_id):
         types_by_code = {str(r['codigo']).lower(): r['nombre'] for r in types_rows if r['codigo']}
         types_by_name = {str(r['nombre']).lower(): r['nombre'] for r in types_rows if r['nombre']}
 
+        types_id_by_code = {str(r['codigo']).lower(): r['id'] for r in types_rows if r['codigo']}
+        types_id_by_name = {str(r['nombre']).lower(): r['id'] for r in types_rows if r['nombre']}
         # Query unique documents in movimientos_inventario (purchases/entries)
         rows_inv = conn.execute("""
             SELECT mi.tipo_documento_id, mi.tipo_documento, mi.documento_numero, mi.documento_fecha, SUM(mi.valor_total) AS total,
@@ -9321,7 +9380,7 @@ def api_mantenimiento_documentos_tercero(negocio_id, tercero_id):
             td_name = _nombre_tipo_doc(td_id, r['tipo_documento'], types_map, types_by_code, types_by_name)
             doc_num = r['documento_numero']
             pure_num = _num_documento_limpio(doc_num, td_id, types_code)
-            td_key = td_id if td_id else td_name.lower()
+            td_key = _clave_tipo_doc(td_id, r['tipo_documento'], types_id_by_code, types_id_by_name)
             key = (td_key, pure_num)
             consolidated[key] = {
                 'tipo_documento_id': td_id,
@@ -9350,7 +9409,7 @@ def api_mantenimiento_documentos_tercero(negocio_id, tercero_id):
             td_id = r['tipo_documento_id']
             td_name = types_map.get(td_id) if td_id else 'pedido_venta'
             pure_num = _num_documento_limpio(doc_num, td_id, types_code)
-            td_key = td_id if td_id else td_name.lower()
+            td_key = _clave_tipo_doc(td_id, td_name, types_id_by_code, types_id_by_name)
             key = (td_key, pure_num)
             
             if key in consolidated:
@@ -9388,7 +9447,7 @@ def api_mantenimiento_documentos_tercero(negocio_id, tercero_id):
             doc_num = r['numero_documento'] or ''
             td_name = _nombre_tipo_doc(None, r['tipo_documento'], types_map, types_by_code, types_by_name)
             pure_num = _num_documento_limpio(doc_num, None, types_code)
-            key = (td_name.lower(), pure_num)
+            key = (_clave_tipo_doc(None, r['tipo_documento'], types_id_by_code, types_id_by_name), pure_num)
             if key in consolidated:
                 continue
             _cod = (r['cuenta_codigo'] or '')
@@ -9433,8 +9492,11 @@ def api_mantenimiento_documentos_tercero(negocio_id, tercero_id):
             doc_num = r['numero_documento'] or ''
             td_name = _nombre_tipo_doc(None, r['tipo_documento'], types_map, types_by_code, types_by_name)
             pure_num = _num_documento_limpio(doc_num, None, types_code)
-            key = (td_name.lower(), pure_num)
+            key = (_clave_tipo_doc(None, r['tipo_documento'], types_id_by_code, types_id_by_name), pure_num)
             if key in consolidated:
+                # Paso1: fusionar totales contables en la fila unica (no gemelas)
+                consolidated[key]['total_debitos'] = float(r['total_debitos'] or 0)
+                consolidated[key]['total_creditos'] = float(r['total_creditos'] or 0)
                 continue
             consolidated[key] = {
                 'tipo_documento_id': None,
@@ -9739,6 +9801,8 @@ def api_mantenimiento_documentos_recientes(negocio_id):
         sql_cont = """
             SELECT mc.tipo_documento_id, mc.numero_documento AS documento_numero,
                    SUM(CASE WHEN mc.tipo IN ('debito', 'D', 'deb') THEN mc.monto ELSE 0 END) AS total_contable,
+                   SUM(CASE WHEN mc.tipo IN ('debito', 'D', 'deb') THEN mc.monto ELSE 0 END) AS total_debitos,
+                   SUM(CASE WHEN mc.tipo IN ('credito', 'C') THEN mc.monto ELSE 0 END) AS total_creditos,
                    MIN(mc.created_at) AS grabado_en,
                    mc.tercero_id AS proveedor_id,
                    MIN(mc.fecha) AS documento_fecha
@@ -9819,7 +9883,10 @@ def api_mantenimiento_documentos_recientes(negocio_id):
                 if not consolidated[found_key]['tercero_id'] and p_id:
                     consolidated[found_key]['tercero_id'] = p_id
                     consolidated[found_key]['tercero_nombre'] = p_name or 'Cliente/Proveedor general'
-                consolidated[found_key]['total_contable'] = float(r['total_contable'] or 0)
+                # Paso1: acumular (un doc puede venir en varios grupos por tercero)
+                consolidated[found_key]['total_contable'] = float(consolidated[found_key].get('total_contable') or 0) + float(r['total_contable'] or 0)
+                consolidated[found_key]['total_debitos'] = float(consolidated[found_key].get('total_debitos') or 0) + float(r['total_debitos'] or 0)
+                consolidated[found_key]['total_creditos'] = float(consolidated[found_key].get('total_creditos') or 0) + float(r['total_creditos'] or 0)
                 consolidated[found_key]['grabado_en'] = _min_grabado_iso(consolidated[found_key].get('grabado_en'), r['grabado_en'])
             else:
                 consolidated[exact_key] = {
@@ -9831,6 +9898,8 @@ def api_mantenimiento_documentos_recientes(negocio_id):
                     'origen': 'contabilidad',
                     'total_inventario': None,
                     'total_contable': float(r['total_contable'] or 0),
+                    'total_debitos': float(r['total_debitos'] or 0),
+                    'total_creditos': float(r['total_creditos'] or 0),
                     'total_pedidos': None,
                     'grabado_en': r['grabado_en'].isoformat() if r['grabado_en'] else None,
                     'tercero_nombre': p_name or '—',
@@ -9853,8 +9922,7 @@ def api_mantenimiento_documentos_recientes(negocio_id):
                 _dd, _cc = _audit_montos_dc(d)
                 return ((_cc if orden == 'credito' else _dd), d.get('fecha') or '')
             if orden == 'saldo':
-                _s = d.get('saldo_pendiente')
-                return ((float(_s) if _s is not None else -1), d.get('fecha') or '')
+                return (_audit_saldo(d), d.get('fecha') or '')
             return (d.get('fecha') or '', _num_int_doc(d))
         documentos.sort(key=_sort_doc_key, reverse=(sentido == 'desc'))
         

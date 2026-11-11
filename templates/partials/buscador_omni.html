@@ -1265,7 +1265,7 @@
     }
     if (p.es_produccion) {
       idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Producci\u00f3n ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.produccion });
-      h += omniFilaDato(idx, 'Producci\u00f3n: ver sugerencia y \u00f3rdenes', p.nombre, 'Producci\u00f3n (todos) \u203a');
+      h += omniFilaDato(idx, 'Producci\u00f3n: ver sugerencia y \u00f3rdenes', p.nombre, 'Producci\u00f3n \u203a');
     }
     const precioTxt = p.precio > 0 ? ('Venta $' + omniFmt(p.precio) + ((p.margen !== null && p.margen !== undefined) ? ' \u00b7 margen ' + p.margen + '%' : '')) : ('Costo $' + omniFmt(p.costo) + ' \u00b7 sin precio');
     idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Precio ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.editar });

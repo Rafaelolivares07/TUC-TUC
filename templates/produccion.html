@@ -3058,6 +3058,11 @@ function mostrarConsecutivoProduccion() {
             document.getElementById('prod-ac-id').value = pre.id;
             if (typeof limpiarPreview === 'function') limpiarPreview();
             if (typeof sugerirProduccion === 'function') await sugerirProduccion();
+            const pvSug = document.getElementById('prod-sugerencia');
+            if (pvSug && !pvSug.classList.contains('hidden')) {
+              pvSug.style.scrollMarginTop = '90px';
+              pvSug.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
           }
         }
       } catch (e) { console.error('prefill produccion:', e); }

@@ -960,9 +960,14 @@
       return partes.join(' <span class="text-gray-300">\u00b7</span> ');
     }
 
-    // 1. Stock
-    if (p.stock <= 0) {
-      partes.push('<span class="text-rose-600 font-semibold">Stock: 0 ' + u + ' (Agotado)</span>');
+    // 1. Stock (Agotado = motor de alertas, 11/11)
+    if (p.agotado) {
+      partes.push('<span class="text-rose-600 font-semibold">Stock: ' + omniFmt(p.stock) + ' ' + u + ' (Agotado)</span>');
+    } else if (p.sin_uso) {
+      partes.push('<span class="text-gray-800 font-semibold">Stock: ' + omniFmt(p.stock) + ' ' + u + '</span>');
+      partes.push('<span class="text-amber-700 font-medium" title="Creado en cat\u00e1logo, sin movimientos">Sin uso</span>');
+    } else if (p.stock <= 0) {
+      partes.push('<span class="text-gray-800 font-semibold">Stock: ' + omniFmt(p.stock) + ' ' + u + '</span>');
     } else {
       partes.push('<span class="text-gray-800 font-semibold">Stock: ' + omniFmt(p.stock) + ' ' + u + '</span>');
     }
@@ -1272,6 +1277,10 @@
       idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Agotado ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.compras });
       const provTxt = p.proveedor ? ('Agotado: comprar a ' + p.proveedor) : 'Agotado: sin stock disponible';
       h += omniFilaDato(idx, provTxt, p.nombre, 'Compra \u203a');
+    }
+    if (p.sin_uso) {
+      idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Sin uso ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.editar });
+      h += omniFilaDato(idx, 'Sin uso: creado en cat\u00e1logo, sin movimientos', p.nombre, 'Revisar \u203a');
     }
     if (p.sobre) {
       idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Sobrestock ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.editar });

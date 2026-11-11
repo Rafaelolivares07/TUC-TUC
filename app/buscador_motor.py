@@ -511,6 +511,7 @@ def buscar_datos_producto(conn, q, negocio_id, slug=None, limite=20):
         pass
     ids = [r['id'] for r in rows]
     movs, alertas, provs, tops, rankv, v30, urg, rankm = {}, {}, {}, {}, {}, {}, {}, {}
+    movs_ok = False
     rankv_total, rankm_total = 0, 0
     try:
         for m in conn.execute(
@@ -524,14 +525,18 @@ def buscar_datos_producto(conn, q, negocio_id, slug=None, limite=20):
             movs[m['producto_id']] = {'tipo': m['tipo'], 'motivo': m['motivo'],
                                       'cantidad': float(m['cantidad'] or 0),
                                       'doc': m['doc'], 'fecha': m['fecha']}
+        movs_ok = True
     except Exception:
         movs = {}
     try:
         for a in conn.execute(
-                "SELECT producto_id, estado, cobertura_dias FROM inventario_alertas_agotados "
-                "WHERE negocio_id = %s AND producto_id = ANY(%s)",
+                "SELECT producto_id, estado, cobertura_dias, ultimo_aviso_at FROM inventario_alertas_agotados "
+                "WHERE negocio_id = %s AND producto_id = ANY(%s) "
+                "ORDER BY producto_id, (estado = 'agotado') DESC, ultimo_aviso_at DESC NULLS LAST",
                 (nid, ids)).fetchall():
-            alertas[a['producto_id']] = a
+            _apid = a['producto_id']
+            if _apid not in alertas or a.get('estado') == 'agotado':
+                alertas[_apid] = a
     except Exception:
         alertas = {}
     try:
@@ -640,13 +645,15 @@ def buscar_datos_producto(conn, q, negocio_id, slug=None, limite=20):
         kurl = (f'https://{slug}.tuc-tuc.co/kardex?producto_id={pid}' if slug
                 else f'/inventario/{nid}/kardex?producto_id={pid}')
         al = alertas.get(pid) or {}
+        r_disp = bool(r.get('disponible'))
         es_rec = bool(r.get('es_receta'))
         v = v30.get(pid, 0)
         valor = stock * costo
         dmax = r['dias_max_stock'] if r['dias_max_stock'] else 15
         cob = round(stock / (v / 30), 1) if (v > 0 and not es_rec) else None
         sobre = bool(not es_rec and valor > 0 and (cob is None or cob > dmax))
-        agotado = bool(not es_rec and stock <= 0)
+        agotado = bool(not es_rec and r_disp and (al.get('estado') == 'agotado'))
+        sin_uso = bool(movs_ok and not es_rec and pid not in movs)
         urg_rk = urg.get(pid)
         rm = rankm.get(pid)
         out.append({
@@ -664,6 +671,7 @@ def buscar_datos_producto(conn, q, negocio_id, slug=None, limite=20):
             'es_receta': es_rec,
             'ventas_30d': v,
             'agotado': agotado,
+            'sin_uso': sin_uso,
             'alerta': al.get('estado') if not es_rec else None,
             'cobertura': float(al['cobertura_dias']) if (not es_rec and al.get('cobertura_dias') is not None) else None,
             'proveedor': provs.get(pid),

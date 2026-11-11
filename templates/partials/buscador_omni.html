@@ -1258,10 +1258,10 @@
       if (p.ventas_30d > 0) {
         txtReceta += ' \u00b7 Ventas 30d: ' + omniFmt(p.ventas_30d) + ' ' + u;
       }
-      h += omniFilaDato(idx, txtReceta, p.nombre, 'Receta \u203a');
+      h += omniFilaDato(idx, txtReceta, p.nombre, 'Cat\u00e1logo (todos) \u203a');
     } else {
       idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Ver saldo ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.productos });
-      h += omniFilaDato(idx, 'Saldo: ' + omniFmt(p.stock) + ' ' + u + ' \u00b7 $' + omniFmt(p.costo) + ' c/u \u00b7 $' + omniFmt(p.stock * p.costo), p.nombre, 'Abrir \u203a');
+      h += omniFilaDato(idx, 'Saldo: ' + omniFmt(p.stock) + ' ' + u + ' \u00b7 $' + omniFmt(p.costo) + ' c/u \u00b7 $' + omniFmt(p.stock * p.costo), p.nombre, 'Cat\u00e1logo (todos) \u203a');
     }
     const precioTxt = p.precio > 0 ? ('Venta $' + omniFmt(p.precio) + ((p.margen !== null && p.margen !== undefined) ? ' \u00b7 margen ' + p.margen + '%' : '')) : ('Costo $' + omniFmt(p.costo) + ' \u00b7 sin precio');
     idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Precio ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.editar });
@@ -1278,7 +1278,7 @@
     if (p.alerta === 'agotado' || p.agotado) {
       idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Agotado ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.compras });
       const provTxt = p.proveedor ? ('Agotado: comprar a ' + p.proveedor) : 'Agotado: sin stock disponible';
-      h += omniFilaDato(idx, provTxt, p.nombre, 'Compra \u203a');
+      h += omniFilaDato(idx, provTxt, p.nombre, 'Compra (todos) \u203a');
     }
     if (p.sin_uso) {
       idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Sin uso ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.editar });
@@ -1300,29 +1300,29 @@
       + '</label></div>';
     if (!p.es_receta || p.stock > 0) {
       idx = omniPushDato({ tipo: 'dato-fila', titulo: 'F\u00edsico ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.fisico });
-      h += omniFilaDato(idx, 'Hacer inventario f\u00edsico', p.nombre, 'Conteo \u203a');
+      h += omniFilaDato(idx, 'Hacer inventario f\u00edsico', p.nombre, 'Conteo (todos) \u203a');
     }
     if (p.urgente) {
       idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Urgente ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.fisico });
-      h += omniFilaDato(idx, 'F\u00edsico urgente: prioridad #' + p.urg_rank + ' de conteo', p.nombre, 'Conteo \u203a');
+      h += omniFilaDato(idx, 'F\u00edsico urgente: prioridad #' + p.urg_rank + ' de conteo', p.nombre, 'Conteo (todos) \u203a');
     }
     if (p.vendido) {
       if (p.margen !== null && p.margen !== undefined) {
         idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Margen ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.vcosto });
-        h += omniFilaDato(idx, 'Margen ' + p.margen + '% \u00b7 ver an\u00e1lisis', p.nombre, 'Ventas \u203a');
+        h += omniFilaDato(idx, 'Margen ' + p.margen + '% \u00b7 ver an\u00e1lisis', p.nombre, 'Ventas (todos) \u203a');
       }
       if (p.rank_ventas) {
         idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Ranking ventas ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.vcosto });
-        h += omniFilaDato(idx, 'Ranking ventas: #' + p.rank_ventas + ' de ' + p.rank_ventas_total, p.nombre, 'Ventas \u203a');
+        h += omniFilaDato(idx, 'Ranking ventas: #' + p.rank_ventas + ' de ' + p.rank_ventas_total, p.nombre, 'Ventas (todos) \u203a');
       }
       if (p.rank_margen) {
         idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Ranking margen ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.vcosto });
-        h += omniFilaDato(idx, 'Ranking margen: #' + p.rank_margen + ' de ' + p.rank_margen_total, p.nombre, 'Ventas \u203a');
+        h += omniFilaDato(idx, 'Ranking margen: #' + p.rank_margen + ' de ' + p.rank_margen_total, p.nombre, 'Ventas (todos) \u203a');
       }
     }
     if (p.top_rank) {
       idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Top ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.vcosto });
-      h += omniFilaDato(idx, 'Top #' + p.top_rank + ' del mes: crear similares', p.nombre, 'Ver \u203a');
+      h += omniFilaDato(idx, 'Top #' + p.top_rank + ' del mes: crear similares', p.nombre, 'Ventas (todos) \u203a');
     }
     const xt = extras || {};
     if (xt.sueltos_total > 0) {

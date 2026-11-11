@@ -11,15 +11,16 @@ def quitar_tildes(texto):
     if not texto:
         return ""
     texto_str = str(texto)
-    return ''.join(c for c in unicodedata.normalize('NFD', texto_str) if unicodedata.category(c) != 'Mn').lower().strip()
+    s = ''.join(c for c in unicodedata.normalize('NFD', texto_str) if unicodedata.category(c) != 'Mn')
+    return re.sub(r'\s+', ' ', s).lower().strip()
 
 _TILDES_DE = 'áéíóúüñàèìòùâêîôûäëïöçãõ'
 _TILDES_A = 'aeiouunaeiouaeiouaeiocao'
 
 
 def _col_plano(col_sql):
-    """Expresion SQL sin tildes ni mayusculas (pareja SQL de quitar_tildes)."""
-    return "translate(LOWER(%s), '%s', '%s')" % (col_sql, _TILDES_DE, _TILDES_A)
+    """Expresion SQL plana: sin tildes, minusculas y espacios colapsados (pareja SQL de quitar_tildes)."""
+    return "regexp_replace(translate(LOWER(%s), '%s', '%s'), '\\s+', ' ', 'g')" % (col_sql, _TILDES_DE, _TILDES_A)
 
 # Prefijos automaticos de MC (opcion A 11/11): lineas que el sistema escribe
 # solo; no mencionan documentos en el omni. Todo en plano (sin tildes, minus).

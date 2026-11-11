@@ -21,6 +21,19 @@ def _col_plano(col_sql):
     """Expresion SQL sin tildes ni mayusculas (pareja SQL de quitar_tildes)."""
     return "translate(LOWER(%s), '%s', '%s')" % (col_sql, _TILDES_DE, _TILDES_A)
 
+# Prefijos automaticos de MC (opcion A 11/11): lineas que el sistema escribe
+# solo; no mencionan documentos en el omni. Todo en plano (sin tildes, minus).
+_MC_AUTO_PREFIJOS = ('costo venta:', 'venta:', 'inv:', 'baja inv:',
+                      'ajuste fisico (+):', 'ajuste fisico (-):')
+
+
+def _es_concepto_automatico(concepto):
+    """True si el concepto MC es plantilla del sistema (no nota humana)."""
+    p = quitar_tildes(concepto)
+    if p.startswith(_MC_AUTO_PREFIJOS):
+        return True
+    return p.startswith('abono a ') and ' no. ' in p
+
 def slugify(text):
     text = quitar_tildes(text)
     text = re.sub(r'[^\w\s-]', '', text)
@@ -1101,6 +1114,9 @@ def buscar_datos_notas(conn, q, negocio_id, limite=10):
     like = f"%{q_plano}%"
     _nn = _col_plano('notas')
     _mc = _col_plano('mc.concepto')
+    _auto_not = ("NOT (" + " OR ".join(
+        ["%s LIKE '%s%%'" % (_mc, px) for px in _MC_AUTO_PREFIJOS]
+        + ["(%s LIKE 'abono a %%' AND %s LIKE '%% no. %%')" % (_mc, _mc)]) + ")")
     notas_out = []
 
     # 1. Comprobantes contables / Desembolsos / Tesoreria
@@ -1214,7 +1230,7 @@ def buscar_datos_notas(conn, q, negocio_id, limite=10):
     except Exception:
         pass
 
-    # 4. Movimientos contables (Conceptos de Desembolsos, Gastos y Tesoreria)
+    # 4. Movimientos contables (solo humanos; plantillas automaticas excluidas, opcion A 11/11)
     try:
         sql_movs = """
             SELECT 
@@ -1222,12 +1238,12 @@ def buscar_datos_notas(conn, q, negocio_id, limite=10):
                 mc.numero_documento,
                 TO_CHAR(MAX(mc.fecha), 'YYYY-MM-DD') AS fecha,
                 COALESCE(NULLIF(MAX(mc.descripcion_general), ''), 'Relación de Desembolsos') AS descripcion_general,
-                STRING_AGG(DISTINCT mc.concepto, ' · ') AS extracto,
+                STRING_AGG(DISTINCT mc.concepto, ' · ') FILTER (WHERE " + _auto_not + ") AS extracto,
                 MAX(t.nombre) AS tercero_nombre,
                 SUM(CASE WHEN mc.tipo = 'debito' THEN mc.monto ELSE 0 END) AS total_monto
             FROM movimientos_contables mc
             LEFT JOIN terceros t ON t.id = mc.tercero_id
-            WHERE """ + _mc + """ ILIKE %s
+            WHERE """ + _mc + """ ILIKE %s AND """ + _auto_not + """
         """
         p_movs = [like]
         if nid:

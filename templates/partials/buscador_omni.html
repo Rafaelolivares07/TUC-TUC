@@ -1298,8 +1298,10 @@
       + '<span class="block w-9 h-5 rounded-full bg-slate-300 peer-checked:bg-emerald-500 transition"></span>'
       + '<span class="absolute top-0.5 left-0.5 block w-4 h-4 rounded-full bg-white shadow transition peer-checked:translate-x-4"></span>'
       + '</label></div>';
-    idx = omniPushDato({ tipo: 'dato-fila', titulo: 'F\u00edsico ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.fisico });
-    h += omniFilaDato(idx, 'Hacer inventario f\u00edsico', p.nombre, 'Conteo \u203a');
+    if (!p.es_receta || p.stock > 0) {
+      idx = omniPushDato({ tipo: 'dato-fila', titulo: 'F\u00edsico ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.fisico });
+      h += omniFilaDato(idx, 'Hacer inventario f\u00edsico', p.nombre, 'Conteo \u203a');
+    }
     if (p.urgente) {
       idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Urgente ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.fisico });
       h += omniFilaDato(idx, 'F\u00edsico urgente: prioridad #' + p.urg_rank + ' de conteo', p.nombre, 'Conteo \u203a');

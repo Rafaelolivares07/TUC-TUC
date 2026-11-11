@@ -707,7 +707,7 @@ def buscar_datos_producto(conn, q, negocio_id, slug=None, limite=20):
                 'editar': f'/catalogo-productos/{nid}?editar_producto={pid}',
                 'compras': f'/inventario/{nid}?tab=compras_sugerencias',
                 'receta': f'/catalogo-productos/{nid}?tarjeta=1&producto_id={pid}',
-                'produccion': f'/produccion/{nid}',
+                'produccion': f'/produccion/{nid}?producto_id={pid}',
                 'fisico': f'/admin/inventario-fisico/{nid}',
                 'vcosto': f'/ventas-costos/{nid}',
                 'toggle': f'/api/inventario/producto/{pid}/disponible',

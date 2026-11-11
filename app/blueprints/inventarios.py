@@ -6345,12 +6345,12 @@ def _reparar_venta(conn, negocio_id, prod_padre_id, numero_doc, td_codigo_map):
                documento_fecha, created_at
         FROM movimientos_inventario
         WHERE negocio_id = %s
-          AND producto_padre_id = %s
+          AND (producto_padre_id = %s OR (producto_id = %s AND producto_padre_id IS NULL))
           AND tipo = 'salida'
           AND (motivo = 'venta' OR referencia_tipo LIKE 'pedido%%' OR tipo_documento_id = 6 OR UPPER(COALESCE(tipo_documento, '')) LIKE '%%VENTA%%')
           AND (documento_numero = %s OR documento_numero = %s)
         ORDER BY nombre_producto
-    """, (negocio_id, prod_padre_id, consecutive, numero_doc)).fetchall()
+    """, (negocio_id, prod_padre_id, prod_padre_id, consecutive, numero_doc)).fetchall()
 
     if not kardex_rows:
         return {'numero_doc': numero_doc, 'producto_padre_id': prod_padre_id,
@@ -6501,6 +6501,9 @@ def _reparar_venta(conn, negocio_id, prod_padre_id, numero_doc, td_codigo_map):
     # 5. Eliminar asientos sobrantes / duplicados de la 14* para este producto_padre en este documento
     for c in asientos_disponibles:
         if c['id'] not in asientos_usados:
+            if c.get('producto_padre_id') != prod_padre_id:
+                # F2: linea de otro plato/producto (ej. venta directa huerfana): no tocar
+                continue
             conn.execute("DELETE FROM movimientos_contables WHERE id = %s", (c['id'],))
             cambios.append({
                 'id': c['id'],
@@ -7314,6 +7317,16 @@ def api_produccion_registrar(negocio_id):
         conn.close()
 
 
+def _aplica_residual_61(monto_actual, dif):
+    """F1: decide si el residual de cuadre 61/14 puede aplicarse.
+
+    Devuelve (aplica, nuevo_monto). Nunca aplica si el resultado seria
+    un debito negativo: el llamador omite el cuadre y deja aviso.
+    """
+    nuevo = round(float(monto_actual or 0) + float(dif or 0), 2)
+    return (nuevo >= 0, nuevo)
+
+
 def _recostear_producto(conn, negocio_id, producto_id, bodega=None, origen=None, doc_tipo=None, doc_num=None, usuario_id=None, usuario_nombre=None):
     """
     Recalcula cronológicamente los saldos de inventario y el costo promedio de un producto por bodega.
@@ -7358,6 +7371,8 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None, origen=None,
     tot_as14_ajust = 0
     tot_ascp_ajust = 0
     tot_ped_ajust = 0
+    tot_res61_omit = 0
+    alertas_61 = []
     cambios_detalle = []
 
     for b_id in bodegas_a_procesar:
@@ -7705,7 +7720,7 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None, origen=None,
                     """, (negocio_id, comp_id_inv)).fetchone()
                     if diff_61_14 and abs(float(diff_61_14['dif'] or 0)) >= 0.01:
                         lin_61 = conn.execute("""
-                            SELECT id FROM movimientos_contables
+                            SELECT id, monto, concepto FROM movimientos_contables
                             WHERE negocio_id = %s AND comprobante_id = %s
                               AND tipo IN ('debito', 'D') AND LEFT(cuenta, 2) = '61'
                               AND cuenta NOT LIKE '6142%%' AND cuenta NOT LIKE '6143%%'
@@ -7714,12 +7729,26 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None, origen=None,
                             LIMIT 1
                         """, (negocio_id, comp_id_inv, target_prod_v, target_prod_v)).fetchone()
                         if lin_61:
-                            tot_ascp_ajust += 1
-                            conn.execute("""
-                                UPDATE movimientos_contables
-                                SET monto = round((monto + %s)::numeric, 2)
-                                WHERE id = %s
-                            """, (float(diff_61_14['dif']), lin_61['id']))
+                            _aplica61, _nuevo61 = _aplica_residual_61(lin_61['monto'], diff_61_14['dif'])
+                            if not _aplica61:
+                                # F1: el cuadre dejaria un debito negativo (caso FV-650):
+                                # no se escribe, se cuenta y se avisa para arreglo manual.
+                                tot_res61_omit += 1
+                                alertas_61.append({
+                                    'comprobante_id': comp_id_inv,
+                                    'linea_61_id': lin_61['id'],
+                                    'concepto': lin_61['concepto'],
+                                    'monto_actual': float(lin_61['monto'] or 0),
+                                    'residual_omitido': float(diff_61_14['dif'] or 0),
+                                })
+                                print(f"[recosteo] residual 61 omitido (evita negativo): comp={comp_id_inv} linea={lin_61['id']} monto={lin_61['monto']} dif={diff_61_14['dif']}")
+                            else:
+                                tot_ascp_ajust += 1
+                                conn.execute("""
+                                    UPDATE movimientos_contables
+                                    SET monto = round((monto + %s)::numeric, 2)
+                                    WHERE id = %s
+                                """, (float(diff_61_14['dif']), lin_61['id']))
 
             # --- 3) AJUSTES DE INVENTARIO (E IFD): Sincronizar contrapartida 53*/42*/41*/61* dentro del mismo comprobante ---
             elif es_ajuste_mov and comp_id_inv:
@@ -7861,6 +7890,8 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None, origen=None,
                 'movimientos_procesados': tot_movs_proc,
                 'asientos_14_ajustados': tot_as14_ajust,
                 'asientos_cp_ajustados': tot_ascp_ajust,
+                'residuales_61_omitidos': tot_res61_omit,
+                'alertas_61': alertas_61[:10],
                 'pedidos_ajustados': tot_ped_ajust,
                 'cambios_detalle': cambios_detalle[:5]
             })
@@ -7875,6 +7906,8 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None, origen=None,
         'movimientos_ajustados': tot_movs_ajust,
         'asientos_14_ajustados': tot_as14_ajust,
         'asientos_cp_ajustados': tot_ascp_ajust,
+        'residuales_61_omitidos': tot_res61_omit,
+        'alertas_61': alertas_61,
         'pedidos_ajustados': tot_ped_ajust,
         'stock_final': float(total_stk),
         'costo_final': float(costo_catalogo),
@@ -8570,7 +8603,9 @@ def api_ejecutar_recosteo(negocio_id):
         total_as14 = sum(d.get('asientos_14_ajustados', 0) for d in detalles)
         total_ascp = sum(d.get('asientos_cp_ajustados', 0) for d in detalles) + ventas_sincronizadas
         total_ped = sum(d.get('pedidos_ajustados', 0) for d in detalles) + pedidos_sincronizados
-        prods_con_cambios = sum(1 for d in detalles if d.get('movimientos_ajustados', 0) > 0 or d.get('asientos_14_ajustados', 0) > 0 or d.get('pedidos_ajustados', 0) > 0)
+        total_res61 = sum(d.get('residuales_61_omitidos', 0) for d in detalles)
+        alertas_res61 = [a for d in detalles for a in d.get('alertas_61', [])][:20]
+        prods_con_cambios = sum(1 for d in detalles if d.get('movimientos_ajustados', 0) > 0 or d.get('asientos_14_ajustados', 0) > 0 or d.get('pedidos_ajustados', 0) > 0 or d.get('residuales_61_omitidos', 0) > 0)
 
         return jsonify({
             'ok': True,
@@ -8582,6 +8617,8 @@ def api_ejecutar_recosteo(negocio_id):
                 'total_movimientos_ajustados': total_movs_ajust,
                 'total_asientos_inv_ajustados': total_as14,
                 'total_asientos_cp_ajustados': total_ascp,
+                'total_residuales_61_omitidos': total_res61,
+                'alertas_61': alertas_res61,
                 'total_pedidos_ajustados': total_ped,
             },
             'productos_detalle': detalles,

@@ -1253,15 +1253,19 @@
     const u = omniUnidadProducto(p);
     let idx;
     if (p.es_receta) {
-      idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Receta ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.productos });
+      idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Receta ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.receta });
       let txtReceta = 'Ensamble al pedido \u00b7 Costo receta: $' + omniFmt(p.costo);
       if (p.ventas_30d > 0) {
         txtReceta += ' \u00b7 Ventas 30d: ' + omniFmt(p.ventas_30d) + ' ' + u;
       }
-      h += omniFilaDato(idx, txtReceta, p.nombre, 'Cat\u00e1logo (todos) \u203a');
+      h += omniFilaDato(idx, txtReceta, p.nombre, 'Receta \u203a');
     } else {
       idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Ver saldo ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.productos });
       h += omniFilaDato(idx, 'Saldo: ' + omniFmt(p.stock) + ' ' + u + ' \u00b7 $' + omniFmt(p.costo) + ' c/u \u00b7 $' + omniFmt(p.stock * p.costo), p.nombre, 'Cat\u00e1logo (todos) \u203a');
+    }
+    if (p.es_produccion) {
+      idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Producci\u00f3n ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.produccion });
+      h += omniFilaDato(idx, 'Producci\u00f3n: ver sugerencia y \u00f3rdenes', p.nombre, 'Producci\u00f3n (todos) \u203a');
     }
     const precioTxt = p.precio > 0 ? ('Venta $' + omniFmt(p.precio) + ((p.margen !== null && p.margen !== undefined) ? ' \u00b7 margen ' + p.margen + '%' : '')) : ('Costo $' + omniFmt(p.costo) + ' \u00b7 sin precio');
     idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Precio ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.editar });

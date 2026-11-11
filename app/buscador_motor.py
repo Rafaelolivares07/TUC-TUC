@@ -528,6 +528,17 @@ def buscar_datos_producto(conn, q, negocio_id, slug=None, limite=20):
         movs_ok = True
     except Exception:
         movs = {}
+    prod, prod_ok = {}, False
+    try:
+        for g in conn.execute(
+                "SELECT m.producto_id, BOOL_OR(m.tipo = 'salida') AS has_sal, "
+                "BOOL_OR(m.tipo = 'entrada' AND m.referencia_tipo = 'produccion') AS has_prod "
+                "FROM movimientos_inventario m WHERE m.producto_id = ANY(%s) GROUP BY m.producto_id",
+                (ids,)).fetchall():
+            prod[g['producto_id']] = g
+        prod_ok = True
+    except Exception:
+        prod = {}
     try:
         for a in conn.execute(
                 "SELECT producto_id, estado, cobertura_dias, ultimo_aviso_at FROM inventario_alertas_agotados "
@@ -654,6 +665,8 @@ def buscar_datos_producto(conn, q, negocio_id, slug=None, limite=20):
         sobre = bool(not es_rec and valor > 0 and (cob is None or cob > dmax))
         agotado = bool(not es_rec and r_disp and (al.get('estado') == 'agotado'))
         sin_uso = bool(movs_ok and not es_rec and pid not in movs)
+        pr = prod.get(pid) or {}
+        es_produccion = bool(prod_ok and es_rec and r_disp and not (pr.get('has_sal') and not pr.get('has_prod')))
         urg_rk = urg.get(pid)
         rm = rankm.get(pid)
         out.append({
@@ -672,6 +685,7 @@ def buscar_datos_producto(conn, q, negocio_id, slug=None, limite=20):
             'ventas_30d': v,
             'agotado': agotado,
             'sin_uso': sin_uso,
+            'es_produccion': es_produccion,
             'alerta': al.get('estado') if not es_rec else None,
             'cobertura': float(al['cobertura_dias']) if (not es_rec and al.get('cobertura_dias') is not None) else None,
             'proveedor': provs.get(pid),
@@ -691,6 +705,8 @@ def buscar_datos_producto(conn, q, negocio_id, slug=None, limite=20):
                 'productos': f'/catalogo-productos/{nid}',
                 'editar': f'/catalogo-productos/{nid}?editar_producto={pid}',
                 'compras': f'/inventario/{nid}?tab=compras_sugerencias',
+                'receta': f'/catalogo-productos/{nid}?tarjeta=1&producto_id={pid}',
+                'produccion': f'/produccion/{nid}',
                 'fisico': f'/admin/inventario-fisico/{nid}',
                 'vcosto': f'/ventas-costos/{nid}',
                 'toggle': f'/api/inventario/producto/{pid}/disponible',

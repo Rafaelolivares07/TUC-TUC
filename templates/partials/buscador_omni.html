@@ -1267,8 +1267,8 @@
     idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Precio ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.editar });
     h += omniFilaDato(idx, precioTxt, p.nombre, 'Abrir \u203a');
     const mv = p.ult_mov;
-    const movTxt = mv ? ('Movimiento: ' + mv.tipo + (mv.motivo ? ' (' + mv.motivo + ')' : '') + ' ' + (mv.doc || '') + ' \u00b7 ' + mv.fecha + ' \u00b7 ' + omniFmt(mv.cantidad) + ' ' + u) : 'Movimiento: sin movimientos a\u00fan';
-    idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Movimiento ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.kardex });
+    const movTxt = mv ? ('Ver movimientos \u00b7 \u00daltimo: ' + mv.tipo + (mv.motivo ? ' (' + mv.motivo + ')' : '') + ' ' + (mv.doc || '') + ' \u00b7 ' + mv.fecha + ' \u00b7 ' + omniFmt(mv.cantidad) + ' ' + u) : 'Ver movimientos: sin movimientos a\u00fan';
+    idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Ver movimientos ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.kardex });
     h += omniFilaDato(idx, movTxt, p.nombre, 'Kardex \u203a');
     const meta4 = ((p.categoria || '') + (p.unidad ? ' \u00b7 ' + p.unidad : '')) || p.nombre;
     idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Editar ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.editar });

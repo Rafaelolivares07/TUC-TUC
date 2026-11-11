@@ -61,8 +61,8 @@ check('tabla: montosDC usa D/C explicitos', 'function montosDC(' in TPL and 'doc
 
 # 3c. Columnas D/C + sumatorias (pedido Rafa 10/11: dos columnas separadas con totales)
 _head = TPL.split('id="aud-tabla-tbody"')[0] if 'id="aud-tabla-tbody"' in TPL else ''
-check('thead: columna Debito', '>Débito</th>' in _head)
-check('thead: columna Credito', '>Crédito</th>' in _head)
+check('thead: columna Debito', '>Débito <span data-flecha="debito">' in _head)
+check('thead: columna Credito', '>Crédito <span data-flecha="credito">' in _head)
 check('thead: fuera Monto Total', 'Monto Total' not in _head)
 check('tabla: helper montosDC', 'function montosDC(' in TPL)
 check('tabla: fila totales', 'TOTALES' in TPL and 'totD' in TPL)

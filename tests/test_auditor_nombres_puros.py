@@ -126,11 +126,11 @@ check('confirms usan puro', TPL.count('numeroPuro || numero') == 2)
 check('vieja etiqueta pura', 'd.documento_numero_puro || numero' in MAN)
 
 # 9. Ronda 3: tipo + numero juntos en una linea (tipo izquierda, numero derecha)
-check('thead Documento', '>Documento</th>' in TPL)
+check('thead Documento', '>Documento <span data-flecha="documento">' in TPL)
 check('sin col Consecutivo', '>Consecutivo</th>' not in TPL)
 check('fila junta badge+numero', '${typeStr}</span> <span class="font-mono' in TPL)
 # Ronda D/C (10/11): Monto Total se partió en Débito+Crédito -> 7 columnas
-check('colspans 7', TPL.count('colspan="7"') == 4)
+check('colspans 8 (Grabado 11/11)', TPL.count('colspan="8"') == 4)
 check('sin colspan 6', 'colspan="6"' not in TPL)
 check('header junto', '`${detTipoStr} ${detNumStr}`' in TPL)
 check('badge tipo oculto', "getElementById('det-doc-tipo-badge').classList.add('hidden')" in TPL)

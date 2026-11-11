@@ -660,9 +660,12 @@
           <p class="text-[11px] text-indigo-900/75 mt-0.5 leading-tight">
             Divide los insumos de la tabla entre tu cantidad real para fijar la <b>nueva receta estándar definitiva</b> en el catálogo. Úsalo solo si la fórmula cambió permanentemente.
           </p>
+          <p id="prod-receta-estado" class="text-[11px] text-indigo-950 mt-1 leading-tight font-semibold">
+            Genere la vista previa para comparar los consumos contra la tarjeta estándar.
+          </p>
         </div>
-        <button id="prod-btn-receta" onclick="abrirAjusteReceta()" type="button"
-                class="shrink-0 px-3.5 py-2 border-2 border-indigo-300 text-indigo-900 bg-white hover:bg-indigo-100 font-bold rounded-xl text-xs transition flex items-center gap-1.5 shadow-2xs cursor-pointer">
+        <button id="prod-btn-receta" onclick="abrirAjusteReceta()" type="button" disabled
+                class="shrink-0 px-3.5 py-2 border-2 border-indigo-300 text-indigo-900 bg-white hover:bg-indigo-100 font-bold rounded-xl text-xs transition flex items-center gap-1.5 shadow-2xs cursor-not-allowed opacity-50">
           <span>🔄</span> Ajustar Receta Estándar (Permanente)
         </button>
       </div>
@@ -860,6 +863,8 @@
     let productos = [];
     let prodPuedeRegistrar = false;
     let activePreviewData = null;
+    let _prodRecetaBase = null;
+    let _prodRecetaCambios = false;
     let _prodPreviewDecimales = 2;
     let _ultimoFetchProductosSilencioso = 0;
     let _isFetchingProductosSilencioso = false;
@@ -1869,6 +1874,9 @@ function limpiarPreview() {
   prodPuedeRegistrar = false;
   activePreviewData = null;
   _prodRealManualmenteModificada = false;
+  _prodRecetaBase = null;
+  _prodRecetaCambios = false;
+  actualizarEstadoBotonReceta();
 }
 
 let _prodCantRecalcTimer = null;
@@ -2162,6 +2170,9 @@ async function previsualizarProduccion(scrollSmooth = true, forzarDesdeTarjeta =
   // Guardar cantidad esperada según receta para poder comparar cuando el usuario ajuste la cantidad real obtenida
   d.cantidad_esperada = d.cantidad;
   activePreviewData = d;
+  // Snapshot base receta: referencia para habilitar el ajuste solo si hay cambios
+  _prodRecetaBase = { cant: d.cantidad_esperada, consumos: {} };
+  (d.lineas || []).forEach(function(l) { _prodRecetaBase.consumos[l.id] = l.a_consumir; });
 
   const centroBadge = document.getElementById('prod-preview-centro-badge');
   if (centroBadge) {
@@ -2310,6 +2321,7 @@ function actualizarTotalesPrevisualizacion() {
 
   prodPuedeRegistrar = activePreviewData.puede_producir;
   document.getElementById('prod-btn-registrar').disabled = !prodPuedeRegistrar;
+  actualizarEstadoBotonReceta();
 }
 
 async function registrarProduccion() {
@@ -2410,6 +2422,45 @@ async function registrarProduccion() {
 
 
 
+
+function actualizarEstadoBotonReceta() {
+  const btn = document.getElementById('prod-btn-receta');
+  const est = document.getElementById('prod-receta-estado');
+  if (!btn || !est) return;
+  _prodRecetaCambios = false;
+  if (!activePreviewData || !_prodRecetaBase) {
+    est.textContent = 'Genere la vista previa para comparar los consumos contra la tarjeta estándar.';
+  } else {
+    const tol = 1e-9;
+    const base = _prodRecetaBase.consumos || {};
+    const difs = (activePreviewData.lineas || []).filter(function(l) {
+      const b = (l.id in base) ? base[l.id] : l.a_consumir;
+      return Math.abs((l.a_consumir || 0) - b) > tol;
+    });
+    const baseCant = Number(_prodRecetaBase.cant || 0);
+    const curCant = Number(activePreviewData.cantidad || 0);
+    const cantDif = Math.abs(curCant - baseCant) > tol;
+    if (difs.length === 0 && !cantDif) {
+      est.textContent = 'Sin cambios respecto a la tarjeta estándar. Ajuste un consumo o la cantidad real obtenida para habilitar.';
+    } else {
+      _prodRecetaCambios = true;
+      const partes = [];
+      if (difs.length > 0) {
+        const nombres = difs.slice(0, 3).map(function(l) { return l.nombre; });
+        let t = difs.length + ' consumo' + (difs.length === 1 ? '' : 's') + ' (' + nombres.join(', ');
+        t += (difs.length > 3 ? ' y ' + (difs.length - 3) + ' más' : '') + ')';
+        partes.push(t);
+      }
+      if (cantDif) partes.push('cantidad real ' + _fmtProdNum(baseCant) + ' → ' + _fmtProdNum(curCant));
+      est.textContent = 'Cambios pendientes de oficializar: ' + partes.join(' · ') + '. Al confirmar, la tarjeta estándar tomará estos valores.';
+    }
+  }
+  btn.disabled = !_prodRecetaCambios;
+  btn.classList.toggle('opacity-50', !_prodRecetaCambios);
+  btn.classList.toggle('cursor-not-allowed', !_prodRecetaCambios);
+  btn.classList.toggle('cursor-pointer', _prodRecetaCambios);
+}
+
 // Lógica de ajuste de receta estándar (permanente)
 
 function abrirAjusteReceta() {
@@ -2417,6 +2468,14 @@ function abrirAjusteReceta() {
   if (!activePreviewData) {
 
     toast('Debe cargar la vista previa de producción antes de ajustar la receta', false);
+
+    return;
+
+  }
+
+  if (!_prodRecetaCambios) {
+
+    toast('Sin cambios respecto a la tarjeta estándar', false);
 
     return;
 

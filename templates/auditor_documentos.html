@@ -258,18 +258,19 @@
         <table class="w-full text-left text-xs border-collapse">
           <thead class="sticky top-0 bg-zinc-50 z-10 text-zinc-400 uppercase text-[10px] tracking-wider border-b border-zinc-200">
             <tr>
-              <th class="py-2.5 px-3.5 font-bold">Fecha</th>
-              <th class="py-2.5 px-3.5 font-bold">Documento</th>
-              <th class="py-2.5 px-3.5 font-bold">Tercero</th>
-              <th class="py-2.5 px-3.5 font-bold text-right font-mono">Débito</th>
-              <th class="py-2.5 px-3.5 font-bold text-right font-mono">Crédito</th>
-              <th class="py-2.5 px-3.5 font-bold text-right font-mono">Saldo Pendiente</th>
+              <th class="py-2.5 px-3.5 font-bold cursor-pointer select-none hover:text-zinc-700" data-orden="fecha" onclick="ordenarPor('fecha')" title="Ordenar por fecha">Fecha <span data-flecha="fecha"></span></th>
+              <th class="py-2.5 px-3.5 font-bold cursor-pointer select-none hover:text-zinc-700" data-orden="grabado" onclick="ordenarPor('grabado')" title="Ordenar por grabación">Grabado <span data-flecha="grabado"></span></th>
+              <th class="py-2.5 px-3.5 font-bold cursor-pointer select-none hover:text-zinc-700" data-orden="documento" onclick="ordenarPor('documento')" title="Ordenar por documento">Documento <span data-flecha="documento"></span></th>
+              <th class="py-2.5 px-3.5 font-bold cursor-pointer select-none hover:text-zinc-700" data-orden="tercero" onclick="ordenarPor('tercero')" title="Ordenar por tercero">Tercero <span data-flecha="tercero"></span></th>
+              <th class="py-2.5 px-3.5 font-bold text-right font-mono cursor-pointer select-none hover:text-zinc-700" data-orden="debito" onclick="ordenarPor('debito')" title="Ordenar por débito">Débito <span data-flecha="debito"></span></th>
+              <th class="py-2.5 px-3.5 font-bold text-right font-mono cursor-pointer select-none hover:text-zinc-700" data-orden="credito" onclick="ordenarPor('credito')" title="Ordenar por crédito">Crédito <span data-flecha="credito"></span></th>
+              <th class="py-2.5 px-3.5 font-bold text-right font-mono cursor-pointer select-none hover:text-zinc-700" data-orden="saldo" onclick="ordenarPor('saldo')" title="Ordenar por saldo">Saldo Pendiente <span data-flecha="saldo"></span></th>
               <th class="py-2.5 px-3.5 font-bold text-center">Acción</th>
             </tr>
           </thead>
           <tbody id="aud-tabla-tbody" class="divide-y divide-zinc-100 font-medium text-zinc-700">
             <tr>
-              <td colspan="7" class="text-center text-zinc-400 py-12">
+              <td colspan="8" class="text-center text-zinc-400 py-12">
                 <i class="bi bi-clock-history text-xl block mb-1 opacity-40"></i>
                 Cargando transacciones del sistema...
               </td>
@@ -490,7 +491,8 @@
       hasta: '',
       page: 1,
       totalPages: 1,
-      documentos: []
+      documentos: [],
+      orden: { col: 'fecha', dir: 'desc' }
     };
 
     let docSeleccionado = null;
@@ -500,6 +502,14 @@
       el.textContent = msg;
       el.className = `toast show ${ok ? 'toast-ok' : 'toast-err'}`;
       setTimeout(() => el.classList.remove('show'), 3500);
+    }
+
+    function formatearFechahoraLocal(fechaHoraStr) {
+      if (!fechaHoraStr) return '—';
+      const s = String(fechaHoraStr).trim().replace('T', ' ');
+      const m = s.match(/(\d{4})-(\d{2})-(\d{2})[ ](\d{2}):(\d{2})/);
+      if (!m) return formatearFechaLocal(fechaHoraStr);
+      return `${m[3]}/${m[2]}/${m[1]} ${m[4]}:${m[5]}`;
     }
 
     function formatearFechaLocal(fechaStr) {
@@ -585,7 +595,7 @@
       const tbody = document.getElementById('aud-tabla-tbody');
       tbody.innerHTML = `
         <tr>
-          <td colspan="7" class="text-center text-zinc-400 py-10">
+          <td colspan="8" class="text-center text-zinc-400 py-10">
             <div class="inline-block animate-spin text-zinc-500 text-lg mb-1">
               <i class="bi bi-arrow-repeat"></i>
             </div>
@@ -626,6 +636,7 @@
             docs = docs.filter(doc => doc.fecha && doc.fecha.split('T')[0] <= appState.hasta);
           }
 
+          docs = ordenarDocsCliente(docs);
           appState.documentos = docs;
 
           // Calcular saldo pendiente total del tercero
@@ -658,7 +669,9 @@
             q: appState.consecutivo,
             tipo: appState.tipo,
             desde: appState.desde,
-            hasta: appState.hasta
+            hasta: appState.hasta,
+            orden: appState.orden.col,
+            dir: appState.orden.dir
           });
 
           const r = await fetch(`/api/inventario/${NEGOCIO_ID}/mantenimiento/documentos-recientes?${params.toString()}`);
@@ -681,7 +694,7 @@
         console.error(e);
         tbody.innerHTML = `
           <tr>
-            <td colspan="7" class="text-center text-red-500 py-8 text-xs font-semibold">
+            <td colspan="8" class="text-center text-red-500 py-8 text-xs font-semibold">
               Error al consultar transacciones: ${e.message}
             </td>
           </tr>
@@ -707,17 +720,21 @@
           }
         }
       }
+      // Espejo contable: todo documento cuadra D=C; un solo lado conocido se replica
+      if (!d && c) d = c;
+      else if (!c && d) c = d;
       return {d: d, c: c};
     }
 
     function renderFilasTabla(docs, esModoTercero) {
       const tbody = document.getElementById('aud-tabla-tbody');
+      pintarFlechasOrden();
       document.getElementById('tabla-contador-docs').textContent = `${docs.length} ${docs.length === 1 ? 'documento' : 'documentos'}`;
 
       if (!docs.length) {
         tbody.innerHTML = `
           <tr>
-            <td colspan="7" class="text-center text-zinc-400 py-10">
+            <td colspan="8" class="text-center text-zinc-400 py-10">
               No se encontraron documentos con los filtros aplicados.
             </td>
           </tr>
@@ -756,6 +773,7 @@
         return `
           <tr class="hover:bg-zinc-50/80 transition-colors">
             <td class="py-2.5 px-3.5 text-zinc-500 text-[11px] font-mono">${formatearFechaLocal(doc.fecha)}</td>
+            <td class="py-2.5 px-3.5 text-zinc-500 text-[11px] font-mono whitespace-nowrap" title="Fecha y hora de grabación">${formatearFechahoraLocal(doc.grabado_en)}</td>
             <td class="py-2.5 px-3.5 whitespace-nowrap"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-100 text-zinc-700 border border-zinc-200">${typeStr}</span> <span class="font-mono font-bold text-zinc-900">${numDoc}</span></td>
             <td class="py-2.5 px-3.5 text-zinc-700 font-medium">${docTerceroNom}${detTxt ? `<div class="text-[10px] text-zinc-400 font-normal whitespace-pre-line break-words max-w-[260px]" title="${detTxt.replace(/"/g, "'")}">${detTxt}</div>` : ''}</td>
             <td class="py-2.5 px-3.5 text-right font-mono text-zinc-800">${debStr}</td>
@@ -780,13 +798,68 @@
       const fmtT = v => '$' + v.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
       tbody.innerHTML += `
           <tr class="bg-zinc-50 border-t-2 border-zinc-200 font-bold">
-            <td colspan="3" class="py-2.5 px-3.5 text-right text-zinc-700 text-[11px] uppercase tracking-wide">TOTALES${esModoTercero ? '' : ' PÁGINA'} · ${docs.length} docs</td>
+            <td colspan="4" class="py-2.5 px-3.5 text-right text-zinc-700 text-[11px] uppercase tracking-wide">TOTALES${esModoTercero ? '' : ' PÁGINA'} · ${docs.length} docs</td>
             <td class="py-2.5 px-3.5 text-right font-mono text-zinc-900">${fmtT(totD)}</td>
             <td class="py-2.5 px-3.5 text-right font-mono text-zinc-900">${fmtT(totC)}</td>
             <td class="py-2.5 px-3.5 text-right font-mono text-zinc-900">${fmtT(totS)}</td>
             <td></td>
           </tr>
         `;
+    }
+
+    // ================= ORDENAMIENTO =================
+    function ordenarDocsCliente(docs) {
+      const col = appState.orden.col;
+      const dir = appState.orden.dir === 'asc' ? 1 : -1;
+      const numInt = (d) => {
+        const m = String(d.documento_numero || '').match(/\d+/);
+        return m ? parseInt(m[0], 10) : 0;
+      };
+      const clave = (d) => {
+        if (col === 'grabado') return [d.grabado_en || ''];
+        if (col === 'documento') return [d.tipo_documento || '', numInt(d), d.fecha || ''];
+        if (col === 'tercero') return [(d.tercero_nombre || '').toLowerCase(), d.fecha || ''];
+        if (col === 'debito' || col === 'credito') {
+          const m = montosDC(d);
+          return [(col === 'credito' ? m.c : m.d) || 0, d.fecha || ''];
+        }
+        if (col === 'saldo') return [(d.saldo_pendiente !== undefined && d.saldo_pendiente !== null) ? Number(d.saldo_pendiente) : -1, d.fecha || ''];
+        return [d.fecha || '', numInt(d)];
+      };
+      const cmp = (a, b) => {
+        const ka = clave(a), kb = clave(b);
+        for (let i = 0; i < ka.length; i++) {
+          if (ka[i] < kb[i]) return -1 * dir;
+          if (ka[i] > kb[i]) return 1 * dir;
+        }
+        return 0;
+      };
+      return docs.slice().sort(cmp);
+    }
+
+    function pintarFlechasOrden() {
+      document.querySelectorAll('[data-flecha]').forEach(el => {
+        el.textContent = (el.getAttribute('data-flecha') === appState.orden.col)
+          ? (appState.orden.dir === 'asc' ? ' ▲' : ' ▼') : '';
+      });
+    }
+
+    function ordenarPor(col) {
+      if (appState.orden.col === col) {
+        appState.orden.dir = (appState.orden.dir === 'asc') ? 'desc' : 'asc';
+      } else {
+        appState.orden.col = col;
+        appState.orden.dir = (col === 'documento' || col === 'tercero') ? 'asc' : 'desc';
+      }
+      pintarFlechasOrden();
+      if (appState.terceroId) {
+        const docs = ordenarDocsCliente(appState.documentos);
+        appState.documentos = docs;
+        renderFilasTabla(docs, true);
+      } else {
+        appState.page = 1;
+        cargarTablaDocumentos();
+      }
     }
 
     // ================= ACCIONES DE FILTRO =================

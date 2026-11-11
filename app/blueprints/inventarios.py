@@ -9210,6 +9210,50 @@ def api_crear_proveedor():
         conn.close()
 
 
+def _min_grabado_iso(a, b):
+    """MIN entre dos grabados (datetime o ISO str): el primero en registrarse."""
+    def _iso(v):
+        if v is None:
+            return None
+        return v.isoformat() if hasattr(v, 'isoformat') else str(v)
+    ia, ib = _iso(a), _iso(b)
+    if ia and ib:
+        return ia if ia <= ib else ib
+    return ia or ib
+
+
+def _audit_montos_dc(doc):
+    """Replica Python de montosDC + espejo: un solo lado conocido se replica."""
+    def _f(v):
+        try:
+            return float(v) if v is not None else None
+        except (TypeError, ValueError):
+            return None
+    d = _f(doc.get('total_debitos'))
+    c = _f(doc.get('total_creditos'))
+    if d is None and c is None:
+        t_inv = _f(doc.get('total_inventario') or doc.get('total_contable'))
+        t_ped = _f(doc.get('total_pedidos'))
+        if t_inv is not None and t_ped is not None:
+            d, c = t_inv, t_ped
+        elif t_ped is not None:
+            c = t_ped
+        elif t_inv is not None:
+            d = t_inv
+        else:
+            x = _f(doc.get('monto_total') or doc.get('total'))
+            if x is not None:
+                if doc.get('origen') in ('ventas', 'ambos'):
+                    c = x
+                else:
+                    d = x
+    if not d and c:
+        d = c
+    elif not c and d:
+        c = d
+    return (d or 0, c or 0)
+
+
 @bp.route('/api/inventario/<int:negocio_id>/mantenimiento/documentos-tercero/<int:tercero_id>', methods=['GET'])
 def api_mantenimiento_documentos_tercero(negocio_id, tercero_id):
     if 'usuario_id' not in session:
@@ -9226,7 +9270,7 @@ def api_mantenimiento_documentos_tercero(negocio_id, tercero_id):
         # Query unique documents in movimientos_inventario (purchases/entries)
         rows_inv = conn.execute("""
             SELECT mi.tipo_documento_id, mi.tipo_documento, mi.documento_numero, mi.documento_fecha, SUM(mi.valor_total) AS total,
-                   MIN(sd.saldo) AS saldo_pendiente
+                   MIN(sd.saldo) AS saldo_pendiente, MIN(mi.created_at) AS grabado_en
             FROM movimientos_inventario mi
             LEFT JOIN saldo_por_documentos sd ON sd.negocio_id = mi.negocio_id 
                                             AND sd.tercero_id = mi.proveedor_id
@@ -9253,7 +9297,8 @@ def api_mantenimiento_documentos_tercero(negocio_id, tercero_id):
                 'fecha': r['documento_fecha'].isoformat() if r['documento_fecha'] else None,
                 'origen': 'inventario',
                 'total': float(r['total'] or 0),
-                'saldo_pendiente': float(r['saldo_pendiente']) if r['saldo_pendiente'] is not None else None
+                'saldo_pendiente': float(r['saldo_pendiente']) if r['saldo_pendiente'] is not None else None,
+                'grabado_en': r['grabado_en'].isoformat() if r['grabado_en'] else None
             }
             
         # Query documents in pedidos (sales/orders) — solo ventas facturadas (con tipo de documento)
@@ -9278,6 +9323,7 @@ def api_mantenimiento_documentos_tercero(negocio_id, tercero_id):
                 consolidated[key]['origen'] = 'ambos'
                 consolidated[key]['total'] = float(r['total'] or 0)
                 consolidated[key]['estado'] = r['estado']
+                consolidated[key]['grabado_en'] = _min_grabado_iso(consolidated[key].get('grabado_en'), r['created_at'])
                 if doc_num and len(doc_num) > len(consolidated[key].get('documento_numero_completo') or ''):
                     consolidated[key]['documento_numero_completo'] = doc_num
             else:
@@ -9289,7 +9335,8 @@ def api_mantenimiento_documentos_tercero(negocio_id, tercero_id):
                     'fecha': f_val.date().isoformat() if f_val else None,
                     'origen': 'ventas',
                     'total': float(r['total'] or 0),
-                    'estado': r['estado']
+                    'estado': r['estado'],
+                    'grabado_en': _min_grabado_iso(None, r['created_at'])
                 }
             
         # Saldos por documento (cartera/tesoreria contable): cubre terceros cuya
@@ -9297,7 +9344,7 @@ def api_mantenimiento_documentos_tercero(negocio_id, tercero_id):
         rows_sal = conn.execute("""
             SELECT s.tipo_documento, s.numero_documento,
                    TO_CHAR(COALESCE(s.fecha_hora, s.created_at), 'YYYY-MM-DD') AS fecha,
-                   s.monto_original, s.saldo, c.codigo AS cuenta_codigo
+                   s.monto_original, s.saldo, c.codigo AS cuenta_codigo, s.created_at AS grabado_en
             FROM saldo_por_documentos s
             LEFT JOIN cuentas_puc c ON c.id = s.cuenta_id
             WHERE s.negocio_id = %s AND s.tercero_id = %s
@@ -9324,7 +9371,8 @@ def api_mantenimiento_documentos_tercero(negocio_id, tercero_id):
                 'total': _tot_sal,
                 'total_debitos': float(0 if _es_cred else _tot_sal),
                 'total_creditos': float(_tot_sal if _es_cred else 0),
-                'saldo_pendiente': float(r['saldo']) if r['saldo'] is not None else None
+                'saldo_pendiente': float(r['saldo']) if r['saldo'] is not None else None,
+                'grabado_en': _min_grabado_iso(None, r['grabado_en'])
             }
 
         # Documentos contables (movimientos_contables): cubre terceros cuya
@@ -9335,6 +9383,7 @@ def api_mantenimiento_documentos_tercero(negocio_id, tercero_id):
                    TO_CHAR(MAX(mc.fecha), 'YYYY-MM-DD') AS fecha,
                    SUM(CASE WHEN mc.tipo IN ('debito', 'D') THEN mc.monto ELSE 0 END) AS total_debitos,
                    SUM(CASE WHEN mc.tipo IN ('credito', 'C') THEN mc.monto ELSE 0 END) AS total_creditos,
+                   MIN(mc.created_at) AS grabado_en,
                    MIN(sd.saldo) AS saldo_pendiente
             FROM movimientos_contables mc
             LEFT JOIN saldo_por_documentos sd ON sd.negocio_id = mc.negocio_id
@@ -9363,7 +9412,8 @@ def api_mantenimiento_documentos_tercero(negocio_id, tercero_id):
                 'total': float(r['total_debitos'] or 0),
                 'total_debitos': float(r['total_debitos'] or 0),
                 'total_creditos': float(r['total_creditos'] or 0),
-                'saldo_pendiente': float(r['saldo_pendiente']) if r['saldo_pendiente'] is not None else None
+                'saldo_pendiente': float(r['saldo_pendiente']) if r['saldo_pendiente'] is not None else None,
+                'grabado_en': r['grabado_en'].isoformat() if r['grabado_en'] else None
             }
         # Detalle/nota del usuario: tesoreria la guarda entre parentesis al final
         # del concepto (gas-nota). Se prefiere el concepto con parentesis.
@@ -9461,6 +9511,13 @@ def api_mantenimiento_documentos_recientes(negocio_id):
     tipo = request.args.get('tipo', '').strip()
     desde = request.args.get('desde', '').strip()
     hasta = request.args.get('hasta', '').strip()
+    orden = request.args.get('orden', '').strip().lower()
+    sentido = request.args.get('dir', '').strip().lower()
+    _ORDENES_AUD = ('fecha', 'grabado', 'documento', 'tercero', 'debito', 'credito', 'saldo')
+    if orden not in _ORDENES_AUD:
+        orden = 'fecha'
+    if sentido not in ('asc', 'desc'):
+        sentido = 'desc'
     
     conn = get_db_connection()
     try:
@@ -9473,7 +9530,7 @@ def api_mantenimiento_documentos_recientes(negocio_id):
 
         # 1. Fetch recent inventory documents
         sql_inv = """
-            SELECT mi.tipo_documento_id, mi.tipo_documento, mi.documento_numero, mi.documento_fecha, SUM(mi.valor_total) AS total_inventario,
+            SELECT mi.tipo_documento_id, mi.tipo_documento, mi.documento_numero, mi.documento_fecha, SUM(mi.valor_total) AS total_inventario, MIN(mi.created_at) AS grabado_en,
                    mi.proveedor_id, COALESCE(t.nombre, mi.proveedor_nombre) AS proveedor_nombre
             FROM movimientos_inventario mi
             LEFT JOIN terceros t ON t.id = mi.proveedor_id
@@ -9538,6 +9595,7 @@ def api_mantenimiento_documentos_recientes(negocio_id):
                 'total_inventario': float(r['total_inventario'] or 0),
                 'total_contable': None,
                 'total_pedidos': None,
+                'grabado_en': r['grabado_en'].isoformat() if r['grabado_en'] else None,
                 'tercero_nombre': r['proveedor_nombre'] or '—',
                 'tercero_id': p_id
             }
@@ -9623,6 +9681,7 @@ def api_mantenimiento_documentos_recientes(negocio_id):
                     consolidated[found_key]['tercero_nombre'] = c_name or 'Cliente general'
                 if r['total'] and float(r['total']) > (consolidated[found_key]['total_pedidos'] or 0):
                     consolidated[found_key]['total_pedidos'] = float(r['total'])
+                consolidated[found_key]['grabado_en'] = _min_grabado_iso(consolidated[found_key].get('grabado_en'), r['created_at'])
                 if doc_num and len(doc_num) > len(consolidated[found_key].get('documento_numero_completo') or ''):
                     consolidated[found_key]['documento_numero_completo'] = doc_num
             else:
@@ -9638,13 +9697,15 @@ def api_mantenimiento_documentos_recientes(negocio_id):
                     'total_pedidos': float(r['total'] or 0),
                     'tercero_nombre': c_name or 'Cliente general',
                     'tercero_id': c_id,
-                    'estado': r['estado']
+                    'estado': r['estado'],
+                    'grabado_en': _min_grabado_iso(None, r['created_at'])
                 }
             
         # 3. Fetch accounting totals for the source documents.
         sql_cont = """
             SELECT mc.tipo_documento_id, mc.numero_documento AS documento_numero,
                    SUM(CASE WHEN mc.tipo IN ('debito', 'D', 'deb') THEN mc.monto ELSE 0 END) AS total_contable,
+                   MIN(mc.created_at) AS grabado_en,
                    mc.tercero_id AS proveedor_id,
                    MIN(mc.fecha) AS documento_fecha
             FROM movimientos_contables mc
@@ -9725,6 +9786,7 @@ def api_mantenimiento_documentos_recientes(negocio_id):
                     consolidated[found_key]['tercero_id'] = p_id
                     consolidated[found_key]['tercero_nombre'] = p_name or 'Cliente/Proveedor general'
                 consolidated[found_key]['total_contable'] = float(r['total_contable'] or 0)
+                consolidated[found_key]['grabado_en'] = _min_grabado_iso(consolidated[found_key].get('grabado_en'), r['grabado_en'])
             else:
                 consolidated[exact_key] = {
                     'tipo_documento_id': td_id,
@@ -9736,19 +9798,31 @@ def api_mantenimiento_documentos_recientes(negocio_id):
                     'total_inventario': None,
                     'total_contable': float(r['total_contable'] or 0),
                     'total_pedidos': None,
+                    'grabado_en': r['grabado_en'].isoformat() if r['grabado_en'] else None,
                     'tercero_nombre': p_name or '—',
                     'tercero_id': p_id
                 }
             
-        # Convertir diccionario consolidado a lista y ordenar por fecha y consecutivo numérico descendente
+        # Convertir diccionario consolidado a lista y ordenar por la columna pedida
         documentos = list(consolidated.values())
+        def _num_int_doc(d):
+            mm = re.search(r'\d+', str(d.get('documento_numero') or ''))
+            return int(mm.group()) if mm else 0
         def _sort_doc_key(d):
-            f = d.get('fecha') or ''
-            num_str = str(d.get('documento_numero') or '')
-            match = re.search(r'\d+', num_str)
-            num_int = int(match.group()) if match else 0
-            return (f, num_int)
-        documentos.sort(key=_sort_doc_key, reverse=True)
+            if orden == 'grabado':
+                return (d.get('grabado_en') or '',)
+            if orden == 'documento':
+                return ((d.get('tipo_documento') or ''), _num_int_doc(d), d.get('fecha') or '')
+            if orden == 'tercero':
+                return ((d.get('tercero_nombre') or '').lower(), d.get('fecha') or '')
+            if orden in ('debito', 'credito'):
+                _dd, _cc = _audit_montos_dc(d)
+                return ((_cc if orden == 'credito' else _dd), d.get('fecha') or '')
+            if orden == 'saldo':
+                _s = d.get('saldo_pendiente')
+                return ((float(_s) if _s is not None else -1), d.get('fecha') or '')
+            return (d.get('fecha') or '', _num_int_doc(d))
+        documentos.sort(key=_sort_doc_key, reverse=(sentido == 'desc'))
         
         # Calcular paginación
         total_registros = len(documentos)

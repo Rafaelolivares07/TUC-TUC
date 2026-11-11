@@ -9231,22 +9231,19 @@ def _audit_montos_dc(doc):
             return None
     d = _f(doc.get('total_debitos'))
     c = _f(doc.get('total_creditos'))
+    # Valor facial: ventas al precio (el costo vive en el detalle); resto a su total
     if d is None and c is None:
-        t_inv = _f(doc.get('total_inventario') or doc.get('total_contable'))
-        t_ped = _f(doc.get('total_pedidos'))
-        if t_inv is not None and t_ped is not None:
-            d, c = t_inv, t_ped
-        elif t_ped is not None:
-            c = t_ped
-        elif t_inv is not None:
-            d = t_inv
+        t_ped = _f(doc.get('total_pedidos') or None)
+        if t_ped is not None:
+            d, c = t_ped, t_ped
         else:
-            x = _f(doc.get('monto_total') or doc.get('total'))
-            if x is not None:
-                if doc.get('origen') in ('ventas', 'ambos'):
-                    c = x
-                else:
-                    d = x
+            t_inv = _f(doc.get('total_inventario') or doc.get('total_contable'))
+            if t_inv is not None:
+                d, c = t_inv, t_inv
+            else:
+                x = _f(doc.get('monto_total') or doc.get('total'))
+                if x is not None:
+                    d, c = x, x
     if not d and c:
         d = c
     elif not c and d:

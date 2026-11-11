@@ -702,21 +702,20 @@
       }
     }
 
-    // Reparte el monto de la fila en débitos/créditos según naturaleza:
-    // contable/saldos traen D/C explícitos; ventas->C; inventario/contabilidad->D.
+    // Valor facial del documento en D y C: ventas al precio de venta (el costo vive en el detalle);
+    // compras/inventario/contabilidad a su total; pares explícitos D/C intactos.
     function montosDC(doc) {
       let d = (doc.total_debitos === undefined || doc.total_debitos === null) ? null : Number(doc.total_debitos);
       let c = (doc.total_creditos === undefined || doc.total_creditos === null) ? null : Number(doc.total_creditos);
       if (d === null && c === null) {
-        const tInv = doc.total_inventario || doc.total_contable || null;
         const tPed = doc.total_pedidos || null;
-        if (tInv !== null && tPed !== null) { d = Number(tInv); c = Number(tPed); }
-        else if (tPed !== null) c = Number(tPed);
-        else if (tInv !== null) d = Number(tInv);
+        if (tPed !== null) { d = Number(tPed); c = Number(tPed); }
         else {
-          const t = doc.monto_total || doc.total || null;
-          if (t !== null) {
-            if (doc.origen === 'ventas' || doc.origen === 'ambos') c = Number(t); else d = Number(t);
+          const tInv = doc.total_inventario || doc.total_contable || null;
+          if (tInv !== null) { d = Number(tInv); c = Number(tInv); }
+          else {
+            const t = doc.monto_total || doc.total || null;
+            if (t !== null) { d = Number(t); c = Number(t); }
           }
         }
       }
@@ -761,13 +760,15 @@
         const debStr = mDC.d ? '$' + mDC.d.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '—';
         const creStr = mDC.c ? '$' + mDC.c.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '—';
 
-        // Saldo
-        const saldoVal = doc.saldo_pendiente !== undefined && doc.saldo_pendiente !== null ? doc.saldo_pendiente : null;
+        // Saldo: cartera real si viene; si no, diferencia D-C calculada (0,00 si cuadra)
+        let saldoVal = (doc.saldo_pendiente !== undefined && doc.saldo_pendiente !== null) ? Number(doc.saldo_pendiente) : null;
+        if (saldoVal === null) saldoVal = (mDC.d || 0) - (mDC.c || 0);
         let saldoStr = '—';
         let saldoClass = 'text-zinc-500';
         if (saldoVal !== null) {
           saldoStr = '$' + saldoVal.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
           if (saldoVal > 0) saldoClass = 'text-zinc-900 font-bold';
+          else if (saldoVal < 0) saldoClass = 'text-red-600 font-bold';
         }
 
         return `
@@ -794,6 +795,7 @@
         const m = montosDC(x);
         totD += m.d || 0; totC += m.c || 0;
         if (x.saldo_pendiente !== undefined && x.saldo_pendiente !== null) totS += Number(x.saldo_pendiente);
+        else totS += (m.d || 0) - (m.c || 0);
       });
       const fmtT = v => '$' + v.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
       tbody.innerHTML += `

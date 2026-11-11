@@ -531,7 +531,7 @@ def buscar_datos_producto(conn, q, negocio_id, slug=None, limite=20):
     prod, prod_ok = {}, False
     try:
         for g in conn.execute(
-                "SELECT m.producto_id, BOOL_OR(m.tipo = 'salida') AS has_sal, "
+                "SELECT m.producto_id, "
                 "BOOL_OR(m.tipo = 'entrada' AND m.referencia_tipo = 'produccion') AS has_prod "
                 "FROM movimientos_inventario m WHERE m.producto_id = ANY(%s) GROUP BY m.producto_id",
                 (ids,)).fetchall():
@@ -666,7 +666,7 @@ def buscar_datos_producto(conn, q, negocio_id, slug=None, limite=20):
         agotado = bool(not es_rec and r_disp and (al.get('estado') == 'agotado'))
         sin_uso = bool(movs_ok and not es_rec and pid not in movs)
         pr = prod.get(pid) or {}
-        es_produccion = bool(prod_ok and es_rec and r_disp and not (pr.get('has_sal') and not pr.get('has_prod')))
+        es_produccion = bool(prod_ok and es_rec and r_disp and pr.get('has_prod'))
         urg_rk = urg.get(pid)
         rm = rankm.get(pid)
         out.append({

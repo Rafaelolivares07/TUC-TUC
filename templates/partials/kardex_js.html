@@ -558,6 +558,11 @@ function compararConteoKardex(totalRenderizados = null) {
     badge.innerHTML = `<span>! Discrepancia</span> <span class="font-mono font-black">Sede:${targetBd} ≠ Render:${renderVal}</span>`;
     badge.title = `Atención: El número de registros en la sede activa (${targetBd}) no coincide con los registros renderizados (${renderVal}). Total Global BD: ${_kardexTotalGlobalContado}`;
   }
+  const trio = document.getElementById('kardex-conteo-trio');
+  if (trio) {
+    const vs = [Number(_kardexTotalGlobalContado), Number(_kardexTotalCentroContado), Number(renderVal)];
+    trio.classList.toggle('hidden', vs.every(v => Number.isFinite(v)) && vs[0] === vs[1] && vs[1] === vs[2]);
+  }
 }
 
 async function consultarConteoRapidoKardex(productoId) {
@@ -1135,6 +1140,7 @@ function renderizarAuditoriaKardex(auditoria, productoId) {
 
   const difVal = Math.abs(auditoria.diferencia_valor || 0);
   const difClass = difVal > 0.01 ? 'text-red-600 font-bold' : 'text-emerald-600 font-bold';
+  const mostrarRec = Math.abs((auditoria.valor_reconstruido || 0) - (auditoria.valor_almacenado || 0)) > 0.01;
   const requiereRecosteo = alertas.length > 0 || difVal > 0.01 || auditoria.stock_inconsistente || auditoria.costo_inconsistente;
   const tieneAlertasCompras = auditoria.alertas_compras && auditoria.alertas_compras.length > 0;
 
@@ -1146,19 +1152,18 @@ function renderizarAuditoriaKardex(auditoria, productoId) {
     ...(auditoria.valor_inconsistente ? ['Valor no coincide con reconstrucción'] : [])
   ];
 
-  el.className = `mb-3 rounded-xl border p-3 text-xs flex flex-col gap-2.5 shadow-2xs ${requiereRecosteo ? 'border-amber-300 bg-amber-50/50' : 'border-emerald-200 bg-emerald-50/40'}`;
+  el.className = `mb-2 rounded-xl border px-3 py-2 text-xs flex flex-col gap-1.5 shadow-2xs ${requiereRecosteo ? 'border-amber-300 bg-amber-50/50' : 'border-emerald-200 bg-emerald-50/40'}`;
 
   el.innerHTML = `
-    <!-- FILA SUPERIOR: RESUMEN DE AUDITORÍA Y TOTALES DE EXISTENCIA -->
-    <div class="flex items-center justify-between flex-wrap gap-2 pb-1 border-b border-gray-200/50">
+    <!-- L3: ESTADO EN UNA FRANJA -->
+    <div class="flex items-center gap-x-3 gap-y-1 flex-wrap">
       <div class="flex items-center gap-2 flex-wrap shrink-0">
         <span class="text-[11px] font-extrabold text-gray-700">Auditoría:</span>
         ${alertas.length ? alertas.join('') : '<span class="rounded bg-emerald-100 px-1.5 py-0.5 text-emerald-700 font-bold text-[10px]">✓ Sin inconsistencias</span>'}
       </div>
-
       <div class="flex items-center gap-3 text-[11px] font-mono text-gray-600 shrink-0">
         <span>Alm: <strong class="text-gray-800">${_fmtKardexMon(auditoria.valor_almacenado)}</strong></span>
-        <span>Rec: <strong class="text-gray-800">${_fmtKardexMon(auditoria.valor_reconstruido)}</strong></span>
+        ${mostrarRec ? `<span>Rec: <strong class="text-gray-800">${_fmtKardexMon(auditoria.valor_reconstruido)}</strong></span>` : ''}
         <span>Dif: <span class="${difClass}">${_fmtKardexMon(auditoria.diferencia_valor)}</span></span>
         ${detalle.length ? `
           <details class="inline-block relative">
@@ -1169,97 +1174,65 @@ function renderizarAuditoriaKardex(auditoria, productoId) {
           </details>
         ` : ''}
       </div>
-    </div>
-
-    <!-- 1. ALERTAS CRÍTICAS DE COMPRAS (PRIMERO EN LA JERARQUÍA VISUAL) -->
-    ${tieneAlertasCompras ? `
-      <details class="w-full bg-rose-50/90 border border-rose-300 rounded-xl p-2.5 text-rose-950 text-xs shadow-2xs group mb-2.5">
-        <summary class="font-bold flex items-center justify-between cursor-pointer select-none text-rose-950 hover:text-rose-900 list-none">
-          <div class="flex items-center gap-2 flex-wrap">
-            <span class="text-sm shrink-0 font-black">!</span>
-            <span class="font-extrabold uppercase tracking-wide text-xs">Advertencias de Compras (${auditoria.alertas_compras.length})</span>
-            <span class="text-[11px] font-normal text-rose-800">· Revisar antes de recostear</span>
+      ${tieneAlertasCompras ? `
+        <details class="inline-block relative shrink-0">
+          <summary class="cursor-pointer text-[11px] font-bold text-rose-700 hover:text-rose-900 list-none flex items-center gap-1" title="Revisar antes de recostear">
+            ! Compras (${auditoria.alertas_compras.length}) ▼
+          </summary>
+          <div class="absolute left-0 top-full mt-1 bg-white rounded-lg border border-rose-200 shadow-lg p-2.5 max-h-48 overflow-y-auto w-96 z-20">
+            <ul class="space-y-1 text-[11px] text-rose-900 font-medium">
+              ${auditoria.alertas_compras.map(al => {
+                let lbl = 'Variación atípica de costo';
+                let icon = '▲';
+                if (al.tipo === 'posible_duplicado') { lbl = 'Posible compra duplicada'; icon = '!'; }
+                else if (al.tipo === 'registro_retroactivo') { lbl = 'Entrada retroactiva'; icon = '◷'; }
+                return `<li><strong>${icon} ${lbl}:</strong> ${al.mensaje}</li>`;
+              }).join('')}
+            </ul>
           </div>
-          <span class="text-[11px] font-bold text-rose-700 hover:text-rose-900 underline ml-2">Ver detalle ▼</span>
-        </summary>
-        <div class="mt-2.5 pt-2 border-t border-rose-200/80">
-          <ul class="list-disc pl-4 space-y-1.5 text-[11px] text-rose-900 font-medium">
-            ${auditoria.alertas_compras.map(al => {
-              let lbl = 'Variación atípica de costo';
-              let icon = '▲';
-              if (al.tipo === 'posible_duplicado') { lbl = 'Posible compra duplicada'; icon = '!'; }
-              else if (al.tipo === 'registro_retroactivo') { lbl = 'Entrada retroactiva'; icon = '◷'; }
-              return `<li><strong>${icon} ${lbl}:</strong> ${al.mensaje}</li>`;
-            }).join('')}
-          </ul>
+        </details>
+      ` : ''}
+      <details class="inline-block relative shrink-0 group">
+        <summary class="cursor-pointer text-[11px] font-semibold text-slate-500 hover:text-slate-700 list-none flex items-center gap-1" title="Regla de inventario: centros de utilidad y bodegas"><svg class="transition-transform group-open:rotate-90" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg> Regla</summary>
+        <div class="absolute left-0 top-full mt-1 bg-white rounded-lg border border-slate-200 shadow-lg p-2.5 w-96 z-20">
+          <p class="text-[11px] leading-relaxed text-slate-600">En el sistema, cada <strong>Centro de Utilidad representa una bodega física independiente (relación 1:1)</strong>. Los registros no se mezclan en la tabla cronológica para garantizar la exactitud matemática de saldos y costos promedio. Actualmente no es posible crear más de una bodega por centro de utilidad.</p>
         </div>
       </details>
-    ` : ''}
-
-    <!-- EXPLICACIÓN CLARA DE FILAS AMARILLAS SI HAY INCONSISTENCIAS -->
+      ${requiereRecosteo ? `
+        <button type="button" onclick="ejecutarRecosteoKardex(${productoId})" id="btn-recosteo-kardex"
+                class="px-3 py-1 ${tieneAlertasCompras ? 'bg-rose-600 hover:bg-rose-700' : 'bg-amber-600 hover:bg-amber-700'} text-white font-bold text-[11px] rounded-lg shadow-xs transition flex items-center gap-1.5 cursor-pointer ml-auto shrink-0"
+                title="${tieneAlertasCompras ? 'Si ya verificó las alertas de compras anteriores y desea continuar' : 'Recomendación: ejecutar recosteo para sincronizar saldos'}">
+          <span>${tieneAlertasCompras ? 'Recostear y Sincronizar' : 'Ejecutar Recosteo'}</span>
+        </button>
+      ` : `
+        <span class="text-[11px] text-emerald-700 font-medium flex items-center gap-1 ml-auto">
+          <span>✓</span> <span>Saldos y costos sincronizados con la historia</span>
+        </span>
+      `}
+    </div>
     ${(auditoria.inconsistencias_movimientos && auditoria.inconsistencias_movimientos.length > 0) ? `
-      <div class="w-full bg-amber-50/80 border border-amber-300 rounded-xl px-3 py-1.5 text-[11px] text-amber-950 flex items-center gap-2 shadow-2xs mb-2.5">
+      <div class="w-full bg-amber-50/80 border border-amber-300 rounded-xl px-3 py-1.5 text-[11px] text-amber-950 flex items-center gap-2 shadow-2xs">
         <span class="text-sm shrink-0 font-black">ℹ</span>
         <div class="flex-1 leading-snug">
           <strong>Filas en amarillo en la tabla:</strong> Indican movimientos donde el saldo guardado en su momento difiere de la historia cronológica recalculada (habitual cuando se digitan compras con fecha del pasado). Se sincronizan automáticamente al hacer clic en <strong>Recostear</strong>.
         </div>
       </div>
     ` : ''}
-
-    <!-- 2. ALERTA DE EFECTO CASCADA EN RECETAS / ENSAMBLES -->
     ${auditoria.cascada_ensambles && auditoria.cascada_ensambles.es_insumo && requiereRecosteo ? `
-      <div class="w-full bg-amber-50/90 border-2 border-amber-300 rounded-xl p-3 text-amber-950 text-xs shadow-xs">
-        <div class="flex items-start gap-2.5">
-          <span class="text-xl shrink-0 font-black">!</span>
-          <div class="flex-1">
-            <span class="font-black text-amber-950 block text-xs uppercase tracking-wide">
-              ! Efecto Cascada en Costo de Ventas y Márgenes de Ganancia:
-            </span>
-            <p class="mt-1 text-[11px] text-amber-900 leading-relaxed font-medium">
-              Este ítem es insumo en la Tarjeta Estándar de <strong>${auditoria.cascada_ensambles.total_productos_padre} productos terminados</strong>
-              (<em>${auditoria.cascada_ensambles.productos_padre.slice(0, 4).map(p => p.nombre).join(', ')}${auditoria.cascada_ensambles.total_productos_padre > 4 ? '...' : ''}</em>).
-              Cualquier alteración de costos o recosteo afecta los asientos contables de Costo de Ventas (Cuenta 6135 / Salidas 1405) y la rentabilidad calculada en el Reporte de Ventas y Costos (Margen de Ganancia Bruto) de dichos productos.
-            </p>
-            <div class="mt-2.5 flex items-center gap-2 flex-wrap">
-              <button type="button" 
-                      onclick="irAAuditoriaEnsambles('${auditoria.cascada_ensambles.fecha_desde}', '${auditoria.cascada_ensambles.fecha_hasta}')" 
-                      class="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] rounded-lg shadow-xs transition flex items-center gap-1.5 cursor-pointer">
-                <span>↗</span> <span>Auditar Ensambles Históricos (${auditoria.cascada_ensambles.fecha_desde} al ${auditoria.cascada_ensambles.fecha_hasta}) ↗</span>
-              </button>
-              <span class="text-[10px] text-amber-800 font-semibold">Podrá auditar cada documento individualmente y sincronizar tanto su asiento contable como el costo y margen de la venta.</span>
-            </div>
+      <div class="flex items-center gap-2 flex-wrap w-full mt-1 pt-1 border-t border-amber-200/60">
+        <details class="inline-block relative">
+          <summary class="cursor-pointer text-[11px] font-bold text-amber-800 hover:text-amber-900 list-none">! Cascada: insumo en ${auditoria.cascada_ensambles.total_productos_padre} productos ▼</summary>
+          <div class="absolute left-0 top-full mt-1 bg-white rounded-lg border border-amber-200 shadow-lg p-2.5 w-96 z-20">
+            <p class="text-[11px] leading-relaxed text-amber-900">Este ítem es insumo en la Tarjeta Estándar de <strong>${auditoria.cascada_ensambles.total_productos_padre} productos terminados</strong> (<em>${auditoria.cascada_ensambles.productos_padre.slice(0, 4).map(p => p.nombre).join(', ')}${auditoria.cascada_ensambles.total_productos_padre > 4 ? '...' : ''}</em>). Cualquier alteración de costos o recosteo afecta los asientos contables de Costo de Ventas (Cuenta 6135 / Salidas 1405) y la rentabilidad calculada en el Reporte de Ventas y Costos (Margen de Ganancia Bruto) de dichos productos.</p>
           </div>
-        </div>
+        </details>
+        <button type="button" onclick="irAAuditoriaEnsambles('${auditoria.cascada_ensambles.fecha_desde}', '${auditoria.cascada_ensambles.fecha_hasta}')"
+                class="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] rounded-lg shadow-xs transition flex items-center gap-1.5 cursor-pointer ml-auto"
+                title="Podrá auditar cada documento individualmente y sincronizar tanto su asiento contable como el costo y margen de la venta">
+          <span>↗</span> <span>Auditar Ensambles Históricos (${auditoria.cascada_ensambles.fecha_desde} al ${auditoria.cascada_ensambles.fecha_hasta}) ↗</span>
+        </button>
       </div>
     ` : ''}
-
-    <!-- 3. ACCIÓN DE RECOSTEO (UBICADO ABAJO DE LAS ADVERTENCIAS) -->
-    <div class="flex items-center justify-between gap-3 pt-1 border-t border-gray-200/50 flex-wrap">
-      ${requiereRecosteo ? `
-        <div class="flex items-center gap-2 text-[11px] font-medium">
-          ${tieneAlertasCompras ? `
-            <span class="text-rose-800 font-semibold flex items-center gap-1.5">
-              <span class="font-black">!</span>
-              <span>Si ya verificó las alertas de compras anteriores y desea continuar:</span>
-            </span>
-          ` : `
-            <span class="text-amber-900 font-semibold flex items-center gap-1.5">
-              <span class="font-black">!</span>
-              <span>Recomendación: ejecutar recosteo para sincronizar saldos</span>
-            </span>
-          `}
-        </div>
-        <button type="button" onclick="ejecutarRecosteoKardex(${productoId})" id="btn-recosteo-kardex"
-                class="px-3 py-1.5 ${tieneAlertasCompras ? 'bg-rose-600 hover:bg-rose-700' : 'bg-amber-600 hover:bg-amber-700'} text-white font-bold text-[11px] rounded-lg shadow-xs transition flex items-center gap-1.5 cursor-pointer ml-auto shrink-0"
-                title="Recalcular cronológicamente los saldos y el costo promedio de este producto">
-          <span>${tieneAlertasCompras ? 'Recostear y Sincronizar' : 'Ejecutar Recosteo'}</span>
-        </button>
-      ` : `
-        <span class="text-[11px] text-emerald-700 font-medium flex items-center gap-1">
-          <span>✓</span> <span>Saldos y costos sincronizados con la historia</span>
-        </span>
-      `}
-    </div>
   `;
 }
 
@@ -1296,6 +1269,13 @@ function renderizarBodegasKardex(centros, bodegaActivaId, totalEmpresa) {
   if (totalEmpresa && kteStock && kteValor) {
     kteStock.textContent = _fmtKardexQty(totalEmpresa.stock);
     kteValor.textContent = _fmtKardexMon(totalEmpresa.valor_existencia);
+  }
+  const kteBox = document.getElementById('kardex-total-empresa-box');
+  if (kteBox) {
+    const conStock = (centros || []).filter(c => Number(c.stock || 0) > 0).length;
+    const mostrar = !!(totalEmpresa && conStock > 1);
+    kteBox.classList.toggle('hidden', !mostrar);
+    kteBox.classList.toggle('flex', mostrar);
   }
 }
 

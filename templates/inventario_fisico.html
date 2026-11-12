@@ -279,6 +279,10 @@
           <span class="block text-[10px] font-bold text-gray-400 uppercase">Costo Promedio Ponderado</span>
           <span id="info-prod-costo" class="font-extrabold text-gray-800 text-sm">$0.00</span>
         </div>
+        <div>
+          <span class="block text-[10px] font-bold text-gray-400 uppercase">Recosteo previo</span>
+          <span id="info-prod-recosteo" class="font-extrabold text-gray-400 text-sm">...</span>
+        </div>
       </div>
     </div>
   </div>
@@ -625,6 +629,25 @@ function seleccionarProductoLibre(id) {
   document.getElementById("info-prod-nombre").textContent = selectedProduct.nombre;
   document.getElementById("info-prod-stock").textContent = selectedProduct.stock;
   document.getElementById("info-prod-costo").textContent = `$${parseFloat(selectedProduct.costo || 0).toLocaleString('es-CO', { minimumFractionDigits: 2 })}`;
+  const recCard = document.getElementById("info-prod-recosteo");
+  if (recCard) {
+    recCard.className = "font-extrabold text-gray-400 text-sm";
+    recCard.textContent = "verificando...";
+    const centroCard = document.getElementById("select-centro-utilidad")?.value;
+    fetch(`/api/inventario/producto/${id}/kardex?por_pagina=1` + (centroCard ? `&bodega=${centroCard}` : ''))
+      .then((r) => r.json()).then((d) => {
+        if (!d || !d.ok || !d.auditoria) { recCard.textContent = "no verificado"; return; }
+        const a = d.auditoria;
+        const difV = Math.abs(a.diferencia_valor || 0);
+        if (a.problemas || difV > 0.01) {
+          recCard.className = "font-extrabold text-amber-700 text-sm";
+          recCard.textContent = "! se recostea al guardar";
+        } else {
+          recCard.className = "font-extrabold text-emerald-600 text-sm";
+          recCard.textContent = "base limpia";
+        }
+      }).catch(() => { recCard.textContent = "no verificado"; });
+  }
   
   // Asistente empaque
   const empBox = document.getElementById("libre-empaque-box");

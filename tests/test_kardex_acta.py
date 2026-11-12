@@ -53,6 +53,8 @@ check('omni causa pura', 'valor_inconsistente && !a.stock_inconsistente && !a.co
 check('kardex Uds junto a Dif', 'Uds:' in kx and 'difUds' in kx)
 check('omni fila envuelve', "classList.remove('truncate')" in om and 'whitespace-normal' in om)
 check('omni reintento unico', 'omniCompletar7(pid, idx, 1)' in om and '!intento' in om)
+check('kardex botones item solo', kx.count('solo_recosteo: true') >= 2)
+check('kardex todos intacto full', 'ejecutarRecosteo({ todos: true }' in kx)
 
 print('fails:', len(fails))
 sys.exit(1 if fails else 0)

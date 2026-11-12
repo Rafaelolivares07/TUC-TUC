@@ -1362,7 +1362,7 @@
   window.omniSueltosCerrar = function() {
     document.getElementById('dato-sueltos-modal').classList.add('hidden');
   };
-  window.omniCompletar7 = async function(pid, idx) {
+  window.omniCompletar7 = async function(pid, idx, intento) {
     try {
       const r = await fetch('/api/inventario/producto/' + pid + '/kardex?por_pagina=1');
       const d = await r.json();
@@ -1396,9 +1396,18 @@
         const sd = (ac.diferencia >= 0 ? '+' : '') + omniFmt(ac.diferencia);
         seg.push('Acta ' + f + ' dif ' + sd + (ac.sistema_cambiado ? ' (! cambi\u00f3)' : ''));
       }
-      const box = resultsBody.querySelector('[data-omni-index="' + idx + '"] .text-xs');
-      if (box && seg.length) box.textContent += ' \u00b7 ' + seg.join(' \u00b7 ');
-    } catch (e) { /* fila queda con Ultimo: ... */ }
+      const row = resultsBody.querySelector('[data-omni-index="' + idx + '"]');
+      const box = row ? row.querySelector('.text-xs') : null;
+      if (box && seg.length) {
+        box.textContent += ' \u00b7 ' + seg.join(' \u00b7 ');
+        box.classList.remove('truncate');
+        box.classList.add('whitespace-normal');
+        const wrap = box.parentElement;
+        if (wrap) wrap.classList.remove('truncate');
+      } else if (!box && !intento) {
+        setTimeout(function(){ window.omniCompletar7(pid, idx, 1); }, 400);
+      }
+    } catch (e) { console.debug('omni7', (e && e.message) || e); }
   };
 
   window.omniElegirProducto = function(i) {

@@ -61,6 +61,10 @@
         <span class="text-gray-500 font-medium">Diferencia Física:</span>
         <span id="val-diferencia" class="font-bold"></span>
       </div>
+      <div class="flex justify-between border-b border-gray-100 pb-2">
+        <span class="text-gray-500 font-medium">Recosteo previo:</span>
+        <span id="val-recosteo-previo" class="font-semibold text-gray-400 text-xs">verificando...</span>
+      </div>
       <div class="pt-2">
         <div class="flex items-center justify-between mb-1">
           <label class="block text-xs font-bold text-gray-500 uppercase">Costo Unitario de Ajuste ($)</label>
@@ -1330,6 +1334,29 @@ function abrirModalValidacionGenerica(product, physicalQty, overrideCosto = null
   verificarCuentasCategoria(product.categoria, diff > 0);
 
   // Mostrar modal
+  // Recosteo previo evidente: estado de la base antes de guardar
+  const recSpan = document.getElementById("val-recosteo-previo");
+  if (recSpan) {
+    recSpan.className = "font-semibold text-gray-400 text-xs";
+    recSpan.textContent = "verificando base...";
+    const centroRec = document.getElementById("select-centro-utilidad")?.value;
+    fetch(`/api/inventario/producto/${product.id}/kardex?por_pagina=1` + (centroRec ? `&bodega=${centroRec}` : ''))
+      .then((r) => r.json()).then((d) => {
+        if (!d || !d.ok || !d.auditoria) { recSpan.textContent = "no verificado"; return; }
+        const a = d.auditoria;
+        const difV = Math.abs(a.diferencia_valor || 0);
+        if (a.problemas || difV > 0.01) {
+          const almU = (a.stock_almacenado === null || a.stock_almacenado === undefined) ? null : a.stock_almacenado;
+          const du = almU === null ? null : (almU - (a.stock_final || 0));
+          recSpan.className = "font-bold text-amber-700 text-xs";
+          recSpan.textContent = "! se recostea al guardar \u00b7 dif $" + difV.toFixed(2) + (du === null ? "" : " \u00b7 uds " + (du >= 0 ? "+" : "") + du);
+        } else {
+          recSpan.className = "font-bold text-emerald-600 text-xs";
+          recSpan.textContent = "\u2713 base limpia";
+        }
+      }).catch(() => { recSpan.textContent = "no verificado"; });
+  }
+
   document.getElementById("modal-validacion").classList.remove("hidden");
 }
 

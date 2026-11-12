@@ -630,23 +630,45 @@ function seleccionarProductoLibre(id) {
   document.getElementById("info-prod-stock").textContent = selectedProduct.stock;
   document.getElementById("info-prod-costo").textContent = `$${parseFloat(selectedProduct.costo || 0).toLocaleString('es-CO', { minimumFractionDigits: 2 })}`;
   const recCard = document.getElementById("info-prod-recosteo");
+  const stkAntes = selectedProduct.stock;
+  const ctoAntes = selectedProduct.costo;
+  const centroCard = document.getElementById("select-centro-utilidad")?.value;
+  const enfocarTrasRecosteo = () => {
+    const q = document.getElementById("libre-cantidad");
+    if (q) { q.disabled = false; q.value = ""; q.focus(); }
+  };
   if (recCard) {
-    recCard.className = "font-extrabold text-gray-400 text-sm";
-    recCard.textContent = "verificando...";
-    const centroCard = document.getElementById("select-centro-utilidad")?.value;
-    fetch(`/api/inventario/producto/${id}/kardex?por_pagina=1` + (centroCard ? `&bodega=${centroCard}` : ''))
-      .then((r) => r.json()).then((d) => {
-        if (!d || !d.ok || !d.auditoria) { recCard.textContent = "no verificado"; return; }
-        const a = d.auditoria;
-        const difV = Math.abs(a.diferencia_valor || 0);
-        if (a.problemas || difV > 0.01) {
+    recCard.className = "font-extrabold text-amber-700 text-sm";
+    recCard.textContent = "corriendo recosteo...";
+    fetch(`/api/inventario/${NEGOCIO_ID}/recosteo/ejecutar`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ producto_ids: [id], centro_utilidad_id: centroCard ? parseInt(centroCard) : null })
+    }).then((r) => r.json()).then((d) => {
+      if (!d || !d.ok) throw new Error((d && d.error) || "recosteo fallo");
+      return fetch(`/api/inventario/producto/${id}/kardex?por_pagina=1` + (centroCard ? `&bodega=${centroCard}` : '')).then((r2) => r2.json());
+    }).then((k) => {
+      if (k && k.ok && k.stock_actual !== undefined) {
+        selectedProduct.stock = k.stock_actual;
+        selectedProduct.costo = k.costo_actual;
+        document.getElementById("info-prod-stock").textContent = k.stock_actual;
+        document.getElementById("info-prod-costo").textContent = `$${parseFloat(k.costo_actual || 0).toLocaleString('es-CO', { minimumFractionDigits: 2 })}`;
+        const cStk = Math.abs((parseFloat(k.stock_actual) || 0) - (parseFloat(stkAntes) || 0)) > 0.000001;
+        const cCto = Math.abs((parseFloat(k.costo_actual) || 0) - (parseFloat(ctoAntes) || 0)) > 0.01;
+        if (cStk || cCto) {
           recCard.className = "font-extrabold text-amber-700 text-sm";
-          recCard.textContent = "! se recostea al guardar";
+          recCard.textContent = `stock ${stkAntes}\u2192${k.stock_actual} \u00b7 costo $${ctoAntes}\u2192$${k.costo_actual}`;
         } else {
           recCard.className = "font-extrabold text-emerald-600 text-sm";
-          recCard.textContent = "base limpia";
+          recCard.textContent = "sin cambios, base limpia";
         }
-      }).catch(() => { recCard.textContent = "no verificado"; });
+      } else {
+        recCard.textContent = "no verificado, se recostea al guardar";
+      }
+      enfocarTrasRecosteo();
+    }).catch(() => { recCard.textContent = "no verificado, se recostea al guardar"; enfocarTrasRecosteo(); });
+  } else {
+    enfocarTrasRecosteo();
   }
   
   // Asistente empaque
@@ -666,11 +688,10 @@ function seleccionarProductoLibre(id) {
     empBox.classList.add("hidden");
   }
 
-  // Habilitar campos de conteo
+  // Campos de conteo: se habilitan y enfocan tras el recosteo
   const qtyField = document.getElementById("libre-cantidad");
-  qtyField.disabled = false;
+  qtyField.disabled = true;
   qtyField.value = "";
-  qtyField.focus();
   
   const btn = document.getElementById("libre-btn-add");
   btn.disabled = true;

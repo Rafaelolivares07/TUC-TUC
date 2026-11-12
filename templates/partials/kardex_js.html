@@ -1446,7 +1446,7 @@ function renderizarTablaKardex(d) {
       : '';
 
     // Formatear nombre puro del documento sin slugs ni concatenaciones redundantes
-    const docTypeRaw = (m.tipo_documento || '').trim();
+    const docTypeRaw = (m.tipo_documento_nombre || m.tipo_documento || '').trim();
     const docNumRaw = String(m.documento_numero || '').trim();
 
     let cleanNum = docNumRaw;

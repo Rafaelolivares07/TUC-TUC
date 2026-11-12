@@ -3599,6 +3599,7 @@ def api_inventario_kardex(producto_id):
         rows = conn.execute(f"""
             SELECT m.id, m.producto_id, m.tipo, m.motivo, m.cantidad, m.stock_anterior, m.stock_nuevo,
                    m.valor_unitario, m.costo_und, m.valor_total, m.notas, m.created_at, m.tipo_documento,
+                   tdn.nombre AS tipo_documento_nombre,
                    m.documento_numero, m.documento_fecha, m.tipo_documento_id, m.proveedor_id,
                    COALESCE(t.nombre, m.proveedor_nombre) AS proveedor_nombre, m.iva_total, m.documento_total,
                    COALESCE(TO_CHAR(m.documento_fecha, 'DD/MM/YY') || ' ' || TO_CHAR(m.created_at, 'HH24:MI'), TO_CHAR(m.created_at, 'DD/MM/YY HH24:MI')) AS fecha,
@@ -3622,6 +3623,7 @@ def api_inventario_kardex(producto_id):
             LEFT JOIN terceros t ON t.id = m.proveedor_id
             LEFT JOIN productos p_padre ON p_padre.id = m.producto_padre_id
             LEFT JOIN presentaciones pres ON pres.id = m.presentacion_id
+            LEFT JOIN tipos_documento_negocio tdn ON tdn.id = m.tipo_documento_id AND tdn.negocio_id = m.negocio_id
             LEFT JOIN LATERAL (
                 SELECT act.id, act.cantidad_contada, act.stock_sistema, act.diferencia,
                        act.usuario_nombre, act.modulo_origen, act.metodologia, act.notas
@@ -4055,6 +4057,7 @@ def api_inventario_kardex_pdf(producto_id):
         rows = conn.execute(f"""
             SELECT m.id, m.tipo, m.motivo, m.cantidad, m.stock_anterior, m.stock_nuevo,
                    m.valor_unitario, m.costo_und, m.valor_total, m.notas, m.tipo_documento,
+                   tdn.nombre AS tipo_documento_nombre,
                    m.documento_numero, m.documento_fecha,
                    COALESCE(t.nombre, m.proveedor_nombre) AS proveedor_nombre,
                    TO_CHAR(m.documento_fecha, 'DD/MM/YY') || ' ' || TO_CHAR(m.created_at, 'HH24:MI') AS fecha,
@@ -4067,6 +4070,7 @@ def api_inventario_kardex_pdf(producto_id):
             LEFT JOIN terceros t ON t.id = m.proveedor_id
             LEFT JOIN productos p_padre ON p_padre.id = m.producto_padre_id
             LEFT JOIN presentaciones pres ON pres.id = m.presentacion_id
+            LEFT JOIN tipos_documento_negocio tdn ON tdn.id = m.tipo_documento_id AND tdn.negocio_id = m.negocio_id
             WHERE m.producto_id = %s {filtro_bodega_sql}
             ORDER BY COALESCE(m.documento_fecha, m.created_at::date) ASC, m.created_at ASC, m.id ASC
         """, tuple(params_kardex)).fetchall()
@@ -6682,6 +6686,7 @@ def api_tienda_inventario_kardex(slug):
         rows = conn.execute("""
             SELECT m.id, m.tipo, m.motivo, m.cantidad, m.stock_anterior, m.stock_nuevo,
                    m.valor_unitario, m.costo_und, m.valor_total, m.notas, m.tipo_documento,
+                   tdn.nombre AS tipo_documento_nombre,
                    m.documento_numero, m.documento_fecha, m.proveedor_id,
                    COALESCE(t.nombre, m.proveedor_nombre) AS proveedor_nombre, m.iva_total, m.documento_total,
                    COALESCE(TO_CHAR(m.documento_fecha, 'DD/MM/YY') || ' ' || TO_CHAR(m.created_at, 'HH24:MI'), TO_CHAR(m.created_at, 'DD/MM/YY HH24:MI')) AS fecha,
@@ -14604,7 +14609,7 @@ def _pdf_kardex_producto(nombre_negocio, nombre_producto, codigo_producto,
     pdf.set_text_color(40, 40, 40)
     ancho_tabla = sum(col_w)
     for m in movimientos:
-        doc_tipo_raw = (m.get('tipo_documento') or '').strip()
+        doc_tipo_raw = (m.get('tipo_documento_nombre') or m.get('tipo_documento') or '').strip()
         doc_num_raw = str(m.get('documento_numero') or '').strip()
         
         import re

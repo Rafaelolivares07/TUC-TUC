@@ -48,6 +48,9 @@ check('pinta recosteo/cuadra', 'Recosteo S' in om and "'cuadra'" in om)
 check('pinta cascada/compras/acta',
       'Cascada ' in om and 'Compras raras ' in om and 'Acta ' in om)
 check('disparo tras fila Kardex', 'window.omniCompletar7(p.id, idx)' in om)
+check('omni dif uds con signo', "('uds ' + (difU >= 0 ? '+' : '') + omniFmt(difU))" in om)
+check('omni causa pura', 'valor_inconsistente && !a.stock_inconsistente && !a.costo_inconsistente' in om)
+check('kardex Uds junto a Dif', 'Uds:' in kx and 'difUds' in kx)
 
 print('fails:', len(fails))
 sys.exit(1 if fails else 0)

@@ -9941,6 +9941,71 @@ def api_mantenimiento_documentos_recientes(negocio_id):
         conn.close()
 
 
+@bp.route('/api/inventario/<int:negocio_id>/mantenimiento/negativos', methods=['GET'])
+def api_mantenimiento_negativos(negocio_id):
+    """Rastreo solo-lectura de montos negativos (nacio del -3110.97 de FV-650).
+
+    Lista movimientos contables (monto<0) e inventario (valor/costo<0) del
+    negocio. No escribe nada: GET puro con LIMIT.
+    """
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    limite = min(500, max(10, _int_o_none(request.args.get('limite')) or 200))
+    conn = get_db_connection()
+    try:
+        rows_mc = conn.execute("""
+            SELECT mc.id, mc.comprobante_id, mc.cuenta, mc.concepto, mc.tipo, mc.monto,
+                   mc.tipo_documento, mc.numero_documento, mc.producto_id,
+                   TO_CHAR(mc.fecha, 'YYYY-MM-DD') AS fecha,
+                   TO_CHAR(mc.created_at, 'YYYY-MM-DD HH24:MI:SS') AS creado_en
+            FROM movimientos_contables mc
+            WHERE mc.negocio_id = %s AND mc.monto < 0
+            ORDER BY mc.id DESC
+            LIMIT %s
+        """, (negocio_id, limite)).fetchall()
+        rows_mi = conn.execute("""
+            SELECT m.id, m.producto_id, m.nombre_producto, m.cantidad,
+                   m.costo_und, m.valor_total, m.motivo,
+                   m.tipo_documento, m.documento_numero,
+                   TO_CHAR(m.documento_fecha, 'YYYY-MM-DD') AS fecha,
+                   TO_CHAR(m.created_at, 'YYYY-MM-DD HH24:MI:SS') AS creado_en
+            FROM movimientos_inventario m
+            WHERE m.negocio_id = %s AND (m.valor_total < 0 OR m.costo_und < 0)
+            ORDER BY m.id DESC
+            LIMIT %s
+        """, (negocio_id, limite)).fetchall()
+        mc_neg = []
+        for r in rows_mc:
+            mc_neg.append({
+                'id': r['id'], 'comprobante_id': r['comprobante_id'], 'cuenta': r['cuenta'],
+                'concepto': r['concepto'], 'tipo': r['tipo'], 'monto': float(r['monto'] or 0),
+                'tipo_documento': r['tipo_documento'], 'numero_documento': r['numero_documento'],
+                'producto_id': r['producto_id'], 'fecha': r['fecha'], 'creado_en': r['creado_en'],
+            })
+        mi_neg = []
+        for r in rows_mi:
+            mi_neg.append({
+                'id': r['id'], 'producto_id': r['producto_id'],
+                'nombre_producto': r['nombre_producto'], 'cantidad': float(r['cantidad'] or 0),
+                'costo_und': float(r['costo_und']) if r['costo_und'] is not None else None,
+                'valor_total': float(r['valor_total']) if r['valor_total'] is not None else None,
+                'motivo': r['motivo'], 'tipo_documento': r['tipo_documento'],
+                'documento_numero': r['documento_numero'], 'fecha': r['fecha'],
+                'creado_en': r['creado_en'],
+            })
+        return jsonify({
+            'ok': True,
+            'negocio_id': negocio_id,
+            'mc_negativos': mc_neg,
+            'mi_negativos': mi_neg,
+            'totales': {'mc': len(mc_neg), 'mi': len(mi_neg), 'limite': limite},
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
 @bp.route('/api/inventario/<int:negocio_id>/mantenimiento/tipos-documentos', methods=['GET'])
 def api_mantenimiento_tipos_documentos(negocio_id):
     if 'usuario_id' not in session:

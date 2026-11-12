@@ -57,9 +57,9 @@ check('dc facial intacto', m({'total_pedidos': 882000.0}) == (882000.0, 882000.0
 check('saldo helper existe', hasattr(inv, '_audit_saldo'))
 if hasattr(inv, '_audit_saldo'):
     s = inv._audit_saldo
-    check('saldo cartera manda',
+    check('saldo ignora cartera',
           s({'saldo_pendiente': 500.0, 'total_debitos': 100.0, 'total_creditos': 100.0})
-          == 500.0)
+          == 0.0)
     check('saldo diferencia',
           s({'total_debitos': 100.0, 'total_creditos': 90.0}) == 10.0)
     check('saldo cuadra cero',
@@ -102,6 +102,9 @@ check('tpl: helper saldoDoc', 'function saldoDoc(' in TPL)
 check('tpl: fila usa saldoDoc', 'let saldoVal = saldoDoc(doc);' in TPL)
 check('tpl: pie usa saldoDoc', 'totS += saldoDoc(x);' in TPL)
 check('tpl: orden usa saldoDoc', '[saldoDoc(d),' in TPL)
+check('tpl: fuera badge cartera', "getElementById('tabla-badge-saldo-tercero')" not in TPL)
+check('tpl: fuera saldo panel', "getElementById('det-doc-saldo-badge')" not in TPL)
+check('tpl: cero cartera', 'saldo_pendiente' not in TPL)
 
 # ---------- py_compile ----------
 r = subprocess.run([sys.executable, '-m', 'py_compile',

@@ -243,9 +243,6 @@
           <span id="tabla-contador-docs" class="text-[11px] font-semibold text-zinc-500 bg-white border border-zinc-200 px-2 py-0.5 rounded-md">
             0 documentos
           </span>
-          <span id="tabla-badge-saldo-tercero" class="hidden text-[11px] font-semibold font-mono text-zinc-700 bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded-md">
-            Saldo Pendiente: $0.00
-          </span>
         </div>
 
         <div class="flex items-center gap-2 text-xs text-zinc-500 font-medium">
@@ -317,7 +314,6 @@
             <span class="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Documento Auditado:</span>
             <span id="det-doc-numero" class="font-mono font-bold text-sm text-zinc-900">—</span>
             <span id="det-doc-tipo-badge" class="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-zinc-100 text-zinc-700 border border-zinc-200">—</span>
-            <span id="det-doc-saldo-badge" class="hidden px-2 py-0.5 rounded-md text-[11px] font-semibold font-mono bg-zinc-100 text-zinc-800 border border-zinc-200"></span>
           </div>
           <p id="det-doc-subtitulo" class="text-xs text-zinc-500 mt-1"></p>
         </div>
@@ -639,29 +635,12 @@
           docs = ordenarDocsCliente(docs);
           appState.documentos = docs;
 
-          // Calcular saldo pendiente total del tercero
-          let totalSaldo = 0;
-          docs.forEach(doc => {
-            if (doc.saldo_pendiente && doc.saldo_pendiente > 0) {
-              totalSaldo += doc.saldo_pendiente;
-            }
-          });
-
-          const badgeSaldo = document.getElementById('tabla-badge-saldo-tercero');
-          if (totalSaldo > 0) {
-            badgeSaldo.textContent = `Saldo Pendiente Total: $${totalSaldo.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-            badgeSaldo.classList.remove('hidden');
-          } else {
-            badgeSaldo.classList.add('hidden');
-          }
-
           renderFilasTabla(docs, true);
 
         } else {
           // MODO GENERAL: Transacciones recientes globales paginadas
           document.getElementById('filtro-badge-modo').textContent = 'Todas las transacciones';
           document.getElementById('tabla-titulo').textContent = 'Transacciones Registradas';
-          document.getElementById('tabla-badge-saldo-tercero').classList.add('hidden');
           document.getElementById('tabla-paginador').classList.remove('hidden');
 
           const params = new URLSearchParams({
@@ -727,9 +706,8 @@
       return {d: d, c: c};
     }
 
-    // Saldo mostrado: cartera si viene; si no, diferencia D-C de lo mostrado.
+    // Saldo mostrado: diferencia D-C de lo mostrado (0,00 si cuadra).
     function saldoDoc(doc) {
-      if (doc.saldo_pendiente !== undefined && doc.saldo_pendiente !== null) return Number(doc.saldo_pendiente);
       const m = montosDC(doc);
       return (m.d || 0) - (m.c || 0);
     }
@@ -987,14 +965,6 @@
         // Header detalle: tipo + numero juntos en una linea.
         document.getElementById('det-doc-numero').textContent = `${detTipoStr} ${detNumStr}`;
         document.getElementById('det-doc-tipo-badge').classList.add('hidden');
-
-        const badgeSaldo = document.getElementById('det-doc-saldo-badge');
-        if (d.saldo_pendiente !== undefined && d.saldo_pendiente !== null) {
-          badgeSaldo.textContent = `Saldo: $${d.saldo_pendiente.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-          badgeSaldo.classList.remove('hidden');
-        } else {
-          badgeSaldo.classList.add('hidden');
-        }
 
         let subtituloPartes = [];
         if (provNombre) subtituloPartes.push(`Tercero: ${provNombre}`);

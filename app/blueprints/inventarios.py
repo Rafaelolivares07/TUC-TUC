@@ -9334,13 +9334,7 @@ def _audit_montos_dc(doc):
 
 
 def _audit_saldo(doc):
-    """Replica Python del saldo mostrado: cartera si viene; si no, D-C."""
-    s = doc.get('saldo_pendiente')
-    if s is not None:
-        try:
-            return float(s)
-        except (TypeError, ValueError):
-            pass
+    """Replica Python del saldo mostrado: diferencia D-C (sin cartera)."""
     d, c = _audit_montos_dc(doc)
     return d - c
 

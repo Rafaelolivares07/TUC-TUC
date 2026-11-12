@@ -1369,6 +1369,8 @@
       if (!d || !d.ok || !d.auditoria) return;
       const a = d.auditoria;
       const difV = Math.abs(a.diferencia_valor || 0);
+      const almU = (a.stock_almacenado === null || a.stock_almacenado === undefined) ? null : a.stock_almacenado;
+      const difU = almU === null ? null : (almU - (a.stock_final || 0));
       const nNeg = (a.negativo_final ? 1 : 0) + ((a.negativos_intermedios && a.negativos_intermedios.length) || 0);
       const nInc = (a.inconsistencias_movimientos && a.inconsistencias_movimientos.length) || 0;
       const nCom = (a.alertas_compras && a.alertas_compras.length) || 0;
@@ -1377,9 +1379,9 @@
       if (rec) {
         const motivo = [];
         if (difV > 0.01) motivo.push('dif $' + omniFmt(a.diferencia_valor));
-        if (a.stock_inconsistente) motivo.push('stock');
+        if (a.stock_inconsistente) motivo.push(difU === null ? 'cantidades' : ('uds ' + (difU >= 0 ? '+' : '') + omniFmt(difU)));
         if (a.costo_inconsistente) motivo.push('costo');
-        if (a.valor_inconsistente) motivo.push('valor');
+        if (a.valor_inconsistente && !a.stock_inconsistente && !a.costo_inconsistente) motivo.push('valor');
         if (nNeg > 0) motivo.push('neg');
         if (nInc > 0) motivo.push(nInc + ' cadenas');
         seg.push('Recosteo S\u00cd' + (motivo.length ? ' (' + motivo.join(', ') + ')' : ''));

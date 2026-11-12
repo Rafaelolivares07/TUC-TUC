@@ -1139,6 +1139,8 @@ function renderizarAuditoriaKardex(auditoria, productoId, acta) {
   if (auditoria.valor_inconsistente) alertas.push('<span class="rounded bg-cyan-100 px-1.5 py-0.5 text-cyan-700 font-bold text-[10px]">Dif. valor</span>');
 
   const difVal = Math.abs(auditoria.diferencia_valor || 0);
+  const almUds = (auditoria.stock_almacenado === null || auditoria.stock_almacenado === undefined) ? null : auditoria.stock_almacenado;
+  const difUds = almUds === null ? null : (almUds - (auditoria.stock_final || 0));
   const difClass = difVal > 0.01 ? 'text-red-600 font-bold' : 'text-emerald-600 font-bold';
   const mostrarRec = Math.abs((auditoria.valor_reconstruido || 0) - (auditoria.valor_almacenado || 0)) > 0.01;
   const requiereRecosteo = alertas.length > 0 || difVal > 0.01 || auditoria.stock_inconsistente || auditoria.costo_inconsistente;
@@ -1166,6 +1168,7 @@ function renderizarAuditoriaKardex(auditoria, productoId, acta) {
         <span>Alm: <strong class="text-gray-800">${_fmtKardexMon(auditoria.valor_almacenado)}</strong></span>
         ${mostrarRec ? `<span>Rec: <strong class="text-gray-800">${_fmtKardexMon(auditoria.valor_reconstruido)}</strong></span>` : ''}
         <span>Dif: <span class="${difClass}">${_fmtKardexMon(auditoria.diferencia_valor)}</span></span>
+        ${auditoria.stock_inconsistente && difUds !== null ? `<span>Uds: <span class="${difClass}">${difUds >= 0 ? '+' : ''}${_fmtKardexQty(difUds)}</span></span>` : ''}
         ${detalle.length ? `
           <details class="inline-block relative">
             <summary class="cursor-pointer text-[10px] font-bold text-indigo-600 hover:text-indigo-800 underline ml-1">Detalle</summary>

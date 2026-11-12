@@ -41,6 +41,8 @@ check('UI muestra recosteo previo',
       'recosteo_previo' in fs and 'Recosteo previo' in fs)
 check('modal linea evidente', 'val-recosteo-previo' in fs)
 check('modal consulta auditoria', '/kardex?por_pagina=1' in fs)
+check('tarjeta linea recosteo', 'info-prod-recosteo' in fs)
+check('tarjeta y modal consultan', fs.count('/kardex?por_pagina=1') >= 2)
 
 print('fails:', len(fails))
 sys.exit(1 if fails else 0)

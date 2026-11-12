@@ -9970,10 +9970,19 @@ def api_mantenimiento_negativos(negocio_id):
                    TO_CHAR(m.documento_fecha, 'YYYY-MM-DD') AS fecha,
                    TO_CHAR(m.created_at, 'YYYY-MM-DD HH24:MI:SS') AS creado_en
             FROM movimientos_inventario m
-            WHERE m.negocio_id = %s AND (m.valor_total < 0 OR m.costo_und < 0)
+            WHERE m.negocio_id = %s AND (m.valor_total < 0 OR m.costo_und < 0 OR m.cantidad < 0)
             ORDER BY m.id DESC
             LIMIT %s
         """, (negocio_id, limite)).fetchall()
+        est_mc = conn.execute("""
+            SELECT COUNT(*) AS n, MIN(mc.monto) AS min_monto
+            FROM movimientos_contables mc WHERE mc.negocio_id = %s
+        """, (negocio_id,)).fetchone()
+        est_mi = conn.execute("""
+            SELECT COUNT(*) AS n, MIN(m.valor_total) AS min_valor,
+                   MIN(m.costo_und) AS min_costo, MIN(m.cantidad) AS min_cant
+            FROM movimientos_inventario m WHERE m.negocio_id = %s
+        """, (negocio_id,)).fetchone()
         mc_neg = []
         for r in rows_mc:
             mc_neg.append({
@@ -9999,6 +10008,12 @@ def api_mantenimiento_negativos(negocio_id):
             'mc_negativos': mc_neg,
             'mi_negativos': mi_neg,
             'totales': {'mc': len(mc_neg), 'mi': len(mi_neg), 'limite': limite},
+            'estadisticas': {
+                'mc_total': est_mc['n'], 'mc_min': float(est_mc['min_monto'] or 0),
+                'mi_total': est_mi['n'], 'mi_min_valor': float(est_mi['min_valor'] or 0),
+                'mi_min_costo': float(est_mi['min_costo'] or 0),
+                'mi_min_cant': float(est_mi['min_cant'] or 0),
+            },
         })
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500

@@ -34,6 +34,7 @@ check('ruta GET',
       in PY)
 check('solo lectura MC', 'mc.monto < 0' in FN)
 check('solo lectura MI', 'valor_total < 0' in FN)
+check('solo lectura MI cantidad', 'm.cantidad < 0' in FN)
 check('sin escrituras',
       all(k not in FN for k in ('INSERT INTO', 'UPDATE ', 'DELETE FROM')))
 check('con limite', 'LIMIT' in FN)
@@ -42,6 +43,7 @@ check('trae created_at', 'created_at' in FN)
 check('trae cuenta', 'mc.cuenta' in FN)
 check('requiere sesion', "'usuario_id' not in session" in FN)
 check('respuesta ok', "'mc_negativos'" in FN and "'mi_negativos'" in FN)
+check('trae estadisticas', "'estadisticas'" in FN and 'MIN(' in FN)
 
 r = subprocess.run([sys.executable, '-m', 'py_compile',
                     str(ROOT / 'app' / 'blueprints' / 'inventarios.py')],

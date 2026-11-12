@@ -650,7 +650,7 @@ async function ejecutarRecosteoKardex(productoId) {
     const r = await fetch(`/api/inventario/${NEGOCIO_ID}/recosteo/ejecutar`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ producto_ids: [Number(productoId)] })
+      body: JSON.stringify({ producto_ids: [Number(productoId)], solo_recosteo: true })
     });
     const d = await r.json();
     if (!r.ok || !d.ok) throw new Error(d.error || 'No fue posible ejecutar el recosteo.');
@@ -684,7 +684,7 @@ async function ejecutarRecosteoSeleccionados() {
 
   }
 
-  await ejecutarRecosteo({ producto_ids: ids }, `${ids.length} producto(s)`);
+  await ejecutarRecosteo({ producto_ids: ids, solo_recosteo: true }, `${ids.length} producto(s)`);
 
 }
 

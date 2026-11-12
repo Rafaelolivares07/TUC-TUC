@@ -643,7 +643,7 @@ function seleccionarProductoLibre(id) {
     fetch(`/api/inventario/${NEGOCIO_ID}/recosteo/ejecutar`, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({ producto_ids: [id], centro_utilidad_id: centroCard ? parseInt(centroCard) : null })
+      body: JSON.stringify({ producto_ids: [id], centro_utilidad_id: centroCard ? parseInt(centroCard) : null, solo_recosteo: true })
     }).then((r) => r.json()).then((d) => {
       if (!d || !d.ok) throw new Error((d && d.error) || "recosteo fallo");
       return fetch(`/api/inventario/producto/${id}/kardex?por_pagina=1` + (centroCard ? `&bodega=${centroCard}` : '')).then((r2) => r2.json());

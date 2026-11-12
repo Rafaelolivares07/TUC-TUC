@@ -1521,7 +1521,15 @@ async function guardarAjusteConfirmado() {
   
   const data = await resp.json();
   if (data.ok) {
-    toast(data.mensaje || "Ajuste aplicado correctamente");
+    let msgRec = "";
+    if (data.recosteo_previo) {
+      const rp = data.recosteo_previo;
+      const r2 = (x) => Math.round((parseFloat(x) || 0) * 100) / 100;
+      msgRec = rp.cambio
+        ? ` \u00b7 Recosteo previo: stock ${rp.stock_antes}\u2192${rp.stock_despues}, costo $${r2(rp.costo_antes)}\u2192$${r2(rp.costo_despues)}`
+        : " \u00b7 Recosteo previo: base limpia, sin cambios";
+    }
+    toast((data.mensaje || "Ajuste aplicado correctamente") + msgRec);
     
     // Si fue el primer item, actualizamos el número de documento a su formato oficial
     if (data.consecutivo_actualizado) {

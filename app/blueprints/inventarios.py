@@ -13162,6 +13162,34 @@ def registrar_conteo_fisico_unificado(
             if u:
                 usuario_nombre = u["nombre"]
 
+    # 0. Recosteo previo obligatorio del item: el ajuste se calcula sobre base
+    # limpia. Sin esto, el acta snapshotea un stock_sistema posiblemente sucio.
+    _s_pre = conn.execute(
+        "SELECT stock, costo_und FROM saldos_inventario WHERE negocio_id=%s AND producto_id=%s AND bodega=%s",
+        (negocio_id, producto_id, centro_utilidad_id)).fetchone()
+    _stk_antes = float(_s_pre['stock'] or 0) if _s_pre else 0.0
+    _cto_antes = float(_s_pre['costo_und'] or 0) if _s_pre else 0.0
+    _res_pre = _recostear_producto(
+        conn, negocio_id, producto_id, bodega=centro_utilidad_id,
+        origen='previo_conteo_fisico',
+        doc_tipo=str(tipo_doc_codigo) if tipo_doc_codigo is not None else None,
+        doc_num=str(documento_numero) if documento_numero is not None else None,
+        usuario_id=usuario_id, usuario_nombre=usuario_nombre)
+    _s_post = conn.execute(
+        "SELECT stock, costo_und FROM saldos_inventario WHERE negocio_id=%s AND producto_id=%s AND bodega=%s",
+        (negocio_id, producto_id, centro_utilidad_id)).fetchone()
+    _stk_desp = float(_s_post['stock'] or 0) if _s_post else 0.0
+    _cto_desp = float(_s_post['costo_und'] or 0) if _s_post else 0.0
+    recosteo_previo = {
+        'ejecutado': True,
+        'stock_antes': _stk_antes,
+        'stock_despues': _stk_desp,
+        'costo_antes': _cto_antes,
+        'costo_despues': _cto_desp,
+        'movimientos_ajustados': _res_pre.get('movimientos_ajustados', 0),
+        'cambio': bool(abs(_stk_desp - _stk_antes) > 0.000001 or abs(_cto_desp - _cto_antes) > 0.01),
+    }
+
     # 1. Obtener producto y saldo actual en la sede
     prod = conn.execute(
         "SELECT id, nombre, categoria, costo FROM productos WHERE id=%s AND negocio_id=%s",
@@ -13272,7 +13300,8 @@ def registrar_conteo_fisico_unificado(
         "valor_diferencia": valor_diferencia,
         "documento_numero": s_doc_num,
         "tipo_documento": s_tipo_doc,
-        "comp_id": comp_id
+        "comp_id": comp_id,
+        "recosteo_previo": recosteo_previo
     }
 
 
@@ -13690,6 +13719,7 @@ def api_ajuste_guardar_item(negocio_id):
             'documento_numero': doc_num_final,
             'consecutivo_actualizado': consecutivo_actualizado,
             'cotizacion_creada': cotizacion_creada,
+            'recosteo_previo': res_ajuste['recosteo_previo'],
             'warnings': [],
             'centro_utilidad_id': centro_utilidad_id
         })

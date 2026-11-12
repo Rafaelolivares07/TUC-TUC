@@ -14887,7 +14887,8 @@ def _query_reporte_costos_unitarios(conn, negocio_id):
                p.disponible
         FROM productos p
         LEFT JOIN (
-            SELECT producto_id, negocio_id, AVG(costo_und) as costo_und
+            SELECT producto_id, negocio_id,
+                   CASE WHEN SUM(stock) > 0 THEN SUM(valor_existencia)/SUM(stock) ELSE AVG(costo_und) END as costo_und
             FROM saldos_inventario
             WHERE negocio_id = %s
             GROUP BY producto_id, negocio_id
@@ -14927,9 +14928,10 @@ def _query_reporte_costos_unitarios(conn, negocio_id):
         JOIN productos p ON p.id = te.producto_id AND (p.disponible = TRUE OR p.disponible IS NULL)
         JOIN productos comp ON comp.id = te.componente_id
         LEFT JOIN (
-            SELECT DISTINCT ON (producto_id, negocio_id) producto_id, negocio_id, costo_und
+            SELECT producto_id, negocio_id,
+                   CASE WHEN SUM(stock) > 0 THEN SUM(valor_existencia)/SUM(stock) ELSE AVG(costo_und) END as costo_und
             FROM saldos_inventario
-            ORDER BY producto_id, negocio_id, id DESC
+            GROUP BY producto_id, negocio_id
         ) s ON s.producto_id = te.componente_id AND s.negocio_id = p.negocio_id
         WHERE p.negocio_id = %s
         ORDER BY te.id ASC

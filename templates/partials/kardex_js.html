@@ -462,7 +462,7 @@ async function cargarKardex(productoId, pagina = 1) {
     renderizarBodegasKardex(d.centros_saldos, d.bodega_activa_id, d.total_empresa);
   }
 
-  renderizarAuditoriaKardex(d.auditoria, productoId);
+  renderizarAuditoriaKardex(d.auditoria, productoId, d.ultima_acta);
 
   if (summaryPanel && d.stock_actual !== undefined && d.costo_actual !== undefined) {
     if (prod) {
@@ -1126,7 +1126,7 @@ function onKeydownACKardex(e) {
   }
 }
 
-function renderizarAuditoriaKardex(auditoria, productoId) {
+function renderizarAuditoriaKardex(auditoria, productoId, acta) {
   const el = document.getElementById('kardex-auditoria');
   if (!el || !auditoria) return;
 
@@ -1143,6 +1143,7 @@ function renderizarAuditoriaKardex(auditoria, productoId) {
   const mostrarRec = Math.abs((auditoria.valor_reconstruido || 0) - (auditoria.valor_almacenado || 0)) > 0.01;
   const requiereRecosteo = alertas.length > 0 || difVal > 0.01 || auditoria.stock_inconsistente || auditoria.costo_inconsistente;
   const tieneAlertasCompras = auditoria.alertas_compras && auditoria.alertas_compras.length > 0;
+  const actaFecha = (acta && acta.fecha_hora ? acta.fecha_hora.slice(0, 10).split('-').reverse().join('/') : '');
 
   const detalle = [
     ...(auditoria.negativos_intermedios || []).map(x => `Mov #${x.movimiento_id}: stock negativo (${_fmtKardexQty(x.stock)})`),
@@ -1216,6 +1217,17 @@ function renderizarAuditoriaKardex(auditoria, productoId) {
         <div class="flex-1 leading-snug">
           <strong>Filas en amarillo en la tabla:</strong> Indican movimientos donde el saldo guardado en su momento difiere de la historia cronológica recalculada (habitual cuando se digitan compras con fecha del pasado). Se sincronizan automáticamente al hacer clic en <strong>Recostear</strong>.
         </div>
+      </div>
+    ` : ''}
+    ${acta ? `
+      <div class="flex items-center gap-2 flex-wrap w-full mt-1 pt-1 border-t border-slate-200/70">
+        <details class="inline-block relative">
+          <summary class="cursor-pointer text-[11px] font-bold text-slate-600 hover:text-slate-800 list-none">Acta ${actaFecha}: sist ${_fmtKardexQty(acta.stock_sistema)} · contado ${_fmtKardexQty(acta.cantidad_contada)} (dif ${_fmtKardexQty(acta.diferencia)}) ▼</summary>
+          <div class="absolute left-0 top-full mt-1 bg-white rounded-lg border border-slate-200 shadow-lg p-2.5 w-96 z-20">
+            <p class="text-[11px] leading-relaxed text-slate-600">Origen: ${escapeHtml(acta.origen || '')} · ${escapeHtml(acta.tipo_documento || '')} ${escapeHtml(acta.documento_numero || '')} · por ${escapeHtml(acta.usuario_nombre || '')}${acta.notas ? ' · ' + escapeHtml(acta.notas) : ''}</p>
+          </div>
+        </details>
+        ${acta.sistema_cambiado ? `<span class="rounded bg-amber-100 px-1.5 py-0.5 text-amber-800 font-bold text-[10px]">! Sistema del acta (${_fmtKardexQty(acta.stock_sistema)}) ya no rige: línea hoy ${_fmtKardexQty(acta.saldo_anterior_actual)} (recosteado después)</span>` : ''}
       </div>
     ` : ''}
     ${auditoria.cascada_ensambles && auditoria.cascada_ensambles.es_insumo && requiereRecosteo ? `

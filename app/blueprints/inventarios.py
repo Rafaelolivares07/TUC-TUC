@@ -3776,6 +3776,65 @@ def api_inventario_kardex(producto_id):
         valor_existencia = float(prod_info['valor_existencia']) if prod_info else 0.0
         auditoria = _auditar_producto_recosteo(conn, negocio_id, producto_id, bodega=bod_int)
 
+        # Ultima acta del producto + aviso si su foto del sistema ya no rige.
+        # El acta guarda stock_sistema del momento; el recosteo recalcula y
+        # reemplaza stock_anterior/nuevo de la linea. Si difieren, hubo
+        # recosteo despues del acta.
+        ultima_acta = None
+        try:
+            acta_row = conn.execute("""
+                SELECT id, fecha_hora, modulo_origen, metodologia,
+                       tipo_documento, documento_numero,
+                       cantidad_contada, stock_sistema, diferencia,
+                       costo_unitario, valor_diferencia,
+                       usuario_nombre, notas
+                FROM inventario_fisico_actas
+                WHERE negocio_id = %s AND producto_id = %s
+                ORDER BY fecha_hora DESC, id DESC
+                LIMIT 1
+            """, (negocio_id, producto_id)).fetchone()
+            if acta_row:
+                acta_fh = acta_row['fecha_hora']
+                ultima_acta = {
+                    'id': acta_row['id'],
+                    'fecha_hora': acta_fh.isoformat() if hasattr(acta_fh, 'isoformat') else str(acta_fh),
+                    'origen': acta_row['modulo_origen'] or acta_row['metodologia'] or '',
+                    'tipo_documento': acta_row['tipo_documento'],
+                    'documento_numero': acta_row['documento_numero'],
+                    'stock_sistema': float(acta_row['stock_sistema'] or 0),
+                    'cantidad_contada': float(acta_row['cantidad_contada'] or 0),
+                    'diferencia': float(acta_row['diferencia'] or 0),
+                    'costo_unitario': float(acta_row['costo_unitario'] or 0),
+                    'valor_diferencia': float(acta_row['valor_diferencia'] or 0),
+                    'usuario_nombre': acta_row['usuario_nombre'],
+                    'notas': acta_row['notas'],
+                }
+                mov_row = conn.execute("""
+                    SELECT id, stock_anterior, stock_nuevo
+                    FROM movimientos_inventario
+                    WHERE negocio_id = %s AND producto_id = %s
+                      AND motivo IN ('ajuste', 'conteo_conforme')
+                      AND (
+                          (documento_numero IS NOT NULL AND documento_numero = %s)
+                          OR (DATE(COALESCE(documento_fecha, created_at::date)) = DATE(%s))
+                      )
+                    ORDER BY (CASE WHEN documento_numero = %s THEN 0 ELSE 1 END), id DESC
+                    LIMIT 1
+                """, (negocio_id, producto_id, acta_row['documento_numero'], acta_fh,
+                      acta_row['documento_numero'])).fetchone()
+                if mov_row:
+                    sist_en_acta = float(acta_row['stock_sistema'] or 0)
+                    ant_actual = float(mov_row['stock_anterior'] or 0)
+                    ultima_acta['movimiento_id'] = mov_row['id']
+                    ultima_acta['saldo_anterior_actual'] = ant_actual
+                    ultima_acta['sistema_cambiado'] = abs(ant_actual - sist_en_acta) > 0.01
+        except Exception:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            ultima_acta = None
+
         return jsonify({
             'ok': True, 
             'movimientos': movimientos_ui,
@@ -3812,7 +3871,8 @@ def api_inventario_kardex(producto_id):
                 'costo_prom': total_empresa_costo,
                 'valor_existencia': total_empresa_valor
             },
-            'auditoria': auditoria
+            'auditoria': auditoria,
+            'ultima_acta': ultima_acta
         })
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500

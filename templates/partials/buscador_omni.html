@@ -1275,6 +1275,7 @@
       const movTxt = mv ? ('Ver movimientos \u00b7 \u00daltimo: ' + mv.tipo + (mv.motivo ? ' (' + mv.motivo + ')' : '') + ' ' + (mv.doc || '') + ' \u00b7 ' + mv.fecha + ' \u00b7 ' + omniFmt(mv.cantidad) + ' ' + u) : 'Ver movimientos: sin movimientos a\u00fan';
       idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Ver movimientos ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.kardex });
       h += omniFilaDato(idx, movTxt, p.nombre, 'Kardex \u203a');
+      setTimeout(function(){ if (window.omniCompletar7) window.omniCompletar7(p.id, idx); }, 0);
     }
     const meta4 = ((p.categoria || '') + (p.unidad ? ' \u00b7 ' + p.unidad : '')) || p.nombre;
     idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Editar ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.editar });
@@ -1361,6 +1362,43 @@
   window.omniSueltosCerrar = function() {
     document.getElementById('dato-sueltos-modal').classList.add('hidden');
   };
+  window.omniCompletar7 = async function(pid, idx) {
+    try {
+      const r = await fetch('/api/inventario/producto/' + pid + '/kardex?por_pagina=1');
+      const d = await r.json();
+      if (!d || !d.ok || !d.auditoria) return;
+      const a = d.auditoria;
+      const difV = Math.abs(a.diferencia_valor || 0);
+      const nNeg = (a.negativo_final ? 1 : 0) + ((a.negativos_intermedios && a.negativos_intermedios.length) || 0);
+      const nInc = (a.inconsistencias_movimientos && a.inconsistencias_movimientos.length) || 0;
+      const nCom = (a.alertas_compras && a.alertas_compras.length) || 0;
+      const rec = a.problemas || difV > 0.01;
+      const seg = [];
+      if (rec) {
+        const motivo = [];
+        if (difV > 0.01) motivo.push('dif $' + omniFmt(a.diferencia_valor));
+        if (a.stock_inconsistente) motivo.push('stock');
+        if (a.costo_inconsistente) motivo.push('costo');
+        if (a.valor_inconsistente) motivo.push('valor');
+        if (nNeg > 0) motivo.push('neg');
+        if (nInc > 0) motivo.push(nInc + ' cadenas');
+        seg.push('Recosteo S\u00cd' + (motivo.length ? ' (' + motivo.join(', ') + ')' : ''));
+        if (a.cascada_ensambles && a.cascada_ensambles.es_insumo) seg.push('Cascada ' + a.cascada_ensambles.total_productos_padre + ' padres');
+      } else {
+        seg.push('cuadra');
+      }
+      if (nCom > 0) seg.push('Compras raras ' + nCom);
+      const ac = d.ultima_acta;
+      if (ac) {
+        const f = (ac.fecha_hora || '').slice(8, 10) + '/' + (ac.fecha_hora || '').slice(5, 7);
+        const sd = (ac.diferencia >= 0 ? '+' : '') + omniFmt(ac.diferencia);
+        seg.push('Acta ' + f + ' dif ' + sd + (ac.sistema_cambiado ? ' (! cambi\u00f3)' : ''));
+      }
+      const box = resultsBody.querySelector('[data-omni-index="' + idx + '"] .text-xs');
+      if (box && seg.length) box.textContent += ' \u00b7 ' + seg.join(' \u00b7 ');
+    } catch (e) { /* fila queda con Ultimo: ... */ }
+  };
+
   window.omniElegirProducto = function(i) {
     const p = datosProductos[i];
     if (!p) return;

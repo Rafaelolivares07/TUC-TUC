@@ -39,6 +39,8 @@ check('post-recosteo intacto',
       '        _recostear_producto(conn, negocio_id, producto_id)\n' in py)
 check('UI muestra recosteo previo',
       'recosteo_previo' in fs and 'Recosteo previo' in fs)
+check('modal linea evidente', 'val-recosteo-previo' in fs)
+check('modal consulta auditoria', '/kardex?por_pagina=1' in fs)
 
 print('fails:', len(fails))
 sys.exit(1 if fails else 0)

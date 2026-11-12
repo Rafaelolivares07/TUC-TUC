@@ -41,7 +41,7 @@ check('franja sist/contado/dif',
 check('aviso ya no rige', 'ya no rige' in kx and 'acta.saldo_anterior_actual' in kx)
 
 # 3. Omni: 7 datos en Ver movimientos (misma fila, sin fila nueva)
-check('omniCompletar7 existe', 'window.omniCompletar7 = async function(pid, idx)' in om)
+check('omniCompletar7 existe', 'window.omniCompletar7 = async function(pid, idx, intento)' in om)
 check('fetch kardex liviano',
       "'/api/inventario/producto/' + pid + '/kardex?por_pagina=1'" in om)
 check('pinta recosteo/cuadra', 'Recosteo S' in om and "'cuadra'" in om)
@@ -51,6 +51,8 @@ check('disparo tras fila Kardex', 'window.omniCompletar7(p.id, idx)' in om)
 check('omni dif uds con signo', "('uds ' + (difU >= 0 ? '+' : '') + omniFmt(difU))" in om)
 check('omni causa pura', 'valor_inconsistente && !a.stock_inconsistente && !a.costo_inconsistente' in om)
 check('kardex Uds junto a Dif', 'Uds:' in kx and 'difUds' in kx)
+check('omni fila envuelve', "classList.remove('truncate')" in om and 'whitespace-normal' in om)
+check('omni reintento unico', 'omniCompletar7(pid, idx, 1)' in om and '!intento' in om)
 
 print('fails:', len(fails))
 sys.exit(1 if fails else 0)

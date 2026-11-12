@@ -44,6 +44,7 @@ check('modal consulta auditoria', '/kardex?por_pagina=1' in fs)
 check('tarjeta linea recosteo', 'info-prod-recosteo' in fs)
 check('tarjeta y modal consultan', fs.count('/kardex?por_pagina=1') >= 2)
 check('tarjeta ejecuta recosteo', '/recosteo/ejecutar' in fs)
+check('tarjeta modo solo (full 500 preexistente)', 'solo_recosteo: true' in fs)
 check('tarjeta evidencia corrida', 'corriendo recosteo' in fs)
 check('foco tras recosteo', 'enfocarTrasRecosteo' in fs)
 

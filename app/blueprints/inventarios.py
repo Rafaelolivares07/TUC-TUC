@@ -10569,6 +10569,34 @@ def api_auditar_documento(negocio_id):
         conn.close()
 
 
+def _registrar_acta_anulacion(conn, negocio_id, producto_id, producto_nombre,
+                              stock_antes, stock_despues, costo_despues,
+                              tipo_doc, num_doc, usuario_id, usuario_nombre, notas):
+    """Acta inmutable de anulacion (auditoria): puro registro, sin kardex.
+
+    stock_sistema = antes, cantidad_contada = despues, diferencia = despues-antes.
+    """
+    if not usuario_nombre and usuario_id:
+        u = conn.execute("SELECT nombre FROM usuarios WHERE id = %s", (usuario_id,)).fetchone()
+        if u:
+            usuario_nombre = u["nombre"]
+    antes = float(stock_antes or 0)
+    despues = float(stock_despues or 0)
+    costo = float(costo_despues or 0)
+    dif = despues - antes
+    conn.execute("""
+        INSERT INTO inventario_fisico_actas
+            (negocio_id, centro_utilidad_id, producto_id, producto_nombre,
+             usuario_id, usuario_nombre, modulo_origen, metodologia,
+             tipo_documento, documento_numero, cantidad_contada, stock_sistema,
+             diferencia, costo_unitario, valor_diferencia, notas, fecha_hora)
+        VALUES (%s, NULL, %s, %s, %s, %s, 'auditoria', 'anulacion',
+                %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+    """, (negocio_id, producto_id, producto_nombre,
+          usuario_id, usuario_nombre or "Operario",
+          tipo_doc, num_doc, despues, antes,
+          dif, costo, round(abs(dif) * costo, 2), notas or ""))
+
 @bp.route('/api/inventario/<int:negocio_id>/mantenimiento/anular-documento', methods=['POST'])
 def api_anular_documento(negocio_id):
     if 'usuario_id' not in session:
@@ -10668,6 +10696,12 @@ def api_anular_documento(negocio_id):
         movs = conn.execute(sql_inv, tuple(params_inv)).fetchall()
         mov_ids = [m['id'] for m in movs]
         prod_ids = list({m['producto_id'] for m in movs})
+        # Snapshot pre-anulacion por producto (acta de auditoria)
+        snap_antes = {}
+        for _pid in prod_ids:
+            _s = conn.execute("SELECT COALESCE(SUM(stock),0) AS s FROM saldos_inventario WHERE negocio_id=%s AND producto_id=%s", (negocio_id, _pid)).fetchone()
+            _p = conn.execute("SELECT nombre FROM productos WHERE id=%s", (_pid,)).fetchone()
+            snap_antes[_pid] = (float(_s["s"] or 0), (_p["nombre"] if _p else f"Producto #{_pid}"))
         p_id = prov_id_val or (pedido_row['cliente_id'] or pedido_row['id_tercero'] if pedido_row else None) or (movs[0]['proveedor_id'] if movs else None)
         
         # Delete inventory movements
@@ -10765,7 +10799,21 @@ def api_anular_documento(negocio_id):
         # Recosteo: Recalculate stock and average cost for all affected products
         for prod_id in prod_ids:
             _recostear_producto(conn, negocio_id, prod_id)
-            
+
+        # Acta inmutable de la anulacion (puro registro, sin kardex)
+        _uid = session.get('usuario_id')
+        _unom = session.get('nombre') or session.get('nombre_usuario')
+        _nota = f"Anulacion {tipo_doc} {num_doc}: {deleted_inventario} movs MI + {deleted_contables} MC eliminados"
+        if pedido_anulado:
+            _nota += " (pedido anulado)"
+        if pedido_eliminado:
+            _nota += " (pedido eliminado)"
+        for _pid in prod_ids:
+            _d = conn.execute("SELECT COALESCE(SUM(stock),0) AS s, COALESCE(SUM(valor_existencia),0) AS v FROM saldos_inventario WHERE negocio_id=%s AND producto_id=%s", (negocio_id, _pid)).fetchone()
+            _st_d = float(_d['s'] or 0)
+            _costo_d = float(_d['v'] or 0) / _st_d if _st_d > 0 else 0.0
+            _st_a, _pnom = snap_antes.get(_pid, (0.0, f"Producto #{_pid}"))
+            _registrar_acta_anulacion(conn, negocio_id, _pid, _pnom, _st_a, _st_d, _costo_d, tipo_doc, num_doc, _uid, _unom, _nota)
         conn.commit()
         return jsonify({
             'ok': True,

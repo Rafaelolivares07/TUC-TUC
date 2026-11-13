@@ -110,7 +110,9 @@ async function abrirModalFechaDocumento(tipoDocumentoId, numeroCodificado, fecha
   const itemsList = document.getElementById('fecha-doc-items-list');
   const itemsCount = document.getElementById('fecha-doc-items-count');
   itemsList.innerHTML = '<div class="text-center text-indigo-600 py-3 text-xs font-semibold flex items-center justify-center gap-1.5"><div class="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-600"></div> Analizando ítems e impacto en Kardex...</div>';
-  itemsCount.textContent = '...';
+  itemsCount.textContent = '...';
+  const stFecha0 = document.getElementById('fecha-doc-status');
+  if (stFecha0) { stFecha0.className = 'px-5 py-2 text-[11px] font-semibold hidden'; stFecha0.textContent = ''; }
 
   modal.classList.remove('hidden');
   modal.classList.add('flex');
@@ -901,7 +903,8 @@ function kardexDragStart(e) {
 async function kardexDrop(e) {
   e.preventDefault();
   const targetTr = e.target.closest('#tabla-kardex tr');
-  if (!targetTr || !_draggedKardexRow || targetTr === _draggedKardexRow) {
+  if (!targetTr || !_draggedKardexRow || targetTr === _draggedKardexRow) {
+    toast('Suelta la fila sobre otro movimiento para reordenar su fecha.', 'info');
     kardexDragEnd(e);
     return;
   }
@@ -1810,14 +1813,17 @@ async function guardarFechaDocumento() {
   const fecha = document.getElementById('fecha-doc-nueva').value;
   const hora = document.getElementById('hora-doc-nueva').value;
   const hoy = getFechaHoyBogota();
-  const btn = document.getElementById('btn-guardar-fecha-doc');
+  const btn = document.getElementById('btn-guardar-fecha-doc');
+  const statusFechaEl = document.getElementById('fecha-doc-status');
+  const pintarStatusFecha = (msg, cls) => { if (!statusFechaEl) return; statusFechaEl.className = 'px-5 py-2 text-[11px] font-semibold ' + cls; statusFechaEl.textContent = msg; };
 
   if (!fecha) { toast('Selecciona una fecha.', false); return; }
   if (fecha > hoy) { toast('La fecha no puede ser futura.', false); return; }
 
   btn.disabled = true;
   const originalHtml = btn.innerHTML;
-  btn.innerHTML = '<span>Aplicando y recosteando…</span>';
+  btn.innerHTML = '<span>Aplicando y recosteando…</span>';
+  pintarStatusFecha('Aplicando cambio de fecha y recosteando…', 'text-indigo-700');
 
   try {
     const r = await fetch(`/api/inventario/${NEGOCIO_ID}/documento/cambiar-fecha`, {
@@ -1834,12 +1840,14 @@ async function guardarFechaDocumento() {
     const d = await r.json();
     if (!r.ok || !d.ok) throw new Error(d.error || 'No se pudo cambiar la fecha.');
 
+    pintarStatusFecha('✓ Documento actualizado. ' + d.productos_recosteados + ' producto(s) recosteados.', 'text-emerald-700');
     cerrarModalFechaDocumento();
     toast(`✓ Documento actualizado. ${d.productos_recosteados} producto(s) recosteados exitosamente.`);
     if (kardexProductoActual) {
       await cargarKardex(kardexProductoActual);
     }
   } catch (error) {
+    pintarStatusFecha('✕ ' + error.message, 'text-red-700');
     toast(error.message, false);
   } finally {
     btn.disabled = false;

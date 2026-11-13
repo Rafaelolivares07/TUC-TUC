@@ -107,6 +107,12 @@ def create_app():
             _conn_cat.close()
     except Exception as _e:
         print(f'[pantallas] init: {_e}')
+    # Precalentar DDL global en el worker lider (propuesta A 13/11)
+    try:
+        from .asegurar import precalentar_ddl
+        precalentar_ddl()
+    except Exception as _e:
+        print(f'[precalentar] init: {_e}')
 
     # Inicializar APScheduler para tareas en segundo plano (amortizaciones, domÃƒÂ³tica, crm)
     try:

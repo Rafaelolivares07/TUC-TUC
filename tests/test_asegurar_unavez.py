@@ -140,6 +140,81 @@ check('sin timeout 0', mal == [], str(mal)[:200])
 core = open(os.path.join(ROOT, 'app', 'blueprints', 'core.py'), encoding='utf-8').read()
 check('backup tope 600s', 'SET statement_timeout = 600000' in core)
 
+# 13. precalentar: paridad estatica lista <-> codigo
+eleg = set()
+for f in glob.glob(os.path.join(ROOT, 'app', 'blueprints', '*.py')):
+    mod = os.path.basename(f)[:-3]
+    for ln in open(f, encoding='utf-8').read().splitlines():
+        s = ln.strip()
+        if s.startswith('def _asegurar_') or s.startswith('def _crear_tablas('):
+            nom = s[4:s.index('(')]
+            if nom.endswith('_impl'):
+                continue
+            args = s[s.index('(') + 1:s.index(')')]
+            narg = 0 if not args.strip() else len(args.split(','))
+            if narg <= 1:
+                eleg.add(mod + '.' + nom)
+eleg.discard('crm._asegurar_pywebpush')
+reg = set(m + '.' + n for m, n in asegurar.PRECALENTAR)
+check('precalentar paridad', eleg == reg,
+      'extra:' + str(sorted(reg - eleg))[:120] + ' falta:' + str(sorted(eleg - reg))[:120])
+
+# 14-16. precalentar funcional con modulo falso
+import types  # noqa: E402
+_calls = []
+
+
+def _mkfake():
+    def _u0():
+        asegurar.asegurar_una_vez('fake.u0', lambda: _calls.append(('u0',)))
+    def _u1(conn):
+        asegurar.asegurar_una_vez('fake.u1', lambda: _calls.append(('u1', conn)))
+    def _uboom(conn):
+        asegurar.asegurar_una_vez('fake.uboom', lambda: 1 / 0)
+    m = types.ModuleType('app.blueprints.fakeb')
+    m._u0 = _u0
+    m._u1 = _u1
+    m._uboom = _uboom
+    return m
+
+
+class _FC:
+    def close(self):
+        pass
+
+
+_orig_pre = asegurar.PRECALENTAR
+_orig_rec = asegurar.reclamar_scheduler
+_mdb = types.ModuleType('app.db')
+_fconn = _FC()
+_mdb.get_db_connection = lambda: _fconn
+sys.modules['app.db'] = _mdb
+sys.modules['app.blueprints.fakeb'] = _mkfake()
+asegurar.PRECALENTAR = [('fakeb', '_u0'), ('fakeb', '_u1'), ('fakeb', '_uboom')]
+asegurar.reclamar_scheduler = lambda: True
+try:
+    asegurar._flags.pop('fake.u0', None)
+    asegurar._flags.pop('fake.u1', None)
+    asegurar._flags.pop('fake.uboom', None)
+    _calls.clear()
+    _n1 = asegurar.precalentar_ddl()
+    check('precalentar corre todo', _n1 == 3 and [c[0] for c in _calls] == ['u0', 'u1']
+          and _calls[1][1] is _fconn, str(_n1) + str(_calls)[:100])
+    _calls.clear()
+    _n2 = asegurar.precalentar_ddl()
+    check('precalentar no repite', _n2 == 3 and _calls == [], str(_n2))
+    asegurar.reclamar_scheduler = lambda: False
+    _calls.clear()
+    _n3 = asegurar.precalentar_ddl()
+    check('precalentar respeta lider', _n3 == 0 and _calls == [], str(_n3))
+finally:
+    asegurar.PRECALENTAR = _orig_pre
+    asegurar.reclamar_scheduler = _orig_rec
+    sys.modules.pop('app.db', None)
+    sys.modules.pop('app.blueprints.fakeb', None)
+    asegurar._flags.pop('fake.u0', None)
+    asegurar._flags.pop('fake.u1', None)
+    asegurar._flags.pop('fake.uboom', None)
 print('---')
 print(f"OK {total[0]} checks" if not fails else f"FALLOS: {fails}")
 sys.exit(1 if fails else 0)

@@ -907,7 +907,7 @@ VERSIONES_AGENTES = {
         'url': 'https://github.com/Rafaelolivares07/TUC-TUC/releases/download/agentes/SarReportes.exe',
     },
     'admin_agent': {
-        'version': '1.2.8',
+        'version': '1.3.1',
         'url': 'https://github.com/Rafaelolivares07/TUC-TUC/releases/download/agentes/AdminAgent.exe',
     },
 }

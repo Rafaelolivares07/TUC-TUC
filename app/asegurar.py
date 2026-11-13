@@ -167,8 +167,8 @@ def precalentar_ddl():
                         fn(conn)
                     n += 1
                 except Exception as e:
-                    print('[precalentar] %s.%s: %s: %s' % (mod, nombre, type(e).__name__, e))
-            print('[precalentar] DDL arranque: %d/%d (lider)' % (n, len(PRECALENTAR)))
+                    print('[precalentar] %s.%s: %s: %s' % (mod, nombre, type(e).__name__, e), flush=True)
+            print('[precalentar] DDL arranque: %d/%d (lider)' % (n, len(PRECALENTAR)), flush=True)
             return n
         finally:
             try:
@@ -176,5 +176,5 @@ def precalentar_ddl():
             except Exception:
                 pass
     except Exception as e:
-        print('[precalentar] omitido: %s: %s' % (type(e).__name__, e))
+        print('[precalentar] omitido: %s: %s' % (type(e).__name__, e), flush=True)
         return 0

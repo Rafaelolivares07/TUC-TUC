@@ -112,7 +112,7 @@ def create_app():
         from .asegurar import precalentar_ddl
         precalentar_ddl()
     except Exception as _e:
-        print(f'[precalentar] init: {_e}')
+        print(f'[precalentar] init: {_e}', flush=True)
 
     # Inicializar APScheduler para tareas en segundo plano (amortizaciones, domÃƒÂ³tica, crm)
     try:

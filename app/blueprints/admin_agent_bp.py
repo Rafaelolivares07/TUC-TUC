@@ -14,6 +14,11 @@ _tablas_listas = False
 
 
 def _crear_tablas(conn):
+    from app.asegurar import asegurar_una_vez
+    return asegurar_una_vez('admin_agent.tablas', lambda: _crear_tablas_impl(conn))
+
+
+def _crear_tablas_impl(conn):
     global _tablas_listas
     if _tablas_listas:
         return

@@ -44,6 +44,11 @@ _tablas_listas = False
 
 
 def _crear_tablas(conn):
+    from app.asegurar import asegurar_una_vez
+    return asegurar_una_vez('inventarios.tablas', lambda: _crear_tablas_impl(conn))
+
+
+def _crear_tablas_impl(conn):
     global _tablas_listas
     if _tablas_listas:
         return
@@ -18680,6 +18685,11 @@ def _tercero_sesion_centros(conn, ses=None):
 
 
 def _asegurar_acceso_centros(conn):
+    from app.asegurar import asegurar_una_vez
+    return asegurar_una_vez('inventarios.acceso_centros', lambda: _asegurar_acceso_centros_impl(conn))
+
+
+def _asegurar_acceso_centros_impl(conn):
     """Molde bueno: acceso a centros por (tercero_id, negocio_id).
 
     La tabla nació con usuario_id pelado (ambiguo: fila de usuarios o id

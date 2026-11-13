@@ -54,6 +54,11 @@ def _migrar_contactos_alias_vendedor(conn, nombre, vendedor_id):
 
 
 def _asegurar_tablas(conn):
+    from app.asegurar import asegurar_una_vez
+    return asegurar_una_vez('vendedor.tablas', lambda: _asegurar_tablas_impl(conn))
+
+
+def _asegurar_tablas_impl(conn):
     for sql in [
         """CREATE TABLE IF NOT EXISTS citas_vendedor (
             id SERIAL PRIMARY KEY, vendedor_cod VARCHAR(50), tipo_negocio VARCHAR(20),

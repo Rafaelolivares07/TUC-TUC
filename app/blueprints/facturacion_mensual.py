@@ -89,6 +89,11 @@ def _formato_numero(n):
 
 
 def _asegurar_columnas(conn):
+    from app.asegurar import asegurar_una_vez
+    return asegurar_una_vez('facturacion.columnas', lambda: _asegurar_columnas_impl(conn))
+
+
+def _asegurar_columnas_impl(conn):
     for sql in [
         "ALTER TABLE terceros ADD COLUMN IF NOT EXISTS documento VARCHAR(30)",
         "ALTER TABLE terceros ADD COLUMN IF NOT EXISTS contacto VARCHAR(100)",
@@ -111,6 +116,11 @@ def _asegurar_columnas(conn):
 
 
 def _asegurar_datos(conn):
+    from app.asegurar import asegurar_una_vez
+    return asegurar_una_vez('facturacion.datos', lambda: _asegurar_datos_impl(conn))
+
+
+def _asegurar_datos_impl(conn):
     """Crea si faltan: empresa, tipo doc, cliente, servicios. Retorna ids."""
     _asegurar_columnas(conn)
     try:

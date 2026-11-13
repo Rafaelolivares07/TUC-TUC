@@ -117,6 +117,11 @@ def chat_invitado(token):
 # ── Helpers de schema ─────────────────────────────────────────────────────
 
 def _asegurar_schema_chat(conn):
+    from app.asegurar import asegurar_una_vez
+    return asegurar_una_vez('crm.schema_chat', lambda: _asegurar_schema_chat_impl(conn))
+
+
+def _asegurar_schema_chat_impl(conn):
     global _schema_chat_listo
     if _schema_chat_listo:
         return
@@ -197,6 +202,11 @@ def _crear_tabla_fotos(conn):
 
 
 def _asegurar_tabla_apuntes(conn):
+    from app.asegurar import asegurar_una_vez
+    return asegurar_una_vez('crm.tabla_apuntes', lambda: _asegurar_tabla_apuntes_impl(conn))
+
+
+def _asegurar_tabla_apuntes_impl(conn):
     conn.execute("""
         CREATE TABLE IF NOT EXISTS apuntes (
             id          SERIAL PRIMARY KEY,

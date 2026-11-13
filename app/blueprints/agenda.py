@@ -82,6 +82,11 @@ def _ocr_imagen(ruta):
 
 
 def _asegurar_tabla():
+    from app.asegurar import asegurar_una_vez
+    return asegurar_una_vez('agenda.tabla', _asegurar_tabla_impl)
+
+
+def _asegurar_tabla_impl():
     with get_db_connection() as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS agenda_items (

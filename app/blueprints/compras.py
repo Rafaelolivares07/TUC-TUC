@@ -11,6 +11,11 @@ _tablas_listas = False
 
 
 def _asegurar_tablas(conn):
+    from app.asegurar import asegurar_una_vez
+    return asegurar_una_vez('compras.tablas', lambda: _asegurar_tablas_impl(conn))
+
+
+def _asegurar_tablas_impl(conn):
     global _tablas_listas
     if _tablas_listas:
         return
@@ -478,6 +483,11 @@ from datetime import datetime, date
 import json
 
 def _asegurar_tablas_oc(conn):
+    from app.asegurar import asegurar_una_vez
+    return asegurar_una_vez('compras.tablas_oc', lambda: _asegurar_tablas_oc_impl(conn))
+
+
+def _asegurar_tablas_oc_impl(conn):
     conn.execute("""
         CREATE TABLE IF NOT EXISTS ordenes_compra (
             id SERIAL PRIMARY KEY,

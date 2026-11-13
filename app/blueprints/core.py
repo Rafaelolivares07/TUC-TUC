@@ -59,6 +59,11 @@ def _contactos_allowed():
 
 
 def _asegurar_tabla_contactos(conn):
+    from app.asegurar import asegurar_una_vez
+    return asegurar_una_vez('core.contactos', lambda: _asegurar_tabla_contactos_impl(conn))
+
+
+def _asegurar_tabla_contactos_impl(conn):
     conn.execute("""
         CREATE TABLE IF NOT EXISTS contactos (
             id SERIAL PRIMARY KEY,
@@ -775,6 +780,8 @@ def api_admin_backup_crear():
 
         conn = psycopg2.connect(db_url)
         cur = conn.cursor()
+        # Respaldo manual: tablas grandes superan el tope normal de 30s
+        cur.execute("SET statement_timeout = 600000")
         cur.execute("""
             SELECT table_name FROM information_schema.tables
             WHERE table_schema = 'public' AND table_type = 'BASE TABLE' ORDER BY table_name
@@ -1919,6 +1926,11 @@ def _url_pantalla(fila, negocio_id, slug):
 
 
 def _asegurar_pantallas_catalogo(conn):
+    from app.asegurar import asegurar_una_vez
+    return asegurar_una_vez('core.pantallas_catalogo', lambda: _asegurar_pantallas_catalogo_impl(conn))
+
+
+def _asegurar_pantallas_catalogo_impl(conn):
     """Crea/extiende pantallas y siembra el catalogo unico (omni+menu+otorgar)."""
     from ..buscador_motor import _CATALOGO_PANTALLAS, _SUGERIDOS, _MIGRAR_GRANTS
     import json as _json

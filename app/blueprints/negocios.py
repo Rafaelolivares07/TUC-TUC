@@ -323,6 +323,11 @@ def _notificar_pago_pedido(conn, tipo, pedido_id, pagos, metodo_pago):
 
 
 def _asegurar_domicilio_restaurante(conn):
+    from app.asegurar import asegurar_una_vez
+    return asegurar_una_vez('negocios.domicilio', lambda: _asegurar_domicilio_restaurante_impl(conn))
+
+
+def _asegurar_domicilio_restaurante_impl(conn):
     alters = [
         "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS valor_domicilio NUMERIC(12,2) DEFAULT 0",
         "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS domicilio_estado VARCHAR(30) DEFAULT 'no_aplica'",
@@ -1146,6 +1151,11 @@ def api_pagar(pedido_id):
 
 
 def _asegurar_pagos_restaurante(conn):
+    from app.asegurar import asegurar_una_vez
+    return asegurar_una_vez('negocios.pagos', lambda: _asegurar_pagos_restaurante_impl(conn))
+
+
+def _asegurar_pagos_restaurante_impl(conn):
     conn.execute("""
         CREATE TABLE IF NOT EXISTS pedido_pagos (
             id SERIAL PRIMARY KEY,

@@ -44,6 +44,11 @@ def init_tablas_restaurante():
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _crear_tablas(conn):
+    from app.asegurar import asegurar_una_vez
+    return asegurar_una_vez('restaurantes.tablas', lambda: _crear_tablas_impl(conn))
+
+
+def _crear_tablas_impl(conn):
     global _tablas_listas
     if _tablas_listas:
         return
@@ -171,11 +176,16 @@ def _crear_tablas(conn):
                 conn.rollback()
             except Exception:
                 pass
-    conn.execute("SET statement_timeout = '0'")
+    conn.execute("SET statement_timeout = '30000'")
     _tablas_listas = True
 
 
 def _asegurar_pagos_restaurante(conn):
+    from app.asegurar import asegurar_una_vez
+    return asegurar_una_vez('restaurantes.pagos', lambda: _asegurar_pagos_restaurante_impl(conn))
+
+
+def _asegurar_pagos_restaurante_impl(conn):
     conn.execute("""
         CREATE TABLE IF NOT EXISTS pedido_pagos (
             id SERIAL PRIMARY KEY,
@@ -197,6 +207,11 @@ def _asegurar_pagos_restaurante(conn):
 
 
 def _asegurar_domicilio_restaurante(conn):
+    from app.asegurar import asegurar_una_vez
+    return asegurar_una_vez('restaurantes.domicilio', lambda: _asegurar_domicilio_restaurante_impl(conn))
+
+
+def _asegurar_domicilio_restaurante_impl(conn):
     alters = [
         "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS subtotal_productos NUMERIC(12,2) DEFAULT 0",
         "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS valor_domicilio NUMERIC(12,2) DEFAULT 0",
@@ -266,6 +281,11 @@ def _calcular_domicilio(conn, tercero_id, tipo_entrega, lat, lon):
 
 
 def _asegurar_experiencia_restaurante(conn):
+    from app.asegurar import asegurar_una_vez
+    return asegurar_una_vez('restaurantes.experiencia', lambda: _asegurar_experiencia_restaurante_impl(conn))
+
+
+def _asegurar_experiencia_restaurante_impl(conn):
     conn.execute("ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS pantalla_experiencial BOOLEAN DEFAULT FALSE")
     conn.execute("ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS color_accion VARCHAR(20) DEFAULT '#f59e0b'")
     conn.execute("""
@@ -290,6 +310,11 @@ def _asegurar_experiencia_restaurante(conn):
 
 
 def _asegurar_catalogo_adiciones_restaurante(conn):
+    from app.asegurar import asegurar_una_vez
+    return asegurar_una_vez('restaurantes.catalogo_adiciones', lambda: _asegurar_catalogo_adiciones_restaurante_impl(conn))
+
+
+def _asegurar_catalogo_adiciones_restaurante_impl(conn):
     conn.execute("ALTER TABLE productos ADD COLUMN IF NOT EXISTS es_adicion BOOLEAN DEFAULT FALSE")
     conn.execute("ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS mostrar_adiciones_en_carta BOOLEAN DEFAULT FALSE")
     conn.commit()
@@ -2887,6 +2912,11 @@ def api_ventas(slug):
 # ── Docs ──────────────────────────────────────────────────────────────────────
 
 def _asegurar_vendedor_negocios(conn):
+    from app.asegurar import asegurar_una_vez
+    return asegurar_una_vez('restaurantes.vendedor_negocios', lambda: _asegurar_vendedor_negocios_impl(conn))
+
+
+def _asegurar_vendedor_negocios_impl(conn):
     conn.execute("""
         CREATE TABLE IF NOT EXISTS vendedor_negocios (
             id SERIAL PRIMARY KEY,

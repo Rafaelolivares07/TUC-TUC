@@ -58,6 +58,11 @@ def _limpiar_sesiones_caja():
 
 
 def _crear_tablas(conn):
+    from app.asegurar import asegurar_una_vez
+    return asegurar_una_vez('tiendas.tablas', lambda: _crear_tablas_impl(conn))
+
+
+def _crear_tablas_impl(conn):
     global _tablas_listas
     if _tablas_listas:
         return

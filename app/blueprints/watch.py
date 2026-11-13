@@ -5,6 +5,11 @@ bp = Blueprint('watch', __name__)
 
 
 def _asegurar_tabla(conn):
+    from app.asegurar import asegurar_una_vez
+    return asegurar_una_vez('watch.tabla', lambda: _asegurar_tabla_impl(conn))
+
+
+def _asegurar_tabla_impl(conn):
     conn.execute("""
         CREATE TABLE IF NOT EXISTS watch_salas (
             sala        VARCHAR(60) PRIMARY KEY,

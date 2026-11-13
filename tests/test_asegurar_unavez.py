@@ -215,6 +215,21 @@ finally:
     asegurar._flags.pop('fake.u0', None)
     asegurar._flags.pop('fake.u1', None)
     asegurar._flags.pop('fake.uboom', None)
+# 17. wrappers anidados no traban (RLock 13/11)
+asegurar._flags.pop('fake.outer', None)
+asegurar._flags.pop('fake.inner', None)
+_nest = []
+def _inner():
+    asegurar.asegurar_una_vez('fake.inner', lambda: _nest.append('in'))
+def _outer():
+    asegurar.asegurar_una_vez('fake.outer', lambda: (_inner(), _nest.append('out')))
+import threading as _th  # noqa: E402
+_t = _th.Thread(target=_outer, daemon=True)
+_t.start()
+_t.join(10)
+check('anidado no traba', (not _t.is_alive()) and _nest == ['in', 'out'], str(_nest)[:60])
+asegurar._flags.pop('fake.outer', None)
+asegurar._flags.pop('fake.inner', None)
 print('---')
 print(f"OK {total[0]} checks" if not fails else f"FALLOS: {fails}")
 sys.exit(1 if fails else 0)

@@ -7,7 +7,7 @@ La cola de candados eterna trababa los 8 hilos y la app quedaba en 000.
 
 Reglas desde 2026-11-13:
 - Todo DDL idempotente (`CREATE/ALTER IF NOT EXISTS`) corre UNA vez por
-  proceso worker, con candado entre hilos. Si falla, se marca igual y se
+  proceso worker, con candado reentrante entre hilos. Si falla, se marca igual y se
   registra: se reintenta al reiniciar el worker (cada deploy o max-requests).
   Nunca rompe la peticion en curso.
 - Los jobs del scheduler solo los corre el worker lider (lockfile + pid +
@@ -22,7 +22,7 @@ import threading
 import time
 
 _flags = {}
-_lock = threading.Lock()
+_lock = threading.RLock()  # reentrante: un _impl puede llamar otro asegurar (13/11)
 
 
 def asegurar_una_vez(clave, fn):

@@ -22,6 +22,7 @@ def check(name, cond):
 py = io.open(BASE + '/app/blueprints/inventarios.py', encoding='utf-8').read()
 kx = io.open(BASE + '/templates/partials/kardex_js.html', encoding='utf-8').read()
 om = io.open(BASE + '/templates/partials/buscador_omni.html', encoding='utf-8').read()
+kh = io.open(BASE + '/templates/kardex.html', encoding='utf-8').read()
 
 # 1. Endpoint: ultima_acta + comparacion con la linea (sin historial)
 check('kardex devuelve ultima_acta', "'ultima_acta': ultima_acta" in py)
@@ -55,6 +56,15 @@ check('omni fila envuelve', "classList.remove('truncate')" in om and 'whitespace
 check('omni reintento unico', 'omniCompletar7(pid, idx, 1)' in om and '!intento' in om)
 check('kardex botones item solo', kx.count('solo_recosteo: true') >= 2)
 check('kardex todos intacto full', 'ejecutarRecosteo({ todos: true }' in kx)
+
+# 4. Modal fecha: sin cascada + status persistente; arrastre invalido avisa
+check('modal fecha sin cascada', 'cascada' not in kh.lower())
+check('modal fecha texto puntual',
+      'Se recalcularán cronológicamente los movimientos posteriores' in kh)
+check('drop invalido avisa', "toast('Suelta la fila sobre otro movimiento" in kx)
+check('status modal existe', 'id="fecha-doc-status"' in kh and 'fecha-doc-status' in kx)
+check('status pinta proceso', "'Aplicando cambio de fecha y recosteando" in kx)
+check('status pinta error', "'✕ ' + error.message" in kx)
 
 print('fails:', len(fails))
 sys.exit(1 if fails else 0)

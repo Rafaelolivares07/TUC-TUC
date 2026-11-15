@@ -9023,6 +9023,88 @@ def api_verificar_cambio_fecha_documento(negocio_id):
         conn.close()
 
 
+def _veredicto_cambio_fecha(conn, negocio_id, fecha_anterior, nueva_fecha):
+    """Guards uniformes de fecha (protocolo): no futura + periodo cerrado origen/destino."""
+    hoy = _hoy_bogota()
+    if nueva_fecha > hoy:
+        raise ValueError(f'La fecha no puede ser futura respecto a hoy ({hoy})')
+    if fecha_anterior:
+        _verificar_periodo_cerrado(conn, negocio_id, fecha_anterior)
+    _verificar_periodo_cerrado(conn, negocio_id, nueva_fecha)
+
+
+def _mover_fecha_documento(conn, negocio_id, tipo_documento_id, tipo_documento, documento_numero,
+                            nueva_fecha, nueva_hora=None, rows_mi=(), variantes_mc=()):
+    """Motor unico de fecha por documento (protocolo recosteo).
+    Mismo veredicto desde cualquier evento: guards + MI (por IDs) + saldos + MC.
+    rows_mi: movimientos inventario resueltos por la ruta. variantes_mc: numeros extra (mantenimiento).
+    Retorna {'producto_ids', 'movimientos_actualizados', 'fecha_hora'}. Lanza ValueError."""
+    from datetime import datetime, time
+    rows_mi = list(rows_mi or [])
+    anterior = None
+    if rows_mi:
+        anterior = date.fromisoformat(min(str(r['documento_fecha'] or r['created_at'])[:10] for r in rows_mi))
+    else:
+        _r = conn.execute("""
+            SELECT MIN(fecha) AS f FROM movimientos_contables
+            WHERE negocio_id = %s AND (LOWER(documento_numero) = LOWER(%s)
+                OR LOWER(COALESCE(numero_documento, '')) = LOWER(%s))
+        """, (negocio_id, documento_numero, documento_numero)).fetchone()
+        if _r and _r.get('f'):
+            anterior = date.fromisoformat(str(_r['f'])[:10])
+    _veredicto_cambio_fecha(conn, negocio_id, anterior, nueva_fecha)
+    _th = (nueva_hora or '').strip()
+    if not _th and rows_mi and rows_mi[0].get('created_at'):
+        _th = str(rows_mi[0]['created_at'])[11:16]
+    _th = _th if len(_th) == 5 else (_th[:5] if _th else '00:00')
+    try:
+        fecha_hora = datetime.combine(nueva_fecha, time.fromisoformat(_th))
+    except ValueError:
+        fecha_hora = datetime.combine(nueva_fecha, time(0, 0))
+    mov_ids = [r['id'] for r in rows_mi]
+    if mov_ids:
+        ph = ','.join(['%s'] * len(mov_ids))
+        conn.execute(
+            f"UPDATE movimientos_inventario SET documento_fecha = %s, created_at = %s WHERE id IN ({ph})",
+            (nueva_fecha, fecha_hora, *mov_ids))
+    conn.execute("""
+        UPDATE saldo_por_documentos
+        SET fecha_hora = %s, created_at = %s
+        WHERE negocio_id = %s
+          AND (tipo_documento_id = %s OR LOWER(COALESCE(tipo_documento, '')) = LOWER(%s)
+               OR (tipo_documento_id IS NULL AND %s IS NULL))
+          AND numero_documento = %s
+    """, (fecha_hora, fecha_hora, negocio_id, tipo_documento_id, tipo_documento or '', tipo_documento, documento_numero))
+    _mc_or = ''
+    _mc_p = []
+    if variantes_mc:
+        _mc_or = " OR LOWER(documento_numero) IN %s OR LOWER(COALESCE(numero_documento, '')) IN %s"
+        _mc_p = [tuple(variantes_mc), tuple(variantes_mc)]
+    conn.execute(f"""
+        UPDATE movimientos_contables
+        SET fecha = %s, created_at = %s
+        WHERE negocio_id = %s
+          AND ((numero_documento = %s AND (tipo_documento_id = %s
+                OR LOWER(COALESCE(tipo_documento, '')) = LOWER(%s)
+                OR (tipo_documento_id IS NULL AND %s IS NULL))){_mc_or})
+    """, (nueva_fecha, fecha_hora, negocio_id, documento_numero,
+          tipo_documento_id, tipo_documento or '', tipo_documento, *_mc_p))
+    return {'producto_ids': sorted({r['producto_id'] for r in rows_mi}),
+            'movimientos_actualizados': len(rows_mi), 'fecha_hora': fecha_hora}
+
+
+def _recostear_productos_detalle(conn, negocio_id, producto_ids):
+    """Recostea c/u con motor unico + afectados (protocolo). Retorna detalle[]."""
+    det = []
+    for _pid in sorted(set(producto_ids or [])):
+        _res = _recostear_producto(conn, negocio_id, _pid)
+        _d = dict(_res) if _res else {'producto_id': _pid}
+        _d.setdefault('producto_id', _pid)
+        _d['afectados'] = _productos_padre(conn, negocio_id, _pid)
+        det.append(_d)
+    return det
+
+
 @bp.route('/api/inventario/<int:negocio_id>/documento/cambiar-fecha', methods=['POST'])
 def api_cambiar_fecha_documento_inventario(negocio_id):
     if 'usuario_id' not in session:
@@ -9087,51 +9169,22 @@ def api_cambiar_fecha_documento_inventario(negocio_id):
         tipo_documento_id = tipo_documento_id or rows[0]['tipo_documento_id']
         tipo_documento = tipo_documento or rows[0]['tipo_documento']
 
-        fecha_anterior = min((r['documento_fecha'] or r['created_at'].date()) for r in rows)
         try:
-            _verificar_periodo_cerrado(conn, negocio_id, fecha_anterior)
-            _verificar_periodo_cerrado(conn, negocio_id, nueva_fecha)
-        except Exception as exc:
+            _mv = _mover_fecha_documento(conn, negocio_id, tipo_documento_id, tipo_documento, documento_numero,
+                                         nueva_fecha, nueva_hora, rows_mi=rows)
+        except ValueError as exc:
             return jsonify({'ok': False, 'error': str(exc)}), 400
+        hora_uso = _mv['fecha_hora'].time()
+        fecha_hora = _mv['fecha_hora']
 
-        hora_uso = hora or (rows[0]['created_at'].time() if rows[0]['created_at'] else time(0, 0))
-        fecha_hora = datetime.combine(nueva_fecha, hora_uso)
+        # MI+saldos+MC los mueve el motor (mismo veredicto)
 
-        # 1. Actualizar movimientos de inventario
-        conn.execute("""
-            UPDATE movimientos_inventario
-            SET documento_fecha = %s, created_at = %s
-            WHERE negocio_id = %s 
-              AND (tipo_documento_id = %s OR LOWER(COALESCE(tipo_documento, '')) = LOWER(%s)) 
-              AND documento_numero = %s
-        """, (nueva_fecha, fecha_hora, negocio_id, tipo_documento_id, tipo_documento, documento_numero))
 
-        # 2. Actualizar movimientos contables
-        conn.execute("""
-            UPDATE movimientos_contables
-            SET fecha = %s, created_at = %s
-            WHERE negocio_id = %s 
-              AND (tipo_documento_id = %s OR LOWER(COALESCE(tipo_documento, '')) = LOWER(%s)) 
-              AND numero_documento = %s
-        """, (nueva_fecha, fecha_hora, negocio_id, tipo_documento_id, tipo_documento, documento_numero))
 
-        # 3. Actualizar saldo_por_documentos
-        conn.execute("""
-            UPDATE saldo_por_documentos
-            SET fecha_hora = %s, created_at = %s
-            WHERE negocio_id = %s 
-              AND (tipo_documento_id = %s OR LOWER(COALESCE(tipo_documento, '')) = LOWER(%s)) 
-              AND numero_documento = %s
-        """, (fecha_hora, fecha_hora, negocio_id, tipo_documento_id, tipo_documento, documento_numero))
 
-        # Recostear en cascada todos los productos de este documento
+
         producto_ids = sorted({r['producto_id'] for r in rows})
-        detalle_cf = []
-        for _cfpid in producto_ids:
-            _cfres = _recostear_producto(conn, negocio_id, _cfpid)
-            _cfd = dict(_cfres) if _cfres else {'producto_id': _cfpid}
-            _cfd['afectados'] = _productos_padre(conn, negocio_id, _cfpid)
-            detalle_cf.append(_cfd)
+        detalle_cf = _recostear_productos_detalle(conn, negocio_id, producto_ids)
 
         conn.commit()
         return jsonify({
@@ -11073,7 +11126,6 @@ def api_modificar_documento_mantenimiento(negocio_id):
             doc_codes.extend([f"{tipo_doc}-{num_doc}", f"{tipo_doc}{num_doc}"])
         doc_codes = list(set([d.lower() for d in doc_codes]))
 
-        prod_ids_to_recostear = set()
         detalle_mant = []
 
         if nuevo_tercero_id:
@@ -11109,24 +11161,20 @@ def api_modificar_documento_mantenimiento(negocio_id):
 
         if nueva_fecha:
             movs = conn.execute("""
-                SELECT id, producto_id
+                SELECT id, producto_id, documento_fecha, created_at
                 FROM movimientos_inventario
                 WHERE negocio_id = %s AND (
                     LOWER(documento_numero) IN %s
                     OR (numero_documento IS NOT NULL AND LOWER(numero_documento) IN %s)
                 )
             """, (negocio_id, tuple(doc_codes), tuple(doc_codes))).fetchall()
-            for m in movs:
-                prod_ids_to_recostear.add(m['producto_id'])
+            tiene_inventario = len(movs) > 0
 
-            conn.execute("""
-                UPDATE movimientos_inventario
-                SET documento_fecha = %s
-                WHERE negocio_id = %s AND (
-                    LOWER(documento_numero) IN %s
-                    OR (numero_documento IS NOT NULL AND LOWER(numero_documento) IN %s)
-                )
-            """, (nueva_fecha, negocio_id, tuple(doc_codes), tuple(doc_codes)))
+            try:
+                _mv = _mover_fecha_documento(conn, negocio_id, None, tipo_doc, num_doc,
+                                             nueva_fecha, None, rows_mi=movs, variantes_mc=tuple(doc_codes))
+            except ValueError as exc:
+                return jsonify({'ok': False, 'error': str(exc)}), 400
 
             conn.execute("""
                 UPDATE comprobantes_diario
@@ -11137,14 +11185,7 @@ def api_modificar_documento_mantenimiento(negocio_id):
                 )
             """, (nueva_fecha, negocio_id, tuple(doc_codes), tuple(doc_codes)))
 
-            conn.execute("""
-                UPDATE movimientos_contables
-                SET fecha = %s
-                WHERE negocio_id = %s AND (
-                    LOWER(documento_numero) IN %s
-                    OR (numero_documento IS NOT NULL AND LOWER(numero_documento) IN %s)
-                )
-            """, (nueva_fecha, negocio_id, tuple(doc_codes), tuple(doc_codes)))
+            # MC lo mueve el motor (con created_at + veredicto)
 
             conn.execute("""
                 UPDATE pedidos
@@ -11154,11 +11195,8 @@ def api_modificar_documento_mantenimiento(negocio_id):
                 )
             """, (nueva_fecha, negocio_id, tuple(doc_codes)))
 
-            for pid in sorted(prod_ids_to_recostear):
-                _mres = _recostear_producto(conn, negocio_id, pid)
-                _md = dict(_mres) if _mres else {'producto_id': pid}
-                _md['afectados'] = _productos_padre(conn, negocio_id, pid)
-                detalle_mant.append(_md)
+            if tiene_inventario:
+                detalle_mant = _recostear_productos_detalle(conn, negocio_id, sorted({m['producto_id'] for m in movs}))
 
         conn.commit()
         return jsonify({'ok': True, 'mensaje': 'Documento modificado y propagado con exito',

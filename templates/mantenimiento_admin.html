@@ -968,6 +968,7 @@
       }
       
       document.getElementById('aud-edit-fecha').value = docFecha;
+      _armarPreviewFechaMant();
       document.getElementById('aud-edit-tercero-id').value = provId || '';
       document.getElementById('aud-edit-tercero').value = provNombre || '';
       
@@ -1386,6 +1387,47 @@ function mostrarInformeRecosteo(resumen, productosDetalle) {
   `;
 }
 
+// Preview impacto fecha (protocolo: avisar antes de mover el documento)
+let _tPreviewFechaMant = null;
+async function previsualizarImpactoFechaMant(idx) {
+  const inp = document.getElementById('aud-edit-fecha');
+  let box = document.getElementById('aud-impacto-fecha');
+  if (box) box.remove();
+  const f = inp?.value || '';
+  if (!f || typeof auditorDocumentoSeleccionado === 'undefined' || !auditorDocumentoSeleccionado) return;
+  if (_tPreviewFechaMant) clearTimeout(_tPreviewFechaMant);
+  _tPreviewFechaMant = setTimeout(async () => {
+    try {
+      const r = await fetch(`/api/inventario/${NEGOCIO_ID}/documento/verificar-cambio-fecha`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ tipo_documento_id: null, tipo_documento: auditorDocumentoSeleccionado.tipo, documento_numero: auditorDocumentoSeleccionado.numero, nueva_fecha: f, nueva_hora: null })
+      });
+      const d = await r.json();
+      const items = (d && d.ok && Array.isArray(d.items)) ? d.items : [];
+      box = document.createElement('div');
+      box.id = 'aud-impacto-fecha';
+      box.className = 'mt-1 px-3 py-2 bg-indigo-50/95 border border-indigo-300 rounded-lg text-xs text-indigo-950';
+      const filas = items.map(it => {
+        const post = Number(it.movimientos_posteriores) || 0;
+        const sgn = it.tipo === 'entrada' ? '+' : '\u2212';
+        return `<div class="flex items-center justify-between gap-2 py-0.5 border-b border-indigo-200/50 last:border-0">`
+          + `<span class="font-semibold truncate">${it.producto_nombre} <span class="font-normal text-indigo-700/70">(${sgn} ${Number(it.cantidad || 0).toLocaleString('es-CO', {maximumFractionDigits: 2})} und)</span></span>`
+          + `<span class="shrink-0 px-2 py-0.5 rounded-full font-bold text-[10px] ${post > 0 ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-800'}">${post > 0 ? `Recostear\u00e1 ${post} mov(s)` : 'Sin salidas afectadas'}</span></div>`;
+      }).join('');
+      box.innerHTML = items.length
+        ? `<p class="font-bold mb-1">! La fecha se mueve para todo el documento (${items.length} \u00edtem(s)). Impacto:</p>` + filas
+        : `<p class="font-semibold">Sin \u00edtems de inventario en este documento: cambiar la fecha no genera recosteo.</p>`;
+      inp.after(box);
+    } catch (e) {}
+  }, 280);
+}
+function _armarPreviewFechaMant() {
+  const inp = document.getElementById('aud-edit-fecha');
+  if (!inp || inp.dataset.previewArmado) return;
+  inp.dataset.previewArmado = '1';
+  inp.addEventListener('change', previsualizarImpactoFechaMant);
+  previsualizarImpactoFechaMant();
+}
   async function guardarCambiosAuditoriaDocumento() {
     if (!auditorDocumentoSeleccionado) return;
     const { tipo, numero, terceroId } = auditorDocumentoSeleccionado;

@@ -2203,6 +2203,15 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
 
     documento_total = subtotal_compra + iva_total
 
+    for _ln in lineas_procesadas:
+        _h = _auditar_linea_costo(conn, negocio_id, _ln.get('producto_id'), _ln.get('cantidad'), _ln.get('valor_total'))
+        if _h:
+            advertencias.append(
+                f"Posible error de digitaci\u00f3n (prod #{_ln.get('producto_id')}): "
+                f"{float(_ln.get('cantidad') or 0):,.0f} uds por ${float(_ln.get('valor_total') or 0):,.0f} \u2014 "
+                f"el total corresponde a ~{_h['cantidad_sugerida']} uds (ref ${float(_h['ref_sana']):,.2f} c/u)."
+            )
+
     # Segundo ciclo: registrar movimientos
     for ln in lineas_procesadas:
         _aplicar_tarjeta(
@@ -3600,6 +3609,87 @@ def api_tienda_inventario_stock(slug):
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
         conn.close()
+
+
+def _auditar_linea_costo(conn, negocio_id, producto_id, cantidad_base, total_linea):
+    """Posible error de digitaci\u00f3n en l\u00ednea de entrada. Ref sana: mediana \u00faltimas 5 compras."""
+    try:
+        cantidad = float(cantidad_base or 0)
+        total = float(total_linea or 0)
+    except (TypeError, ValueError):
+        return None
+    if cantidad <= 0 or total <= 0:
+        return None
+    try:
+        tol_row = conn.execute(
+            "SELECT COALESCE(tolerancia_costo_pct, 15.0) AS tol FROM productos WHERE id = %s",
+            (producto_id,)).fetchone()
+        tol = float((tol_row or {}).get('tol') or 15.0)
+    except Exception:
+        tol = 15.0
+    try:
+        rows = conn.execute("""
+            SELECT valor_unitario FROM movimientos_inventario
+            WHERE negocio_id = %s AND producto_id = %s AND tipo = 'entrada' AND motivo = 'entrada'
+              AND valor_unitario IS NOT NULL AND valor_unitario > 0
+            ORDER BY created_at DESC LIMIT 5
+        """, (negocio_id, producto_id)).fetchall()
+    except Exception:
+        return None
+    vus = sorted(float(r['valor_unitario']) for r in (rows or []) if r and r.get('valor_unitario'))
+    if len(vus) < 2:
+        return None
+    n = len(vus)
+    ref = vus[n // 2] if n % 2 else (vus[n // 2 - 1] + vus[n // 2]) / 2
+    if ref <= 0:
+        return None
+    vu = total / cantidad
+    variacion = abs(vu - ref) / ref
+    esperada = total / ref
+    if esperada <= 0:
+        return None
+    factor = cantidad / esperada
+    if variacion <= tol / 100:
+        return None
+    if not (factor >= 10 or factor <= 0.1):
+        return None
+    sug = int(round(esperada)) if esperada >= 100 else round(esperada, 2)
+    return {
+        'ref_sana': ref,
+        'compras_base': n,
+        'vu_linea': vu,
+        'variacion_pct': round(variacion * 100, 1),
+        'factor': round(factor, 1),
+        'cantidad_sugerida': sug,
+        'costo_sugerido': ref,
+        'mensaje': (
+            f"Se digitaron {cantidad:,.0f} uds a ${vu:,.4f} c/u; referencia sana ${ref:,.4f} c/u "
+            f"(mediana de {n} compras). El total ${total:,.0f} corresponde a ~{sug} uds."
+        ),
+    }
+
+
+@bp.route('/api/inventario/producto/<int:producto_id>/validar-costo')
+def api_validar_costo_linea(producto_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        negocio_id = _negocio_id_de_producto(conn, producto_id)
+        if not negocio_id:
+            return jsonify({'ok': False, 'error': 'Producto no encontrado'}), 404
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
+        if error:
+            return error
+        cantidad = request.args.get('cantidad_base', type=float)
+        total = request.args.get('total', type=float)
+        h = _auditar_linea_costo(conn, negocio_id, producto_id, cantidad, total)
+        return jsonify({'ok': True, 'hallazgo': h})
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 
 @bp.route('/api/inventario/producto/<int:producto_id>/kardex')

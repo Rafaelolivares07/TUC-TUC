@@ -11445,6 +11445,60 @@ function actualizarToleranciasEntrada() {
   } catch(e) {}
 }
 
+// Hallazgo de costo absurdo con solucion (verificar/aplicar/ignorar)
+const _hallazgoTimers = {};
+const _hallazgoEstado = {};
+async function verificarHallazgoCosto(idx) {
+  const prodId = document.getElementById(`ent-id-${idx}`)?.value;
+  const alertaDiv = document.getElementById(`ent-alerta-${idx}`);
+  if (!prodId || !alertaDiv) return;
+  const cantidad = parseFloat(document.getElementById(`ent-cant-base-${idx}`)?.value) || 0;
+  const total = parseFloat(document.getElementById(`ent-total-${idx}`)?.value) || 0;
+  const firma = `${prodId}|${cantidad}|${total}`;
+  const est = _hallazgoEstado[idx] || {};
+  if (est.firma === firma) return;
+  if (_hallazgoTimers[idx]) clearTimeout(_hallazgoTimers[idx]);
+  _hallazgoTimers[idx] = setTimeout(async () => {
+    try {
+      const c2 = parseFloat(document.getElementById(`ent-cant-base-${idx}`)?.value) || 0;
+      const t2 = parseFloat(document.getElementById(`ent-total-${idx}`)?.value) || 0;
+      if (`${prodId}|${c2}|${t2}` !== firma) return;
+      const r = await fetch(`/api/inventario/producto/${prodId}/validar-costo?cantidad_base=${cantidad}&total=${total}`);
+      const d = await r.json();
+      _hallazgoEstado[idx] = { firma };
+      alertaDiv.querySelector('[data-hallazgo]')?.remove();
+      if (!d.ok || !d.hallazgo) return;
+      const h = d.hallazgo;
+      const card = document.createElement('div');
+      card.setAttribute('data-hallazgo', '1');
+      card.className = 'mt-1 px-3 py-2 bg-rose-50/95 border border-rose-400 rounded-lg text-xs text-rose-950 shadow-2xs';
+      card.innerHTML = `
+        <p class="font-bold">! Posible error de digitaci\u00f3n (factor ${h.factor}x): ${h.cantidad_sugerida} uds a $${h.costo_sugerido} c/u en vez de lo digitado.</p>
+        <p class="text-[11px] mt-0.5">${h.mensaje}</p>
+        <div class="mt-1.5 flex gap-2">
+          <button type="button" onclick="aplicarHallazgoCosto(${idx}, ${h.cantidad_sugerida})" class="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white font-bold text-[11px] rounded-lg shadow-xs transition active:scale-95">Usar ${h.cantidad_sugerida} uds</button>
+          <button type="button" onclick="ignorarHallazgoCosto(${idx})" class="px-2.5 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-[11px] rounded-lg transition">Ignorar</button>
+        </div>`;
+      alertaDiv.appendChild(card);
+      alertaDiv.classList.remove('hidden');
+      if (typeof actualizarContadorAlertas === 'function') actualizarContadorAlertas();
+    } catch (e) {}
+  }, 280);
+}
+function aplicarHallazgoCosto(idx, sugerida) {
+  const presEquiv = parseFloat(document.getElementById(`ent-pres-equiv-${idx}`)?.value) || 0;
+  const cantInp = document.getElementById(`ent-cant-emp-${idx}`);
+  if (!cantInp || !(presEquiv > 0) || !(sugerida > 0)) { toast('No se pudo aplicar la sugerencia.', false); return; }
+  cantInp.value = parseFloat((sugerida / presEquiv).toFixed(4));
+  delete _hallazgoEstado[idx];
+  if (typeof calcularCostoFilaEmpaque === 'function') { try { calcularCostoFilaEmpaque(idx, 'cant'); } catch (e) {} }
+  evaluarToleranciasLinea(idx);
+  toast(`\u2713 Cantidad ajustada a ${sugerida} uds base.`);
+}
+function ignorarHallazgoCosto(idx) {
+  const alertaDiv = document.getElementById(`ent-alerta-${idx}`);
+  alertaDiv?.querySelector('[data-hallazgo]')?.remove();
+}
 function evaluarToleranciasLinea(idx) {
   const div = entradaLineas[idx];
   if (!div) return;
@@ -11592,6 +11646,7 @@ function evaluarToleranciasLinea(idx) {
     }
   }
 
+  if (typeof verificarHallazgoCosto === 'function') { try { verificarHallazgoCosto(idx); } catch (e) {} }
   actualizarContadorAlertas();
 }
 

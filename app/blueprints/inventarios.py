@@ -2399,14 +2399,27 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
             'movimientos_procesados': res_p.get('movimientos_procesados', 0),
             'movimientos_ajustados': res_p.get('movimientos_ajustados', 0),
         })
+    for _pid in sorted(prods_to_recost if es_modificacion else []):
+        res_p = _recostear_producto(conn, negocio_id, _pid, origen='entrada_modificacion', doc_tipo=tipo_documento, doc_num=documento_numero)
+        if res_p:
+            recosteo_auto.append({
+                'producto_id': _pid,
+                'producto_nombre': res_p.get('producto_nombre'),
+                'movimientos_procesados': res_p.get('movimientos_procesados', 0),
+                'movimientos_ajustados': res_p.get('movimientos_ajustados', 0),
+            })
     if recosteo_auto:
         tot_aj = sum(r['movimientos_ajustados'] for r in recosteo_auto)
-        advertencias.append(
-            f"Entrada retroactiva ({documento_fecha.isoformat()}): recosteo automático en "
-            f"{len(recosteo_auto)} producto(s), {tot_aj} movimiento(s) revalorizado(s)."
-        )
-        for p_id in (prods_to_recost if es_modificacion else []):
-            _recostear_producto(conn, negocio_id, p_id)
+        if es_modificacion:
+            advertencias.append(
+                f"Modificación {tipo_documento} {documento_numero}: recosteo automático en "
+                f"{len(recosteo_auto)} producto(s), {tot_aj} movimiento(s) revalorizado(s)."
+            )
+        else:
+            advertencias.append(
+                f"Entrada retroactiva ({documento_fecha.isoformat()}): recosteo automático en "
+                f"{len(recosteo_auto)} producto(s), {tot_aj} movimiento(s) revalorizado(s)."
+            )
 
     return {
         'ok': True,

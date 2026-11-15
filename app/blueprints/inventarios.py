@@ -8614,6 +8614,7 @@ def api_ejecutar_recosteo(negocio_id):
             return error
         producto_ids = data.get('producto_ids')
         bodega_id = data.get('bodega') or data.get('centro_utilidad_id')
+        print(f"[recosteo/ejecutar] inicio neg={negocio_id} prods={producto_ids} bod={bodega_id}", flush=True)
 
         if data.get('todos') or not producto_ids:
             rows = conn.execute("""
@@ -8844,6 +8845,8 @@ def api_ejecutar_recosteo(negocio_id):
         conn.rollback()
         return jsonify({'ok': False, 'error': 'Lista de productos inválida'}), 400
     except Exception as e:
+        import traceback as _tb_huella
+        print(f"[recosteo/ejecutar] ERROR:\n{_tb_huella.format_exc()}", flush=True)
         conn.rollback()
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:

@@ -8,6 +8,9 @@ Imprime cuadro completo y deja tag corto (% libre semanal, '80%') en
 2026-11-04: la API (subs_usage.used_percent) no sirve (0% con 65+ llamadas
 reales) -> se mide consumo LOCAL REAL de los session.jsonl. Regla Rafa:
 el maximo semanal visto vale 95% aprox (auto-sube si se supera el record).
+2026-11-15: API validada (techo ~19.8k llamadas, mediana 62 lecturas, 12 dias
+estable). % = API en vivo; si la consulta falla, estimado local sobre el
+techo calibrado. None = fallo consulta (antes se confundia con 0 real).
 """
 import csv
 import glob
@@ -56,6 +59,28 @@ def _compact(n):
 def _techo(maxv):
     """Tope 100% implicito: el maximo visto vale 95%."""
     return int(round(maxv / 0.95)) if maxv > 0 else 0
+
+
+def _techo_calibrado():
+    """Mediana de week_calls/api_s en HIST (solo lecturas API>0). 0 sin datos."""
+    vals = []
+    try:
+        with open(HIST, encoding='utf-8') as f:
+            for r in csv.reader(f):
+                if len(r) < 7:
+                    continue
+                try:
+                    c, s = float(r[2]), float(r[6])
+                except ValueError:
+                    continue
+                if s > 0 and c > 500:
+                    vals.append(c / s * 100)
+    except OSError:
+        pass
+    if not vals:
+        return 0
+    vals.sort()
+    return int(vals[len(vals) // 2])
 
 
 def _paprox(cs, ref):
@@ -305,7 +330,7 @@ def main():
         return 0
     ahora = datetime.now(timezone.utc).timestamp()
     hoy = datetime.now(BOG)
-    tier, uw, us = '?', 0, 0
+    tier, uw, us, api_ok = '?', None, None, False
     win_start, sem_start = ahora - 5 * 3600, ahora - 7 * 24 * 3600
     win_reset, sem_reset = ahora + 5 * 3600, ahora + 7 * 24 * 3600
     try:
@@ -324,6 +349,7 @@ def main():
         sem_reset = s.get('resets_at', 0) or sem_reset
         win_start = win_reset - (w.get('window_duration_mins', 300) or 300) * 60
         sem_start = sem_reset - 7 * 24 * 3600
+        api_ok = True
     except Exception:
         pass
     try:
@@ -331,17 +357,28 @@ def main():
         prev_max = _max_sem_hist()
         _anotar_hist(cw, cs, tw, ts, uw, us)
         maxv = max(prev_max, cs)
-        techo = _techo(maxv)
-        pap = _paprox(cs, maxv)
+        techo = _techo_calibrado() or _techo(maxv)
+        if api_ok:
+            pap = us
+        else:
+            pap = min(99, int(cs / techo * 100)) if techo > 0 else None
         if pap is None:
             sem_pct, sem_lib = 's/ref', 's/ref'
+        elif api_ok:
+            sem_pct = '%d%%' % pap
+            sem_lib = '%d%%' % max(0, 100 - pap)
         else:
             sem_pct = '~%d%%' % pap
-            sem_lib = '~%d%%' % (100 - int(cs / techo * 100))
+            sem_lib = '~%d%%' % max(0, 100 - int(cs / techo * 100))
         dias_van = max((ahora - sem_start) / 86400.0, 0.05)
         dias_quedan = max((sem_reset - ahora) / 86400.0, 0)
         prom_gasto = int(cs / dias_van)
-        prom_puedes = int((techo - cs) / dias_quedan) if dias_quedan > 0.05 and techo > cs else 0
+        if dias_quedan >= 1 and techo > cs:
+            puedes_txt = 'puedes ~%d/dia sin pasar' % int((techo - cs) / dias_quedan)
+        elif techo > cs:
+            puedes_txt = 'puedes ~%s en lo que queda' % _compact(techo - cs)
+        else:
+            puedes_txt = 'techo alcanzado'
         rw = datetime.fromtimestamp(win_reset, timezone.utc).astimezone(BOG)
         rs = datetime.fromtimestamp(sem_reset, timezone.utc).astimezone(BOG)
         corte = '%s %s' % (DIAS[rs.weekday()], rs.strftime('%d/%m'))
@@ -367,20 +404,20 @@ def main():
         print(_fila(['SESION', str(rec_c), _compact(rec_t), '', '', rec_fecha], W))
         print(_borde())
         print(_linea('faltan sem %s | vent %s' % (_falta(sem_reset - ahora), _falta(win_reset - ahora))))
-        print(_linea('ritmo ~%d/dia gastado | puedes ~%d/dia sin pasar' % (prom_gasto, prom_puedes)))
+        print(_linea('ritmo ~%d/dia gastado | %s' % (prom_gasto, puedes_txt)))
         print(_linea('tu record sem %d | sesion %d (%s)' % (maxv, max_c, max_fecha)))
-        print(_linea('% aproximados: tu record semanal vale 95%'))
+        print(_linea('techo sem ~%s llamadas (mediana API)' % _compact(techo)))
         print(_borde())
-        if prev_max > 0 and cs >= prev_max:
-            print(_linea('Nuevo record semanal sin freno: el 95% se movio solo.'))
+        if pap is not None and pap >= 80:
+            print(_linea('AVISO: semana al %d%% (%s).' % (pap, 'API en vivo' if api_ok else 'estimado')))
             print(_borde())
-        elif prev_max > 0 and cs >= 0.8 * prev_max:
-            print(_linea('AVISO: cerca de tu maximo semanal.'))
-            print(_borde())
-        print(_linea('API Meta dice %d%%/%d%% (no confiable, referencia)' % (uw, us)))
+        if api_ok:
+            print(_linea('API Meta en vivo: %d%%/%d%% (ventana/semana)' % (uw, us)))
+        else:
+            print(_linea('API Meta sin respuesta: % estimado local'))
         print(_borde())
         with open(TAG, 'w') as f:
-            f.write(_tag_libre(cs, techo))
+            f.write(('%d%%' % max(0, 100 - us)) if api_ok else _tag_libre(cs, techo))
         if len(sys.argv) > 1 and sys.argv[1] == '--voz':
             _hablar(cs, pap, corte, rec_c)
     except Exception as e:

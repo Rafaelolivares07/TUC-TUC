@@ -2398,6 +2398,14 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
             'producto_nombre': res_p.get('producto_nombre'),
             'movimientos_procesados': res_p.get('movimientos_procesados', 0),
             'movimientos_ajustados': res_p.get('movimientos_ajustados', 0),
+            'stock_final': res_p.get('stock_final'),
+            'costo_final': res_p.get('costo_final'),
+            'costo_anterior': res_p.get('costo_anterior'),
+            'valor_existencia': res_p.get('valor_existencia'),
+            'asientos_14_ajustados': res_p.get('asientos_14_ajustados', 0),
+            'asientos_cp_ajustados': res_p.get('asientos_cp_ajustados', 0),
+            'pedidos_ajustados': res_p.get('pedidos_ajustados', 0),
+            'afectados': _productos_padre(conn, negocio_id, _pid),
         })
     for _pid in sorted(prods_to_recost if es_modificacion else []):
         res_p = _recostear_producto(conn, negocio_id, _pid, origen='entrada_modificacion', doc_tipo=tipo_documento, doc_num=documento_numero)
@@ -2407,6 +2415,14 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
                 'producto_nombre': res_p.get('producto_nombre'),
                 'movimientos_procesados': res_p.get('movimientos_procesados', 0),
                 'movimientos_ajustados': res_p.get('movimientos_ajustados', 0),
+                'stock_final': res_p.get('stock_final'),
+                'costo_final': res_p.get('costo_final'),
+                'costo_anterior': res_p.get('costo_anterior'),
+                'valor_existencia': res_p.get('valor_existencia'),
+                'asientos_14_ajustados': res_p.get('asientos_14_ajustados', 0),
+                'asientos_cp_ajustados': res_p.get('asientos_cp_ajustados', 0),
+                'pedidos_ajustados': res_p.get('pedidos_ajustados', 0),
+                'afectados': _productos_padre(conn, negocio_id, _pid),
             })
     if recosteo_auto:
         tot_aj = sum(r['movimientos_ajustados'] for r in recosteo_auto)
@@ -8479,6 +8495,22 @@ def api_auditoria_recosteo(negocio_id):
         conn.close()
 
 
+def _productos_padre(conn, negocio_id, producto_id):
+    """Padres que usan producto_id como componente (costo posiblemente afectado)."""
+    try:
+        rows = conn.execute("""
+            SELECT te.producto_id, p.nombre AS producto_nombre, te.cantidad
+            FROM tarjeta_estandar te
+            JOIN productos p ON p.id = te.producto_id
+            WHERE te.componente_id = %s AND p.negocio_id = %s
+            ORDER BY p.nombre ASC
+        """, (producto_id, negocio_id)).fetchall()
+    except Exception:
+        return []
+    return [{'id': r['producto_id'], 'nombre': r['producto_nombre'],
+             'cantidad': float(r['cantidad'] or 0)} for r in rows]
+
+
 @bp.route('/api/inventario/<int:negocio_id>/recosteo/ejecutar', methods=['POST'])
 def api_ejecutar_recosteo(negocio_id):
     if 'usuario_id' not in session:
@@ -8515,6 +8547,7 @@ def api_ejecutar_recosteo(negocio_id):
                 return jsonify({'ok': False, 'error': f'Producto no pertenece al negocio: {producto_id}'}), 400
             res_p = _recostear_producto(conn, negocio_id, producto_id, bodega=bodega_id, origen='manual_kardex', doc_tipo='MANUAL_KARDEX', doc_num=f'Prod #{producto_id}')
             if res_p:
+                res_p['afectados'] = _productos_padre(conn, negocio_id, producto_id)
                 detalles.append(res_p)
 
         conn.commit()
@@ -9003,13 +9036,18 @@ def api_cambiar_fecha_documento_inventario(negocio_id):
 
         # Recostear en cascada todos los productos de este documento
         producto_ids = sorted({r['producto_id'] for r in rows})
-        for producto_id in producto_ids:
-            _recostear_producto(conn, negocio_id, producto_id)
+        detalle_cf = []
+        for _cfpid in producto_ids:
+            _cfres = _recostear_producto(conn, negocio_id, _cfpid)
+            _cfd = dict(_cfres) if _cfres else {'producto_id': _cfpid}
+            _cfd['afectados'] = _productos_padre(conn, negocio_id, _cfpid)
+            detalle_cf.append(_cfd)
 
         conn.commit()
         return jsonify({
             'ok': True,
             'productos_recosteados': len(producto_ids),
+            'productos_detalle': detalle_cf,
             'movimientos_actualizados': len(rows),
             'fecha': nueva_fecha.isoformat(),
             'hora': hora_uso.strftime('%H:%M')

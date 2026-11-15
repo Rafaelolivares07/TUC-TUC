@@ -11826,6 +11826,21 @@ async function registrarEntrada() {
     }
     toast(_msgEntrada);
     (d.advertencias || []).forEach(a => toast(a));
+    {
+      const _det = (d.recosteo_automatico || []).filter(x => (x.afectados || []).length);
+      if (typeof mostrarInformeRecosteo === 'function' && _det.length) {
+        const _sum = k => _det.reduce((a, x) => a + (Number(x[k]) || 0), 0);
+        mostrarInformeRecosteo({
+          total_productos: _det.length,
+          productos_con_cambios: _det.filter(x => (x.movimientos_ajustados || 0) > 0).length,
+          total_movimientos_procesados: _sum('movimientos_procesados'),
+          total_movimientos_ajustados: _sum('movimientos_ajustados'),
+          total_asientos_inv_ajustados: _sum('asientos_14_ajustados'),
+          total_asientos_cp_ajustados: _sum('asientos_cp_ajustados'),
+          total_pedidos_ajustados: _sum('pedidos_ajustados')
+        }, _det);
+      }
+    }
 
     avisarMetodosSinCuentaEntrada(metodo_pago);
 
@@ -12001,6 +12016,32 @@ function irAAuditoriaEnsambles(fechaIni, fechaFin) {
 
 
 
+async function recostearAfectado(btn, productoId) {
+  if (!btn || btn.disabled) return;
+  const _orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span>Recosteando…</span>';
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/recosteo/ejecutar`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ producto_ids: [Number(productoId)], solo_recosteo: true })
+    });
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error(d.error || 'No se pudo recostear.');
+    const _det = (d.productos_detalle || [])[0] || {};
+    const _nAf = (_det.afectados || []).length;
+    btn.innerHTML = '<span>✓ Recosteado</span>';
+    btn.className = 'shrink-0 px-2.5 py-1 bg-emerald-600 text-white font-bold text-[11px] rounded-lg shadow-xs';
+    toast(`✓ Producto recosteado (${_det.movimientos_ajustados || 0} movs).` + (_nAf ? ` Revisa sus ${_nAf} afectados en kardex.` : ''));
+    if (typeof cargarKardex === 'function' && typeof kardexProductoActual !== 'undefined' && kardexProductoActual) {
+      try { await cargarKardex(kardexProductoActual); } catch (e) {}
+    }
+  } catch (e) {
+    btn.disabled = false;
+    btn.innerHTML = _orig;
+    toast(e.message, false);
+  }
+}
 function mostrarInformeRecosteo(resumen, productosDetalle) {
   if (!resumen) return;
   
@@ -12029,6 +12070,23 @@ function mostrarInformeRecosteo(resumen, productosDetalle) {
   prods.forEach(p => {
     const tieneCambios = (p.movimientos_ajustados > 0 || p.asientos_14_ajustados > 0 || p.pedidos_ajustados > 0);
     const difCosto = (p.costo_final || 0) - (p.costo_anterior || 0);
+    const afectados = Array.isArray(p.afectados) ? p.afectados : [];
+    let afectadosHtml = '';
+    if (afectados.length) {
+      const filasAf = afectados.map(a => `
+        <div class="flex items-center justify-between gap-2 py-1.5 border-b border-amber-200/50 last:border-0">
+          <span class="min-w-0">
+            <span class="font-semibold text-slate-700 dark:text-slate-200 text-xs truncate block">${a.nombre}</span>
+            <span class="text-[10px] text-amber-700/80 block">${Number(a.cantidad || 0).toLocaleString('es-CO', {maximumFractionDigits: 4})} unds/porción · su costo puede estar descuadrado</span>
+          </span>
+          <button type="button" onclick="recostearAfectado(this, ${Number(a.id)})" class="shrink-0 px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] rounded-lg shadow-xs transition active:scale-95">Recostear</button>
+        </div>`).join('');
+      afectadosHtml = `
+        <div class="mt-2 pt-2 border-t border-amber-300/60 bg-amber-50/70 dark:bg-amber-900/20 rounded-lg p-2.5">
+          <p class="text-[11px] font-bold text-amber-800 dark:text-amber-300 mb-1">! Usan este insumo (${afectados.length}): conviene recostearlos también</p>
+          ${filasAf}
+        </div>`;
+    }
     
     filasHtml += `
       <div class="border border-slate-200 dark:border-slate-700 rounded-xl p-3.5 bg-slate-50/50 dark:bg-slate-800/40 hover:bg-white dark:hover:bg-slate-800 transition-all shadow-sm">
@@ -12068,6 +12126,7 @@ function mostrarInformeRecosteo(resumen, productosDetalle) {
             </span>
           </div>
         </div>
+        ${afectadosHtml}
       </div>
     `;
   });

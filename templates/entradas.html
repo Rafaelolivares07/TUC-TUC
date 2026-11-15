@@ -7166,6 +7166,192 @@ function recalcularTodasLasTolerancias() {
 }
 
 
+// ── Informe recosteo + afectados (espejo de partials/kardex_js.html) ──
+async function recostearAfectado(btn, productoId) {
+  if (!btn || btn.disabled) return;
+  const _orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span>Recosteando…</span>';
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/recosteo/ejecutar`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ producto_ids: [Number(productoId)], solo_recosteo: true })
+    });
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error(d.error || 'No se pudo recostear.');
+    const _det = (d.productos_detalle || [])[0] || {};
+    const _nAf = (_det.afectados || []).length;
+    btn.innerHTML = '<span>✓ Recosteado</span>';
+    btn.className = 'shrink-0 px-2.5 py-1 bg-emerald-600 text-white font-bold text-[11px] rounded-lg shadow-xs';
+    toast(`✓ Producto recosteado (${_det.movimientos_ajustados || 0} movs).` + (_nAf ? ` Revisa sus ${_nAf} afectados en kardex.` : ''));
+    if (typeof cargarKardex === 'function' && typeof kardexProductoActual !== 'undefined' && kardexProductoActual) {
+      try { await cargarKardex(kardexProductoActual); } catch (e) {}
+    }
+  } catch (e) {
+    btn.disabled = false;
+    btn.innerHTML = _orig;
+    toast(e.message, false);
+  }
+}
+function mostrarInformeRecosteo(resumen, productosDetalle) {
+  if (!resumen) return;
+  
+  let modalEl = document.getElementById('modal-informe-recosteo');
+  if (!modalEl) {
+    modalEl = document.createElement('div');
+    modalEl.id = 'modal-informe-recosteo';
+    document.body.appendChild(modalEl);
+  }
+  modalEl.className = 'fixed inset-0 flex items-center justify-center p-4 transition-all duration-300';
+  modalEl.style.cssText = 'position: fixed !important; top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important; width: 100vw !important; height: 100vh !important; background-color: rgba(15, 23, 42, 0.75) !important; backdrop-filter: blur(4px) !important; -webkit-backdrop-filter: blur(4px) !important; z-index: 999999 !important; display: flex !important; align-items: center !important; justify-content: center !important; padding: 16px !important; margin: 0 !important;';
+  modalEl.onclick = function(e) {
+    if (e.target === modalEl) modalEl.remove();
+  };
+
+  const prods = productosDetalle || [];
+  const totalProds = resumen.total_productos || prods.length || 0;
+  const totalMovs = resumen.total_movimientos_procesados || 0;
+  const totalMovsAjustados = resumen.total_movimientos_ajustados || 0;
+  const totalAs14 = resumen.total_asientos_inv_ajustados || 0;
+  const totalAscp = resumen.total_asientos_cp_ajustados || 0;
+  const totalPed = resumen.total_pedidos_ajustados || 0;
+  const prodsConCambios = resumen.productos_con_cambios || 0;
+
+  let filasHtml = '';
+  prods.forEach(p => {
+    const tieneCambios = (p.movimientos_ajustados > 0 || p.asientos_14_ajustados > 0 || p.pedidos_ajustados > 0);
+    const difCosto = (p.costo_final || 0) - (p.costo_anterior || 0);
+    const afectados = Array.isArray(p.afectados) ? p.afectados : [];
+    let afectadosHtml = '';
+    if (afectados.length) {
+      const filasAf = afectados.map(a => `
+        <div class="flex items-center justify-between gap-2 py-1.5 border-b border-amber-200/50 last:border-0">
+          <span class="min-w-0">
+            <span class="font-semibold text-slate-700 dark:text-slate-200 text-xs truncate block">${a.nombre}</span>
+            <span class="text-[10px] text-amber-700/80 block">${Number(a.cantidad || 0).toLocaleString('es-CO', {maximumFractionDigits: 4})} unds/porción · su costo puede estar descuadrado</span>
+          </span>
+          <button type="button" onclick="recostearAfectado(this, ${Number(a.id)})" class="shrink-0 px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] rounded-lg shadow-xs transition active:scale-95">Recostear</button>
+        </div>`).join('');
+      afectadosHtml = `
+        <div class="mt-2 pt-2 border-t border-amber-300/60 bg-amber-50/70 dark:bg-amber-900/20 rounded-lg p-2.5">
+          <p class="text-[11px] font-bold text-amber-800 dark:text-amber-300 mb-1">! Usan este insumo (${afectados.length}): conviene recostearlos también</p>
+          ${filasAf}
+        </div>`;
+    }
+    
+    filasHtml += `
+      <div class="border border-slate-200 dark:border-slate-700 rounded-xl p-3.5 bg-slate-50/50 dark:bg-slate-800/40 hover:bg-white dark:hover:bg-slate-800 transition-all shadow-sm">
+        <div class="flex items-center justify-between gap-3 mb-2">
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="font-bold text-slate-800 dark:text-slate-100 text-sm truncate">${p.producto_nombre}</span>
+            <span class="text-xs px-2 py-0.5 rounded-full font-semibold ${tieneCambios ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'}">
+              ${tieneCambios ? p.movimientos_ajustados + ' movs ajustados' : '✓ Sin desfases'}
+            </span>
+          </div>
+          <div class="text-right whitespace-nowrap">
+            <span class="text-xs font-medium text-slate-500">Stock Final:</span>
+            <span class="text-xs font-bold text-slate-700 dark:text-slate-200 ml-1">${Number(p.stock_final || 0).toLocaleString('es-CO', {maximumFractionDigits: 2})} unds</span>
+          </div>
+        </div>
+        
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-200/60 dark:border-slate-700/60 text-xs">
+          <div>
+            <span class="text-slate-500 block">Costo Promedio:</span>
+            <span class="font-semibold text-slate-800 dark:text-slate-100">$${Number(p.costo_final || 0).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+            ${Math.abs(difCosto) > 0.01 ? `<span class="text-[10px] ${difCosto > 0 ? 'text-rose-500' : 'text-emerald-500'} block">(${difCosto > 0 ? '+' : ''}$${difCosto.toFixed(2)})</span>` : ''}
+          </div>
+          <div>
+            <span class="text-slate-500 block">Valor Existencias:</span>
+            <span class="font-semibold text-slate-800 dark:text-slate-100">$${Number(p.valor_existencia || 0).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+          </div>
+          <div>
+            <span class="text-slate-500 block">Asientos 14* / 61*:</span>
+            <span class="font-semibold ${p.asientos_14_ajustados > 0 ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-600 dark:text-slate-400'}">
+              ${(p.asientos_14_ajustados || 0) + (p.asientos_cp_ajustados || 0)} sincronizados
+            </span>
+          </div>
+          <div>
+            <span class="text-slate-500 block">Comandas Pedidos:</span>
+            <span class="font-semibold ${p.pedidos_ajustados > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-600 dark:text-slate-400'}">
+              ${p.pedidos_ajustados || 0} actualizados
+            </span>
+          </div>
+        </div>
+        ${afectadosHtml}
+      </div>
+    `;
+  });
+
+  modalEl.innerHTML = `
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+      <div class="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-gradient-to-r from-amber-500/10 via-emerald-500/10 to-indigo-500/10">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center text-xl shadow-inner">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M22 20H2"/></svg>
+          </div>
+          <div>
+            <h3 class="font-bold text-slate-800 dark:text-slate-100 text-lg">Informe Ejecutivo de Recosteo</h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Sincronización integral: Kardex ↔ Contabilidad ↔ Pedidos</p>
+          </div>
+        </div>
+        <button onclick="document.getElementById('modal-informe-recosteo').remove()" class="w-8 h-8 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+          ✕
+        </button>
+      </div>
+
+      <div class="p-5 overflow-y-auto flex-1 space-y-4">
+        <!-- KPI CARDS -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div class="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200/60 dark:border-slate-700/60 text-center">
+            <span class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">Productos</span>
+            <span class="text-xl font-black text-slate-800 dark:text-slate-100">${totalProds}</span>
+            <span class="text-[10px] text-emerald-600 dark:text-emerald-400 block font-medium mt-0.5">Recosteados</span>
+          </div>
+          <div class="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200/60 dark:border-slate-700/60 text-center">
+            <span class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">Kardex Movs</span>
+            <span class="text-xl font-black text-slate-800 dark:text-slate-100">${totalMovsAjustados}</span>
+            <span class="text-[10px] text-slate-500 block font-medium mt-0.5">de ${totalMovs} proc.</span>
+          </div>
+          <div class="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200/60 dark:border-slate-700/60 text-center">
+            <span class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">Contabilidad</span>
+            <span class="text-xl font-black text-indigo-600 dark:text-indigo-400">${totalAs14 + totalAscp}</span>
+            <span class="text-[10px] text-indigo-500 block font-medium mt-0.5">Asientos 14* y 61*</span>
+          </div>
+          <div class="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200/60 dark:border-slate-700/60 text-center">
+            <span class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">Comandas</span>
+            <span class="text-xl font-black text-amber-600 dark:text-amber-400">${totalPed}</span>
+            <span class="text-[10px] text-amber-500 block font-medium mt-0.5">Pedidos POS</span>
+          </div>
+        </div>
+
+        <!-- LISTA DE PRODUCTOS -->
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">Detalle por Producto</span>
+            <span class="text-xs text-slate-500 font-medium">${prodsConCambios} con ajustes aplicados</span>
+          </div>
+          <div class="space-y-2 max-h-64 overflow-y-auto pr-1">
+            ${filasHtml}
+          </div>
+        </div>
+
+        <div class="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 flex items-center gap-3">
+          <div class="text-xl font-black text-emerald-600">✓</div>
+          <p class="text-xs text-emerald-800 dark:text-emerald-300 font-medium">
+            Todos los saldos de inventario, asientos contables del Libro Diario y costos en comandas quedaron <strong>100% sincronizados y cuadrados</strong>.
+          </p>
+        </div>
+      </div>
+
+      <div class="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 flex justify-end">
+        <button onclick="document.getElementById('modal-informe-recosteo').remove()" class="px-5 py-2 bg-slate-800 hover:bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white font-bold text-sm rounded-xl transition-all shadow-md active:scale-95">
+          Entendido / Cerrar
+        </button>
+      </div>
+    </div>
+  `;
+}
+
 async function registrarEntrada() {
   if (!validarConfirmacionEncabezadoEntrada()) {
     return;
@@ -7362,6 +7548,21 @@ async function registrarEntrada() {
     }
     toast(_msgEntrada);
     (d.advertencias || []).forEach(a => toast(a));
+    {
+      const _det = (d.recosteo_automatico || []).filter(x => (x.afectados || []).length);
+      if (typeof mostrarInformeRecosteo === 'function' && _det.length) {
+        const _sum = k => _det.reduce((a, x) => a + (Number(x[k]) || 0), 0);
+        mostrarInformeRecosteo({
+          total_productos: _det.length,
+          productos_con_cambios: _det.filter(x => (x.movimientos_ajustados || 0) > 0).length,
+          total_movimientos_procesados: _sum('movimientos_procesados'),
+          total_movimientos_ajustados: _sum('movimientos_ajustados'),
+          total_asientos_inv_ajustados: _sum('asientos_14_ajustados'),
+          total_asientos_cp_ajustados: _sum('asientos_cp_ajustados'),
+          total_pedidos_ajustados: _sum('pedidos_ajustados')
+        }, _det);
+      }
+    }
 
     avisarMetodosSinCuentaEntrada(metodo_pago);
 

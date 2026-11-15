@@ -68,6 +68,28 @@ _i_cf = KJ.find('Documento actualizado. ${d.productos_recosteados}')
 _seg_cf = KJ[_i_cf:_i_cf + 1200] if _i_cf > 0 else ''
 check('cambiar-fecha abre modal', 'mostrarInformeRecosteo' in _seg_cf and 'd.productos_detalle' in _seg_cf)
 
-N = 12
+# 13) mantenimiento retorna detalle con afectados
+SRC_MT = inspect.getsource(INV.api_modificar_documento_mantenimiento)
+check('mantenimiento retorna productos_detalle', "'productos_detalle'" in SRC_MT)
+
+# 14-15) auditoria nueva
+AUD = (ROOT / 'templates' / 'auditor_documentos.html').read_text(encoding='utf-8')
+check('auditor nuevo tiene informe+boton',
+      'function mostrarInformeRecosteo' in AUD and 'function recostearAfectado' in AUD)
+check('auditor nuevo abre modal', 'mostrarInformeRecosteo({' in AUD and 'data.productos_detalle' in AUD)
+
+# 16-17) mantenimiento viejo
+MAN = (ROOT / 'templates' / 'mantenimiento_admin.html').read_text(encoding='utf-8')
+check('mant viejo tiene informe+boton',
+      'function mostrarInformeRecosteo' in MAN and 'function recostearAfectado' in MAN)
+check('mant viejo abre modal', 'mostrarInformeRecosteo({' in MAN and 'data.productos_detalle' in MAN)
+
+# 18-19) fisico modal completo
+FIS = (ROOT / 'templates' / 'inventario_fisico.html').read_text(encoding='utf-8')
+check('fisico tiene informe+boton',
+      'function mostrarInformeRecosteo' in FIS and 'function recostearAfectado' in FIS)
+check('fisico abre modal', 'mostrarInformeRecosteo({' in FIS)
+
+N = 19
 print(f'{N - len(fails)}/{N} checks, {len(fails)} fallos')
 sys.exit(1 if fails else 0)

@@ -10984,6 +10984,7 @@ def api_modificar_documento_mantenimiento(negocio_id):
         doc_codes = list(set([d.lower() for d in doc_codes]))
 
         prod_ids_to_recostear = set()
+        detalle_mant = []
 
         if nuevo_tercero_id:
             tercero_row = conn.execute("SELECT id, nombre FROM terceros WHERE id = %s", (nuevo_tercero_id,)).fetchone()
@@ -11063,11 +11064,15 @@ def api_modificar_documento_mantenimiento(negocio_id):
                 )
             """, (nueva_fecha, negocio_id, tuple(doc_codes)))
 
-            for pid in prod_ids_to_recostear:
-                _recostear_producto(conn, negocio_id, pid)
+            for pid in sorted(prod_ids_to_recostear):
+                _mres = _recostear_producto(conn, negocio_id, pid)
+                _md = dict(_mres) if _mres else {'producto_id': pid}
+                _md['afectados'] = _productos_padre(conn, negocio_id, pid)
+                detalle_mant.append(_md)
 
         conn.commit()
-        return jsonify({'ok': True, 'mensaje': 'Documento modificado y propagado con exito'})
+        return jsonify({'ok': True, 'mensaje': 'Documento modificado y propagado con exito',
+                            'productos_recosteados': len(detalle_mant), 'productos_detalle': detalle_mant})
     except Exception as e:
         conn.rollback()
         return jsonify({'ok': False, 'error': str(e)}), 500

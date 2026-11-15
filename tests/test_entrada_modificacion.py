@@ -37,5 +37,15 @@ check('mismo motor (llamada existe)', '_recostear_producto(' in SRC)
 check('resumen se llena en modif', "'recosteo_automatico': recosteo_auto" in SRC)
 check('aviso menciona modificacion', 'Modificaci' in SRC and 'recosteo autom' in SRC)
 
-print(f'{6 - len(fails)}/6 checks, {len(fails)} fallos')
+EN = (ROOT / 'templates' / 'entradas.html').read_text(encoding='utf-8')
+AD = (ROOT / 'templates' / 'inventario_admin.html').read_text(encoding='utf-8')
+check('boton explicito al modificar',
+      'function actualizarBotonEntrada' in EN and 'function actualizarBotonEntrada' in AD)
+check('boton dice guardar cambios',
+      'Guardar cambios de la entrada' in EN and 'Guardar cambios de la entrada' in AD)
+check('toast dice modificada', "'Entrada modificada'" in EN and "'Entrada modificada'" in AD)
+check('boton se actualiza al cambiar modo',
+      EN.count('actualizarBotonEntrada()') >= 3 and AD.count('actualizarBotonEntrada()') >= 3)
+
+print(f'{10 - len(fails)}/10 checks, {len(fails)} fallos')
 sys.exit(1 if fails else 0)

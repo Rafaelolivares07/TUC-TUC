@@ -9798,6 +9798,7 @@ async function verificarDocumentoExistente() {
     if (d.ok && d.existe) {
 
       esModificacionDoc = true;
+      actualizarBotonEntrada();
 
       toast('Factura/Documento existente cargado para modificar', true);
 
@@ -9850,6 +9851,7 @@ async function verificarDocumentoExistente() {
     } else {
 
       esModificacionDoc = false;
+      actualizarBotonEntrada();
 
     }
 
@@ -11685,6 +11687,23 @@ function recalcularTodasLasTolerancias() {
 }
 
 
+function actualizarBotonEntrada() {
+  const btn = document.getElementById('btn-registrar-entrada');
+  if (!btn) return;
+  const spans = btn.querySelectorAll('span');
+  const lbl = spans && spans[1];
+  if (esModificacionDoc) {
+    if (lbl) lbl.textContent = 'Guardar cambios de la entrada';
+    btn.classList.remove('bg-rose-600', 'hover:bg-rose-700');
+    btn.classList.add('bg-amber-600', 'hover:bg-amber-700');
+    btn.title = 'Modificando documento existente';
+  } else {
+    if (lbl) lbl.textContent = 'Registrar Entrada';
+    btn.classList.remove('bg-amber-600', 'hover:bg-amber-700');
+    btn.classList.add('bg-rose-600', 'hover:bg-rose-700');
+    btn.title = '';
+  }
+}
 async function registrarEntrada() {
   if (!validarConfirmacionEncabezadoEntrada()) {
     return;
@@ -11874,7 +11893,7 @@ async function registrarEntrada() {
 
   if (d.ok) {
 
-    let _msgEntrada = 'Entrada registrada';
+    let _msgEntrada = esModificacionDoc ? 'Entrada modificada' : 'Entrada registrada';
     if (d.recosteo_automatico && d.recosteo_automatico.length) {
       const _tMov = d.recosteo_automatico.reduce((a, r) => a + (r.movimientos_ajustados || 0), 0);
       _msgEntrada += `. Recosteo automático: ${d.recosteo_automatico.length} producto(s), ${_tMov} mov(s) revalorizados`;
@@ -11904,6 +11923,7 @@ async function registrarEntrada() {
     entradaLineas = [];
 
     esModificacionDoc = false;
+    actualizarBotonEntrada();
     _borradorCargadoActual = null;
     document.getElementById('banner-borrador-entrada')?.classList.add('hidden');
     document.getElementById('indicador-auto-guardado-borrador')?.classList.add('hidden');

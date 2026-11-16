@@ -4729,7 +4729,8 @@ def api_desvincular_ids_contabilidad(negocio_id):
 
 # ── Reparador de Costos de Venta ─────────────────────────────────────────────
 def _ventas_sin_descarga(conn, negocio_id, fecha_desde, fecha_hasta, prod_padre_id=None, numero_doc=''):
-    """Ventas del rango sin salidas kardex (producto_padre_id) — ej. bondiola 328/FV-440.
+    """Ventas del rango sin salidas kardex (producto_padre_id;
+    simples sin receta con salida directa NO se listan) — ej. bondiola 328/FV-440.
 
     Contrato: lista de dicts por documento {producto_id, producto_nombre,
     pedido_id, numero_documento, tipo_documento_id, cliente_tercero_id,
@@ -4770,7 +4771,16 @@ def _ventas_sin_descarga(conn, negocio_id, fecha_desde, fecha_hasta, prod_padre_
           AND NOT EXISTS (
             SELECT 1 FROM movimientos_inventario mi
             WHERE mi.negocio_id = %s AND mi.tipo = 'salida'
-              AND mi.producto_padre_id = pi.producto_id
+              AND (
+                mi.producto_padre_id = pi.producto_id
+                OR (
+                  mi.producto_id = pi.producto_id
+                  AND mi.producto_padre_id IS NULL
+                  AND NOT EXISTS (
+                    SELECT 1 FROM tarjeta_estandar t WHERE t.producto_id = pi.producto_id
+                  )
+                )
+              )
               AND COALESCE(mi.documento_fecha, mi.created_at::date) >= %s::date
               AND COALESCE(mi.documento_fecha, mi.created_at::date) <= %s::date
           )

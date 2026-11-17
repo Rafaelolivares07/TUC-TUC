@@ -1176,6 +1176,9 @@ function onKeydownACKardex(e) {
 function renderizarAuditoriaKardex(auditoria, productoId, acta) {
   const el = document.getElementById('kardex-auditoria');
   if (!el || !auditoria) return;
+  // Globo de conteo vive en la tira: desprenderlo antes de reconstruir el HTML
+  const _cotejoPrevio = document.getElementById('kardex-conteo-cotejo');
+  if (_cotejoPrevio) _cotejoPrevio.remove();
 
   const alertas = [];
   if (auditoria.negativo_final) alertas.push('<span class="rounded bg-red-100 px-1.5 py-0.5 text-red-700 font-bold text-[10px]">Saldo final negativo</span>');
@@ -1296,6 +1299,16 @@ function renderizarAuditoriaKardex(auditoria, productoId, acta) {
       </div>
     ` : ''}
   `;
+
+  // Globo de conteo adentro de la tira, tras el grupo Auditoria
+  if (_cotejoPrevio) {
+    _cotejoPrevio.classList.remove('ml-auto');
+    _cotejoPrevio.classList.add('shrink-0');
+    const _filaL3 = el.firstElementChild;
+    if (_filaL3 && _filaL3.children.length > 1) _filaL3.insertBefore(_cotejoPrevio, _filaL3.children[1]);
+    else if (_filaL3) _filaL3.appendChild(_cotejoPrevio);
+    else el.appendChild(_cotejoPrevio);
+  }
 }
 
 function renderizarBodegasKardex(centros, bodegaActivaId, totalEmpresa) {

@@ -4123,6 +4123,8 @@ def api_inventario_movimiento_reclasificar_bodega(movimiento_id):
                                 doc_tipo=tipo_doc, doc_num=doc_num,
                                 usuario_id=u_id, usuario_nombre=u_nom)
 
+        # Persistir recosteo origen+destino: sin esto close() lo revierte
+        conn.commit()
         conn.close()
         return jsonify({
             'ok': True,

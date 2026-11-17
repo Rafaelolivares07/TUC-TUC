@@ -7617,8 +7617,8 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None, origen=None,
             mot_str = str(m.get('motivo') or '').lower()
             ref_tipo_str = str(m.get('referencia_tipo') or '').lower()
             td_id_m = m.get('tipo_documento_id')
-            doc_num = m.get('documento_numero')
-            consecutive = str(doc_num).split('-')[-1].strip() if (doc_num and '-' in str(doc_num)) else (str(doc_num) if doc_num else '')
+            doc_num_mov = m.get('documento_numero')
+            consecutive = str(doc_num_mov).split('-')[-1].strip() if (doc_num_mov and '-' in str(doc_num_mov)) else (str(doc_num_mov) if doc_num_mov else '')
 
             es_prod_mov = (
                 mot_str == 'produccion'
@@ -7660,7 +7660,7 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None, origen=None,
                         WHERE negocio_id = %s AND tipo = 'salida'
                           AND referencia_tipo = 'produccion' AND referencia_id = %s
                     """, (negocio_id, ref_id_m)).fetchone()
-                if (not sum_sal_row or sum_sal_row[0] is None) and doc_num:
+                if (not sum_sal_row or sum_sal_row[0] is None) and doc_num_mov:
                     sum_sal_row = conn.execute("""
                         SELECT round(SUM(valor_total)::numeric, 2)
                         FROM movimientos_inventario
@@ -7668,7 +7668,7 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None, origen=None,
                           AND (documento_numero = %s OR documento_numero = %s)
                           AND (motivo = 'produccion' OR referencia_tipo = 'produccion' OR UPPER(COALESCE(tipo_documento, '')) LIKE '%%PRODUC%%' OR tipo_documento_id = 5)
                           AND (producto_padre_id = %s OR producto_padre_id IS NULL)
-                    """, (negocio_id, str(doc_num), str(consecutive), producto_id)).fetchone()
+                    """, (negocio_id, str(doc_num_mov), str(consecutive), producto_id)).fetchone()
                 if sum_sal_row and sum_sal_row[0] is not None and Decimal(str(sum_sal_row[0])) > 0:
                     val_tot_prod_in = Decimal(str(sum_sal_row[0])).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
                     vu = val_tot_prod_in / cant_m
@@ -7767,7 +7767,7 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None, origen=None,
                     conn.execute("UPDATE movimientos_inventario SET asiento_inventario_id = NULL, asiento_contrapartida_id = NULL WHERE id = %s", (m['id'],))
 
             # Autocuración 1 a 1 (Cuenta 14*) con aislamiento estricto por tipo de documento y producto_padre_id
-            if not as_inv_id and doc_num:
+            if not as_inv_id and doc_num_mov:
                 mc_inv = conn.execute(f"""
                     SELECT id, comprobante_id FROM movimientos_contables
                     WHERE negocio_id = %s AND cuenta LIKE '14%%'
@@ -7782,7 +7782,7 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None, origen=None,
                       )
                     ORDER BY CASE WHEN producto_id = %s AND producto_padre_id = %s THEN 0 WHEN producto_id = %s THEN 1 ELSE 2 END, id ASC
                     LIMIT 1
-                """, (negocio_id, expected_mc_tipos[0], expected_mc_tipos[1], str(doc_num), str(consecutive), str(consecutive), producto_id, m_padre_id, m_padre_id, m_padre_id, negocio_id, m['id'], producto_id, m_padre_id, producto_id)).fetchone()
+                """, (negocio_id, expected_mc_tipos[0], expected_mc_tipos[1], str(doc_num_mov), str(consecutive), str(consecutive), producto_id, m_padre_id, m_padre_id, m_padre_id, negocio_id, m['id'], producto_id, m_padre_id, producto_id)).fetchone()
                 if mc_inv:
                     as_inv_id = mc_inv['id']
                     comp_id_inv = mc_inv['comprobante_id']
@@ -7801,7 +7801,7 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None, origen=None,
 
             # --- 1) PRODUCCIÓN: Sincronizar entrada de producto terminado y Débito 14* del comprobante ---
             if es_prod_mov:
-                if m['tipo'] == 'salida' and doc_num:
+                if m['tipo'] == 'salida' and doc_num_mov:
                     p_term_id = m.get('producto_padre_id')
                     ref_id_m = m.get('referencia_id')
                     if p_term_id:
@@ -7819,7 +7819,7 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None, origen=None,
                                 WHERE negocio_id = %s AND tipo = 'salida'
                                   AND (documento_numero = %s OR documento_numero = %s)
                                   AND (motivo = 'produccion' OR referencia_tipo = 'produccion' OR UPPER(COALESCE(tipo_documento, '')) LIKE '%%PRODUC%%' OR tipo_documento_id = 5)
-                            """, (negocio_id, str(doc_num), str(consecutive))).fetchone()
+                            """, (negocio_id, str(doc_num_mov), str(consecutive))).fetchone()
                         tot_prod_val = float(tot_prod_row[0]) if (tot_prod_row and tot_prod_row[0] is not None) else 0.0
                         if tot_prod_val > 0:
                             conn.execute("""
@@ -7829,7 +7829,7 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None, origen=None,
                                 WHERE negocio_id = %s AND tipo = 'entrada' AND producto_id = %s
                                   AND (documento_numero = %s OR documento_numero = %s)
                                   AND (motivo = 'produccion' OR referencia_tipo = 'produccion' OR UPPER(COALESCE(tipo_documento, '')) LIKE '%%PRODUC%%' OR tipo_documento_id = 5)
-                            """, (tot_prod_val, tot_prod_val, negocio_id, p_term_id, str(doc_num), str(consecutive)))
+                            """, (tot_prod_val, tot_prod_val, negocio_id, p_term_id, str(doc_num_mov), str(consecutive)))
 
                 if comp_id_inv:
                     sum_cred_prod = conn.execute("""
@@ -7847,7 +7847,7 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None, origen=None,
                         """, (float(sum_cred_prod[0]), negocio_id, comp_id_inv))
 
             # --- 2) VENTAS: Sincronizar pedido_items.costo_unitario y Débito 61* del comprobante ---
-            elif es_venta_mov and m['tipo'] == 'salida' and doc_num:
+            elif es_venta_mov and m['tipo'] == 'salida' and doc_num_mov:
                 ref_id_int = _int_o_none(m.get('referencia_id'))
                 padre_id = m.get('producto_padre_id')
 
@@ -7858,7 +7858,7 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None, origen=None,
                         WHERE negocio_id = %s AND producto_padre_id = %s AND tipo = 'salida'
                           AND (documento_numero = %s OR documento_numero = %s)
                           AND (motivo = 'venta' OR referencia_tipo LIKE 'pedido%%' OR UPPER(COALESCE(tipo_documento, '')) LIKE '%%VENTA%%' OR tipo_documento_id = 6)
-                    """, (negocio_id, padre_id, str(doc_num), str(consecutive))).fetchone()
+                    """, (negocio_id, padre_id, str(doc_num_mov), str(consecutive))).fetchone()
                     tot_kardex_padre = float(tot_plato_row[0]) if (tot_plato_row and tot_plato_row[0] is not None) else 0.0
 
                     qty_row = conn.execute("""
@@ -7867,7 +7867,7 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None, origen=None,
                         JOIN pedidos p ON p.id = pi.pedido_id
                         WHERE p.negocio_id = %s AND pi.producto_id = %s
                           AND (p.numero_documento = %s OR p.numero_documento = %s OR p.id = %s)
-                    """, (negocio_id, padre_id, str(consecutive), str(doc_num), ref_id_int)).fetchone()
+                    """, (negocio_id, padre_id, str(consecutive), str(doc_num_mov), ref_id_int)).fetchone()
                     cant_v = float(qty_row['cant_vendida']) if (qty_row and qty_row['cant_vendida']) else 0.0
 
                     if cant_v > 0 and tot_kardex_padre > 0:
@@ -7883,7 +7883,7 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None, origen=None,
                                 WHERE p.negocio_id = %s AND pi.producto_id = %s
                                   AND (p.numero_documento = %s OR p.numero_documento = %s OR p.id = %s)
                             )
-                        """, (c_und_pi, negocio_id, padre_id, str(consecutive), str(doc_num), ref_id_int))
+                        """, (c_und_pi, negocio_id, padre_id, str(consecutive), str(doc_num_mov), ref_id_int))
                 else:
                     tot_ped_ajust += 1
                     conn.execute("""
@@ -7896,7 +7896,7 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None, origen=None,
                             WHERE p.negocio_id = %s AND pi.producto_id = %s
                               AND (p.numero_documento = %s OR p.numero_documento = %s OR p.id = %s)
                         )
-                    """, (float(costo_und), negocio_id, producto_id, str(consecutive), str(doc_num), ref_id_int))
+                    """, (float(costo_und), negocio_id, producto_id, str(consecutive), str(doc_num_mov), ref_id_int))
 
                 if comp_id_inv:
                     target_prod_v = padre_id if padre_id else producto_id

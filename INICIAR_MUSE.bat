@@ -2,8 +2,9 @@
 chcp 65001 >nul
 REM ============================================================
 REM  INICIAR_MUSE.bat - Arranque diario de Muse (TUC TUC V2)
-REM  Uso: doble clic cada dia. Pide tema, chequea entorno,
-REM  abre pestana WT con titulo fijo e invoca muse --yolo.
+REM  Uso: doble clic cada dia. Chequea entorno, abre pestana WT
+REM  con titulo fijo e invoca muse --yolo. MUDO: cero voz aqui;
+REM  Muse pide el tema en el chat solo al tener todo cargado.
 REM  Idempotente. Directorio de trabajo: raiz (AGENTS.md + V2 + docs).
 REM  Regla cmd: cero parentesis literales en echos dentro de
 REM  bloques (...) - el texto con ) aborta el parseo. Estilo goto.
@@ -15,7 +16,6 @@ set "V2=C:\Users\RAFAEL OLIVARES\Documents\TucTucV2"
 set "DOCS=C:\Users\RAFAEL OLIVARES\Documents\docs"
 set "CREDS=C:\Tools\muse-git-credentials"
 set "TEMA=%DOCS%\_conversacion\tema_activo.txt"
-set "SELECTOR=%DOCS%\_conversacion\ELEGIR_TEMA.ps1"
 set "LOG=%TEMP%\muse_arranque.log"
 echo [%date% %time%] INICIO>>"%LOG%"
 
@@ -55,19 +55,11 @@ echo [5/8] Tema de trabajo
 echo [5/8]>>"%LOG%"
 if exist "%TEMA%" goto :tema_ant
 echo   Sin tema anterior.
-goto :tema_sel
+goto :tema_ok
 :tema_ant
 set /p TEMA_ANT=<"%TEMA%"
 echo   Anterior: !TEMA_ANT!
-:tema_sel
-if not exist "%SELECTOR%" echo   AVISO: falta selector, sigo con el tema anterior.
-if not exist "%SELECTOR%" goto :tema_ok
-powershell -NoProfile -Command "if ([Console]::IsInputRedirected) { exit 2 }"
-if %errorlevel% equ 2 goto :tema_noconsola
-powershell -NoProfile -ExecutionPolicy Bypass -File "%SELECTOR%"
-goto :tema_ok
-:tema_noconsola
-echo   Omitido: sin consola interactiva.
+echo   Muse pedira el tema en el chat al estar listo.
 :tema_ok
 
 echo [6/8] Etiqueta de pestana
@@ -105,6 +97,7 @@ if not defined MUSECMD (pause & exit /b 1)
 
 echo [8/8] Abrir pestana !ETIQUETA!
 echo [8/8]>>"%LOG%"
+set "FIRSTMSG=Carga todo tu contexto base en silencio: indice, estado, reglas, memorias, cuota, tablero y bridge. Solo al estar totalmente listo presenta el menu de temas en el chat y espera el numero. Si Rafa ordena otra cosa, trabaja en eso con el tema anterior."
 C:\Tools\Python313\python.exe "%V2%\muse_cuota.py" 2>nul
 set "CUOTATAG="
 set /p CUOTATAG=<"%TEMP%\muse_cuota_tag.txt" 2>nul
@@ -114,8 +107,8 @@ echo   Titulo: !ETIQUETA!
 echo !ETIQUETA!>%TEMP%\muse_tab_title.txt
 where wt >nul 2>nul
 if %errorlevel% neq 0 goto :sin_wt
-echo   wt --title "!ETIQUETA!" --suppressApplicationTitle -d "%CD%" cmd /k !MUSECMD! --yolo
-wt --title "!ETIQUETA!" --suppressApplicationTitle -d "%CD%" cmd /k !MUSECMD! --yolo
+echo   wt --title "!ETIQUETA!" --suppressApplicationTitle -d "%CD%" cmd /k !MUSECMD! --yolo "!FIRSTMSG!"
+wt --title "!ETIQUETA!" --suppressApplicationTitle -d "%CD%" cmd /k !MUSECMD! --yolo "!FIRSTMSG!"
 set "WTX=%errorlevel%"
 (echo WT_EXIT=!WTX!)>>"%LOG%"
 if !WTX! neq 0 goto :wt_fallo
@@ -128,4 +121,4 @@ pause
 :sin_wt
 title !ETIQUETA!
 echo   Abriendo !MUSECMD! aqui...
-!MUSECMD! --yolo
+!MUSECMD! --yolo "!FIRSTMSG!"

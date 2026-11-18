@@ -97,7 +97,7 @@ if not defined MUSECMD (pause & exit /b 1)
 
 echo [8/8] Abrir pestana !ETIQUETA!
 echo [8/8]>>"%LOG%"
-set "FIRSTMSG=Carga todo tu contexto base en silencio: indice, estado, reglas, memorias, cuota, tablero y bridge. Solo al estar totalmente listo presenta el menu de temas en el chat y espera el numero. Si Rafa ordena otra cosa, trabaja en eso con el tema anterior."
+set "FIRSTMSG=Carga todo tu contexto base en silencio: indice, estado, reglas, memorias, cuota, tablero y bridge. Solo al estar totalmente listo presenta el menu de temas en el chat y espera el numero. Al pintar el menu crea %TEMP%\muse_menu_listo.mark con la hora Bogota. NO uses la voz en el arranque: el vigilante habla al ver tu menu. Si Rafa ordena otra cosa, trabaja en eso con el tema anterior."
 C:\Tools\Python313\python.exe "%V2%\muse_cuota.py" 2>nul
 set "CUOTATAG="
 set /p CUOTATAG=<"%TEMP%\muse_cuota_tag.txt" 2>nul
@@ -105,6 +105,10 @@ del "%TEMP%\muse_cuota_tag.txt" 2>nul
 if defined CUOTATAG set "ETIQUETA=!CUOTATAG! !ETIQUETA!"
 echo   Titulo: !ETIQUETA!
 echo !ETIQUETA!>%TEMP%\muse_tab_title.txt
+echo BOOT>%TEMP%\muse_boot.mark
+del "%TEMP%\muse_menu_listo.mark" 2>nul
+start "" /min C:\Tools\Python313\pythonw.exe "%V2%\muse_menu_voz.py"
+echo   vigilante menu-voz lanzado
 where wt >nul 2>nul
 if %errorlevel% neq 0 goto :sin_wt
 echo   wt --title "!ETIQUETA!" --suppressApplicationTitle -d "%CD%" cmd /k !MUSECMD! --yolo "!FIRSTMSG!"

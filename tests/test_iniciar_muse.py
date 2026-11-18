@@ -149,5 +149,33 @@ else:
     check('autoarranque: daemon sin linea viva', False)
     check('autoarranque: abre INICIAR MUSE.lnk', False)
 
+# 11) vigilante menu-voz: habla SOLO tras menu pintado (2026-11-18, orden Rafa)
+# Falla autentico: sin vigilante la voz salia antes del menu visible (turno
+# del 18-nov manana: "te deje el menu en pantalla" sin menu en pantalla).
+# Contrato: FIRSTMSG prohibe voz en arranque + ordena crear muse_menu_listo.mark
+# al pintar el menu; muse_menu_voz.py habla al verlo (falla-cierra: sin mark,
+# sin marca de boot, con respuesta de Rafa o con otro vigilante vivo = silencio).
+check('vigilante: FIRSTMSG prohibe voz en arranque',
+      fm and 'NO uses la voz' in fm[0])
+check('vigilante: FIRSTMSG ordena mark al pintar menu',
+      fm and 'muse_menu_listo.mark' in fm[0])
+check('vigilante: bat toca marca de boot', 'muse_boot.mark' in text)
+check('vigilante: bat lanza watcher oculto',
+      'muse_menu_voz.py' in text and 'pythonw' in text)
+_wv = BAT.parent / 'muse_menu_voz.py'
+check('vigilante: script existe', _wv.exists())
+if _wv.exists():
+    _w = _wv.read_text(encoding='utf-8')
+    check('vigilante: habla via hablar.ps1', 'hablar.ps1' in _w)
+    check('vigilante: lock instancia unica', 'muse_menu_voz.lock' in _w)
+    check('vigilante: timeout y falla-cierra (3+ salidas 0)',
+          'TIMEOUT_MIN' in _w and _w.count('return 0') >= 3)
+    check('vigilante: respeta respuesta de Rafa', 'user_intent' in _w)
+    import subprocess as _sp
+    _r = _sp.run([sys.executable, str(_wv), '--probar'],
+                 capture_output=True, text=True, timeout=60)
+    check('vigilante: self-test verde', _r.returncode == 0 and 'PROBAR: OK' in _r.stdout,
+          (_r.stdout + _r.stderr)[-200:])
+
 print('RESULTADO:', 'PASS' if not fails else f'FAIL ({len(fails)})')
 sys.exit(1 if fails else 0)

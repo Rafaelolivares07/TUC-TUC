@@ -598,7 +598,7 @@
         <div class="flex items-center gap-1.5 text-xs font-bold text-indigo-900">
           <span>📦</span> Parámetros de Stock y Alerta de Compra (Compras Sugeridas)
         </div>
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label class="block text-[10px] font-bold text-slate-600 uppercase mb-0.5">Días Stock Mínimo (Alerta)</label>
             <input id="mp-dias-min-stock" type="number" min="0" max="180" placeholder="Global (~3 d)" class="w-full text-xs border rounded px-2 py-1 outline-none">
@@ -608,11 +608,6 @@
             <label class="block text-[10px] font-bold text-slate-600 uppercase mb-0.5">Días Stock Máximo (Meta)</label>
             <input id="mp-dias-max-stock" type="number" min="0" max="180" placeholder="Global (~15 d)" class="w-full text-xs border rounded px-2 py-1 outline-none">
             <span class="text-[9px] text-slate-400">Días deseados a tener cubiertos en bodega.</span>
-          </div>
-          <div>
-            <label class="block text-[10px] font-bold text-slate-600 uppercase mb-0.5">Stock Mínimo Fijo (Und)</label>
-            <input id="mp-stock-minimo" type="number" min="0" step="0.01" placeholder="Opcional (fijo)" class="w-full text-xs border rounded px-2 py-1 outline-none">
-            <span class="text-[9px] text-slate-400">Umbral fijo en unidades (opcional).</span>
           </div>
         </div>
       </div>
@@ -3208,7 +3203,6 @@ function abrirModalProducto(pOrId = null) {
   document.getElementById('mp-descripcion').value  = p ? (p.descripcion || '') : '';
   document.getElementById('mp-dias-min-stock').value = (p && p.dias_min_stock !== null && p.dias_min_stock !== undefined) ? p.dias_min_stock : '';
   document.getElementById('mp-dias-max-stock').value = (p && p.dias_max_stock !== null && p.dias_max_stock !== undefined) ? p.dias_max_stock : '';
-  document.getElementById('mp-stock-minimo').value   = (p && p.stock_minimo !== null && p.stock_minimo !== undefined) ? p.stock_minimo : '';
   const selBase = document.getElementById('mp-unidad-medida');
   const selVis = document.getElementById('mp-unidad-visual');
   if (selBase) selBase.value = (p && p.unidad_medida_id) ? p.unidad_medida_id : '';
@@ -3291,7 +3285,6 @@ async function guardarProducto() {
 
     dias_max_stock: document.getElementById('mp-dias-max-stock')?.value.trim() ? parseInt(document.getElementById('mp-dias-max-stock').value) : null,
 
-    stock_minimo:   document.getElementById('mp-stock-minimo')?.value.trim() ? parseFloat(document.getElementById('mp-stock-minimo').value) : null,
 
     unidad_medida_id: document.getElementById('mp-unidad-medida')?.value ? parseInt(document.getElementById('mp-unidad-medida').value) : null,
 

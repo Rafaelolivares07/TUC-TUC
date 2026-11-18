@@ -630,7 +630,7 @@
         <div class="flex items-center gap-1.5 text-xs font-bold text-indigo-900">
           <span>📦</span> Parámetros de Stock y Alerta de Compra (Compras Sugeridas)
         </div>
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label class="block text-[10px] font-bold text-slate-600 uppercase mb-0.5">Días Stock Mínimo (Alerta)</label>
             <input id="mp-dias-min-stock" type="number" min="0" max="180" placeholder="Global (~3 d)" class="w-full text-xs border rounded px-2 py-1 outline-none">
@@ -640,11 +640,6 @@
             <label class="block text-[10px] font-bold text-slate-600 uppercase mb-0.5">Días Stock Máximo (Meta)</label>
             <input id="mp-dias-max-stock" type="number" min="0" max="180" placeholder="Global (~15 d)" class="w-full text-xs border rounded px-2 py-1 outline-none">
             <span class="text-[9px] text-slate-400">Días deseados a tener cubiertos en bodega.</span>
-          </div>
-          <div>
-            <label class="block text-[10px] font-bold text-slate-600 uppercase mb-0.5">Stock Mínimo Fijo (Und)</label>
-            <input id="mp-stock-minimo" type="number" min="0" step="0.01" placeholder="Opcional (fijo)" class="w-full text-xs border rounded px-2 py-1 outline-none">
-            <span class="text-[9px] text-slate-400">Umbral fijo en unidades (opcional).</span>
           </div>
         </div>
       </div>
@@ -3515,7 +3510,7 @@
               <span>&#x1F4D0;</span> Fórmula de Compra Sugerida
             </div>
             <div><span class="text-indigo-600 font-bold">Demanda Proyectada</span> = DDP × (1 + Crecimiento)</div>
-            <div><span class="text-indigo-600 font-bold">DDP</span> = Total Salidas ÷ <span id="formula-dias-label" class="font-bold">Días con stock</span></div>
+            <div><span class="text-indigo-600 font-bold">DDP</span> = Total Salidas ÷ <span class="font-bold">todos los días del período</span></div>
             <div><span class="text-indigo-600 font-bold">Stock Objetivo</span> = Demanda Proyectada × Stock Máx (días)</div>
             <div><span class="text-indigo-600 font-bold">Cantidad</span> = Stock Objetivo − Stock Actual</div>
             <div><span class="text-indigo-600 font-bold">Cobertura</span> = Stock Actual ÷ Demanda Proyectada</div>
@@ -3552,18 +3547,13 @@
           <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
             <div>
               <label class="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Historial (días)</label>
-              <input type="number" id="cfg-compras-dias-historial" value="30" min="1" max="90" class="border rounded px-1.5 py-0.5 text-xs w-full outline-none">
+                            <div class="flex items-center gap-1">
+                <input type="number" id="cfg-compras-dias-historial" value="30" min="1" max="90" class="border rounded px-1.5 py-0.5 text-xs flex-1 outline-none" onchange="guardarParametroNegocio('inventario_dias_historial', 'cfg-compras-dias-historial')">
+                <span id="save-cfg-compras-dias-historial" class="text-xs font-bold text-slate-300 transition" title="Autoguardado al salir del campo">●</span>
+              </div>
               <details class="cursor-pointer text-[9px] text-slate-400 mt-0.5 hover:text-slate-600">
                 <summary>¿Qué es?</summary>
                 <p class="mt-0.5 text-slate-500 normal-case leading-relaxed">Días hacia atrás que analiza el sistema para calcular el consumo promedio. Más días = más precisión pero incluye tendencias antiguas. Recomendado: 30.</p>
-              </details>
-            </div>
-            <div>
-              <label class="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Frecuencia defecto (días)</label>
-              <input type="number" id="cfg-compras-dias-defecto" value="7" min="1" max="30" class="border rounded px-1.5 py-0.5 text-xs w-full outline-none">
-              <details class="cursor-pointer text-[9px] text-slate-400 mt-0.5 hover:text-slate-600">
-                <summary>¿Qué es?</summary>
-                <p class="mt-0.5 text-slate-500 normal-case leading-relaxed">Ciclo de compra por defecto cuando no hay historial de producción. Si el producto nunca se ha fabricado, se asume que se compra cada 7 días.</p>
               </details>
             </div>
             <div>
@@ -3601,7 +3591,10 @@
             </div>
             <div>
               <label class="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Ventana tendencia (días)</label>
-              <input type="number" id="cfg-compras-growth-window" value="7" min="1" max="15" class="border rounded px-1.5 py-0.5 text-xs w-full outline-none">
+                            <div class="flex items-center gap-1">
+                <input type="number" id="cfg-compras-growth-window" value="7" min="1" max="15" class="border rounded px-1.5 py-0.5 text-xs flex-1 outline-none" onchange="guardarParametroNegocio('inventario_growth_window', 'cfg-compras-growth-window')">
+                <span id="save-cfg-compras-growth-window" class="text-xs font-bold text-slate-300 transition" title="Autoguardado al salir del campo">●</span>
+              </div>
               <details class="cursor-pointer text-[9px] text-slate-400 mt-0.5 hover:text-slate-600">
                 <summary>¿Qué es?</summary>
                 <p class="mt-0.5 text-slate-500 normal-case leading-relaxed">Período para comparar consumo reciente vs anterior. Con 7 días compara la última semana contra la anterior.</p>
@@ -3609,7 +3602,10 @@
             </div>
             <div>
               <label class="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Crecimiento Máximo (%)</label>
-              <input type="number" id="cfg-compras-max-growth" value="100" min="0" max="500" class="border rounded px-1.5 py-0.5 text-xs w-full outline-none">
+                            <div class="flex items-center gap-1">
+                <input type="number" id="cfg-compras-max-growth" value="100" min="0" max="500" class="border rounded px-1.5 py-0.5 text-xs flex-1 outline-none" onchange="guardarParametroNegocio('inventario_max_growth', 'cfg-compras-max-growth')">
+                <span id="save-cfg-compras-max-growth" class="text-xs font-bold text-slate-300 transition" title="Autoguardado al salir del campo">●</span>
+              </div>
               <details class="cursor-pointer text-[9px] text-slate-400 mt-0.5 hover:text-slate-600">
                 <summary>¿Qué es?</summary>
                 <p class="mt-0.5 text-slate-500 normal-case leading-relaxed">Tope máximo de crecimiento permitido. Evita sobrecompra por picos atípicos.</p>
@@ -3617,29 +3613,14 @@
             </div>
             <div>
               <label class="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Decrecimiento Mínimo (%)</label>
-              <input type="number" id="cfg-compras-min-growth" value="-50" min="-100" max="0" class="border rounded px-1.5 py-0.5 text-xs w-full outline-none">
+                            <div class="flex items-center gap-1">
+                <input type="number" id="cfg-compras-min-growth" value="-50" min="-100" max="0" class="border rounded px-1.5 py-0.5 text-xs flex-1 outline-none" onchange="guardarParametroNegocio('inventario_min_growth', 'cfg-compras-min-growth')">
+                <span id="save-cfg-compras-min-growth" class="text-xs font-bold text-slate-300 transition" title="Autoguardado al salir del campo">●</span>
+              </div>
               <details class="cursor-pointer text-[9px] text-slate-400 mt-0.5 hover:text-slate-600">
                 <summary>¿Qué es?</summary>
                 <p class="mt-0.5 text-slate-500 normal-case leading-relaxed">Tope mínimo de decrecimiento. Evita ignorar productos con demanda residual.</p>
               </details>
-            </div>
-          </div>
-
-          <!-- TOGGLE: DIAS CON STOCK -->
-          <div class="bg-indigo-50 border border-indigo-200 rounded-lg p-3">
-            <div class="flex items-center gap-3">
-              <label class="relative inline-flex items-center cursor-pointer">
-                <input type="checkbox" id="cfg-compras-usar-dias-con-stock" class="sr-only peer" checked onchange="document.getElementById('formula-dias-label').textContent = this.checked ? 'Días con stock' : 'Todos los días del período'">
-                <div class="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
-              </label>
-              <div>
-                <span class="text-[11px] font-bold text-indigo-800">Solo contar días con stock</span>
-                <span class="text-[9px] text-indigo-500 ml-1">(Guardado en BD &#x1f4be;)</span>
-              </div>
-            </div>
-            <div class="mt-2 text-[10px] text-slate-600 space-y-1 pl-12">
-              <div><span class="font-bold text-indigo-700">ON:</span> La demanda diaria se calcula dividiendo las salidas solo entre los días en que hubo stock disponible. Más preciso si hubo quiebres. Resultado: demanda más agresiva, sugiere comprar más pronto.</div>
-              <div><span class="font-bold text-slate-500">OFF:</span> La demanda diaria se calcula dividiendo las salidas entre <b>todos</b> los días del período, incluyendo días sin stock. Más conservador. Resultado: demanda más baja, sugiere comprar menos o más tarde.</div>
             </div>
           </div>
 
@@ -7796,7 +7777,6 @@ function abrirModalProducto(pOrId = null) {
   document.getElementById('mp-descripcion').value  = p ? (p.descripcion || '') : '';
   document.getElementById('mp-dias-min-stock').value = (p && p.dias_min_stock !== null && p.dias_min_stock !== undefined) ? p.dias_min_stock : '';
   document.getElementById('mp-dias-max-stock').value = (p && p.dias_max_stock !== null && p.dias_max_stock !== undefined) ? p.dias_max_stock : '';
-  document.getElementById('mp-stock-minimo').value   = (p && p.stock_minimo !== null && p.stock_minimo !== undefined) ? p.stock_minimo : '';
   const selBase = document.getElementById('mp-unidad-medida');
   const selVis = document.getElementById('mp-unidad-visual');
   if (selBase) selBase.value = (p && p.unidad_medida_id) ? p.unidad_medida_id : '';
@@ -7879,7 +7859,6 @@ async function guardarProducto() {
 
     dias_max_stock: document.getElementById('mp-dias-max-stock')?.value.trim() ? parseInt(document.getElementById('mp-dias-max-stock').value) : null,
 
-    stock_minimo:   document.getElementById('mp-stock-minimo')?.value.trim() ? parseFloat(document.getElementById('mp-stock-minimo').value) : null,
 
     unidad_medida_id: document.getElementById('mp-unidad-medida')?.value ? parseInt(document.getElementById('mp-unidad-medida').value) : null,
 
@@ -12496,18 +12475,15 @@ async function cargarSugerenciasProduccion() {
 
 async function guardarYRecalcularCompras() {
   // Guardar parametros en BD antes de recalcular
-  const toggleChecked = document.getElementById('cfg-compras-usar-dias-con-stock')?.checked;
   await Promise.all([
     guardarParametroNegocio('inventario_stock_max_dias', 'cfg-compras-stock-max'),
     guardarParametroNegocio('inventario_stock_min_dias', 'cfg-compras-stock-min'),
     guardarParametroNegocio('inventario_dias_entrega', 'cfg-compras-dias-entrega'),
-    guardarParametroNegocio('inventario_usar_dias_con_stock', null, toggleChecked ? 'true' : 'false')
+    guardarParametroNegocio('inventario_dias_historial', 'cfg-compras-dias-historial'),
+    guardarParametroNegocio('inventario_growth_window', 'cfg-compras-growth-window'),
+    guardarParametroNegocio('inventario_max_growth', 'cfg-compras-max-growth'),
+    guardarParametroNegocio('inventario_min_growth', 'cfg-compras-min-growth')
   ]);
-  // Actualizar label de la formula
-  const formulaLabel = document.getElementById('formula-dias-label');
-  if (formulaLabel) {
-    formulaLabel.textContent = toggleChecked ? 'Días con stock' : 'Todos los días del período';
-  }
   cargarSugerenciasCompras();
 }
 
@@ -12639,44 +12615,27 @@ async function cargarSugerenciasCompras() {
       const stockMaxInput = document.getElementById('cfg-compras-stock-max');
       const stockMinInput = document.getElementById('cfg-compras-stock-min');
       const diasEntregaInput = document.getElementById('cfg-compras-dias-entrega');
-      const toggleInput = document.getElementById('cfg-compras-usar-dias-con-stock');
-      const formulaLabel = document.getElementById('formula-dias-label');
+      const histInput = document.getElementById('cfg-compras-dias-historial');
+      const gwInput = document.getElementById('cfg-compras-growth-window');
+      const maxGInput = document.getElementById('cfg-compras-max-growth');
+      const minGInput = document.getElementById('cfg-compras-min-growth');
       if (stockMaxInput && p.dias_stock_max_global !== undefined) stockMaxInput.value = p.dias_stock_max_global;
       if (stockMinInput && p.dias_stock_min_global !== undefined) stockMinInput.value = p.dias_stock_min_global;
       if (diasEntregaInput && p.dias_entrega_global !== undefined) diasEntregaInput.value = p.dias_entrega_global;
-      if (toggleInput) {
-        toggleInput.checked = !!p.usar_dias_con_stock;
-        if (formulaLabel) formulaLabel.textContent = p.usar_dias_con_stock ? 'Días con stock' : 'Todos los días del período';
-      }
+      if (histInput && p.dias_historial !== undefined) histInput.value = p.dias_historial;
+      if (gwInput && p.growth_window !== undefined) gwInput.value = p.growth_window;
+      if (maxGInput && p.max_growth !== undefined) maxGInput.value = p.max_growth;
+      if (minGInput && p.min_growth !== undefined) minGInput.value = p.min_growth;
     }
   } catch(e) { /* continue with DOM defaults */ }
 
-  // 2. Ahora leer del DOM (que ya tiene los valores correctos de BD)
-  const diasHistorial = document.getElementById('cfg-compras-dias-historial')?.value || '30';
-
-  const diasDefecto = document.getElementById('cfg-compras-dias-defecto')?.value || '7';
-
-  const growthWindow = document.getElementById('cfg-compras-growth-window')?.value || '7';
-
-  const maxGrowth = document.getElementById('cfg-compras-max-growth')?.value || '100';
-
-  const minGrowth = document.getElementById('cfg-compras-min-growth')?.value || '-50';
-
-  const stockMax = document.getElementById('cfg-compras-stock-max')?.value || '15';
-  const stockMin = document.getElementById('cfg-compras-stock-min')?.value || '3';
-
-  const diasEntrega = document.getElementById('cfg-compras-dias-entrega')?.value || '2';
-  const usarDiasConStock = document.getElementById('cfg-compras-usar-dias-con-stock')?.checked ? 'true' : 'false';
-
-  
-
-  const queryParams = `?dias_historial=${diasHistorial}&dias_defecto=${diasDefecto}&growth_window=${growthWindow}&max_growth=${maxGrowth}&min_growth=${minGrowth}&dias_stock_max_global=${stockMax}&dias_stock_min_global=${stockMin}&dias_entrega_global=${diasEntrega}&usar_dias_con_stock=${usarDiasConStock}`;
+  // 2. Unimotor: el endpoint lee params de BD (contrato FINAL 2026-11-18)
 
   
 
   try {
 
-    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/compras/sugerencias` + queryParams);
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/compras/sugerencias`);
 
     const d = await r.json();
 
@@ -12697,8 +12656,10 @@ async function cargarSugerenciasCompras() {
       const stockMaxInput = document.getElementById('cfg-compras-stock-max');
       const stockMinInput = document.getElementById('cfg-compras-stock-min');
       const diasEntregaInput = document.getElementById('cfg-compras-dias-entrega');
-      const toggleInput = document.getElementById('cfg-compras-usar-dias-con-stock');
-      const formulaLabel = document.getElementById('formula-dias-label');
+      const histInput = document.getElementById('cfg-compras-dias-historial');
+      const gwInput = document.getElementById('cfg-compras-growth-window');
+      const maxGInput = document.getElementById('cfg-compras-max-growth');
+      const minGInput = document.getElementById('cfg-compras-min-growth');
       if (stockMaxInput && d.parametros.dias_stock_max_global !== undefined) {
         stockMaxInput.value = d.parametros.dias_stock_max_global;
       }
@@ -12708,11 +12669,17 @@ async function cargarSugerenciasCompras() {
       if (diasEntregaInput && d.parametros.dias_entrega_global !== undefined) {
         diasEntregaInput.value = d.parametros.dias_entrega_global;
       }
-      if (toggleInput && d.parametros.usar_dias_con_stock !== undefined) {
-        toggleInput.checked = d.parametros.usar_dias_con_stock;
-        if (formulaLabel) {
-          formulaLabel.textContent = d.parametros.usar_dias_con_stock ? 'Días con stock' : 'Todos los días del período';
-        }
+      if (histInput && d.parametros.dias_historial !== undefined) {
+        histInput.value = d.parametros.dias_historial;
+      }
+      if (gwInput && d.parametros.growth_window !== undefined) {
+        gwInput.value = d.parametros.growth_window;
+      }
+      if (maxGInput && d.parametros.max_growth !== undefined) {
+        maxGInput.value = d.parametros.max_growth;
+      }
+      if (minGInput && d.parametros.min_growth !== undefined) {
+        minGInput.value = d.parametros.min_growth;
       }
     }
 

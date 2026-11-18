@@ -45,7 +45,7 @@ check('punto estado por linea', 'id="save-stock-prod-${prod.producto_id}"' in ht
 check('linea pinta guardando', "pintarEstado('\u2026'" in cuerpo_linea)
 check('linea pinta guardado', "pintarEstado('\u2713'" in cuerpo_linea)
 check('linea pinta error', "pintarEstado('!'" in cuerpo_linea)
-check('3 globales con onchange', html.count('onchange="guardarParametroNegocio') == 3,
+check('7 globales con onchange', html.count('onchange="guardarParametroNegocio') == 7,
       str(html.count('onchange="guardarParametroNegocio')))
 check('sin botones floppy', 'title="Guardar en BD"' not in html)
 check('sin onclick param', 'onclick="guardarParametroNegocio' not in html)

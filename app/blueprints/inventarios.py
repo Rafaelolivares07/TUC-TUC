@@ -612,124 +612,173 @@ def _formatear_tiempo_transcurrido(dt):
         return "anteriormente"
 
 
-def _obtener_config_stock_minimo(conn, negocio_id, producto_id):
-    """
-    Retorna (stock_min_unidades, dias_min_aplicados, ddp, es_fijo)
-    """
-    p_info = conn.execute(
-        "SELECT dias_min_stock, stock_minimo FROM productos WHERE id = %s",
-        (producto_id,)
-    ).fetchone()
-    
-    # 1. Si tiene stock mínimo fijo en unidades
-    if p_info and p_info['stock_minimo'] is not None and float(p_info['stock_minimo']) > 0:
-        return float(p_info['stock_minimo']), (p_info['dias_min_stock'] or 3), 0.0, True
+# ── UNIMOTOR AGOTADOS (contrato FINAL 2026-11-18) ──
+# Único que decide el veredicto de agotado. Invocadores (hook de movimientos,
+# promos, Telegram-formato, pantalla Compras, sobre-stock, pronósticos):
+# llaman y presentan, jamás deciden.
 
-    # 2. Días mínimos globales por negocio
-    dias_min_global = 3
+
+def _motor_param_int(conn, negocio_id, nombre, default, minimo=None, maximo=None):
     try:
-        p_row = conn.execute("""
-            SELECT valor_texto FROM parametros_sistema 
-            WHERE nombre = 'inventario_stock_min_dias' AND negocio_id = %s
-        """, (negocio_id,)).fetchone()
-        if p_row and p_row[0]:
-            dias_min_global = int(p_row[0])
-        else:
-            p_ent = conn.execute("""
-                SELECT valor_texto FROM parametros_sistema 
-                WHERE nombre = 'inventario_dias_entrega' AND negocio_id = %s
-            """, (negocio_id,)).fetchone()
-            if p_ent and p_ent[0]:
-                dias_min_global = int(p_ent[0])
+        row = conn.execute(
+            "SELECT valor_texto FROM parametros_sistema WHERE nombre = %s AND negocio_id = %s",
+            (nombre, negocio_id)).fetchone()
+        if row and row[0] not in (None, ''):
+            val = int(float(row[0]))
+            if minimo is not None:
+                val = max(minimo, val)
+            if maximo is not None:
+                val = min(maximo, val)
+            return val
     except Exception:
-        dias_min_global = 3
+        pass
+    return default
 
-    dias_aplicados = p_info['dias_min_stock'] if (p_info and p_info['dias_min_stock'] is not None) else dias_min_global
-    if dias_aplicados is None or dias_aplicados <= 0:
-        dias_aplicados = 3
 
-    # 3. Demanda diaria promedio últimos 30 días
-    total_salidas = 0.0
+def _motor_param_float(conn, negocio_id, nombre, default):
     try:
-        row_dem = conn.execute("""
-            SELECT COALESCE(SUM(cantidad), 0)
-            FROM movimientos_inventario
-            WHERE negocio_id = %s AND producto_id = %s AND tipo = 'salida'
-              AND created_at >= NOW() - INTERVAL '30 days'
-        """, (negocio_id, producto_id)).fetchone()
-        if row_dem and row_dem[0]:
-            total_salidas = float(row_dem[0])
+        row = conn.execute(
+            "SELECT valor_texto FROM parametros_sistema WHERE nombre = %s AND negocio_id = %s",
+            (nombre, negocio_id)).fetchone()
+        if row and row[0] not in (None, ''):
+            return float(row[0])
     except Exception:
-        total_salidas = 0.0
+        pass
+    return default
 
-    ddp = total_salidas / 30.0
-    stock_min_calculado = ddp * float(dias_aplicados)
 
-    if stock_min_calculado <= 0.0001:
-        stock_min_calculado = 1.0
+def _motor_params_demanda(conn, negocio_id):
+    """Única fuente de params de demanda: BD. Retorna (historial, growth_win, max_frac, min_frac)."""
+    dias_historial = _motor_param_int(conn, negocio_id, 'inventario_dias_historial', 30, 7, 365)
+    gw = _motor_param_int(conn, negocio_id, 'inventario_growth_window', 7, 1, 90)
+    maxg = _motor_param_float(conn, negocio_id, 'inventario_max_growth', 100.0) / 100.0
+    ming = _motor_param_float(conn, negocio_id, 'inventario_min_growth', -50.0) / 100.0
+    return dias_historial, gw, maxg, ming
 
-    return stock_min_calculado, dias_aplicados, ddp, False
+
+def _motor_params_cobertura(conn, negocio_id, producto_id):
+    """Retorna (dias_min, dias_max, dias_entrega). Fijo MUERTO: stock_minimo no se lee."""
+    dias_min_global = _motor_param_int(conn, negocio_id, 'inventario_stock_min_dias', None)
+    if dias_min_global is None:
+        dias_min_global = _motor_param_int(conn, negocio_id, 'inventario_dias_entrega', 3, 1, 365)
+    dias_max_global = _motor_param_int(conn, negocio_id, 'inventario_stock_max_dias', 15, 1, 365)
+    dias_entrega = _motor_param_int(conn, negocio_id, 'inventario_dias_entrega', 2, 0, 365)
+    p = conn.execute(
+        "SELECT dias_min_stock, dias_max_stock FROM productos WHERE id = %s",
+        (producto_id,)).fetchone()
+    dias_min = p['dias_min_stock'] if (p and p['dias_min_stock'] is not None) else dias_min_global
+    dias_max = p['dias_max_stock'] if (p and p['dias_max_stock'] is not None) else dias_max_global
+    dias_min = dias_min if (dias_min and dias_min > 0) else 3
+    dias_max = dias_max if (dias_max and dias_max > 0) else 15
+    return dias_min, dias_max, dias_entrega
+
+
+def _motor_evaluar(conn, negocio_id, producto_id, stock_actual):
+    """Veredicto binario + cantidades. Único decisor (contrato FINAL 2026-11-18).
+
+    Retorna dict: veredicto ('agotado'|'sano'|'sin_historia'), demanda_diaria,
+    demanda_proyectada, growth_rate, frecuencia_dias, cobertura_dias, dias_min,
+    dias_max, dias_entrega, stock_min_unidades, cantidad_sugerida.
+    """
+    base = {
+        'veredicto': 'sin_historia', 'demanda_diaria': 0.0, 'demanda_proyectada': 0.0,
+        'growth_rate': 0.0, 'frecuencia_dias': 0, 'cobertura_dias': 0.0,
+        'dias_min': 3, 'dias_max': 15, 'dias_entrega': 2,
+        'stock_min_unidades': 0.0, 'cantidad_sugerida': 0.0,
+    }
+    dias_historial, gw, maxg, ming = _motor_params_demanda(conn, negocio_id)
+    stock = float(stock_actual or 0.0)
+    ddp, frecuencia, growth = _calcular_demanda_y_ciclo(
+        conn, negocio_id, producto_id, stock, dias_historial, gw, maxg, ming)
+    if ddp <= 0.0001:
+        return base
+    demanda_proy = ddp * (1.0 + growth)
+    if demanda_proy <= 0.0001:
+        return base
+    dias_min, dias_max, dias_entrega = _motor_params_cobertura(conn, negocio_id, producto_id)
+    cobertura = 0.0 if stock <= 0.0001 else stock / demanda_proy
+    return {
+        'veredicto': 'agotado' if cobertura < dias_min else 'sano',
+        'demanda_diaria': ddp,
+        'demanda_proyectada': demanda_proy,
+        'growth_rate': growth,
+        'frecuencia_dias': int(frecuencia),
+        'cobertura_dias': round(cobertura, 1),
+        'dias_min': dias_min,
+        'dias_max': dias_max,
+        'dias_entrega': dias_entrega,
+        'stock_min_unidades': round(demanda_proy * dias_min, 2),
+        'cantidad_sugerida': round(max(0.0, demanda_proy * dias_max - stock), 2),
+    }
+
+
+def _motor_depurar_sin_historia(conn, negocio_id, bodega, filas):
+    """En lectura: banderas cuya ventana quedó sin historia se caen solas.
+    Retorna set de producto_id depurados. Filas: dicts con id/producto_id/stock_actual."""
+    caidos = set()
+    for f in filas:
+        try:
+            v = _motor_evaluar(conn, negocio_id, f['producto_id'], float(f.get('stock_actual') or 0))
+        except Exception:
+            continue
+        if v['veredicto'] == 'sin_historia':
+            try:
+                conn.execute(
+                    "UPDATE inventario_alertas_agotados SET estado = 'recuperado', recuperado_at = NOW() WHERE id = %s",
+                    (f['id'],))
+                caidos.add(f['producto_id'])
+            except Exception:
+                pass
+    return caidos
 
 
 def _verificar_alerta_stock_agotado(conn, negocio_id, producto_id, nombre_producto,
                                     bodega, tipo, motivo, doc_ref,
                                     stock_ant, stock_nuevo):
     """
-    Controla el ciclo de vida de alertas de stock agotado.
-    Dispara cuando stock_nuevo < stock_minimo y el producto no estaba ya en la lista de agotados.
-    Recupera automáticamente cuando stock_nuevo >= stock_minimo tras una entrada.
+    Invocador del unimotor: re-evalúa el item en CADA movimiento (doctrina 2026-11-18).
+    El motor decide; aquí solo persisten transiciones y se encolan despachos de ENTRADA.
     """
     try:
-        stock_min_req, dias_min, ddp, es_fijo = _obtener_config_stock_minimo(conn, negocio_id, producto_id)
-        st_ant = float(stock_ant)
         st_nuevo = float(stock_nuevo)
-
-        if tipo == 'entrada':
-            if st_nuevo >= stock_min_req:
-                conn.execute("""
-                    UPDATE inventario_alertas_agotados
-                    SET estado = 'recuperado', recuperado_at = NOW()
-                    WHERE negocio_id = %s AND bodega = %s AND producto_id = %s AND estado = 'agotado'
-                """, (negocio_id, bodega, producto_id))
-            return
-
-        if tipo == 'salida':
-            if st_nuevo < stock_min_req:
-                activo = conn.execute("""
-                    SELECT id FROM inventario_alertas_agotados
-                    WHERE negocio_id = %s AND bodega = %s AND producto_id = %s AND estado = 'agotado'
-                """, (negocio_id, bodega, producto_id)).fetchone()
-
-                if not activo:
-                    cobertura_dias = round(max(0.0, st_nuevo / ddp), 1) if ddp > 0 else 0.0
-                    conn.execute("""
-                        INSERT INTO inventario_alertas_agotados
-                            (negocio_id, bodega, producto_id, estado, primer_aviso_at, ultimo_aviso_at,
-                             veces_avisado, stock_alerta, stock_minimo, cobertura_dias)
-                        VALUES (%s, %s, %s, 'agotado', NOW(), NOW(), 1, %s, %s, %s)
-                    """, (negocio_id, bodega, producto_id, st_nuevo, round(stock_min_req, 2), cobertura_dias))
-
-                    item_info = {
-                        'negocio_id': negocio_id,
-                        'bodega': bodega,
-                        'producto_id': producto_id,
-                        'producto_nombre': nombre_producto or f"Producto #{producto_id}",
-                        'stock_actual': st_nuevo,
-                        'stock_minimo': round(stock_min_req, 2),
-                        'cobertura_dias': cobertura_dias,
-                        'dias_min': dias_min,
-                        'ddp': ddp,
-                        'motivo': motivo or 'salida',
-                        'documento': doc_ref or ''
-                    }
-
-                    from flask import g, has_request_context
-                    if has_request_context():
-                        if not hasattr(g, '_nuevos_agotados_buffer'):
-                            g._nuevos_agotados_buffer = []
-                        g._nuevos_agotados_buffer.append(item_info)
-                    else:
-                        _despachar_alerta_agotados(conn, negocio_id, bodega, [item_info])
+        v = _motor_evaluar(conn, negocio_id, producto_id, st_nuevo)
+        flag = conn.execute("""
+            SELECT id FROM inventario_alertas_agotados
+            WHERE negocio_id = %s AND bodega = %s AND producto_id = %s AND estado = 'agotado'
+        """, (negocio_id, bodega, producto_id)).fetchone()
+        if v['veredicto'] == 'agotado' and not flag:
+            conn.execute("""
+                INSERT INTO inventario_alertas_agotados
+                    (negocio_id, bodega, producto_id, estado, primer_aviso_at, ultimo_aviso_at,
+                     veces_avisado, stock_alerta, stock_minimo, cobertura_dias)
+                VALUES (%s, %s, %s, 'agotado', NOW(), NOW(), 1, %s, %s, %s)
+            """, (negocio_id, bodega, producto_id, st_nuevo, v['stock_min_unidades'], v['cobertura_dias']))
+            item_info = {
+                'negocio_id': negocio_id,
+                'bodega': bodega,
+                'producto_id': producto_id,
+                'producto_nombre': nombre_producto or f"Producto #{producto_id}",
+                'stock_actual': st_nuevo,
+                'stock_minimo': v['stock_min_unidades'],
+                'cobertura_dias': v['cobertura_dias'],
+                'dias_min': v['dias_min'],
+                'ddp': v['demanda_proyectada'],
+                'motivo': motivo or ('entrada' if tipo == 'entrada' else 'salida'),
+                'documento': doc_ref or ''
+            }
+            from flask import g, has_request_context
+            if has_request_context():
+                if not hasattr(g, '_nuevos_agotados_buffer'):
+                    g._nuevos_agotados_buffer = []
+                g._nuevos_agotados_buffer.append(item_info)
+            else:
+                _despachar_alerta_agotados(conn, negocio_id, bodega, [item_info])
+        elif v['veredicto'] != 'agotado' and flag:
+            conn.execute("""
+                UPDATE inventario_alertas_agotados
+                SET estado = 'recuperado', recuperado_at = NOW()
+                WHERE id = %s
+            """, (flag['id'],))
     except Exception as e:
         print(f"[alerta agotado] error verificando producto {producto_id}: {e}")
 
@@ -991,11 +1040,18 @@ def _despachar_alerta_agotados(conn, negocio_id, bodega, nuevos_items):
 
     for p in pendientes:
         hace_str = _formatear_tiempo_transcurrido(p['primer_aviso_at'])
+        try:
+            _vp = _motor_evaluar(conn, negocio_id, p['producto_id'], float(p['stock_actual'] or 0))
+        except Exception:
+            _vp = None
+        if _vp is not None and _vp['veredicto'] == 'sin_historia':
+            conn.execute("UPDATE inventario_alertas_agotados SET estado = 'recuperado', recuperado_at = NOW() WHERE id = %s", (p['id'],))
+            continue
         info_p = _obtener_info_reabastecimiento_producto(
             conn, negocio_id, p['producto_id'],
             stock_actual=float(p['stock_actual'] or 0),
             stock_minimo=float(p['stock_minimo'] or 0),
-            ddp=0.0
+            ddp=(_vp['demanda_proyectada'] if _vp else 0.0)
         )
         st_val = float(p['stock_actual'] or 0)
         min_val = float(p['stock_minimo'] or 0)
@@ -1157,49 +1213,8 @@ def _evaluar_y_despachar_alertas_promociones(conn, negocio_id_param=None, forzar
     }
     NOMBRES_DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
 
-    # Sincronización proactiva (solo en modo producción)
-    if not solo_dev:
-        try:
-            sync_sql = """
-                SELECT DISTINCT p.id as producto_id, p.negocio_id, COALESCE(s.bodega, 1) as bodega, 
-                       COALESCE(s.stock, 0) as stock_actual, p.nombre as producto_nombre
-                FROM productos p
-                JOIN cotizaciones_compras c ON c.item_id = p.id
-                LEFT JOIN saldos_inventario s ON s.producto_id = p.id AND s.negocio_id = p.negocio_id
-                WHERE c.promo_dia_semana IS NOT NULL 
-                  AND p.disponible = TRUE
-            """
-            sync_params = []
-            if negocio_id_param:
-                sync_sql += " AND p.negocio_id = %s"
-                sync_params.append(negocio_id_param)
-            
-            candidatos_sync = conn.execute(sync_sql, sync_params).fetchall()
-            for cand in candidatos_sync:
-                st_min, _, _, _ = _obtener_config_stock_minimo(conn, cand['negocio_id'], cand['producto_id'])
-                if float(cand['stock_actual']) <= st_min:
-                    existe_al = conn.execute("""
-                        SELECT id, estado FROM inventario_alertas_agotados
-                        WHERE negocio_id = %s AND bodega = %s AND producto_id = %s
-                        ORDER BY id DESC LIMIT 1
-                    """, (cand['negocio_id'], cand['bodega'], cand['producto_id'])).fetchone()
-                    
-                    if not existe_al:
-                        conn.execute("""
-                            INSERT INTO inventario_alertas_agotados
-                                (negocio_id, bodega, producto_id, estado, primer_aviso_at, ultimo_aviso_at,
-                                 veces_avisado, stock_alerta, stock_minimo, cobertura_dias)
-                            VALUES (%s, %s, %s, 'agotado', NOW(), NOW(), 1, %s, %s, 0.0)
-                        """, (cand['negocio_id'], cand['bodega'], cand['producto_id'], cand['stock_actual'], round(st_min, 2)))
-                    elif existe_al['estado'] != 'agotado':
-                        conn.execute("""
-                            UPDATE inventario_alertas_agotados
-                            SET estado = 'agotado', ultimo_aviso_at = NOW(), stock_alerta = %s
-                            WHERE id = %s
-                        """, (cand['stock_actual'], existe_al['id']))
-            conn.commit()
-        except Exception as _sync_err:
-            print(f"[sincronizar_agotados_promo] Error: {_sync_err}")
+    # NOTA unimotor (2026-11-18): las banderas solo nacen en el hook de movimientos.
+    # Este motor solo evalúa oportunidades promo sobre items YA flaggeados. Sin sync.
 
     sql = """
         SELECT a.id AS alerta_id, a.negocio_id, a.bodega, a.producto_id, p.nombre AS producto_nombre,
@@ -1226,13 +1241,17 @@ def _evaluar_y_despachar_alertas_promociones(conn, negocio_id_param=None, forzar
         if not ya_esta:
             p_row = conn.execute("""
                 SELECT p.id as producto_id, p.nombre as producto_nombre, p.negocio_id,
-                       COALESCE(s.stock, 0) as stock_actual,
-                       COALESCE(p.stock_minimo, 10.0) as stock_minimo
+                       COALESCE(s.stock, 0) as stock_actual
                 FROM productos p
                 LEFT JOIN saldos_inventario s ON s.producto_id = p.id AND s.negocio_id = p.negocio_id
                 WHERE p.id = %s
             """, (producto_id_simular,)).fetchone()
             if p_row:
+                try:
+                    _v_sim = _motor_evaluar(conn, p_row['negocio_id'], p_row['producto_id'], float(p_row['stock_actual']))
+                    _min_sim = _v_sim['stock_min_unidades']
+                except Exception:
+                    _min_sim = 0.0
                 alertas.append({
                     'alerta_id': -999,
                     'negocio_id': p_row['negocio_id'],
@@ -1240,7 +1259,7 @@ def _evaluar_y_despachar_alertas_promociones(conn, negocio_id_param=None, forzar
                     'producto_id': p_row['producto_id'],
                     'producto_nombre': p_row['producto_nombre'],
                     'stock_actual': float(p_row['stock_actual']),
-                    'stock_minimo': float(p_row['stock_minimo']),
+                    'stock_minimo': _min_sim,
                     'avisos_promo_hoy': 0,
                     'fecha_ultimo_aviso_promo': None
                 })
@@ -2486,8 +2505,6 @@ def api_inventario_producto_crear():
         dias_min = int(dias_min) if (dias_min is not None and str(dias_min).strip() != '') else None
         dias_max = data.get('dias_max_stock')
         dias_max = int(dias_max) if (dias_max is not None and str(dias_max).strip() != '') else None
-        st_min = data.get('stock_minimo')
-        st_min = float(st_min) if (st_min is not None and str(st_min).strip() != '') else None
         peso_variable = bool(data.get('peso_variable', False))
         tol_peso = float(data.get('tolerancia_peso_pct') or 10.0)
         unidad_medida_id = _int_o_none(data.get('unidad_medida_id'))
@@ -2498,11 +2515,11 @@ def api_inventario_producto_crear():
         row = conn.execute("""
             INSERT INTO productos (negocio_id, nombre, categoria, precio, costo,
                                    descripcion, codigo_barra, iva_pct, orden,
-                                   dias_min_stock, dias_max_stock, stock_minimo,
+                                   dias_min_stock, dias_max_stock,
                                    peso_variable, tolerancia_peso_pct,
                                    unidad_medida_id, unidad_visual_id,
                                    tolerancia_costo_pct)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
         """, (
             negocio_id, nombre,
             data.get('categoria') or None,
@@ -2512,7 +2529,7 @@ def api_inventario_producto_crear():
             data.get('codigo_barra') or None,
             float(data.get('iva_pct') or 0),
             int(data.get('orden') or 0),
-            dias_min, dias_max, st_min,
+            dias_min, dias_max,
             peso_variable, tol_peso,
             unidad_medida_id, unidad_visual_id,
             tol_costo
@@ -6971,8 +6988,6 @@ def api_inventario_producto_editar(producto_id):
         dias_min = int(dias_min) if (dias_min is not None and str(dias_min).strip() != '') else None
         dias_max = data.get('dias_max_stock')
         dias_max = int(dias_max) if (dias_max is not None and str(dias_max).strip() != '') else None
-        st_min = data.get('stock_minimo')
-        st_min = float(st_min) if (st_min is not None and str(st_min).strip() != '') else None
         peso_variable = bool(data.get('peso_variable', False))
         tol_peso = float(data.get('tolerancia_peso_pct') or 10.0)
         unidad_medida_id = _int_o_none(data.get('unidad_medida_id'))
@@ -6984,7 +6999,7 @@ def api_inventario_producto_editar(producto_id):
             UPDATE productos SET
                 nombre=%s, categoria=%s, precio=%s, costo=%s,
                 descripcion=%s, codigo_barra=%s, iva_pct=%s, disponible=%s,
-                dias_min_stock=%s, dias_max_stock=%s, stock_minimo=%s,
+                dias_min_stock=%s, dias_max_stock=%s,
                 peso_variable=%s, tolerancia_peso_pct=%s,
                 unidad_medida_id=%s, unidad_visual_id=%s,
                 tolerancia_costo_pct=%s,
@@ -7001,7 +7016,6 @@ def api_inventario_producto_editar(producto_id):
             bool(data.get('disponible', True)),
             dias_min,
             dias_max,
-            st_min,
             peso_variable,
             tol_peso,
             unidad_medida_id,
@@ -12846,7 +12860,7 @@ def api_evaluar_sobre_stock(negocio_id, producto_id):
     conn = get_db_connection()
     try:
         p = conn.execute("""
-            SELECT id, nombre, dias_max_stock, stock_minimo
+            SELECT id, nombre, dias_max_stock
             FROM productos
             WHERE id = %s AND negocio_id = %s
         """, (producto_id, negocio_id)).fetchone()
@@ -12867,10 +12881,7 @@ def api_evaluar_sobre_stock(negocio_id, producto_id):
         
         # Calcular demanda promedio diaria (DDP)
         ddp, frecuencia, growth_rate = _calcular_demanda_y_ciclo(
-            conn, negocio_id, producto_id, current_stock=0,
-            dias_historial=30, dias_defecto=15, growth_window=14,
-            max_growth=0.5, min_growth=-0.5, usar_dias_con_stock=True
-        )
+            conn, negocio_id, producto_id, 0, *_motor_params_demanda(conn, negocio_id))
         demanda_proyectada = ddp * (1.0 + growth_rate)
         
         if demanda_proyectada <= 0.0001:
@@ -12918,15 +12929,19 @@ def api_parametros_compras(negocio_id):
         return jsonify({'ok': False, 'error': 'No autorizado'}), 403
     conn = get_db_connection()
     try:
-        params = {'dias_stock_max_global': 15, 'dias_stock_min_global': 3, 'dias_entrega_global': 2, 'usar_dias_con_stock': True}
+        params = {'dias_stock_max_global': 15, 'dias_stock_min_global': 3, 'dias_entrega_global': 2,
+                  'dias_historial': 30, 'growth_window': 7, 'max_growth': 100.0, 'min_growth': -50.0}
         row = conn.execute("SELECT valor_texto FROM parametros_sistema WHERE nombre = 'inventario_stock_max_dias' AND negocio_id = %s", (negocio_id,)).fetchone()
         if row and row[0]: params['dias_stock_max_global'] = int(row[0])
         row = conn.execute("SELECT valor_texto FROM parametros_sistema WHERE nombre = 'inventario_stock_min_dias' AND negocio_id = %s", (negocio_id,)).fetchone()
         if row and row[0]: params['dias_stock_min_global'] = int(row[0])
         row = conn.execute("SELECT valor_texto FROM parametros_sistema WHERE nombre = 'inventario_dias_entrega' AND negocio_id = %s", (negocio_id,)).fetchone()
         if row and row[0]: params['dias_entrega_global'] = int(row[0])
-        row = conn.execute("SELECT valor_booleano FROM parametros_sistema WHERE nombre = 'inventario_usar_dias_con_stock' AND negocio_id = %s", (negocio_id,)).fetchone()
-        if row and row[0]: params['usar_dias_con_stock'] = str(row[0]).lower() == 'true'
+        dh, gw, maxg, ming = _motor_params_demanda(conn, negocio_id)
+        params['dias_historial'] = dh
+        params['growth_window'] = gw
+        params['max_growth'] = round(maxg * 100, 2)
+        params['min_growth'] = round(ming * 100, 2)
         return jsonify({'ok': True, 'parametros': params})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -15925,21 +15940,12 @@ def api_produccion_sugerencias(negocio_id):
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
         
-    try:
-        dias_historial = int(request.args.get('dias_historial', 30))
-        dias_defecto = int(request.args.get('dias_defecto', 7))
-        growth_window = int(request.args.get('growth_window', 7))
-        max_growth = float(request.args.get('max_growth', 100.0)) / 100.0
-        min_growth = float(request.args.get('min_growth', -50.0)) / 100.0
-    except (ValueError, TypeError):
-        dias_historial = 30
-        dias_defecto = 7
-        growth_window = 7
-        max_growth = 1.0
-        min_growth = -0.5
+
         
     conn = get_db_connection()
     try:
+        # Unimotor: params solo de BD (contrato FINAL 2026-11-18)
+        dias_historial, growth_window, max_growth, min_growth = _motor_params_demanda(conn, negocio_id)
         # 1. Buscar todos los productos con receta estándar en este negocio
         produced_products = conn.execute("""
             SELECT DISTINCT p.id, p.nombre, COALESCE(s.stock, 0) AS stock_actual
@@ -15974,9 +15980,7 @@ def api_produccion_sugerencias(negocio_id):
             
             # Calcular demanda, ciclo (frecuencia) y crecimiento
             ddp, frecuencia, growth_rate = _calcular_demanda_y_ciclo(
-                conn, negocio_id, p_id, stock_actual,
-                dias_historial, dias_defecto, growth_window, max_growth, min_growth
-            )
+                conn, negocio_id, p_id, stock_actual, *_motor_params_demanda(conn, negocio_id))
             
             if ddp < 0.0001:
                 # Excluir productos con consumo cero
@@ -16165,7 +16169,7 @@ def api_ensambles_sugerencias(negocio_id):
             fechas_venta = sorted(por_fecha)
             total_vendido = sum(por_fecha.values())
             dias_venta = len(fechas_venta)
-            frecuencia = dias_defecto
+            frecuencia = dias_historial  # unimotor: sin defecto mágico (decisión 5)
             if len(fechas_venta) > 1:
                 diferencias = [(fechas_venta[i] - fechas_venta[i - 1]).days for i in range(1, len(fechas_venta))]
                 frecuencia = max(1, round(sum(diferencias) / len(diferencias)))
@@ -16268,8 +16272,7 @@ def api_ensambles_sugerencias(negocio_id):
 
 
 def _calcular_demanda_y_ciclo(conn, negocio_id, producto_id, current_stock,
-                              dias_historial, dias_defecto, growth_window, max_growth, min_growth,
-                              usar_dias_con_stock=True):
+                              dias_historial, growth_window, max_growth, min_growth):
     import datetime
     
     # 1. Obtener todos los movimientos de los últimos X días
@@ -16282,36 +16285,13 @@ def _calcular_demanda_y_ciclo(conn, negocio_id, producto_id, current_stock,
     """, (negocio_id, producto_id, limite_fecha)).fetchall()
     
     # 2. Reconstruir stock diario hacia atrás
-    stock_temp = float(current_stock)
-    movs_por_dia = {}
     total_salidas = 0.0
     for m in movs:
-        dia_str = m['created_at'].strftime('%Y-%m-%d')
-        if dia_str not in movs_por_dia:
-            movs_por_dia[dia_str] = []
-        movs_por_dia[dia_str].append(m)
         if m['tipo'] == 'salida':
             total_salidas += float(m['cantidad'])
             
-    # Calcular stock al final de cada uno de los últimos X días
-    hoy = datetime.date.today()
-    dias_con_stock = 0
-    for i in range(dias_historial):
-        dia = hoy - datetime.timedelta(days=i)
-        dia_str = dia.strftime('%Y-%m-%d')
-        
-        if stock_temp > 0.0001:
-            dias_con_stock += 1
-            
-        if dia_str in movs_por_dia:
-            for m in movs_por_dia[dia_str]:
-                if m['tipo'] == 'entrada':
-                    stock_temp -= float(m['cantidad'])
-                elif m['tipo'] == 'salida':
-                    stock_temp += float(m['cantidad'])
-                    
-    # Demanda diaria promedio
-    dias_div = max(1, dias_con_stock if usar_dias_con_stock else dias_historial)
+    # Demanda diaria promedio (unimotor: denominador calendario, decisión 3)
+    dias_div = max(1, dias_historial)
     ddp = total_salidas / dias_div
     
     # 3. Frecuencia de producción
@@ -16331,7 +16311,7 @@ def _calcular_demanda_y_ciclo(conn, negocio_id, producto_id, current_stock,
             diffs.append((d1 - d2).days)
         frecuencia = sum(diffs) / len(diffs)
     else:
-        frecuencia = float(dias_defecto)
+        frecuencia = float(dias_historial)  # unimotor: sin defecto mágico (decisión 5)
         
     frecuencia = max(1.0, round(frecuencia))
     
@@ -16394,15 +16374,6 @@ def api_update_product_max_stock(producto_id):
         updates.append("dias_min_stock = %s")
         params.append(val)
 
-    if 'stock_minimo' in data:
-        val = data.get('stock_minimo')
-        if val is not None and str(val).strip() != '':
-            try: val = float(val)
-            except: val = None
-        else:
-            val = None
-        updates.append("stock_minimo = %s")
-        params.append(val)
 
     if not updates:
         return jsonify({'ok': True, 'mensaje': 'Sin cambios'})
@@ -16480,65 +16451,18 @@ def api_compras_sugerencias(negocio_id):
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
         
-    try:
-        dias_historial = int(request.args.get('dias_historial', 30))
-        dias_defecto = int(request.args.get('dias_defecto', 7))
-        growth_window = int(request.args.get('growth_window', 7))
-        max_growth = float(request.args.get('max_growth', 100.0)) / 100.0
-        min_growth = float(request.args.get('min_growth', -50.0)) / 100.0
-        dias_stock_max_global = int(request.args.get('dias_stock_max_global', 15))
-        dias_entrega_global = int(request.args.get('dias_entrega_global', 2))
-        usar_dias_con_stock_param = request.args.get('usar_dias_con_stock')
-    except (ValueError, TypeError):
-        dias_historial = 30
-        dias_defecto = 7
-        growth_window = 7
-        max_growth = 1.0
-        min_growth = -0.5
-        dias_stock_max_global = 15
-        dias_entrega_global = 2
-        usar_dias_con_stock_param = None
-        
     conn = get_db_connection()
     try:
-        # Leer parametros globales desde BD por negocio
-        param_row = conn.execute("""
-            SELECT valor_texto FROM parametros_sistema 
-            WHERE nombre = 'inventario_stock_max_dias' AND negocio_id = %s
-        """, (negocio_id,)).fetchone()
-        if param_row and param_row[0]:
-            dias_stock_max_global = int(param_row[0])
-        
-        param_entrega = conn.execute("""
-            SELECT valor_texto FROM parametros_sistema 
-            WHERE nombre = 'inventario_dias_entrega' AND negocio_id = %s
-        """, (negocio_id,)).fetchone()
-        if param_entrega and param_entrega[0]:
-            dias_entrega_global = int(param_entrega[0])
-
-        dias_stock_min_global = dias_entrega_global or 3
-        param_min = conn.execute("""
-            SELECT valor_texto FROM parametros_sistema 
-            WHERE nombre = 'inventario_stock_min_dias' AND negocio_id = %s
-        """, (negocio_id,)).fetchone()
-        if param_min and param_min[0]:
-            try: dias_stock_min_global = int(param_min[0])
-            except: pass
-
-        param_dias_stock = conn.execute("""
-            SELECT valor_booleano FROM parametros_sistema 
-            WHERE nombre = 'inventario_usar_dias_con_stock' AND negocio_id = %s
-        """, (negocio_id,)).fetchone()
-        if usar_dias_con_stock_param is not None:
-            usar_dias_con_stock = usar_dias_con_stock_param.lower() == 'true'
-        elif param_dias_stock and param_dias_stock[0]:
-            usar_dias_con_stock = param_dias_stock[0].lower() == 'true'
-        else:
-            usar_dias_con_stock = True
+        # Unimotor: params solo de BD (contrato FINAL 2026-11-18)
+        dias_historial, growth_window, max_growth, min_growth = _motor_params_demanda(conn, negocio_id)
+        dias_stock_max_global = _motor_param_int(conn, negocio_id, 'inventario_stock_max_dias', 15, 1, 365)
+        _min_g = _motor_param_int(conn, negocio_id, 'inventario_stock_min_dias', None)
+        dias_entrega_global = _motor_param_int(conn, negocio_id, 'inventario_dias_entrega', 2, 0, 365)
+        dias_stock_min_global = _min_g if _min_g is not None else (dias_entrega_global or 3)
 
         # Alertas activas de ítems agotados para esta sede
         alertas_rows = conn.execute("""
-            SELECT a.producto_id, p.nombre, a.stock_alerta, a.stock_minimo, a.primer_aviso_at, a.veces_avisado,
+            SELECT a.id AS alerta_id, a.producto_id, p.nombre, a.stock_alerta, a.stock_minimo, a.primer_aviso_at, a.veces_avisado,
                    COALESCE(s.stock, 0) as stock_actual
             FROM inventario_alertas_agotados a
             JOIN productos p ON p.id = a.producto_id
@@ -16548,10 +16472,18 @@ def api_compras_sugerencias(negocio_id):
         """, (negocio_id,)).fetchall()
         alertas_map = {r['producto_id']: dict(r) for r in alertas_rows}
         alertas_pids = set(alertas_map.keys())
+        _caidos = _motor_depurar_sin_historia(conn, negocio_id, 1, [
+            {'id': r['alerta_id'], 'producto_id': r['producto_id'], 'stock_actual': r['stock_actual']}
+            for r in alertas_rows])
+        if _caidos:
+            alertas_rows = [r for r in alertas_rows if r['producto_id'] not in _caidos]
+            alertas_map = {r['producto_id']: dict(r) for r in alertas_rows}
+            alertas_pids = set(alertas_map.keys())
+            conn.commit()
 
         # 1. Obtener todos los productos comprados (sin receta)
         purchased_products = conn.execute("""
-            SELECT p.id, p.nombre, COALESCE(p.costo, 0) AS costo, p.dias_max_stock, p.dias_min_stock, p.stock_minimo,
+            SELECT p.id, p.nombre, COALESCE(p.costo, 0) AS costo, p.dias_max_stock, p.dias_min_stock,
                    COALESCE(s.stock, 0) AS stock_actual,
                    COALESCE(p.iva_pct, 0) AS iva_pct,
                    COALESCE(p.peso_variable, FALSE) AS peso_variable,
@@ -16573,28 +16505,19 @@ def api_compras_sugerencias(negocio_id):
             p_dias_max_stock = prod['dias_max_stock']
             stock_actual = float(prod['stock_actual'])
             
-            # Calcular demanda, ciclo y tendencia
-            ddp, frecuencia, growth_rate = _calcular_demanda_y_ciclo(
-                conn, negocio_id, p_id, stock_actual,
-                dias_historial, dias_defecto, growth_window, max_growth, min_growth,
-                usar_dias_con_stock=usar_dias_con_stock
-            )
-            
-            if ddp < 0.0001:
-                # Omitir productos sin consumo
+            # Unimotor: veredicto + cantidades (contrato FINAL 2026-11-18)
+            v = _motor_evaluar(conn, negocio_id, p_id, stock_actual)
+            if v['veredicto'] == 'sin_historia':
+                # Sin historia = sin recomendación (decisión 5)
                 continue
+            ddp = v['demanda_diaria']
+            demanda_proyectada = v['demanda_proyectada']
+            frecuencia = v['frecuencia_dias']
+            growth_rate = v['growth_rate']
                 
-            demanda_proyectada = ddp * (1.0 + growth_rate)
-
-            # Determinar stock mínimo aplicable y si el producto está en alerta de agotado
-            p_stock_min_fijo = float(prod['stock_minimo']) if prod['stock_minimo'] is not None else None
-            p_dias_min = prod['dias_min_stock'] if prod['dias_min_stock'] is not None else dias_stock_min_global
-            stock_min_calculado = p_stock_min_fijo if p_stock_min_fijo is not None else (demanda_proyectada * p_dias_min)
-            if p_id in alertas_map:
-                al_min = float(alertas_map[p_id].get('stock_minimo') or 0.0)
-                stock_min_calculado = max(stock_min_calculado, al_min)
+            stock_min_calculado = v['stock_min_unidades']
                 
-            esta_agotado = (stock_actual < stock_min_calculado) or (p_id in alertas_pids)
+            esta_agotado = (v['veredicto'] == 'agotado') or (p_id in alertas_pids)
             
             # Obtener cotizaciones activas para este producto (globales)
             # Priorizar empaques comerciales (> 1 und y no 'unidad') sobre registros genéricos de 1 unidad
@@ -16626,7 +16549,7 @@ def api_compras_sugerencias(negocio_id):
             """, (negocio_id, p_id)).fetchone()
             
             # Determinar días máximos de stock para este producto
-            dias_max = p_dias_max_stock if p_dias_max_stock is not None else dias_stock_max_global
+            dias_max = v['dias_max']
             max_comprar = demanda_proyectada * dias_max
             
             # Piso de reposición de seguridad para ítems agotados / bajo mínimo
@@ -16770,7 +16693,6 @@ def api_compras_sugerencias(negocio_id):
                 'dias_max_stock_aplicado': dias_max,
                 'dias_min_stock': prod['dias_min_stock'],
                 'dias_min_stock_aplicado': prod['dias_min_stock'] if prod['dias_min_stock'] is not None else dias_stock_min_global,
-                'stock_minimo_fijo': float(prod['stock_minimo']) if prod['stock_minimo'] is not None else None,
                 'cobertura_dias': round(cobertura_dias, 1),
                 'dias_entrega_global': dias_entrega_global,
                 'fecha_limite': fecha_limite,
@@ -16907,7 +16829,10 @@ def api_compras_sugerencias(negocio_id):
                 'dias_stock_max_global': dias_stock_max_global,
                 'dias_stock_min_global': dias_stock_min_global,
                 'dias_entrega_global': dias_entrega_global,
-                'usar_dias_con_stock': usar_dias_con_stock
+                'dias_historial': dias_historial,
+                'growth_window': growth_window,
+                'max_growth': round(max_growth * 100, 2),
+                'min_growth': round(min_growth * 100, 2)
             }
         })
     except Exception as e:

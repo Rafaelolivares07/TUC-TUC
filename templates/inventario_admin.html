@@ -3569,8 +3569,8 @@
             <div>
               <label class="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Stock Máximo Global (días)</label>
               <div class="flex items-center gap-1">
-                <input type="number" id="cfg-compras-stock-max" value="15" min="1" max="180" class="border rounded px-1.5 py-0.5 text-xs flex-1 outline-none">
-                <button type="button" onclick="guardarParametroNegocio('inventario_stock_max_dias', 'cfg-compras-stock-max')" class="text-indigo-500 hover:text-indigo-700 text-xs font-bold transition" title="Guardar en BD">&#x1f4be;</button>
+                <input type="number" id="cfg-compras-stock-max" value="15" min="1" max="180" class="border rounded px-1.5 py-0.5 text-xs flex-1 outline-none" onchange="guardarParametroNegocio('inventario_stock_max_dias', 'cfg-compras-stock-max')">
+                <span id="save-cfg-compras-stock-max" class="text-xs font-bold text-slate-300 transition" title="Autoguardado al salir del campo">●</span>
               </div>
               <details class="cursor-pointer text-[9px] text-slate-400 mt-0.5 hover:text-slate-600">
                 <summary>¿Qué es?</summary>
@@ -3580,8 +3580,8 @@
             <div>
               <label class="block text-[10px] font-bold text-rose-500 uppercase mb-0.5">🚨 Stock Mínimo / Alerta (días)</label>
               <div class="flex items-center gap-1">
-                <input type="number" id="cfg-compras-stock-min" value="3" min="1" max="60" class="border border-rose-200 rounded px-1.5 py-0.5 text-xs flex-1 outline-none font-bold text-rose-700 bg-rose-50/30">
-                <button type="button" onclick="guardarParametroNegocio('inventario_stock_min_dias', 'cfg-compras-stock-min')" class="text-rose-500 hover:text-rose-700 text-xs font-bold transition" title="Guardar en BD">&#x1f4be;</button>
+                <input type="number" id="cfg-compras-stock-min" value="3" min="1" max="60" class="border border-rose-200 rounded px-1.5 py-0.5 text-xs flex-1 outline-none font-bold text-rose-700 bg-rose-50/30" onchange="guardarParametroNegocio('inventario_stock_min_dias', 'cfg-compras-stock-min')">
+                <span id="save-cfg-compras-stock-min" class="text-xs font-bold text-slate-300 transition" title="Autoguardado al salir del campo">●</span>
               </div>
               <details class="cursor-pointer text-[9px] text-slate-400 mt-0.5 hover:text-slate-600">
                 <summary>¿Qué es?</summary>
@@ -3591,8 +3591,8 @@
             <div>
               <label class="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Entrega Proveedor (días)</label>
               <div class="flex items-center gap-1">
-                <input type="number" id="cfg-compras-dias-entrega" value="2" min="0" max="30" class="border rounded px-1.5 py-0.5 text-xs flex-1 outline-none">
-                <button type="button" onclick="guardarParametroNegocio('inventario_dias_entrega', 'cfg-compras-dias-entrega')" class="text-indigo-500 hover:text-indigo-700 text-xs font-bold transition" title="Guardar en BD">&#x1f4be;</button>
+                <input type="number" id="cfg-compras-dias-entrega" value="2" min="0" max="30" class="border rounded px-1.5 py-0.5 text-xs flex-1 outline-none" onchange="guardarParametroNegocio('inventario_dias_entrega', 'cfg-compras-dias-entrega')">
+                <span id="save-cfg-compras-dias-entrega" class="text-xs font-bold text-slate-300 transition" title="Autoguardado al salir del campo">●</span>
               </div>
               <details class="cursor-pointer text-[9px] text-slate-400 mt-0.5 hover:text-slate-600">
                 <summary>¿Qué es?</summary>
@@ -13060,19 +13060,16 @@ function renderizarComprasTabla(proveedores) {
               <div class="flex items-center gap-1">
                 <div class="flex flex-col items-center">
                   <span class="text-[7.5px] font-bold text-rose-500 uppercase leading-none">Mín</span>
-                  <input type="number" id="${minInputId}" value="${minStockVal}" placeholder="${prod.dias_min_stock_aplicado || 3}" min="1" max="60"
+                  <input type="number" id="${minInputId}" value="${minStockVal}" placeholder="${prod.dias_min_stock_aplicado || 3}" min="1" max="60" onchange="guardarStockParamsProducto(${prod.producto_id}, '${minInputId}', '${inputId}')"
                          class="border border-rose-200 rounded px-1 py-0.5 text-center font-bold text-rose-700 outline-none w-11 text-[10px] bg-rose-50/20" title="Días mínimos de alerta">
                 </div>
                 <div class="flex flex-col items-center">
                   <span class="text-[7.5px] font-bold text-slate-400 uppercase leading-none">Máx</span>
-                  <input type="number" id="${inputId}" value="${maxStockVal}" placeholder="${prod.dias_max_stock_aplicado}" min="1" max="180" oninput="recalcularLineaMaxStock(${pIdx}, ${prod.producto_id}, '${inputId}')"
+                  <input type="number" id="${inputId}" value="${maxStockVal}" placeholder="${prod.dias_max_stock_aplicado}" min="1" max="180" oninput="recalcularLineaMaxStock(${pIdx}, ${prod.producto_id}, '${inputId}')" onchange="guardarStockParamsProducto(${prod.producto_id}, '${minInputId}', '${inputId}')"
                          class="border rounded px-1 py-0.5 text-center font-bold text-slate-700 outline-none w-11 text-[10px]" title="Días máximos meta">
                 </div>
               </div>
-              <button onclick="guardarStockParamsProducto(${prod.producto_id}, '${minInputId}', '${inputId}')"
-                      class="text-[9px] text-indigo-500 hover:text-indigo-700 hover:underline font-bold transition">
-                Guardar
-              </button>
+              <span id="save-stock-prod-${prod.producto_id}" class="text-[9px] font-bold text-slate-300 transition" title="Autoguardado al salir del campo">●</span>
             </div>
           </td>
 
@@ -13279,6 +13276,14 @@ async function guardarStockParamsProducto(productoId, minInputId, maxInputId) {
   const maxInp = document.getElementById(maxInputId);
   const minVal = minInp && minInp.value.trim() !== '' ? parseInt(minInp.value) : null;
   const maxVal = maxInp && maxInp.value.trim() !== '' ? parseInt(maxInp.value) : null;
+  const stEl = document.getElementById(`save-stock-prod-${productoId}`);
+  const pintarEstado = (txt, cls) => {
+    if (!stEl) return;
+    stEl.textContent = txt;
+    stEl.className = `text-[9px] font-bold transition ${cls}`;
+  };
+  pintarEstado('…', 'text-amber-500');
+  if (stEl) stEl.title = 'Guardando…';
 
   try {
     const r = await fetch(`/api/producto/${productoId}/update-stock-params`, {
@@ -13289,10 +13294,15 @@ async function guardarStockParamsProducto(productoId, minInputId, maxInputId) {
     const d = await r.json();
 
     if (!d.ok) {
+      pintarEstado('!', 'text-rose-600');
+      if (stEl) stEl.title = `Error al guardar: ${d.error}`;
       alert(`Error al guardar: ${d.error}`);
       return;
     }
 
+    pintarEstado('✓', 'text-emerald-600');
+    if (stEl) stEl.title = `Guardado ${new Date().toLocaleTimeString()}`;
+    setTimeout(() => pintarEstado('●', 'text-slate-300'), 4000);
     if (minInp) {
       minInp.classList.add('border-emerald-500', 'bg-emerald-50');
       setTimeout(() => minInp.classList.remove('border-emerald-500', 'bg-emerald-50'), 1500);
@@ -13303,6 +13313,8 @@ async function guardarStockParamsProducto(productoId, minInputId, maxInputId) {
     }
   } catch (err) {
     console.error(err);
+    pintarEstado('!', 'text-rose-600');
+    if (stEl) stEl.title = 'Error de conexión al guardar';
     alert('Error de conexión al guardar los parámetros de cobertura.');
   }
 }
@@ -13319,6 +13331,14 @@ async function guardarParametroNegocio(nombre, inputId, overrideVal) {
     val = inp.value.trim();
     if (val === '') return;
   }
+  const stEl = inputId ? document.getElementById(`save-${inputId}`) : null;
+  const pintarEstado = (txt, cls) => {
+    if (!stEl) return;
+    stEl.textContent = txt;
+    stEl.className = `text-xs font-bold transition ${cls}`;
+  };
+  pintarEstado('…', 'text-amber-500');
+  if (stEl) stEl.title = 'Guardando…';
   
   try {
     const r = await fetch(`/api/inventario/${NEGOCIO_ID}/parametro`, {
@@ -13329,15 +13349,22 @@ async function guardarParametroNegocio(nombre, inputId, overrideVal) {
     const d = await r.json();
     
     if (d.ok) {
+      pintarEstado('✓', 'text-emerald-600');
+      if (stEl) stEl.title = `Guardado ${new Date().toLocaleTimeString()}`;
+      setTimeout(() => pintarEstado('●', 'text-slate-300'), 4000);
       if (inp) {
         inp.classList.add('border-emerald-500', 'bg-emerald-50');
         setTimeout(() => inp.classList.remove('border-emerald-500', 'bg-emerald-50'), 1500);
       }
     } else {
+      pintarEstado('!', 'text-rose-600');
+      if (stEl) stEl.title = 'Error al guardar: ' + d.error;
       alert('Error al guardar: ' + d.error);
     }
   } catch (err) {
     console.error(err);
+    pintarEstado('!', 'text-rose-600');
+    if (stEl) stEl.title = 'Error de conexion al guardar';
     alert('Error de conexion al guardar parametro.');
   }
 }

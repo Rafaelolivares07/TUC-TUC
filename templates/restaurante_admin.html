@@ -120,6 +120,9 @@
                 <button onclick="cambiarTab('cuentas')" id="tab-cuentas" class="tab-btn">
                     🧾 Cuentas
                 </button>
+                <button onclick="cambiarTab('pedidos')" id="tab-pedidos" class="tab-btn">
+                    🔔 Pedidos <span id="pedidos-badge" class="hidden inline-block min-w-[22px] px-1.5 py-0.5 rounded-full bg-red-600 text-white text-[11px] font-bold leading-none text-center">0</span>
+                </button>
                 <button onclick="cambiarTab('visitantes')" id="tab-visitantes" class="tab-btn">
                     Visitantes
                 </button>
@@ -584,6 +587,30 @@
                 </div>
 
                 <p id="rpt-vacio" class="hidden text-gray-400 text-center py-8">No hay ventas en este periodo</p>
+            </div>
+        </div>
+
+        <!-- ====== TAB: PEDIDOS (bandeja del plan Básico) ====== -->
+        <div id="panel-pedidos" class="p-6 hidden">
+            <div class="bg-amber-50 rounded-xl p-4 mb-6 flex justify-between items-center">
+                <div>
+                    <h3 class="font-bold text-amber-800">Bandeja de pedidos</h3>
+                    <p class="text-sm text-gray-500">Entran solos desde tu URL pública</p>
+                </div>
+                <div class="text-right">
+                    <span id="pedidos-nuevos-count" class="text-3xl font-extrabold text-amber-700">0</span>
+                    <p class="text-sm text-gray-500">nuevos</p>
+                </div>
+            </div>
+
+            <h3 class="font-bold text-gray-700 mb-3">Nuevos</h3>
+            <div id="lista-pedidos-nuevos" class="space-y-3 mb-6">
+                <p class="text-gray-400 text-center py-6">Cargando...</p>
+            </div>
+
+            <h3 class="font-bold text-gray-700 mb-3">Listos para entregar</h3>
+            <div id="lista-pedidos-listos" class="space-y-3">
+                <p class="text-gray-400 text-center py-4">-</p>
             </div>
         </div>
 
@@ -1077,8 +1104,115 @@ function renderizarVisitantes() {
 }
 
 // ===== TABS =====
+// ===== BANDEJA DE PEDIDOS (plan Básico: URL pública + gestión) =====
+let pedidosAdminAnteriores = -1;
+const BEEP_PEDIDO = 'data:audio/wav;base64,UklGRlQFAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YTAFAACAgICAgICAgICBgYKDhIWHiYuNj5GUl5qdn6KlqKuusbS3ury+wMPFx8nLzc/R0tTW2Nna3N3e3+Dh4uPk5eXm5+jo6enq6uvr7O3t7u7v8PDx8fLy8/P09PX19vb39/j4+fn6+vv7/Pz9/f7+//8AAQECAgMDBAQFBQYGBwcICAkJCgoLCwwMDQ0ODg8PEBARERISExMUFBUVFhYXFxcYGBkZGhobGxwcHR0eHh8fICAhISIiIyMkJCUlJiYnJygoKSkqKisrLCwtLS4uLy8wMDExMjIzMzQ0NTU2Njc3ODg5OTo6Ozs8PD09';
+
+function fmtDineroAdmin(v) { return '$' + Number(v || 0).toLocaleString('es-CO'); }
+
+async function cargarPedidosAdmin() {
+    if (!BASE) return;
+    try {
+        const r = await fetch(`${BASE}/pedidos?estado=pendiente,listo`);
+        const data = await r.json();
+        if (!data.ok || !Array.isArray(data.pedidos)) return;
+        const pendientes = data.pedidos.filter(p => p.estado === 'pendiente');
+        const listos = data.pedidos.filter(p => p.estado === 'listo');
+        const badge = document.getElementById('pedidos-badge');
+        if (badge) {
+            badge.textContent = pendientes.length;
+            badge.classList.toggle('hidden', pendientes.length === 0);
+        }
+        const nCont = document.getElementById('pedidos-nuevos-count');
+        if (nCont) nCont.textContent = pendientes.length;
+        if (pedidosAdminAnteriores >= 0 && pendientes.length > pedidosAdminAnteriores) {
+            try { new Audio(BEEP_PEDIDO).play(); } catch(e) {}
+            toast(`Nuevo pedido (${pendientes.length} pendientes)`);
+        }
+        pedidosAdminAnteriores = pendientes.length;
+        const contP = document.getElementById('lista-pedidos-nuevos');
+        if (contP) contP.innerHTML = pendientes.length === 0
+            ? '<p class="text-gray-400 text-center py-6">Sin pedidos nuevos</p>'
+            : pendientes.map(p => renderPedidoAdmin(p, false)).join('');
+        const contL = document.getElementById('lista-pedidos-listos');
+        if (contL) contL.innerHTML = listos.length === 0
+            ? '<p class="text-gray-400 text-center py-4">-</p>'
+            : listos.map(p => renderPedidoAdmin(p, true)).join('');
+    } catch(e) { console.error(e); }
+}
+
+function renderPedidoAdmin(p, esListo) {
+    const items = p.tipo === 'carta'
+        ? [p.plato ? `${(p.cantidad > 1 ? p.cantidad + 'x ' : '')}${p.plato}` : '']
+        : [p.sopa, p.proteina, p.principio].filter(Boolean);
+    const tipoLabel = p.tipo === 'carta' ? '' : p.tipo.charAt(0).toUpperCase() + p.tipo.slice(1);
+    const esMesa = !!p.mesa_nombre;
+    const etiqueta = esMesa ? p.mesa_nombre : (p.tipo_entrega === 'domicilio' ? 'DOM' : 'REC');
+    const titulo = esMesa ? tipoLabel : (p.tipo_entrega === 'domicilio' ? 'Domicilio' : 'Recoger');
+    const total = (parseFloat(p.precio) || 0) * (parseInt(p.cantidad) || 1) + (parseFloat(p.valor_domicilio) || 0);
+    const borde = esListo ? 'border-green-500 bg-green-50' : 'border-amber-400 bg-white';
+    return `
+        <div class="rounded-xl p-4 border-2 ${borde} shadow-sm">
+            <div class="flex justify-between items-start gap-2 mb-2">
+                <div class="flex items-center gap-3">
+                    <span class="bg-amber-600 text-white px-3 py-1 rounded-lg font-extrabold text-xl">${etiqueta}</span>
+                    <div>
+                        <span class="font-bold text-lg text-gray-800">${titulo}</span>
+                        ${p.nombre_cliente ? `<span class="text-amber-700 text-sm ml-2 font-semibold">${p.nombre_cliente}</span>` : ''}
+                        ${!esMesa && p.telefono_cliente ? `<span class="text-gray-500 text-xs ml-1">${p.telefono_cliente}</span>` : ''}
+                        <span class="text-gray-400 text-xs ml-2">${p.created_at || ''}</span>
+                        ${!esMesa && p.direccion_cliente ? `<div class="text-amber-800 text-xs mt-1">${p.direccion_cliente}</div>` : ''}
+                    </div>
+                </div>
+                <div class="text-right shrink-0">
+                    <div class="font-extrabold text-gray-800">${fmtDineroAdmin(total)}</div>
+                    <div class="text-gray-400 text-xs">${p.metodo_pago || 'efectivo'}</div>
+                </div>
+            </div>
+            <div class="ml-14 space-y-1">
+                ${items.map(i => `<p class="text-gray-600">${i}</p>`).join('')}
+                ${p.notas ? `<p class="text-amber-700 text-sm font-semibold mt-1">${p.notas}</p>` : ''}
+            </div>
+            ${!esListo ? `
+                <button onclick="marcarListoAdmin(${p.id})"
+                    class="mt-3 w-full bg-green-600 hover:bg-green-500 text-white py-2.5 rounded-xl font-bold transition">
+                    Marcar listo
+                </button>
+            ` : `
+                <button onclick="marcarEntregadoAdmin(${p.id})"
+                    class="mt-3 w-full bg-indigo-600 hover:bg-indigo-500 text-white py-2.5 rounded-xl font-bold transition">
+                    Marcar entregado
+                </button>
+            `}
+        </div>
+    `;
+}
+
+async function marcarListoAdmin(id) {
+    try {
+        const r = await fetch(`${BASE}/pedido/${id}/listo`, {method: 'POST'});
+        const data = await r.json();
+        if (data.ok) { toast('Pedido listo'); cargarPedidosAdmin(); }
+        else toast(data.error || 'No se pudo marcar', false);
+    } catch(e) { toast('Error de conexión', false); }
+}
+
+async function marcarEntregadoAdmin(id) {
+    try {
+        const r = await fetch(`${BASE}/pedido/${id}/entregado`, {method: 'POST'});
+        const data = await r.json();
+        if (data.ok) { toast('Pedido entregado'); cargarPedidosAdmin(); }
+        else toast(data.error || 'No se pudo marcar', false);
+    } catch(e) { toast('Error de conexión', false); }
+}
+
+if (typeof BASE !== 'undefined' && BASE) {
+    cargarPedidosAdmin();
+    setInterval(cargarPedidosAdmin, 8000);
+}
+
 function cambiarTab(tab) {
-    ['catalogo', 'opcmenudia', 'menudia', 'mesas', 'cuentas', 'visitantes', 'vendedores', 'personalizar', 'acceso', 'ubicacion'].forEach(t => {
+    ['catalogo', 'opcmenudia', 'menudia', 'mesas', 'cuentas', 'pedidos', 'visitantes', 'vendedores', 'personalizar', 'acceso', 'ubicacion'].forEach(t => {
         const panel = document.getElementById(`panel-${t}`);
         const tabEl = document.getElementById(`tab-${t}`);
         if (panel) panel.classList.toggle('hidden', t !== tab);
@@ -1090,6 +1224,7 @@ function cambiarTab(tab) {
     if (tab === 'opcmenudia') cargarOpcionesMenuDia();
     if (tab === 'mesas') cargarMesas();
     if (tab === 'cuentas') cargarCuentasAdmin();
+    if (tab === 'pedidos') cargarPedidosAdmin();
     if (tab === 'visitantes') cargarVisitantes();
     if (tab === 'vendedores') cargarVendedores();
     if (tab === 'personalizar') cargarBloquesExperiencia();

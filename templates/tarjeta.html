@@ -1,0 +1,1795 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tarjeta Estándar — {{ producto_nombre }}</title>
+  <script src="/static/js/tailwind.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+        body { font-family: 'Inter', sans-serif; background: #f3f4f6; }
+
+        .no-spinners::-webkit-inner-spin-button,
+        .no-spinners::-webkit-outer-spin-button {
+          -webkit-appearance: none;
+          margin: 0;
+        }
+        .no-spinners {
+          -moz-appearance: textfield;
+          appearance: textfield;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
+
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        .custom-scrollbar { scrollbar-width: thin; scrollbar-color: #cbd5e1 #f1f5f9; }
+
+        .toast {
+
+          position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+
+          padding: 12px 24px; border-radius: 8px; color: white; font-weight: 600;
+
+          z-index: 9999; opacity: 0; transition: opacity .3s; pointer-events: none;
+
+        }
+
+        .toast.show { opacity: 1; }
+
+        .toast-ok { background: #059669; }
+
+        .toast-err { background: #dc2626; }
+        .toast-warn { background: #d97706; }
+
+        .ac-list {
+
+          position: absolute; background: white; border: 1px solid #e5e7eb;
+
+          border-radius: 8px; box-shadow: 0 4px 12px #0001;
+
+          max-height: 220px; overflow-y: auto; z-index: 100; width: 100%;
+
+        }
+
+        .ac-item { padding: 8px 12px; cursor: pointer; font-size: .85rem; }
+
+        .ac-item:hover, .ac-item.ac-focus { background: #fef2f2; color: #e11d48; }
+
+        .modal {
+
+          background: white; border-radius: 16px; padding: 24px;
+
+          width: 100%; max-width: 520px; position: relative;
+
+        }
+
+        input, select, textarea {
+
+          border: 1px solid #d1d5db; border-radius: 8px;
+
+          padding: 8px 12px; width: 100%; font-size: .875rem;
+
+          outline: none; transition: border-color .15s;
+
+        }
+
+        input:focus, select:focus, textarea:focus { border-color: #e11d48; }
+
+
+        /* Modal Tarjeta Estándar */
+        #overlay-tarjeta input:not([type="hidden"]),
+        #overlay-tarjeta select {
+          font-size: 0.95rem;
+          padding: 8px 12px;
+          border-radius: 8px;
+        }
+        #overlay-tarjeta label {
+          font-size: 0.88rem;
+          font-weight: 700;
+          color: #374151;
+          margin-bottom: 3px;
+        }
+  </style>
+</head>
+<body class="p-4 sm:p-6 min-h-screen">
+<div id="toast" class="toast"></div>
+  <div class="max-w-[880px] mx-auto mb-3 flex items-center justify-between gap-2">
+    <button onclick="volverTarjeta()" class="text-xs font-bold bg-white hover:bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg border border-gray-200 transition-colors">← Volver</button>
+    <div class="relative flex-1 max-w-[320px]">
+      <input id="tarjeta-page-ac-input" type="text" placeholder="Consultar otro producto…" autocomplete="off" class="w-full bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-sm">
+      <div id="tarjeta-page-ac-list" class="ac-list hidden shadow-xl border border-gray-200 rounded-xl" style="max-height:200px; z-index: 50;"></div>
+      <input type="hidden" id="tarjeta-page-ac-id">
+    </div>
+    <span class="text-xs font-bold text-gray-400">{{ negocio_nombre }}</span>
+  </div>
+  <div class="max-w-[880px] mx-auto">
+<div id="overlay-tarjeta">
+
+  <div class="modal bg-white shadow-2xl border border-gray-100 flex flex-col bg-white rounded-2xl" style="max-width:840px; width:96%; max-height:92vh; height:auto; padding:18px 24px; overflow:hidden; position:relative; box-sizing:border-box;">
+
+    <!-- Fixed Header -->
+    <div class="flex-shrink-0 mb-3 border-b border-gray-100 pb-2.5">
+      <div class="flex items-center justify-between mb-1.5">
+        <h3 class="text-lg sm:text-xl font-extrabold text-gray-900 flex items-center gap-2">
+          <span>📋</span> Tarjeta Estándar (Ficha Técnica)
+        </h3>
+        <span id="tarjeta-items-count" class="text-xs bg-rose-50 text-rose-700 px-3 py-1 rounded-full font-bold">0 componentes</span>
+      </div>
+
+      <div class="flex items-center justify-between mt-1 pt-2 border-t border-gray-50 flex-wrap gap-2">
+        <div class="flex items-center gap-2 truncate max-w-[360px]">
+          <span class="text-xs font-bold text-gray-500 uppercase">Producto:</span>
+          <p id="tarjeta-nombre-prod" class="text-base font-extrabold text-gray-900 truncate"></p>
+        </div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <!-- Selectores interactivos de decimales para la Ficha Técnica -->
+          <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg text-xs shadow-2xs" title="Decimales para observar: solo cambian cómo se VEN los números en esta ficha, no los valores guardados"><span class="text-[10px] font-extrabold text-slate-500 uppercase tracking-wide select-none whitespace-nowrap">Decimales vista:</span>
+            <div class="flex items-center gap-1.5">
+              <label for="modal-tarjetas-dec-cant" class="text-[10px] font-extrabold text-slate-600 uppercase tracking-wide select-none">
+                🔢 Cant:
+              </label>
+              <input id="modal-tarjetas-dec-cant" type="number" min="0" max="4" step="1" value="2"
+                     oninput="cambiarDecimalesTarjetasCantidad(this.value)"
+                     onchange="cambiarDecimalesTarjetasCantidad(this.value)"
+                     onblur="validarDecimalesTarjetasCantidadInput(this)"
+                     onfocus="setTimeout(() => this.select(), 50)"
+                     class="no-spinners w-10 text-center font-mono font-black text-xs bg-white border border-slate-300 rounded px-1 py-0.5 outline-none text-slate-800 focus:bg-blue-50 focus:text-blue-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-400 selection:bg-blue-600 selection:text-white transition-all"
+                     style="-moz-appearance: textfield; appearance: textfield;"
+                     title="Decimales para observar cantidades de componentes en esta ficha (solo vista, no cambia valores)">
+            </div>
+            <div class="h-3.5 w-px bg-slate-300"></div>
+            <div class="flex items-center gap-1.5">
+              <label for="modal-tarjetas-dec-mon" class="text-[10px] font-extrabold text-slate-600 uppercase tracking-wide select-none">
+                💲 Costo:
+              </label>
+              <input id="modal-tarjetas-dec-mon" type="number" min="0" max="6" step="1" value="2"
+                     oninput="cambiarDecimalesTarjetasMoneda(this.value)"
+                     onchange="cambiarDecimalesTarjetasMoneda(this.value)"
+                     onblur="validarDecimalesTarjetasMonedaInput(this)"
+                     onfocus="setTimeout(() => this.select(), 50)"
+                     class="no-spinners w-10 text-center font-mono font-black text-xs bg-white border border-slate-300 rounded px-1 py-0.5 outline-none text-slate-800 focus:bg-blue-50 focus:text-blue-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-400 selection:bg-blue-600 selection:text-white transition-all"
+                     style="-moz-appearance: textfield; appearance: textfield;"
+                     title="Decimales para observar costos unitarios y subtotales en esta ficha (solo vista, no cambia valores)">
+            </div>
+          </div>
+
+          <button type="button" onclick="toggleClonarEscalarPanel()" id="btn-toggle-clonar" class="text-xs font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 px-3 py-1.5 rounded-lg border border-amber-200 transition-colors flex items-center gap-1.5">
+            📋 Clonar / Multiplicar
+          </button>
+          <button type="button" onclick="mostrarProcedimiento()" class="text-xs font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg border border-indigo-100 transition-colors flex items-center gap-1.5">
+            🧪 Calcular desde Lote
+          </button>
+        </div>
+      </div>
+      <input type="hidden" id="tarjeta-prod-id">
+    </div>
+
+    <!-- Scrollable Middle Body Area -->
+    <div class="flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-1 space-y-3">
+
+      <!-- Panel Clonar / Multiplicar / Escalar -->
+      <div id="panel-clonar-escalar" class="hidden bg-gradient-to-br from-amber-50/90 to-amber-100/40 border border-amber-200 rounded-xl p-3 text-xs shadow-xs">
+        <div class="flex items-center justify-between mb-2">
+          <span class="font-bold text-amber-900 flex items-center gap-1.5 text-sm">
+            <span>📋</span> Clonar / Escalar Receta con Multiplicador
+          </span>
+          <button type="button" onclick="toggleClonarEscalarPanel(false)" class="text-amber-700 hover:text-amber-900 font-bold text-base leading-none px-1.5">✕</button>
+        </div>
+        
+        <!-- Selector de Destino (Clonar a otro producto) -->
+        <div class="mb-2.5 bg-white/95 p-2.5 rounded-xl border border-amber-200/80">
+          <label class="text-xs font-bold text-gray-700 block mb-1">
+            🎯 Producto Destino (opcional, para guardar como copia en otro producto):
+          </label>
+          <div class="relative">
+            <input id="clonar-dest-input" type="text" placeholder="Buscar nuevo producto destino (ej: Porción 50g)…" autocomplete="off" class="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm">
+            <div id="clonar-dest-list" class="ac-list hidden shadow-xl border border-gray-200 rounded-xl" style="max-height:180px; z-index: 60;"></div>
+            <input type="hidden" id="clonar-dest-id">
+            
+            <div id="clonar-dest-chip" class="hidden absolute inset-0 bg-emerald-50 border border-emerald-300 rounded-lg px-3 py-1.5 text-sm flex items-center justify-between text-emerald-800 font-semibold z-10">
+              <div class="flex items-center gap-1.5 truncate">
+                <span class="text-emerald-600 font-bold">✓ Destino:</span>
+                <span id="clonar-dest-name" class="truncate font-bold"></span>
+              </div>
+              <button type="button" onclick="clearSelectedClonarDest()" class="text-emerald-700 hover:text-emerald-900 font-bold ml-2">✕</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Multiplicador / Factor de Escala -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-white/95 p-2.5 rounded-xl border border-amber-200/80 items-end">
+          <div>
+            <label class="text-xs font-bold text-gray-700 block mb-1">
+              ✖ Multiplicador / Factor (ej: 0.05 ó 2.0):
+            </label>
+            <div class="flex items-center gap-1.5">
+              <input id="tarjeta-multiplicador-factor" type="number" step="any" min="0.00001" placeholder="Ej: 0.05" class="w-full bg-white border border-amber-300 rounded-lg px-2.5 py-1.5 text-sm font-mono font-bold text-amber-900">
+              <button type="button" onclick="aplicarMultiplicadorTarjeta()" class="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg transition-colors whitespace-nowrap shadow-xs text-xs">
+                Aplicar ✖
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label class="text-xs font-bold text-gray-700 block mb-1">
+              ⚖️ Calculadora rápida (Gramos Base ➔ Porción):
+            </label>
+            <div class="flex items-center gap-1.5">
+              <input id="calc-gramos-base" type="number" step="any" placeholder="Base (ej: 1000)" class="w-1/2 bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-xs font-mono text-center" oninput="calcularFactorDesdeGramos()">
+              <span class="text-gray-400 font-bold">➔</span>
+              <input id="calc-gramos-target" type="number" step="any" placeholder="Porción (ej: 50)" class="w-1/2 bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-xs font-mono text-center" oninput="calcularFactorDesdeGramos()">
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick Action Buttons -->
+        <div class="flex items-center justify-between mt-2 pt-1.5 border-t border-amber-200/70 flex-wrap gap-1">
+          <div class="flex gap-1.5 flex-wrap">
+            <button type="button" onclick="setMultiplicadorRapido(0.05)" class="text-xs px-2.5 py-1 bg-white border border-amber-200 rounded-md text-amber-800 hover:bg-amber-50 font-mono">x0.05 (50g/1kg)</button>
+            <button type="button" onclick="setMultiplicadorRapido(0.07)" class="text-xs px-2.5 py-1 bg-white border border-amber-200 rounded-md text-amber-800 hover:bg-amber-50 font-mono">x0.07 (70g/1kg)</button>
+            <button type="button" onclick="setMultiplicadorRapido(0.5)" class="text-xs px-2.5 py-1 bg-white border border-amber-200 rounded-md text-amber-800 hover:bg-amber-50 font-mono">x0.5</button>
+            <button type="button" onclick="setMultiplicadorRapido(2)" class="text-xs px-2.5 py-1 bg-white border border-amber-200 rounded-md text-amber-800 hover:bg-amber-50 font-mono">x2.0</button>
+          </div>
+          <button type="button" onclick="restaurarLineasOriginalesTarjeta()" id="btn-restaurar-tarjeta" class="text-xs text-gray-500 hover:text-gray-800 underline font-semibold hidden ml-auto">
+            ↺ Restaurar originales
+          </button>
+        </div>
+      </div>
+
+      <!-- Compact Add Component Form -->
+      <div class="flex gap-2.5 items-end bg-gray-50 p-2.5 rounded-xl border border-gray-200 relative z-20">
+        <div class="flex-1 relative">
+          <label class="text-xs font-bold text-gray-700 mb-1 block">Agregar componente / insumo</label>
+          <input id="tarjeta-ac-input" type="text" placeholder="Buscar producto…" autocomplete="off" class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm">
+          <div id="tarjeta-ac-list" class="ac-list hidden shadow-xl border border-gray-200 rounded-xl" style="max-height:200px; z-index: 50;"></div>
+          <input type="hidden" id="tarjeta-ac-id">
+
+          <!-- Visual selection chip -->
+          <div id="tarjeta-selected-chip" class="hidden absolute inset-0 bg-emerald-50 border border-emerald-300 rounded-lg px-3 py-1.5 text-sm flex items-center justify-between text-emerald-800 font-semibold z-10">
+            <div class="flex items-center gap-1.5 truncate">
+              <span class="text-emerald-500 font-bold">✓</span>
+              <span id="tarjeta-selected-name" class="truncate text-sm font-bold">Producto seleccionado</span>
+            </div>
+            <button type="button" onclick="clearSelectedComponent()" class="text-emerald-600 hover:text-emerald-800 font-bold ml-2 focus:outline-none">✕</button>
+          </div>
+        </div>
+
+        <div style="width:100px">
+          <label class="text-xs font-bold text-gray-700 mb-1 block text-center">Cant.</label>
+          <input id="tarjeta-ac-cant" type="number" min="0.0001" step="any" value="1" class="w-full bg-white border border-gray-300 rounded-lg px-2 py-2 text-sm text-center font-mono font-bold">
+        </div>
+
+        <button onclick="agregarLineaTarjeta()" class="px-4 py-2 rounded-lg bg-rose-500 text-white font-black text-base hover:bg-rose-600 transition-colors shadow-xs" title="Agregar a la receta">+</button>
+      </div>
+
+      <!-- Table of added components (scrolls inside body area) -->
+      <div id="tarjeta-lineas" class="space-y-1.5 border border-gray-200 rounded-xl p-1 bg-white min-h-[160px]"></div>
+
+    </div>
+
+    <!-- Fixed Bottom Sticky Area (Totals & Actions - Always Visible) -->
+    <div class="flex-shrink-0 mt-3 pt-3 border-t border-gray-200 bg-white">
+      
+      <!-- Summary Total Box -->
+      <div id="tarjeta-total-box" class="flex justify-between items-center bg-rose-50 border border-rose-200 rounded-xl px-4 py-2.5 mb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-sm font-bold text-rose-900">Costo total de receta:</span>
+          <span class="text-xs text-gray-500 font-normal hidden sm:inline">(Se actualiza al guardar)</span>
+        </div>
+        <span id="tarjeta-total-val" class="text-lg sm:text-2xl font-black text-rose-600 font-mono">$0.00</span>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="flex gap-2 justify-between items-center">
+        <button id="btn-eliminar-tarjeta" onclick="eliminarTarjetaDesdeModal()" class="px-3.5 py-2 rounded-xl bg-red-50 text-red-600 border border-red-200 text-xs font-bold hover:bg-red-100 hover:text-red-700 transition-colors hidden">
+          🗑️ Eliminar receta
+        </button>
+        <div class="flex gap-2.5 ml-auto">
+          <button onclick="volverTarjeta()" class="px-5 py-2.5 rounded-xl border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-100 transition-colors">
+            ← Volver
+          </button>
+          <button onclick="guardarTarjeta()" class="px-6 py-2.5 rounded-xl bg-rose-500 text-white font-extrabold text-sm sm:text-base hover:bg-rose-600 shadow-xs transition-colors flex items-center gap-1.5">
+            <span>💾</span> Guardar tarjeta
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 🧪 Seccion Lote / Procedimiento (Calculadora Overlay) -->
+
+    <div id="seccion-procedimiento" class="hidden absolute inset-0 bg-white z-20 rounded-2xl p-5 flex flex-col overflow-hidden">
+
+      <div class="flex-shrink-0 flex items-center justify-between border-b border-gray-100 pb-2 mb-2.5">
+
+        <h3 class="text-base font-bold text-gray-800 flex items-center gap-1.5">
+
+          <span>🧪 Calcular desde Lote / Procedimiento</span>
+
+        </h3>
+
+        <button onclick="ocultarProcedimiento()" class="text-gray-400 hover:text-gray-600 font-bold text-lg leading-none">✕</button>
+
+      </div>
+
+      
+
+      <p class="flex-shrink-0 text-xs text-gray-500 mb-2.5 leading-relaxed">
+
+        Ingresa la cantidad total producida y agrega los componentes con sus cantidades totales usadas. El sistema calculará automáticamente la proporción por unidad.
+
+      </p>
+
+
+
+      <!-- Rendimiento input -->
+
+      <div class="flex-shrink-0 bg-indigo-50/50 border border-indigo-100 rounded-xl p-2.5 mb-2.5">
+
+        <label class="text-xs font-bold text-indigo-900 block mb-1">Cantidad total de producto obtenido (Rendimiento):</label>
+
+        <div class="flex gap-2 items-center">
+
+          <input id="proc-rendimiento" type="number" min="0.0001" step="any" value="10" class="w-full bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-sm font-semibold">
+
+          <span class="text-xs text-indigo-800 font-medium mr-2">unidades</span>
+
+          <button type="button" onclick="escalarCantidadesProcedimiento()" class="flex-shrink-0 text-[10px] font-bold bg-indigo-100 hover:bg-indigo-200 text-indigo-800 px-2 py-1 rounded-lg transition-colors border border-indigo-200">
+
+            🔄 Escalar sugeridos
+
+          </button>
+
+        </div>
+
+      </div>
+
+
+
+      <!-- Add component form for procedure -->
+
+      <div class="flex-shrink-0 flex gap-2 items-end mb-2.5 bg-gray-50 p-2.5 rounded-xl border border-gray-100">
+
+        <div class="flex-1 relative">
+
+          <label class="text-xs font-semibold text-gray-600 mb-1 block">Componente usado</label>
+
+          <input id="proc-ac-input" type="text" placeholder="Buscar producto…" autocomplete="off" class="w-full bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-sm">
+
+          <div id="proc-ac-list" class="ac-list hidden"></div>
+
+          <input type="hidden" id="proc-ac-id">
+
+          <!-- Selection chip for procedure -->
+
+          <div id="proc-selected-chip" class="hidden absolute left-0 right-0 bottom-0 top-6 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-1.5 text-sm flex items-center justify-between text-emerald-800 font-semibold">
+
+            <div class="flex items-center gap-1.5 truncate">
+
+              <span class="text-emerald-500 font-bold">✓</span>
+
+              <span id="proc-selected-name" class="truncate text-xs">Componente seleccionado</span>
+
+            </div>
+
+            <button type="button" onclick="clearSelectedProcComponent()" class="text-emerald-600 hover:text-emerald-800 font-bold ml-2 focus:outline-none">✕</button>
+
+          </div>
+
+        </div>
+
+        <div style="width:100px">
+
+          <label class="text-xs font-semibold text-gray-600 mb-1 block">Cant. Total Usada</label>
+
+          <input id="proc-ac-cant" type="number" min="0.0001" step="any" value="1" class="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-center">
+
+        </div>
+
+        <button onclick="agregarLineaProcedimiento()" class="px-3 py-1.5 rounded-lg bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-700 transition-colors">+</button>
+
+      </div>
+
+
+
+      <!-- List of batch components -->
+
+      <div class="flex-1 overflow-y-auto custom-scrollbar border border-gray-100 rounded-xl bg-gray-50/50 p-2 mb-2.5" style="min-height:100px; max-height:38vh;">
+
+        <table class="w-full text-xs">
+
+          <thead>
+
+            <tr class="text-gray-500 border-b border-gray-200 uppercase text-[10px] text-left">
+
+              <th class="py-1.5 px-2">Insumo</th>
+
+              <th class="py-1.5 px-2 text-right" style="width:120px;">Cantidad Total</th>
+
+              <th class="py-1.5 w-8"></th>
+
+            </tr>
+
+          </thead>
+
+          <tbody id="proc-lineas">
+
+            <!-- Dynamic rows -->
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+
+
+      <!-- Footer of calculator overlay -->
+
+      <div class="flex-shrink-0 flex gap-3 justify-end pt-2.5 border-t border-gray-100 mt-auto">
+
+        <button onclick="ocultarProcedimiento()" class="px-4 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50">Atrás</button>
+
+        <button onclick="calcularYAplicarProcedimiento()" class="px-5 py-2 rounded-xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-700 shadow-xs">Calcular y Cargar Receta</button>
+
+      </div>
+
+    </div>
+  </div>
+</div>
+  </div>
+<script>
+const NEGOCIO_ID = {{ negocio_id }};
+const TARJETA_PRODUCTO_ID = {{ producto_id }};
+const TARJETA_PRODUCTO_NOMBRE = {{ producto_nombre | tojson }};
+const VOLVER_URL = {{ volver_url | tojson }};
+let productos = [];
+
+let tarjetaLineas = []; // {componente_id, nombre, cantidad}
+
+function toast(msg, ok = true, duracion = 3200) {
+
+  const el = document.getElementById('toast');
+  if (!el) return;
+
+  el.textContent = msg;
+
+  let cls = 'toast-ok';
+  if (ok === false || ok === 'error') cls = 'toast-err';
+  else if (ok === 'warning' || ok === 'warn' || ok === 'info') cls = 'toast-warn';
+
+  el.className = `toast show ${cls}`;
+
+  clearTimeout(el._t);
+
+  el._t = setTimeout(() => el.classList.remove('show'), duracion);
+
+}
+
+
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+
+let datosLibroActas = [];
+
+const MODULO_ACTA_LABEL = {
+  inventario_fisico: 'Físico General',
+  inventario_distribuido: 'Distribuido',
+  caja_pos_tienda: 'Caja POS Tienda',
+  pos_restaurante: 'Caja POS Rest.'
+};
+
+
+function setupAC(inputId, listId, hiddenId, data, onSelect) {
+
+  const inp = document.getElementById(inputId);
+
+  const list = document.getElementById(listId);
+
+  if (!inp || !list) return;
+
+  let idx = -1, timer = null;
+
+
+
+  const normalizeStr = str => {
+
+    if (!str) return '';
+
+    try {
+
+      return str.toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+
+    } catch (e) {
+
+      return str.toString().toLowerCase().trim();
+
+    }
+
+  };
+
+
+
+  inp.addEventListener('input', () => {
+
+    clearTimeout(timer);
+
+    timer = setTimeout(() => renderAC(), 150);
+
+  });
+
+
+
+  inp.addEventListener('focus', () => {
+
+    if (typeof cargarProductosSilencioso === 'function') {
+      cargarProductosSilencioso().then(() => {
+        if (inp === document.activeElement && inp.value.trim().length >= 1) {
+          renderAC();
+        }
+      });
+    } else if (typeof cargarProductos === 'function' && (!productos || !productos.length)) {
+
+      cargarProductos();
+
+    }
+
+    if (inp.value.trim().length >= 1) {
+
+      renderAC();
+
+    }
+
+  });
+
+
+
+  inp.addEventListener('keydown', e => {
+
+    const items = list.querySelectorAll('.ac-item');
+
+    if (e.key === 'ArrowDown') {
+
+      if (list.classList.contains('hidden')) {
+
+        renderAC();
+
+      } else {
+
+        idx = Math.min(idx + 1, items.length - 1);
+
+        highlightAC(items);
+
+      }
+
+      e.preventDefault();
+
+    }
+
+    else if (e.key === 'ArrowUp') {
+
+      idx = Math.max(idx - 1, 0);
+
+      highlightAC(items);
+
+      e.preventDefault();
+
+    }
+
+    else if (e.key === 'Enter') {
+
+      if (idx >= 0 && items[idx]) {
+
+        items[idx].dispatchEvent(new Event('mousedown'));
+
+        e.preventDefault();
+
+      }
+
+    }
+
+    else if (e.key === 'Escape') {
+
+      list.classList.add('hidden');
+
+      inp.focus();
+
+      e.preventDefault();
+
+    }
+
+  });
+
+
+
+  inp.addEventListener('blur', () => setTimeout(() => list.classList.add('hidden'), 220));
+
+
+
+  function renderAC() {
+
+    const rawQ = inp.value;
+
+    const qNorm = normalizeStr(rawQ);
+
+    if (!qNorm) { list.classList.add('hidden'); return; }
+
+    const itemsList = typeof data === 'function' ? data() : (data || []);
+
+    if (!itemsList || !itemsList.length) {
+      if (typeof cargarProductosSilencioso === 'function' && !inp._buscandoEnServidor) {
+        inp._buscandoEnServidor = true;
+        cargarProductosSilencioso(true).then(() => {
+          inp._buscandoEnServidor = false;
+          if (inp === document.activeElement && inp.value === rawQ) {
+            renderAC();
+          }
+        });
+      }
+    }
+
+    const matches = (itemsList || []).filter(p => {
+
+      if (!p || !p.nombre) return false;
+
+      const nameNorm = normalizeStr(p.nombre);
+
+      const catNorm = normalizeStr(p.categoria);
+
+      return nameNorm.includes(qNorm) || catNorm.includes(qNorm);
+
+    }).slice(0, 20);
+
+    // Si no hubo matches locales pero el usuario escribió 2+ caracteres, consultar al servidor como máximo UNA vez por texto
+    const qClean = rawQ.trim().toLowerCase();
+    if (matches.length === 0 && qClean.length >= 2 && !inp._buscandoEnServidor && inp._ultimoQServidor !== qClean) {
+      inp._buscandoEnServidor = true;
+      inp._ultimoQServidor = qClean;
+      if (typeof cargarProductosSilencioso === 'function') {
+        cargarProductosSilencioso(true).then(() => {
+          inp._buscandoEnServidor = false;
+          // Si el usuario sigue en este campo, reconstruir la lista con los productos recién traídos sin re-consultar al servidor
+          if (inp === document.activeElement && inp.value.trim().toLowerCase() === qClean) {
+            const freshItems = typeof data === 'function' ? data() : (data || []);
+            renderAC();
+          }
+        }).catch(() => {
+          inp._buscandoEnServidor = false;
+        });
+      }
+    }
+
+    idx = -1;
+
+    let html = matches.map(p =>
+
+      `<div class="ac-item text-left px-3 py-2 hover:bg-gray-100 cursor-pointer" data-id="${p.id}" data-nombre="${(p.nombre || '').replace(/"/g,'&quot;')}">
+
+        <span class="font-semibold text-gray-800">${p.nombre}</span>${p.categoria ? ` <span class="text-xs text-gray-400">(${p.categoria})</span>` : ''}
+
+       </div>`
+
+    ).join('');
+
+    // Opción para recargar productos si se creó en otra pestaña
+    if (rawQ.trim().length >= 1) {
+      html += `
+        <div class="ac-item text-left px-3 py-1.5 hover:bg-indigo-50 cursor-pointer text-indigo-700 font-bold border-t border-gray-100 text-xs flex items-center justify-between gap-1" data-recargar="true">
+          <span>🔄 ¿Lo creaste en otra pestaña? Recargar catálogo</span>
+          <span class="text-[10px] text-indigo-500 bg-indigo-100/70 px-1.5 py-0.5 rounded font-mono">Actualizar</span>
+        </div>
+      `;
+    }
+
+    if (rawQ.trim().length >= 2) {
+
+      html += `
+
+        <div class="ac-item text-left px-3 py-2 hover:bg-rose-50 cursor-pointer text-rose-600 font-bold border-t border-gray-100 text-xs flex items-center gap-1" data-crear="true" data-nombre="${rawQ.replace(/"/g,'&quot;')}">
+
+          <span>➕ Crear nuevo producto:</span> <span class="italic text-gray-700">"${rawQ}"</span>
+
+        </div>
+
+      `;
+
+    }
+
+    list.innerHTML = html;
+
+    list.querySelectorAll('.ac-item').forEach(el => {
+
+      el.addEventListener('mousedown', (e) => {
+
+        e.preventDefault();
+
+        if (el.dataset.recargar) {
+          el.innerHTML = '<span class="text-indigo-600 font-bold">⏳ Actualizando productos desde el servidor...</span>';
+          if (typeof cargarProductosSilencioso === 'function') {
+            cargarProductosSilencioso(true).then(() => {
+              renderAC();
+              toast('Catálogo de productos actualizado', true);
+            });
+          }
+          return;
+        }
+
+        if (el.dataset.crear) {
+
+          list.classList.add('hidden');
+
+          abrirModalCrearDesdeAC(inputId, hiddenId, el.dataset.nombre);
+
+          return;
+
+        }
+
+        document.getElementById(hiddenId).value = el.dataset.id;
+
+        inp.value = el.dataset.nombre;
+
+        list.classList.add('hidden');
+
+        if (onSelect) onSelect({id: +el.dataset.id, nombre: el.dataset.nombre});
+
+      });
+
+    });
+
+    list.classList.remove('hidden');
+
+  }
+
+
+
+  function highlightAC(items) {
+
+    items.forEach((el, i) => el.classList.toggle('ac-focus', i === idx));
+
+    if (idx >= 0) items[idx].scrollIntoView({block: 'nearest'});
+
+  }
+
+}
+
+
+
+// Autocomplete específico para categorías
+
+
+function abrirModalCrearDesdeAC() { toast('Crea el producto desde Inventario y vuelve a buscarlo', false); }
+
+async function cargarProductosSilencioso() {
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/productos`);
+    const d = await r.json();
+    if (d.ok) productos = d.productos || [];
+  } catch (e) {}
+  return productos;
+}
+
+function volverTarjeta() {
+  if (history.length > 1) { history.back(); }
+  else { location.href = VOLVER_URL; }
+}
+
+let tarjetaLineasOriginales = [];
+
+function toggleClonarEscalarPanel(forzar) {
+  const p = document.getElementById('panel-clonar-escalar');
+  if (!p) return;
+  if (forzar !== undefined) {
+    if (forzar) p.classList.remove('hidden');
+    else p.classList.add('hidden');
+  } else {
+    p.classList.toggle('hidden');
+  }
+  if (!p.classList.contains('hidden')) {
+    if (!tarjetaLineasOriginales.length && tarjetaLineas.length) {
+      tarjetaLineasOriginales = JSON.parse(JSON.stringify(tarjetaLineas));
+    }
+  }
+}
+
+function clearSelectedClonarDest() {
+  const idEl = document.getElementById('clonar-dest-id');
+  const inputEl = document.getElementById('clonar-dest-input');
+  const chipEl = document.getElementById('clonar-dest-chip');
+  if (idEl) idEl.value = '';
+  if (inputEl) {
+    inputEl.value = '';
+    inputEl.classList.remove('hidden');
+  }
+  if (chipEl) chipEl.classList.add('hidden');
+}
+
+function calcularFactorDesdeGramos() {
+  const base = parseFloat(document.getElementById('calc-gramos-base')?.value);
+  const target = parseFloat(document.getElementById('calc-gramos-target')?.value);
+  if (!isNaN(base) && base > 0 && !isNaN(target) && target > 0) {
+    const factor = target / base;
+    const factorInput = document.getElementById('tarjeta-multiplicador-factor');
+    if (factorInput) {
+      factorInput.value = Number(factor.toFixed(6));
+    }
+  }
+}
+
+function setMultiplicadorRapido(factor) {
+  const factorInput = document.getElementById('tarjeta-multiplicador-factor');
+  if (factorInput) {
+    factorInput.value = factor;
+    aplicarMultiplicadorTarjeta();
+  }
+}
+
+function aplicarMultiplicadorTarjeta() {
+  const factorVal = parseFloat(document.getElementById('tarjeta-multiplicador-factor')?.value);
+  if (isNaN(factorVal) || factorVal <= 0) {
+    toast('Ingresa un factor multiplicador válido mayor a 0', false);
+    return;
+  }
+  if (!tarjetaLineas.length) {
+    toast('No hay componentes en la tarjeta para multiplicar', false);
+    return;
+  }
+  if (!tarjetaLineasOriginales.length) {
+    tarjetaLineasOriginales = JSON.parse(JSON.stringify(tarjetaLineas));
+  }
+
+  tarjetaLineas = tarjetaLineasOriginales.map(ln => ({
+    componente_id: ln.componente_id,
+    nombre: ln.nombre,
+    cantidad: Number((ln.cantidad * factorVal).toFixed(6)),
+    costo_und: ln.costo_und
+  }));
+
+  renderLineasTarjeta();
+  document.getElementById('btn-restaurar-tarjeta')?.classList.remove('hidden');
+  toast(`Factor x${factorVal} aplicado a todos los insumos`);
+}
+
+function restaurarLineasOriginalesTarjeta() {
+  if (tarjetaLineasOriginales && tarjetaLineasOriginales.length) {
+    tarjetaLineas = JSON.parse(JSON.stringify(tarjetaLineasOriginales));
+    renderLineasTarjeta();
+    const facInput = document.getElementById('tarjeta-multiplicador-factor');
+    if (facInput) facInput.value = '';
+    document.getElementById('btn-restaurar-tarjeta')?.classList.add('hidden');
+    toast('Cantidades originales restauradas');
+  }
+}
+
+async function cargarTarjeta(productoId) {
+  const r = await fetch(`/api/inventario/producto/${productoId}/tarjeta`);
+  const d = await r.json();
+  if (!d.ok) return;
+  tarjetaLineas = d.componentes.map(c => {
+    const fv = parseFloat(c.factor_visual) || 1.0;
+    return {
+      componente_id: c.componente_id, 
+      nombre: c.nombre, 
+      cantidad: parseFloat(c.cantidad) || 0,
+      costo_und: parseFloat(c.costo_und) || 0,
+      unidad_base: c.unidad_base || '',
+      unidad_visual: c.unidad_visual || '',
+      factor_visual: fv
+    };
+  });
+  tarjetaLineasOriginales = JSON.parse(JSON.stringify(tarjetaLineas));
+  renderLineasTarjeta();
+
+  const btnEliminar = document.getElementById('btn-eliminar-tarjeta');
+  if (btnEliminar) {
+    if (tarjetaLineas.length > 0) {
+      btnEliminar.classList.remove('hidden');
+    } else {
+      btnEliminar.classList.add('hidden');
+    }
+  }
+}
+
+let modalSortCol = 'nombre';
+
+let modalSortAsc = true;
+
+
+
+function ordenarComponentesModal(columna) {
+
+  if (modalSortCol === columna) {
+
+    modalSortAsc = !modalSortAsc;
+
+  } else {
+
+    modalSortCol = columna;
+
+    modalSortAsc = true;
+
+  }
+
+  renderLineasTarjeta();
+
+}
+
+
+
+function actualizarCantidadComponente(index, valStr) {
+
+  let val = parseFloat(valStr);
+
+  if (isNaN(val) || val <= 0) val = 0.000001;
+
+  const fv = parseFloat(tarjetaLineas[index].factor_visual) || 1.0;
+  tarjetaLineas[index].cantidad = val / fv;
+
+  
+
+  const costoUnd = parseFloat(tarjetaLineas[index].costo_und || 0);
+
+  const subtotal = val * costoUnd;
+
+  const subEl = document.getElementById(`modal-subtotal-${index}`);
+
+  if (subEl) {
+
+    subEl.textContent = '$' + subtotal.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+  }
+
+  recalcularTotalRecetaModal();
+
+}
+
+
+
+function recalcularTotalRecetaModal() {
+
+  let totalReceta = 0;
+
+  tarjetaLineas.forEach(ln => {
+
+    const c = parseFloat(ln.costo_und || 0);
+
+    const q = parseFloat(ln.cantidad) || 0;
+
+    totalReceta += (c * q);
+
+  });
+
+  const totalValEl = document.getElementById('tarjeta-total-val');
+
+  if (totalValEl) {
+
+    totalValEl.textContent = _fmtTarjetasMon(totalReceta);
+
+  }
+
+}
+
+
+
+function renderLineasTarjeta() {
+
+  const cont = document.getElementById('tarjeta-lineas');
+
+  const countEl = document.getElementById('tarjeta-items-count');
+
+  const totalValEl = document.getElementById('tarjeta-total-val');
+
+  
+
+  if (countEl) {
+
+    countEl.textContent = `${tarjetaLineas.length} componente${tarjetaLineas.length === 1 ? '' : 's'}`;
+
+  }
+
+
+
+  if (!tarjetaLineas.length) {
+
+    cont.innerHTML = '<p class="text-sm text-gray-400 text-center py-6">Sin componentes (se tratará como producto simple)</p>';
+
+    if (totalValEl) totalValEl.textContent = '$ 0,00';
+
+    return;
+
+  }
+
+  
+
+  // Sort modal components
+
+  tarjetaLineas.sort((a, b) => {
+
+    let valA, valB;
+
+    if (modalSortCol === 'nombre') {
+
+      valA = a.nombre || '';
+
+      valB = b.nombre || '';
+
+      return modalSortAsc ? valA.localeCompare(valB, 'es') : valB.localeCompare(valA, 'es');
+
+    } else if (modalSortCol === 'cantidad') {
+
+      valA = parseFloat(a.cantidad || 0);
+
+      valB = parseFloat(b.cantidad || 0);
+
+    } else if (modalSortCol === 'costo_und') {
+
+      valA = parseFloat(a.costo_und || 0);
+
+      valB = parseFloat(b.costo_und || 0);
+
+    } else if (modalSortCol === 'subtotal') {
+
+      valA = (parseFloat(a.cantidad || 0)) * parseFloat(a.costo_und || 0);
+
+      valB = (parseFloat(b.cantidad || 0)) * parseFloat(b.costo_und || 0);
+
+    }
+
+    return modalSortAsc ? (valA - valB) : (valB - valA);
+
+  });
+
+
+
+  let totalReceta = 0;
+
+  
+
+  const getSortIcon = col => (modalSortCol === col ? (modalSortAsc ? '▲' : '▼') : '↕');
+
+  const getSortClass = col => (modalSortCol === col ? 'text-rose-500 font-bold' : 'text-gray-400');
+
+
+
+  let rowsHtml = tarjetaLineas.map((ln, i) => {
+
+    const costoUnd = parseFloat(ln.costo_und || 0);
+
+    const cantidad = parseFloat(ln.cantidad || 0);
+
+    const subtotal = cantidad * costoUnd;
+
+    totalReceta += subtotal;
+
+    
+
+    const fv = parseFloat(ln.factor_visual) || 1.0;
+    const hasVisual = Boolean(ln.unidad_visual && fv !== 1.0);
+    const visualQty = hasVisual ? (cantidad * fv) : cantidad;
+    const visualCost = hasVisual ? (costoUnd / fv) : costoUnd;
+
+    const qtyFormatted = Number(visualQty.toFixed(_tarjetasDecimalesCantidad));
+    const unitBadge = hasVisual ? `<span class="inline-flex items-center text-[11px] font-black text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded shadow-2xs" title="Visual: ${ln.unidad_visual} (Base: ${Number(cantidad.toFixed(4))} ${ln.unidad_base})">${ln.unidad_visual}</span>` : '';
+
+    return `
+
+      <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+
+        <td class="py-2.5 px-3 text-left font-bold text-gray-800 text-sm sm:text-base truncate max-w-[240px] sm:max-w-[340px]" title="${ln.nombre}">
+          ${ln.nombre}
+          ${hasVisual ? `<span class="block text-[11px] font-mono text-gray-400 font-normal">Base: ${Number(cantidad.toFixed(4))} ${ln.unidad_base}</span>` : ''}
+        </td>
+
+        <td class="py-2.5 px-1 text-center">
+
+          <div class="flex items-center justify-center gap-1">
+            <input type="number" value="${qtyFormatted}" min="0.000001" step="any"
+
+                   oninput="actualizarCantidadComponente(${i}, this.value)"
+
+                   onblur="if(!this.value || parseFloat(this.value)<=0) { this.value=1; actualizarCantidadComponente(${i}, 1); }"
+
+                   class="w-24 text-center px-2 py-1.5 border border-gray-300 rounded-lg text-sm font-mono font-bold bg-white focus:ring-2 focus:ring-rose-500 outline-none"
+
+                   style="height: 36px;">
+            ${unitBadge}
+          </div>
+
+        </td>
+
+        <td class="py-2.5 px-3 text-right num font-mono text-sm text-gray-600">
+
+          ${_fmtTarjetasMon(visualCost)}
+          ${hasVisual ? `<span class="block text-[10px] text-gray-400 font-mono">/ ${ln.unidad_visual}</span>` : ''}
+
+        </td>
+
+        <td id="modal-subtotal-${i}" class="py-2.5 px-3 text-right num font-mono text-sm font-black text-gray-900">
+
+          ${_fmtTarjetasMon(subtotal)}
+
+        </td>
+
+        <td class="py-2.5 px-2 text-center">
+
+          <button onclick="tarjetaLineas.splice(${i},1); renderLineasTarjeta();"
+
+                  class="text-red-500 hover:text-red-700 font-bold text-xl leading-none px-2 py-1">×</button>
+
+        </td>
+
+      </tr>
+
+    `;
+
+  }).join('');
+
+  
+
+  let html = `
+
+    <table class="w-full text-sm">
+
+      <thead class="sticky top-0 bg-gray-100 shadow-xs border-b border-gray-200 z-10 select-none">
+
+        <tr class="text-gray-600 uppercase text-xs font-black">
+
+          <th onclick="ordenarComponentesModal('nombre')" class="py-2.5 px-3 text-left font-black cursor-pointer hover:bg-gray-200 transition-colors">
+
+            Insumo / Materia Prima <span class="${getSortClass('nombre')}">${getSortIcon('nombre')}</span>
+
+          </th>
+
+          <th onclick="ordenarComponentesModal('cantidad')" class="py-2.5 px-1 text-center font-black cursor-pointer hover:bg-gray-200 transition-colors" style="width:110px;">
+
+            Cant. <span class="${getSortClass('cantidad')}">${getSortIcon('cantidad')}</span>
+
+          </th>
+
+          <th onclick="ordenarComponentesModal('costo_und')" class="py-2.5 px-3 text-right font-black cursor-pointer hover:bg-gray-200 transition-colors">
+
+            Costo Unit. <span class="${getSortClass('costo_und')}">${getSortIcon('costo_und')}</span>
+
+          </th>
+
+          <th onclick="ordenarComponentesModal('subtotal')" class="py-2.5 px-3 text-right font-black cursor-pointer hover:bg-gray-200 transition-colors">
+
+            Subtotal <span class="${getSortClass('subtotal')}">${getSortIcon('subtotal')}</span>
+
+          </th>
+
+          <th class="py-2.5 px-1 w-8"></th>
+
+        </tr>
+
+      </thead>
+
+      <tbody>
+
+        ${rowsHtml}
+
+      </tbody>
+
+    </table>
+
+  `;
+
+
+
+  cont.innerHTML = html;
+
+  if (totalValEl) {
+
+    totalValEl.textContent = _fmtTarjetasMon(totalReceta);
+
+  }
+
+}
+
+function agregarLineaTarjeta() {
+
+  const id = parseInt(document.getElementById('tarjeta-ac-id').value);
+
+  const chipNombre = document.getElementById('tarjeta-selected-name')?.textContent.trim();
+
+  const inputNombre = document.getElementById('tarjeta-ac-input')?.value.trim();
+
+  const prod = (typeof productos !== 'undefined' && productos) ? productos.find(p => p.id === id) : null;
+
+  const nombre = (prod ? prod.nombre : (chipNombre || inputNombre)) || '';
+
+  const cant = parseFloat(document.getElementById('tarjeta-ac-cant').value);
+
+  const prodPadreId = parseInt(document.getElementById('tarjeta-prod-id').value);
+
+
+
+  if (!id || !nombre || isNaN(cant) || cant <= 0) { 
+
+    toast('Selecciona un producto del buscador y define una cantidad válida', false); 
+
+    return; 
+
+  }
+
+  if (id === prodPadreId) { 
+
+    toast('Un producto no puede ser componente de sí mismo', false); 
+
+    return; 
+
+  }
+
+  if (tarjetaLineas.find(l => l.componente_id === id)) { 
+
+    toast('Ya está en la tarjeta', false); 
+
+    return; 
+
+  }
+
+  
+
+  const costo = prod ? (parseFloat(prod.costo) || 0) : 0;
+  const fv = prod ? (parseFloat(prod.factor_visual) || 1.0) : 1.0;
+  const cantBase = cant / fv;
+
+  tarjetaLineas.push({
+    componente_id: id, 
+    nombre, 
+    cantidad: cantBase, 
+    costo_und: costo,
+    unidad_base: prod?.unidad_base_codigo || '',
+    unidad_visual: prod?.unidad_visual_codigo || '',
+    factor_visual: fv
+  });
+
+  renderLineasTarjeta();
+
+  clearSelectedComponent();
+
+}
+
+async function guardarTarjeta() {
+  const prodOrigenId = document.getElementById('tarjeta-prod-id').value;
+  const prodDestinoId = document.getElementById('clonar-dest-id')?.value;
+  const targetId = prodDestinoId ? prodDestinoId : prodOrigenId;
+  const esClonado = Boolean(prodDestinoId && prodDestinoId !== prodOrigenId);
+  const nombreDestino = document.getElementById('clonar-dest-name')?.textContent || '';
+
+  const lineas = tarjetaLineas.map(l => ({componente_id: l.componente_id, cantidad: l.cantidad}));
+
+  if (!lineas.length) {
+    if (confirm('Al guardar la tarjeta sin componentes, se eliminará la receta por completo y el producto volverá a ser Directo (sin receta). ¿Deseas continuar?')) {
+      await ejecutarEliminacionTarjeta(targetId, true);
+    }
+    return;
+  }
+
+  const r = await fetch(`/api/inventario/producto/${targetId}/tarjeta`, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({lineas})
+  });
+
+  const d = await r.json();
+  if (d.ok) {
+    if (esClonado) {
+      toast(`¡Receta clonada y guardada exitosamente para "${nombreDestino}"!`);
+    } else {
+      toast('Tarjeta guardada');
+    }
+    toggleClonarEscalarPanel(false);
+    clearSelectedClonarDest();
+    cargarTarjeta(prodOrigenId);
+  } else {
+    toast(d.error || 'Error al guardar tarjeta', false);
+  }
+}
+
+
+
+// Desde el reporte de Tarjetas Estándar
+
+async function eliminarTarjetaDirecta(productoId, nombre) {
+
+  if (!confirm(`¿Estás seguro de eliminar por completo la tarjeta estándar (receta) del producto "${nombre}"?\n\nEsta acción no se puede deshacer.`)) {
+
+    return;
+
+  }
+
+  await ejecutarEliminacionTarjeta(productoId, false);
+
+}
+
+
+
+// Desde el modal de receta
+
+async function eliminarTarjetaDesdeModal() {
+
+  const productoId = document.getElementById('tarjeta-prod-id').value;
+
+  const nombre = document.getElementById('tarjeta-nombre-prod').textContent;
+
+  if (!productoId) return;
+
+
+
+  if (!confirm(`¿Estás seguro de eliminar por completo la tarjeta estándar (receta) del producto "${nombre}"?\n\nEsta acción no se puede deshacer.`)) {
+
+    return;
+
+  }
+
+  await ejecutarEliminacionTarjeta(productoId);
+
+}
+
+
+
+// Helper común para realizar el fetch DELETE y recargar los reportes
+
+async function ejecutarEliminacionTarjeta(productoId) {
+
+  try {
+
+    const r = await fetch(`/api/inventario/producto/${productoId}/tarjeta`, { method: 'DELETE' });
+
+    const d = await r.json();
+
+    if (d.ok) {
+
+      toast('Tarjeta estándar eliminada correctamente');
+
+      volverTarjeta();
+
+    } else {
+
+      alert(d.error || 'No se pudo eliminar la tarjeta estándar');
+
+    }
+
+  } catch(e) {
+
+    console.error(e);
+
+    alert('Error de red al eliminar la tarjeta estándar');
+
+  }
+
+}
+
+
+
+// ── Gestión de selección y lote (Calculadora) ──────────────────────────────
+
+function clearSelectedComponent() {
+
+  document.getElementById('tarjeta-ac-id').value = '';
+
+  document.getElementById('tarjeta-ac-input').value = '';
+
+  document.getElementById('tarjeta-ac-cant').value = '1';
+
+  document.getElementById('tarjeta-ac-input').classList.remove('hidden');
+
+  document.getElementById('tarjeta-selected-chip').classList.add('hidden');
+
+  document.getElementById('tarjeta-ac-input').focus();
+
+}
+
+
+
+let procLineas = []; // {componente_id, nombre, cantidad_total, costo_und}
+
+
+
+function mostrarProcedimiento() {
+
+  const rendimiento = parseFloat(document.getElementById('proc-rendimiento').value) || 10;
+
+  
+
+  // Pre-cargar los componentes existentes de la tarjeta estándar escalados al rendimiento
+
+  procLineas = tarjetaLineas.map(ln => ({
+
+    componente_id: ln.componente_id,
+
+    nombre: ln.nombre,
+
+    cantidad_total: ln.cantidad * rendimiento,
+
+    costo_und: ln.costo_und
+
+  }));
+
+  
+
+  document.getElementById('proc-rendimiento').value = rendimiento;
+
+  document.getElementById('proc-ac-input').value = '';
+
+  document.getElementById('proc-ac-id').value = '';
+
+  document.getElementById('proc-ac-cant').value = '1';
+
+  document.getElementById('proc-ac-input').classList.remove('hidden');
+
+  document.getElementById('proc-selected-chip').classList.add('hidden');
+
+  
+
+  renderLineasProcedimiento();
+
+  document.getElementById('seccion-procedimiento').classList.remove('hidden');
+
+  
+
+  // Bind autocomplete to procedure input dynamically if not already set
+
+  if (!document.getElementById('proc-ac-input').dataset.bound) {
+
+    document.getElementById('proc-ac-input').dataset.bound = "true";
+
+    setupAC('proc-ac-input', 'proc-ac-list', 'proc-ac-id', () => productos, (item) => {
+
+      document.getElementById('proc-selected-name').textContent = item.nombre;
+
+      document.getElementById('proc-ac-input').classList.add('hidden');
+
+      document.getElementById('proc-selected-chip').classList.remove('hidden');
+
+      document.getElementById('proc-ac-cant').focus();
+
+    });
+
+  }
+
+}
+
+
+
+function escalarCantidadesProcedimiento() {
+
+  const rendimiento = parseFloat(document.getElementById('proc-rendimiento').value);
+
+  if (isNaN(rendimiento) || rendimiento <= 0) return;
+
+  procLineas = tarjetaLineas.map(ln => ({
+
+    componente_id: ln.componente_id,
+
+    nombre: ln.nombre,
+
+    cantidad_total: ln.cantidad * rendimiento,
+
+    costo_und: ln.costo_und
+
+  }));
+
+  renderLineasProcedimiento();
+
+  toast('Cantidades escaladas al rendimiento');
+
+}
+
+
+
+function ocultarProcedimiento() {
+
+  document.getElementById('seccion-procedimiento').classList.add('hidden');
+
+}
+
+
+
+function clearSelectedProcComponent() {
+
+  document.getElementById('proc-ac-id').value = '';
+
+  document.getElementById('proc-ac-input').value = '';
+
+  document.getElementById('proc-ac-cant').value = '1';
+
+  document.getElementById('proc-ac-input').classList.remove('hidden');
+
+  document.getElementById('proc-selected-chip').classList.add('hidden');
+
+  document.getElementById('proc-ac-input').focus();
+
+}
+
+
+
+function agregarLineaProcedimiento() {
+
+  const id = parseInt(document.getElementById('proc-ac-id').value);
+
+  const chipNombre = document.getElementById('proc-selected-name')?.textContent.trim();
+
+  const inputNombre = document.getElementById('proc-ac-input')?.value.trim();
+
+  const prod = (typeof productos !== 'undefined' && productos) ? productos.find(p => p.id === id) : null;
+
+  const nombre = (prod ? prod.nombre : (chipNombre || inputNombre)) || '';
+
+  const cant = parseFloat(document.getElementById('proc-ac-cant').value);
+
+  
+
+  if (!id || !nombre || isNaN(cant) || cant <= 0) {
+
+    toast('Selecciona un producto y define una cantidad válida', false);
+
+    return;
+
+  }
+
+  
+
+  if (procLineas.find(l => l.componente_id === id)) {
+
+    toast('Este insumo ya fue agregado', false);
+
+    return;
+
+  }
+
+  
+
+  const costo = prod ? (parseFloat(prod.costo) || 0) : 0;
+
+  
+
+  procLineas.push({componente_id: id, nombre: nombre, cantidad_total: cant, costo_und: costo});
+
+  renderLineasProcedimiento();
+
+  clearSelectedProcComponent();
+
+}
+
+
+
+function renderLineasProcedimiento() {
+
+  const tbody = document.getElementById('proc-lineas');
+
+  if (!procLineas.length) {
+
+    tbody.innerHTML = '<tr><td colspan="3" class="text-center text-gray-400 py-6">Agrega los insumos utilizados en este lote</td></tr>';
+
+    return;
+
+  }
+
+  
+
+  tbody.innerHTML = procLineas.map((ln, i) => `
+
+    <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+
+      <td class="py-2 px-2 text-left font-semibold text-gray-700 truncate max-w-[180px]">${ln.nombre}</td>
+
+      <td class="py-2 px-2 text-right font-mono text-xs font-semibold text-gray-800">
+
+        <input type="number" value="${ln.cantidad_total}" min="0.0001" step="any"
+
+               oninput="procLineas[${i}].cantidad_total = parseFloat(this.value) || 0"
+
+               class="w-24 text-right px-1 py-1 border border-gray-200 rounded-lg text-xs font-mono font-semibold"
+
+               style="height: 28px;">
+
+      </td>
+
+      <td class="py-2 px-1 text-center">
+
+        <button onclick="procLineas.splice(${i},1); renderLineasProcedimiento();"
+
+                class="text-red-400 hover:text-red-600 font-bold text-base leading-none">✕</button>
+
+      </td>
+
+    </tr>
+
+  `).join('');
+
+}
+
+
+
+function calcularYAplicarProcedimiento() {
+
+  const rendimiento = parseFloat(document.getElementById('proc-rendimiento').value);
+
+  if (isNaN(rendimiento) || rendimiento <= 0) {
+
+    toast('El rendimiento del lote debe ser mayor a 0', false);
+
+    return;
+
+  }
+
+  if (!procLineas.length) {
+
+    toast('Agrega al menos un componente usado', false);
+
+    return;
+
+  }
+
+  
+
+  tarjetaLineas = procLineas.map(ln => ({
+
+    componente_id: ln.componente_id,
+
+    nombre: ln.nombre,
+
+    cantidad: ln.cantidad_total / rendimiento,
+
+    costo_und: ln.costo_und
+
+  }));
+
+  
+
+  renderLineasTarjeta();
+
+  recalcularTotalRecetaModal();
+
+  ocultarProcedimiento();
+
+  toast('Receta calculada y cargada en el borrador');
+
+}
+
+let _tarjetasDecimalesMoneda = parseInt(localStorage.getItem('tarjetas_decimales_moneda') ?? '2', 10);
+if (isNaN(_tarjetasDecimalesMoneda) || _tarjetasDecimalesMoneda < 0) _tarjetasDecimalesMoneda = 2;
+if (_tarjetasDecimalesMoneda > 6) _tarjetasDecimalesMoneda = 6;
+
+let _tarjetasDecimalesCantidad = parseInt(localStorage.getItem('tarjetas_decimales_cantidad') ?? '2', 10);
+if (isNaN(_tarjetasDecimalesCantidad) || _tarjetasDecimalesCantidad < 0) _tarjetasDecimalesCantidad = 2;
+if (_tarjetasDecimalesCantidad > 4) _tarjetasDecimalesCantidad = 4;
+
+// Backward-compatibility alias
+let _tarjetasDecimales = _tarjetasDecimalesMoneda;
+
+function _fmtTarjetasMon(n) {
+  if (n == null || isNaN(n)) return '—';
+  const val = Number(n);
+  return '$ ' + val.toLocaleString('es-CO', { 
+    minimumFractionDigits: _tarjetasDecimalesMoneda, 
+    maximumFractionDigits: _tarjetasDecimalesMoneda 
+  });
+}
+
+function _fmtTarjetasPct(n) {
+  if (n == null || isNaN(n)) return '—';
+  const val = Number(n);
+  return val.toLocaleString('es-CO', { 
+    minimumFractionDigits: Math.min(_tarjetasDecimalesMoneda, 2), 
+    maximumFractionDigits: Math.max(_tarjetasDecimalesMoneda, 1) 
+  }) + ' %';
+}
+
+function _fmtTarjetasNum(n) {
+  if (n == null || isNaN(n)) return '0';
+  const val = Number(n);
+  return val.toLocaleString('es-CO', { 
+    minimumFractionDigits: _tarjetasDecimalesCantidad, 
+    maximumFractionDigits: _tarjetasDecimalesCantidad 
+  });
+}
+
+function cambiarDecimalesTarjetasMoneda(val) {
+  let d = parseInt(val, 10);
+  if (isNaN(d)) return;
+  d = Math.max(0, Math.min(6, d));
+  _tarjetasDecimalesMoneda = d;
+  _tarjetasDecimales = d;
+  try { localStorage.setItem('tarjetas_decimales_moneda', d); } catch(e) {}
+  
+  // Sincronizar inputs de moneda en vistas y modal
+  ['tarjetas-dec-mon-input', 'insumos-dec-mon-input', 'modal-tarjetas-dec-mon'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el && parseInt(el.value, 10) !== d) el.value = d;
+  });
+  
+  if (typeof renderTarjetasTable === 'function') renderTarjetasTable();
+  if (typeof renderInsumosTable === 'function') renderInsumosTable();
+  if (typeof renderLineasTarjeta === 'function') {
+    const ov = document.getElementById('overlay-tarjeta');
+    if (ov && !ov.classList.contains('hidden')) {
+      renderLineasTarjeta();
+    }
+  }
+}
+
+function validarDecimalesTarjetasMonedaInput(inputEl) {
+  let d = parseInt(inputEl.value, 10);
+  if (isNaN(d) || d < 0) d = 2;
+  if (d > 6) d = 6;
+  inputEl.value = d;
+  cambiarDecimalesTarjetasMoneda(d);
+}
+
+function cambiarDecimalesTarjetasCantidad(val) {
+  let d = parseInt(val, 10);
+  if (isNaN(d)) return;
+  d = Math.max(0, Math.min(4, d));
+  _tarjetasDecimalesCantidad = d;
+  try { localStorage.setItem('tarjetas_decimales_cantidad', d); } catch(e) {}
+  
+  // Sincronizar inputs de cantidad en vistas y modal
+  ['tarjetas-dec-cant-input', 'insumos-dec-cant-input', 'modal-tarjetas-dec-cant'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el && parseInt(el.value, 10) !== d) el.value = d;
+  });
+  
+  if (typeof renderTarjetasTable === 'function') renderTarjetasTable();
+  if (typeof renderInsumosTable === 'function') renderInsumosTable();
+  if (typeof renderLineasTarjeta === 'function') {
+    const ov = document.getElementById('overlay-tarjeta');
+    if (ov && !ov.classList.contains('hidden')) {
+      renderLineasTarjeta();
+    }
+  }
+}
+
+function validarDecimalesTarjetasCantidadInput(inputEl) {
+  let d = parseInt(inputEl.value, 10);
+  if (isNaN(d) || d < 0) d = 2;
+  if (d > 4) d = 4;
+  inputEl.value = d;
+  cambiarDecimalesTarjetasCantidad(d);
+}
+
+function inicializarDecimalesTarjetas() {
+  ['tarjetas-dec-mon-input', 'insumos-dec-mon-input', 'modal-tarjetas-dec-mon'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = _tarjetasDecimalesMoneda;
+  });
+  ['tarjetas-dec-cant-input', 'insumos-dec-cant-input', 'modal-tarjetas-dec-cant'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = _tarjetasDecimalesCantidad;
+  });
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+  await cargarProductosSilencioso();
+  // AC tarjeta (usa productos cargados)
+  setupAC('tarjeta-ac-input', 'tarjeta-ac-list', 'tarjeta-ac-id', () => productos, (item) => {
+    document.getElementById('tarjeta-selected-name').textContent = item.nombre;
+    document.getElementById('tarjeta-ac-input').classList.add('hidden');
+    document.getElementById('tarjeta-selected-chip').classList.remove('hidden');
+    document.getElementById('tarjeta-ac-cant').focus();
+  });
+
+  // AC clonar producto destino
+  setupAC('clonar-dest-input', 'clonar-dest-list', 'clonar-dest-id', () => productos, (item) => {
+    document.getElementById('clonar-dest-name').textContent = item.nombre;
+    document.getElementById('clonar-dest-input').classList.add('hidden');
+    document.getElementById('clonar-dest-chip').classList.remove('hidden');
+    document.getElementById('tarjeta-multiplicador-factor').focus();
+  });
+  setupAC('tarjeta-page-ac-input', 'tarjeta-page-ac-list', 'tarjeta-page-ac-id', () => productos, (item) => {
+    if (item && item.id) location.href = '/tarjeta/' + NEGOCIO_ID + '/' + item.id;
+  });
+
+  inicializarDecimalesTarjetas();
+  document.getElementById('tarjeta-prod-id').value = TARJETA_PRODUCTO_ID;
+  document.getElementById('tarjeta-nombre-prod').textContent = TARJETA_PRODUCTO_NOMBRE;
+  cargarTarjeta(TARJETA_PRODUCTO_ID);
+});
+</script>
+</body>
+</html>

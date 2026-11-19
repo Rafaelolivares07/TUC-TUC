@@ -1273,7 +1273,6 @@
     let tiposDocEntrada = {{ tipos_documento|tojson if tipos_documento else '[]' }};
     let activeACInputId = null;
     let activeACHiddenId = null;
-    let tarjetaLineas = [];
 
     // Helper Toast
     function toast(msg, esExito = true) {
@@ -1314,14 +1313,6 @@ function _fmtProdNum(n) {
   return Number(n).toLocaleString('es-CO', {
     minimumFractionDigits: _prodPreviewDecimales,
     maximumFractionDigits: _prodPreviewDecimales
-  });
-}
-function _fmtTarjetasMon(n) {
-  if (n == null || isNaN(n)) return '—';
-  const val = Number(n);
-  return '$ ' + val.toLocaleString('es-CO', { 
-    minimumFractionDigits: _tarjetasDecimalesMoneda, 
-    maximumFractionDigits: _tarjetasDecimalesMoneda 
   });
 }
 function abrirModalCrearDesdeAC(inputId, hiddenId, nombre) {
@@ -1437,60 +1428,6 @@ window.abrirModalProducto = function(p) {
   if (chkPeso) chkPeso.checked = p ? !!p.peso_variable : false;
   if (inpTol) inpTol.value = (p && p.tolerancia_peso_pct !== null && p.tolerancia_peso_pct !== undefined) ? p.tolerancia_peso_pct : '10';
   toggleToleranciaPeso(chkPeso ? chkPeso.checked : false);
-}
-function abrirModalTarjeta(productoId, nombre) {
-  tarjetaLineas = [];
-  tarjetaLineasOriginales = [];
-  document.getElementById('tarjeta-prod-id').value = productoId;
-  document.getElementById('tarjeta-nombre-prod').textContent = nombre;
-  document.getElementById('tarjeta-ac-input').value = '';
-  document.getElementById('tarjeta-ac-id').value = '';
-  document.getElementById('tarjeta-ac-cant').value = '1';
-  document.getElementById('tarjeta-ac-list').classList.add('hidden');
-  document.getElementById('tarjeta-ac-input').classList.remove('hidden');
-  document.getElementById('tarjeta-selected-chip').classList.add('hidden');
-  
-  toggleClonarEscalarPanel(false);
-  clearSelectedClonarDest();
-  const facInput = document.getElementById('tarjeta-multiplicador-factor');
-  if (facInput) facInput.value = '';
-  const baseInput = document.getElementById('calc-gramos-base');
-  if (baseInput) baseInput.value = '';
-  const tgtInput = document.getElementById('calc-gramos-target');
-  if (tgtInput) tgtInput.value = '';
-  document.getElementById('btn-restaurar-tarjeta')?.classList.add('hidden');
-
-  const btnEliminar = document.getElementById('btn-eliminar-tarjeta');
-  if (btnEliminar) btnEliminar.classList.add('hidden');
-
-  document.getElementById('overlay-tarjeta').classList.remove('hidden');
-  cargarTarjeta(productoId);
-}
-function actualizarCantidadComponente(index, valStr) {
-
-  let val = parseFloat(valStr);
-
-  if (isNaN(val) || val <= 0) val = 0.000001;
-
-  const fv = parseFloat(tarjetaLineas[index].factor_visual) || 1.0;
-  tarjetaLineas[index].cantidad = val / fv;
-
-  
-
-  const costoUnd = parseFloat(tarjetaLineas[index].costo_und || 0);
-
-  const subtotal = val * costoUnd;
-
-  const subEl = document.getElementById(`modal-subtotal-${index}`);
-
-  if (subEl) {
-
-    subEl.textContent = '$' + subtotal.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-
-  }
-
-  recalcularTotalRecetaModal();
-
 }
 function actualizarEstadoFormularioPresentacion() {
 
@@ -1839,34 +1776,6 @@ async function cargarProductosSilencioso(force = false) {
   }
   return productos;
 }
-async function cargarTarjeta(productoId) {
-  const r = await fetch(`/api/inventario/producto/${productoId}/tarjeta`);
-  const d = await r.json();
-  if (!d.ok) return;
-  tarjetaLineas = d.componentes.map(c => {
-    const fv = parseFloat(c.factor_visual) || 1.0;
-    return {
-      componente_id: c.componente_id, 
-      nombre: c.nombre, 
-      cantidad: parseFloat(c.cantidad) || 0,
-      costo_und: parseFloat(c.costo_und) || 0,
-      unidad_base: c.unidad_base || '',
-      unidad_visual: c.unidad_visual || '',
-      factor_visual: fv
-    };
-  });
-  tarjetaLineasOriginales = JSON.parse(JSON.stringify(tarjetaLineas));
-  renderLineasTarjeta();
-
-  const btnEliminar = document.getElementById('btn-eliminar-tarjeta');
-  if (btnEliminar) {
-    if (tarjetaLineas.length > 0) {
-      btnEliminar.classList.remove('hidden');
-    } else {
-      btnEliminar.classList.add('hidden');
-    }
-  }
-}
 async function cargarTiposDocEntrada() {
 
   try {
@@ -1936,17 +1845,6 @@ function cerrarModalProducto() {
 
   document.getElementById('overlay-producto').classList.add('hidden');
 
-}
-function clearSelectedClonarDest() {
-  const idEl = document.getElementById('clonar-dest-id');
-  const inputEl = document.getElementById('clonar-dest-input');
-  const chipEl = document.getElementById('clonar-dest-chip');
-  if (idEl) idEl.value = '';
-  if (inputEl) {
-    inputEl.value = '';
-    inputEl.classList.remove('hidden');
-  }
-  if (chipEl) chipEl.classList.add('hidden');
 }
 function editarPresentacionDesdeModal(id, nombre, equiv, usoMovimientos) {
 
@@ -2665,23 +2563,6 @@ function onInputNombrePresentacion(val) {
   actualizarEstadoFormularioPresentacion();
 
 }
-function ordenarComponentesModal(columna) {
-
-  if (modalSortCol === columna) {
-
-    modalSortAsc = !modalSortAsc;
-
-  } else {
-
-    modalSortCol = columna;
-
-    modalSortAsc = true;
-
-  }
-
-  renderLineasTarjeta();
-
-}
 function parseNumeroPresentacion(nombre) {
 
   if (!nombre) return null;
@@ -2746,29 +2627,6 @@ function poblarSelectsUnidadesProducto() {
   selVis.innerHTML = optsVis;
   if (valBase) selBase.value = valBase;
   if (valVis) selVis.value = valVis;
-}
-function recalcularTotalRecetaModal() {
-
-  let totalReceta = 0;
-
-  tarjetaLineas.forEach(ln => {
-
-    const c = parseFloat(ln.costo_und || 0);
-
-    const q = parseFloat(ln.cantidad) || 0;
-
-    totalReceta += (c * q);
-
-  });
-
-  const totalValEl = document.getElementById('tarjeta-total-val');
-
-  if (totalValEl) {
-
-    totalValEl.textContent = _fmtTarjetasMon(totalReceta);
-
-  }
-
 }
 async function recargarCatalogoEntrada(btn) {
   if (btn) {
@@ -2922,220 +2780,6 @@ function renderAC() {
     list.classList.remove('hidden');
 
   }
-function renderLineasTarjeta() {
-
-  const cont = document.getElementById('tarjeta-lineas');
-
-  const countEl = document.getElementById('tarjeta-items-count');
-
-  const totalValEl = document.getElementById('tarjeta-total-val');
-
-  
-
-  if (countEl) {
-
-    countEl.textContent = `${tarjetaLineas.length} componente${tarjetaLineas.length === 1 ? '' : 's'}`;
-
-  }
-
-
-
-  if (!tarjetaLineas.length) {
-
-    cont.innerHTML = '<p class="text-sm text-gray-400 text-center py-6">Sin componentes (se tratará como producto simple)</p>';
-
-    if (totalValEl) totalValEl.textContent = '$ 0,00';
-
-    return;
-
-  }
-
-  
-
-  // Sort modal components
-
-  tarjetaLineas.sort((a, b) => {
-
-    let valA, valB;
-
-    if (modalSortCol === 'nombre') {
-
-      valA = a.nombre || '';
-
-      valB = b.nombre || '';
-
-      return modalSortAsc ? valA.localeCompare(valB, 'es') : valB.localeCompare(valA, 'es');
-
-    } else if (modalSortCol === 'cantidad') {
-
-      valA = parseFloat(a.cantidad || 0);
-
-      valB = parseFloat(b.cantidad || 0);
-
-    } else if (modalSortCol === 'costo_und') {
-
-      valA = parseFloat(a.costo_und || 0);
-
-      valB = parseFloat(b.costo_und || 0);
-
-    } else if (modalSortCol === 'subtotal') {
-
-      valA = (parseFloat(a.cantidad || 0)) * parseFloat(a.costo_und || 0);
-
-      valB = (parseFloat(b.cantidad || 0)) * parseFloat(b.costo_und || 0);
-
-    }
-
-    return modalSortAsc ? (valA - valB) : (valB - valA);
-
-  });
-
-
-
-  let totalReceta = 0;
-
-  
-
-  const getSortIcon = col => (modalSortCol === col ? (modalSortAsc ? '▲' : '▼') : '↕');
-
-  const getSortClass = col => (modalSortCol === col ? 'text-rose-500 font-bold' : 'text-gray-400');
-
-
-
-  let rowsHtml = tarjetaLineas.map((ln, i) => {
-
-    const costoUnd = parseFloat(ln.costo_und || 0);
-
-    const cantidad = parseFloat(ln.cantidad || 0);
-
-    const subtotal = cantidad * costoUnd;
-
-    totalReceta += subtotal;
-
-    
-
-    const fv = parseFloat(ln.factor_visual) || 1.0;
-    const hasVisual = Boolean(ln.unidad_visual && fv !== 1.0);
-    const visualQty = hasVisual ? (cantidad * fv) : cantidad;
-    const visualCost = hasVisual ? (costoUnd / fv) : costoUnd;
-
-    const qtyFormatted = Number(visualQty.toFixed(_tarjetasDecimalesCantidad));
-    const unitBadge = hasVisual ? `<span class="inline-flex items-center text-[11px] font-black text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded shadow-2xs" title="Visual: ${ln.unidad_visual} (Base: ${Number(cantidad.toFixed(4))} ${ln.unidad_base})">${ln.unidad_visual}</span>` : '';
-
-    return `
-
-      <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
-
-        <td class="py-2.5 px-3 text-left font-bold text-gray-800 text-sm sm:text-base truncate max-w-[240px] sm:max-w-[340px]" title="${ln.nombre}">
-          ${ln.nombre}
-          ${hasVisual ? `<span class="block text-[11px] font-mono text-gray-400 font-normal">Base: ${Number(cantidad.toFixed(4))} ${ln.unidad_base}</span>` : ''}
-        </td>
-
-        <td class="py-2.5 px-1 text-center">
-
-          <div class="flex items-center justify-center gap-1">
-            <input type="number" value="${qtyFormatted}" min="0.000001" step="any"
-
-                   oninput="actualizarCantidadComponente(${i}, this.value)"
-
-                   onblur="if(!this.value || parseFloat(this.value)<=0) { this.value=1; actualizarCantidadComponente(${i}, 1); }"
-
-                   class="w-24 text-center px-2 py-1.5 border border-gray-300 rounded-lg text-sm font-mono font-bold bg-white focus:ring-2 focus:ring-rose-500 outline-none"
-
-                   style="height: 36px;">
-            ${unitBadge}
-          </div>
-
-        </td>
-
-        <td class="py-2.5 px-3 text-right num font-mono text-sm text-gray-600">
-
-          ${_fmtTarjetasMon(visualCost)}
-          ${hasVisual ? `<span class="block text-[10px] text-gray-400 font-mono">/ ${ln.unidad_visual}</span>` : ''}
-
-        </td>
-
-        <td id="modal-subtotal-${i}" class="py-2.5 px-3 text-right num font-mono text-sm font-black text-gray-900">
-
-          ${_fmtTarjetasMon(subtotal)}
-
-        </td>
-
-        <td class="py-2.5 px-2 text-center">
-
-          <button onclick="tarjetaLineas.splice(${i},1); renderLineasTarjeta();"
-
-                  class="text-red-500 hover:text-red-700 font-bold text-xl leading-none px-2 py-1">×</button>
-
-        </td>
-
-      </tr>
-
-    `;
-
-  }).join('');
-
-  
-
-  let html = `
-
-    <table class="w-full text-sm">
-
-      <thead class="sticky top-0 bg-gray-100 shadow-xs border-b border-gray-200 z-10 select-none">
-
-        <tr class="text-gray-600 uppercase text-xs font-black">
-
-          <th onclick="ordenarComponentesModal('nombre')" class="py-2.5 px-3 text-left font-black cursor-pointer hover:bg-gray-200 transition-colors">
-
-            Insumo / Materia Prima <span class="${getSortClass('nombre')}">${getSortIcon('nombre')}</span>
-
-          </th>
-
-          <th onclick="ordenarComponentesModal('cantidad')" class="py-2.5 px-1 text-center font-black cursor-pointer hover:bg-gray-200 transition-colors" style="width:110px;">
-
-            Cant. <span class="${getSortClass('cantidad')}">${getSortIcon('cantidad')}</span>
-
-          </th>
-
-          <th onclick="ordenarComponentesModal('costo_und')" class="py-2.5 px-3 text-right font-black cursor-pointer hover:bg-gray-200 transition-colors">
-
-            Costo Unit. <span class="${getSortClass('costo_und')}">${getSortIcon('costo_und')}</span>
-
-          </th>
-
-          <th onclick="ordenarComponentesModal('subtotal')" class="py-2.5 px-3 text-right font-black cursor-pointer hover:bg-gray-200 transition-colors">
-
-            Subtotal <span class="${getSortClass('subtotal')}">${getSortIcon('subtotal')}</span>
-
-          </th>
-
-          <th class="py-2.5 px-1 w-8"></th>
-
-        </tr>
-
-      </thead>
-
-      <tbody>
-
-        ${rowsHtml}
-
-      </tbody>
-
-    </table>
-
-  `;
-
-
-
-  cont.innerHTML = html;
-
-  if (totalValEl) {
-
-    totalValEl.textContent = _fmtTarjetasMon(totalReceta);
-
-  }
-
-}
 function renderTablaEquivalencias() {
   const tb = document.getElementById('tabla-equivalencias-body');
   if (!tb) return;
@@ -3310,7 +2954,7 @@ function renderTablaProductos(lista) {
 
                     class="text-xs px-2 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 font-semibold transition-colors">✏️</button>
 
-            <button onclick="abrirModalTarjeta(${p.id}, '${safeNombre}')" title="Tarjeta estándar"
+            <button onclick="location.href='/tarjeta/'+NEGOCIO_ID+'/${p.id}')" title="Tarjeta estándar"
 
                     class="text-xs px-2 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 font-semibold text-blue-600 transition-colors">🧩</button>
 
@@ -4210,21 +3854,6 @@ function toast(msg, ok = true, duracion = 3200) {
 
   el._t = setTimeout(() => el.classList.remove('show'), duracion);
 
-}
-function toggleClonarEscalarPanel(forzar) {
-  const p = document.getElementById('panel-clonar-escalar');
-  if (!p) return;
-  if (forzar !== undefined) {
-    if (forzar) p.classList.remove('hidden');
-    else p.classList.add('hidden');
-  } else {
-    p.classList.toggle('hidden');
-  }
-  if (!p.classList.contains('hidden')) {
-    if (!tarjetaLineasOriginales.length && tarjetaLineas.length) {
-      tarjetaLineasOriginales = JSON.parse(JSON.stringify(tarjetaLineas));
-    }
-  }
 }
 async function toggleEstadoProducto(id, nuevoEstado) {
 

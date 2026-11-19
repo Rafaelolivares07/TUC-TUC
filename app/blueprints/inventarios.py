@@ -11394,6 +11394,45 @@ def ventas_costos_standalone(negocio_id=None):
         conn.close()
 
 
+@bp.route('/tarjeta/<int:producto_id>')
+@bp.route('/tarjeta/<int:negocio_id>/<int:producto_id>')
+def tarjeta_standalone(producto_id, negocio_id=None):
+    """Ficha unica de Tarjeta Estandar (receta) por producto."""
+    if 'usuario_id' not in session and 'rol' not in session:
+        return redirect(url_for('auth.admin_login'))
+
+    conn = get_db_connection()
+    try:
+        prod_row = conn.execute(
+            "SELECT id, nombre, negocio_id FROM productos WHERE id = %s", (producto_id,)
+        ).fetchone()
+        if not prod_row:
+            return "Producto no encontrado", 404
+        if not negocio_id:
+            negocio_id = prod_row['negocio_id'] or session.get('negocio_id')
+            if not negocio_id:
+                negocio_activo = session.get('negocio_activo')
+                if negocio_activo and isinstance(negocio_activo, dict) and negocio_activo.get('id'):
+                    negocio_id = negocio_activo['id']
+        if not negocio_id:
+            return "Negocio no encontrado", 404
+        contexto = _contexto_negocio(conn, negocio_id)
+        if not contexto:
+            return "Negocio no encontrado", 404
+        if not _puede_gestionar_negocio(contexto):
+            return "No autorizado para este negocio", 403
+        return render_template('tarjeta.html',
+                               negocio_id=negocio_id,
+                               negocio_nombre=contexto['negocio_nombre'],
+                               producto_id=prod_row['id'],
+                               producto_nombre=prod_row['nombre'],
+                               volver_url='/inicio')
+    except Exception as e:
+        return f"Error: {e}", 500
+    finally:
+        conn.close()
+
+
 @bp.route('/entradas')
 @bp.route('/entradas/<int:negocio_id>')
 def entradas_standalone(negocio_id=None):

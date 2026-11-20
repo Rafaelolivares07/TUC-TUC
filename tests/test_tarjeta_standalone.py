@@ -186,7 +186,7 @@ check('tarjeta badge para-1-unidad junto al nombre', 'id="tarjeta-para-1-unidad"
 check('tarjeta badge 1 grande', 'text-2xl font-black text-rose-600 font-mono leading-none">1</span>' in tj)
 check('tarjeta badge UNIDAD evidente', 'text-sm font-black text-rose-700">UNIDAD</span>' in tj)
 
-check('tarjeta nombre sin tope 360', 'flex items-center gap-2 min-w-0 flex-1' in tj)
+check('tarjeta nombre fila propia', '<div class="flex items-center gap-2 w-full">' in tj)
 check('tarjeta nombre trunca flexible', 'id="tarjeta-nombre-prod" class="text-base font-extrabold text-gray-900 truncate min-w-0"' in tj)
 check('tarjeta badge despues del nombre', tj.index('tarjeta-nombre-prod') < tj.index('tarjeta-para-1-unidad'))
 

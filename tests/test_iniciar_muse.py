@@ -177,5 +177,12 @@ if _wv.exists():
     check('vigilante: self-test verde', _r.returncode == 0 and 'PROBAR: OK' in _r.stdout,
           (_r.stdout + _r.stderr)[-200:])
 
+# 12) titulo unico por arranque: MUSE + etiqueta + fecha + hora, mayusculas (2026-11-20, orden Rafa)
+# Falla autentico: doble arranque 16:08/16:09 con titulo "90% coordinacion" en ambas (misma cuota + tema previo).
+check('titulo: antepone MUSE y agrega fecha+hora', 'set "ETIQUETA=MUSE !ETIQUETA! %date:~0,5% !HHMM!"' in text)
+check('titulo: hora HH:MM con cero (sin espacio)', 'set "HHMM=%time:~0,5%"' in text and 'set "HHMM=!HHMM: =0!"' in text)
+check('titulo: mayusculas via python + patron set/p', ".upper()" in text and 'set /p ETIQUETA=<"%TEMP%\\muse_tab_title.txt"' in text)
+check('titulo: compone antes de mostrar Titulo', 0 <= text.find('!HHMM!') < text.find('echo   Titulo: !ETIQUETA!'))
+
 print('RESULTADO:', 'PASS' if not fails else f'FAIL ({len(fails)})')
 sys.exit(1 if fails else 0)

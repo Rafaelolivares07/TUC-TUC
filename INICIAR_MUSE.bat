@@ -103,6 +103,11 @@ set "CUOTATAG="
 set /p CUOTATAG=<"%TEMP%\muse_cuota_tag.txt" 2>nul
 del "%TEMP%\muse_cuota_tag.txt" 2>nul
 if defined CUOTATAG set "ETIQUETA=!CUOTATAG! !ETIQUETA!"
+set "HHMM=%time:~0,5%"
+set "HHMM=!HHMM: =0!"
+set "ETIQUETA=MUSE !ETIQUETA! %date:~0,5% !HHMM!"
+C:\Tools\Python313\python.exe -c "import os;print(os.environ.get('ETIQUETA','MUSE').upper())" > "%TEMP%\muse_tab_title.txt" 2>nul
+set /p ETIQUETA=<"%TEMP%\muse_tab_title.txt" 2>nul
 echo   Titulo: !ETIQUETA!
 echo !ETIQUETA!>%TEMP%\muse_tab_title.txt
 echo BOOT>%TEMP%\muse_boot.mark

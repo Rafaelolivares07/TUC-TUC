@@ -163,8 +163,8 @@ _CATALOGO_PANTALLAS = [
     ('conta_tab_consulta', 'Consulta de Movimientos (Libro Mayor)', 'contabilidad.admin_contabilidad', '🔍', 'Contabilidad > Informes', 'tab=consulta', '/contabilidad/{nid}?tab=consulta', ['consulta movimientos', 'libro mayor', 'auxiliar contable', 'movimientos cuenta', 'extracto cuenta', 'tercero cuenta'], 1120, False),
     ('conta_tab_balance', 'Balance y Cierre de Periodo', 'contabilidad.admin_contabilidad', '⚖️', 'Contabilidad > Cierre', 'tab=balance', '/contabilidad/{nid}?tab=balance', ['balance', 'balance de prueba', 'cierre contable', 'cierre de mes', 'cierre anual', 'saldos cuentas'], 1130, False),
     ('conta_tab_reclas', 'Reclasificaciones Contables', 'contabilidad.admin_contabilidad', '🔀', 'Contabilidad > Ajustes', 'tab=reclasificaciones', '/contabilidad/{nid}?tab=reclasificaciones', ['reclasificaciones', 'reclasificar', 'corregir cuenta', 'mover asiento', 'ajuste contable'], 1140, False),
-    ('inv_tab_tarjetas', 'Tarjetas Estándar (Fórmulas y Recetas)', 'inventarios.admin_inventario', '🧾', 'Inventario > Producción', 'tab=tarjetas', '/inventario/{nid}?tab=tarjetas', ['tarjetas estandar', 'recetas', 'formulas', 'mezclas', 'componentes', 'ensamble', 'ensamblar', 'ensambles', 'produccion', 'producciones historicas', 'ingredientes', 'porciones', 'costo receta', 'ficha tecnica'], 1150, False),
-    ('inv_tarjeta_puntual', 'Tarjeta Estándar puntual (ver una)', 'inventarios.tarjeta_standalone', '📋', 'Inventario > Producción', None, '/tarjeta?negocio_id={nid}', ['tarjeta estandar puntual', 'ver tarjeta', 'consultar tarjeta', 'editar tarjeta', 'receta puntual', 'ver receta', 'formula puntual', 'ver formula', 'mezcla producto', 'ensamble', 'ensamblar', 'ensambles', 'produccion', 'producciones historicas', 'ficha tecnica', 'componentes producto'], 1155, False),
+    ('inv_tab_tarjetas', 'Tarjetas Estándar (todas: fórmulas, recetas y ensambles)', 'inventarios.admin_inventario', '🧾', 'Inventario > Producción', 'tab=tarjetas', '/inventario/{nid}?tab=tarjetas', ['tarjetas estandar', 'recetas', 'formulas', 'mezclas', 'componentes', 'ensamble', 'ensamblar', 'ensambles', 'produccion', 'producciones historicas', 'ingredientes', 'porciones', 'costo receta', 'ficha tecnica'], 1150, False),
+    ('inv_tarjeta_puntual', 'Tarjeta Estándar puntual (ver una sola)', 'inventarios.tarjeta_standalone', '📋', 'Inventario > Producción', None, '/tarjeta?negocio_id={nid}', ['tarjeta estandar puntual', 'ver tarjeta', 'consultar tarjeta', 'editar tarjeta', 'receta puntual', 'ver receta', 'formula puntual', 'ver formula', 'mezcla producto', 'ensamble', 'ensamblar', 'ensambles', 'produccion', 'producciones historicas', 'ficha tecnica', 'componentes producto'], 1155, False),
     ('inv_tab_compras', 'Sugerencias de Compras (Reabastecimiento)', 'inventarios.admin_inventario', '🛒', 'Inventario > Compras', 'tab=compras_sugerencias', '/inventario/{nid}?tab=compras_sugerencias', ['sugerencias compras', 'reabastecer', 'punto de reorden', 'stock minimo', 'faltantes', 'pedir insumos', 'sugerir compras'], 1160, False),
     ('inv_tab_cotiz', 'Cotizaciones de Proveedores', 'inventarios.admin_inventario', '📋', 'Inventario > Compras', 'tab=cotizaciones', '/inventario/{nid}?tab=cotizaciones', ['cotizaciones', 'cotizar', 'comparar proveedores', 'precios proveedor', 'solicitud de precio'], 1170, False),
     ('inv_tab_traslados', 'Traslados entre Bodegas o Sedes', 'inventarios.admin_inventario', '🔄', 'Inventario > Movimientos', 'tab=traslados', '/inventario/{nid}?tab=traslados', ['traslados', 'mover stock', 'enviar a otra bodega', 'transferencia entre sedes', 'remision interna', 'traspasos'], 1180, False),
@@ -258,6 +258,16 @@ def _filas_catalogo(conn=None):
     return _CACHE_CATALOGO
 
 
+_DESCRIPCIONES = {
+    ('inventarios.admin_inventario', 'tab=tarjetas'):
+        'La misma tarjeta estándar (receta, fórmula o mezcla según el negocio): '
+        'aquí las ves y gestionas TODAS.',
+    ('inventarios.tarjeta_standalone', ''):
+        'La misma tarjeta estándar (receta, fórmula o mezcla según el negocio): '
+        'aquí ves y editas UNA sola.',
+}
+
+
 def _obtener_catalogo_base(negocio_id=None, slug=None, otorgados=None, filas=None):
     """Entradas omni desde el catalogo unico. otorgados=None muestra todo."""
     out = []
@@ -286,6 +296,7 @@ def _obtener_catalogo_base(negocio_id=None, slug=None, otorgados=None, filas=Non
             'keywords': kws,
             'endpoint': ep,
             'sugerido': bool(r.get('sugerido')),
+            'descripcion': _DESCRIPCIONES.get(_k, ''),
         })
     return out
 

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tarjeta Estándar — {{ producto_nombre }}</title>
+  <title>Tarjeta Estándar{% if producto_nombre %} — {{ producto_nombre }}{% endif %}</title>
   <script src="/static/js/tailwind.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <style>
@@ -446,7 +446,7 @@
   </div>
 <script>
 const NEGOCIO_ID = {{ negocio_id }};
-const TARJETA_PRODUCTO_ID = {{ producto_id }};
+const TARJETA_PRODUCTO_ID = {{ producto_id if producto_id else 'null' }};
 const TARJETA_PRODUCTO_NOMBRE = {{ producto_nombre | tojson }};
 const VOLVER_URL = {{ volver_url | tojson }};
 let productos = [];
@@ -1787,9 +1787,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   inicializarDecimalesTarjetas();
-  document.getElementById('tarjeta-prod-id').value = TARJETA_PRODUCTO_ID;
-  document.getElementById('tarjeta-nombre-prod').textContent = TARJETA_PRODUCTO_NOMBRE;
-  cargarTarjeta(TARJETA_PRODUCTO_ID);
+  if (!TARJETA_PRODUCTO_ID) {
+    document.getElementById('tarjeta-nombre-prod').textContent = 'Busca un producto arriba para ver su tarjeta';
+    document.getElementById('tarjeta-page-ac-input').focus();
+  } else {
+    document.getElementById('tarjeta-prod-id').value = TARJETA_PRODUCTO_ID;
+    document.getElementById('tarjeta-nombre-prod').textContent = TARJETA_PRODUCTO_NOMBRE;
+    cargarTarjeta(TARJETA_PRODUCTO_ID);
+  }
 });
 </script>
 </body>

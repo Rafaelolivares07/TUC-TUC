@@ -11394,22 +11394,27 @@ def ventas_costos_standalone(negocio_id=None):
         conn.close()
 
 
+@bp.route('/tarjeta')
 @bp.route('/tarjeta/<int:producto_id>')
 @bp.route('/tarjeta/<int:negocio_id>/<int:producto_id>')
-def tarjeta_standalone(producto_id, negocio_id=None):
+def tarjeta_standalone(producto_id=None, negocio_id=None):
     """Ficha unica de Tarjeta Estandar (receta) por producto."""
     if 'usuario_id' not in session and 'rol' not in session:
         return redirect(url_for('auth.admin_login'))
 
     conn = get_db_connection()
     try:
-        prod_row = conn.execute(
-            "SELECT id, nombre, negocio_id FROM productos WHERE id = %s", (producto_id,)
-        ).fetchone()
-        if not prod_row:
-            return "Producto no encontrado", 404
+        prod_row = None
+        if producto_id:
+            prod_row = conn.execute(
+                "SELECT id, nombre, negocio_id FROM productos WHERE id = %s", (producto_id,)
+            ).fetchone()
+            if not prod_row:
+                return "Producto no encontrado", 404
         if not negocio_id:
-            negocio_id = prod_row['negocio_id'] or session.get('negocio_id')
+            negocio_id = (request.args.get('negocio_id', type=int)
+                          or (prod_row['negocio_id'] if prod_row else None)
+                          or session.get('negocio_id'))
             if not negocio_id:
                 negocio_activo = session.get('negocio_activo')
                 if negocio_activo and isinstance(negocio_activo, dict) and negocio_activo.get('id'):
@@ -11424,8 +11429,8 @@ def tarjeta_standalone(producto_id, negocio_id=None):
         return render_template('tarjeta.html',
                                negocio_id=negocio_id,
                                negocio_nombre=contexto['negocio_nombre'],
-                               producto_id=prod_row['id'],
-                               producto_nombre=prod_row['nombre'],
+                               producto_id=prod_row['id'] if prod_row else None,
+                               producto_nombre=prod_row['nombre'] if prod_row else '',
                                volver_url='/inicio')
     except Exception as e:
         return f"Error: {e}", 500

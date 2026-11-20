@@ -1259,7 +1259,7 @@
       if (p.ventas_30d > 0) {
         txtReceta += ' \u00b7 Ventas 30d: ' + omniFmt(p.ventas_30d) + ' ' + u;
       }
-      h += omniFilaDato(idx, txtReceta, p.nombre + ' \u2014 receta, f\u00f3rmula o mezcla seg\u00fan el negocio', 'Tarjeta est\u00e1ndar \u203a');
+      h += omniFilaDato(idx, txtReceta, p.nombre + ' \u2014 receta, f\u00f3rmula, mezcla o ensamble seg\u00fan el negocio', 'Tarjeta est\u00e1ndar \u203a');
     } else {
       idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Ver saldo ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.productos });
       h += omniFilaDato(idx, 'Saldo: ' + omniFmt(p.stock) + ' ' + u + ' \u00b7 $' + omniFmt(p.costo) + ' c/u \u00b7 $' + omniFmt(p.stock * p.costo), p.nombre, 'Cat\u00e1logo (todos) \u203a');

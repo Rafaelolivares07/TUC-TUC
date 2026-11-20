@@ -3133,6 +3133,12 @@ function mostrarConsecutivoProduccion() {
             }
           }
         }
+        const vista = qp.get('vista');
+        if (vista === 'historial') {
+          const wrap = document.getElementById('prod-historial-wrapper');
+          if (wrap && wrap.classList.contains('hidden') && typeof toggleHistorialProduccion === 'function') toggleHistorialProduccion();
+          if (wrap) { wrap.style.scrollMarginTop = '90px'; wrap.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+        }
       } catch (e) { console.error('prefill produccion:', e); }
     });
   </script>

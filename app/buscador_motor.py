@@ -136,6 +136,7 @@ _CATALOGO_PANTALLAS = [
     ('catalogo_productos', 'Catálogo de Productos e Insumos', 'inventarios.catalogo_productos_standalone', '📋', 'Inventario', None, '/catalogo-productos/{nid}', ['productos', 'insumos', 'catalogo', 'catálogo', 'catalogo de productos', 'precios', 'categorias', 'codigo de barras', 'barcode', 'costo unitario', 'recetas', 'ficha tecnica'], 120, True),
     ('entradas', 'Entradas de Almacén (Compras y Facturas)', 'inventarios.entradas_standalone', '📥', 'Inventario', None, '/entradas/{nid}', ['entradas de almacen', 'compras', 'factura de compra', 'recepcion insumos', 'remision', 'ingreso stock'], 130, True),
     ('produccion', 'Órdenes de Producción y Fabricación', 'inventarios.produccion_standalone', '⚙️', 'Inventario', None, '/produccion/{nid}', ['produccion', 'orden de produccion', 'fabricacion', 'lote', 'transformacion', 'cocina'], 140, True),
+    ('inv_produccion_historial', 'Historial Reciente de Producción', 'inventarios.produccion_standalone', '📜', 'Inventario > Producción', 'vista=historial', '/produccion/{nid}?vista=historial', ['producciones historicas', 'historial produccion', 'historico produccion', 'ordenes anteriores', 'lotes anteriores', 'que se produjo', 'produccion pasada'], 145, False),
     ('ventas_costos', 'Ventas y Costos (Margen de Contribución)', 'inventarios.ventas_costos_standalone', '📊', 'Comercial', None, '/ventas-costos/{nid}', ['ventas costos', 'costo de ventas', 'margen de ganancia', 'utilidad bruta', 'rentabilidad productos', 'ventas/costos', 'costos'], 150, True),
     ('inventario_fisico', 'Inventario Físico (Conteo y Ajuste)', 'inventarios.admin_inventario_fisico', '📋', 'Inventario', None, '/admin/inventario-fisico/{nid}', ['inventario fisico', 'conteo fisico', 'toma de inventario', 'sobrantes faltantes', 'ajuste de inventario', 'conteo manual'], 160, True),
     ('inventario_distribuido', 'Inventario Físico Distribuido (Móvil / Tablet)', 'inventarios.admin_inventario_distribuido', '🔄', 'Inventario', None, '/admin/inventario-distribuido/{nid}', ['inventario distribuido', 'conteo por zonas', 'conteo con celulares', 'varios contadores', 'tablet'], 170, True),
@@ -260,11 +261,22 @@ def _filas_catalogo(conn=None):
 
 _DESCRIPCIONES = {
     ('inventarios.admin_inventario', 'tab=tarjetas'):
-        'La misma tarjeta estándar (receta, fórmula o mezcla según el negocio): '
+        'La misma tarjeta estándar (receta, fórmula, mezcla o ensamble según el negocio): '
         'aquí las ves y gestionas TODAS.',
     ('inventarios.tarjeta_standalone', ''):
-        'La misma tarjeta estándar (receta, fórmula o mezcla según el negocio): '
+        'La misma tarjeta estándar (receta, fórmula, mezcla o ensamble según el negocio): '
         'aquí ves y editas UNA sola.',
+    ('inventarios.produccion_standalone', ''):
+        'Lo que se prepara con antelación, por lote (CPU armada, cerdo porcionado). '
+        'Abajo vive el Historial Reciente de Producción.',
+    ('inventarios.produccion_standalone', 'vista=historial'):
+        'Qué se produjo antes: órdenes pasadas con documento, fecha y costo. '
+        'Se abre dentro de Producción.',
+    ('inventarios.admin_inventario', 'tab=ensambles'):
+        'El ensamble: componentes que se integran en el momento exacto de la venta '
+        '(sándwich, computador clon, combo). Se rige por la tarjeta estándar.',
+    ('inventarios.admin_inventario', 'tab=ensambles_historicos'):
+        'Qué ensambles se hicieron en las ventas, históricamente. Solo consulta.',
 }
 
 

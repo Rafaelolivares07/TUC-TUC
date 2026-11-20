@@ -938,9 +938,9 @@
     if (p.es_receta) {
       partes.push('<span class="text-sky-700 font-semibold bg-sky-50 px-1.5 py-0.5 rounded">Al pedido</span>');
       if (p.costo > 0) {
-        partes.push('<span class="text-gray-600 font-medium">Costo receta: $' + omniFmt(p.costo) + '</span>');
+        partes.push('<span class="text-gray-600 font-medium">Costo tarjeta: $' + omniFmt(p.costo) + '</span>');
       } else {
-        partes.push('<span class="text-gray-400 italic">Sin costo receta</span>');
+        partes.push('<span class="text-gray-400 italic">Sin costo tarjeta</span>');
       }
       if (p.precio > 0) {
         let pTxt = 'Venta: $' + omniFmt(p.precio);
@@ -1253,12 +1253,12 @@
     const u = omniUnidadProducto(p);
     let idx;
     if (p.es_receta) {
-      idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Receta ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.receta });
-      let txtReceta = 'Ensamble al pedido \u00b7 Costo receta: $' + omniFmt(p.costo);
+      idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Tarjeta est\u00e1ndar \u00b7 ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.receta });
+      let txtReceta = 'Ensamble al pedido \u00b7 Costo tarjeta: $' + omniFmt(p.costo);
       if (p.ventas_30d > 0) {
         txtReceta += ' \u00b7 Ventas 30d: ' + omniFmt(p.ventas_30d) + ' ' + u;
       }
-      h += omniFilaDato(idx, txtReceta, p.nombre, 'Receta \u203a');
+      h += omniFilaDato(idx, txtReceta, p.nombre + ' \u2014 receta, f\u00f3rmula o mezcla seg\u00fan el negocio', 'Tarjeta est\u00e1ndar \u203a');
     } else {
       idx = omniPushDato({ tipo: 'dato-fila', titulo: 'Ver saldo ' + p.nombre, modulo: 'Producto', icono: '', url: p.urls.productos });
       h += omniFilaDato(idx, 'Saldo: ' + omniFmt(p.stock) + ' ' + u + ' \u00b7 $' + omniFmt(p.costo) + ' c/u \u00b7 $' + omniFmt(p.stock * p.costo), p.nombre, 'Cat\u00e1logo (todos) \u203a');

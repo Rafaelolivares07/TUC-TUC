@@ -62,14 +62,14 @@ echo   Anterior: !TEMA_ANT!
 echo   Muse pedira el tema en el chat al estar listo.
 :tema_ok
 
-echo [6/8] Etiqueta de pestana
+echo [6/8] Tema anterior
 echo [6/8]>>"%LOG%"
 set "ETIQUETA="
 for /f "delims=" %%e in ('C:\Tools\Python313\python.exe "%V2%\muse_cuota.py" --etiqueta 2^>nul') do set "ETIQUETA=%%e"
 if not defined ETIQUETA set "ETIQUETA=tuctuc"
-REM titulo corto: tag cuota + tema, ej "80%% marketing"
+REM informativo: el titulo final es MUSE + hora (ver abajo)
 REM muse_etiqueta.txt ya no se usa
-echo   Pestana: !ETIQUETA!
+echo   Anterior: !ETIQUETA!
 echo ETIQUETA="!ETIQUETA!">>"%LOG%"
 
 echo [7/8] Python + CLI muse + acceso
@@ -95,19 +95,14 @@ if %errorlevel% equ 0 (echo   acceso creado.) else (echo   no se pudo crear acce
 :lnk_ok
 if not defined MUSECMD (pause & exit /b 1)
 
-echo [8/8] Abrir pestana !ETIQUETA!
+echo [8/8] Abrir pestana
 echo [8/8]>>"%LOG%"
 set "FIRSTMSG=Carga todo tu contexto base en silencio: indice, estado, reglas, memorias, cuota, tablero y bridge. Solo al estar totalmente listo presenta el menu de temas en el chat y espera el numero. Al pintar el menu crea %TEMP%\muse_menu_listo.mark con la hora Bogota. NO uses la voz en el arranque: el vigilante habla al ver tu menu. Si Rafa ordena otra cosa, trabaja en eso con el tema anterior."
 C:\Tools\Python313\python.exe "%V2%\muse_cuota.py" 2>nul
-set "CUOTATAG="
-set /p CUOTATAG=<"%TEMP%\muse_cuota_tag.txt" 2>nul
 del "%TEMP%\muse_cuota_tag.txt" 2>nul
-if defined CUOTATAG set "ETIQUETA=!CUOTATAG! !ETIQUETA!"
 set "HHMM=%time:~0,5%"
 set "HHMM=!HHMM: =0!"
-set "ETIQUETA=MUSE !ETIQUETA! %date:~0,5% !HHMM!"
-C:\Tools\Python313\python.exe -c "import os;print(os.environ.get('ETIQUETA','MUSE').upper())" > "%TEMP%\muse_tab_title.txt" 2>nul
-set /p ETIQUETA=<"%TEMP%\muse_tab_title.txt" 2>nul
+set "ETIQUETA=MUSE !HHMM!"
 echo   Titulo: !ETIQUETA!
 echo !ETIQUETA!>%TEMP%\muse_tab_title.txt
 echo BOOT>%TEMP%\muse_boot.mark

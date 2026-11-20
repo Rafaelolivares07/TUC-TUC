@@ -101,13 +101,12 @@ p78 = text.find('[7/8]')
 p88 = text.find('[8/8]')
 pcuota = text.find('muse_cuota.py')
 check('cuota: invocada en [6/8] (etiqueta) y [8/8] (tag)', text.count('muse_cuota.py') == 2 and text.find('[6/8]') < pcuota < p78 and text.find('muse_cuota.py', p78) > p88)
-check('cuota: tag leido y antepuesto a ETIQUETA',
-      'muse_cuota_tag.txt' in text and 'set "ETIQUETA=!CUOTATAG! !ETIQUETA!"' in text)
+check('cuota: tag no contamina titulo (corto MUSE+hora)', 'CUOTATAG' not in text)
 _cuota = (BAT.parent / 'muse_cuota.py').read_text(encoding='utf-8')
 check('cuota: tag = % libre semanal local (API miente)',
       '_tag_libre(cs, techo)' in _cuota and "'%d%%'" in _cuota)
 check('cuota: uso local desde session.jsonl', '_uso_local' in _cuota and 'session.jsonl' in _cuota)
-check('cuota: tag limpio antes de leer', 'set "CUOTATAG="' in text)
+check('cuota: tabla visible en arranque', '"%V2%\\muse_cuota.py" 2>nul' in text)
 check('cuota: titulo final visible', 'echo   Titulo: !ETIQUETA!' in text)
 check('wake: titulo guardado para wake', 'muse_tab_title.txt' in text)
 
@@ -177,11 +176,13 @@ if _wv.exists():
     check('vigilante: self-test verde', _r.returncode == 0 and 'PROBAR: OK' in _r.stdout,
           (_r.stdout + _r.stderr)[-200:])
 
-# 12) titulo unico por arranque: MUSE + etiqueta + fecha + hora, mayusculas (2026-11-20, orden Rafa)
-# Falla autentico: doble arranque 16:08/16:09 con titulo "90% coordinacion" en ambas (misma cuota + tema previo).
-check('titulo: antepone MUSE y agrega fecha+hora', 'set "ETIQUETA=MUSE !ETIQUETA! %date:~0,5% !HHMM!"' in text)
+# 12) titulo corto y verdad: MUSE + hora (2026-11-20, orden Rafa)
+# Falla autentico 1: doble arranque 16:08/16:09 titulo "90% coordinacion" en ambas.
+# Falla autentico 2 (mismo dia): titulo largo "MUSE 90% COORDINACION 20/11 16:09" no cabe en la pestana
+# y miente (cuota + tema previo, no lo actual). Solo la hora es verdad al arrancar.
+check('titulo: corto MUSE + hora', 'set "ETIQUETA=MUSE !HHMM!"' in text)
 check('titulo: hora HH:MM con cero (sin espacio)', 'set "HHMM=%time:~0,5%"' in text and 'set "HHMM=!HHMM: =0!"' in text)
-check('titulo: mayusculas via python + patron set/p', ".upper()" in text and 'set /p ETIQUETA=<"%TEMP%\\muse_tab_title.txt"' in text)
+check('titulo: sin cuota ni tema previo', 'CUOTATAG' not in text and '.upper()' not in text)
 check('titulo: compone antes de mostrar Titulo', 0 <= text.find('!HHMM!') < text.find('echo   Titulo: !ETIQUETA!'))
 
 print('RESULTADO:', 'PASS' if not fails else f'FAIL ({len(fails)})')

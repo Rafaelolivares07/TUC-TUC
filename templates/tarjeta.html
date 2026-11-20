@@ -119,7 +119,7 @@
           <span>📋</span> Tarjeta Estándar (Ficha Técnica)
         </h3>
         <span id="tarjeta-items-count" class="text-xs bg-rose-50 text-rose-700 px-3 py-1 rounded-full font-bold">0 componentes</span>
-        <p class="text-[11px] text-gray-400 mt-0.5">Componentes del producto: en restaurantes es la receta, en otros negocios la fórmula, mezcla o ensamble.</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">Componentes del producto: en restaurantes es la receta, en otros negocios la fórmula, mezcla o ensamble. Cantidades para producir 1 unidad.</p>
       </div>
 
       <div class="flex items-center justify-between mt-1 pt-2 border-t border-gray-50 flex-wrap gap-2">
@@ -262,7 +262,7 @@
 
         <div style="width:100px">
           <label class="text-xs font-bold text-gray-700 mb-1 block text-center">Cant.</label>
-          <input id="tarjeta-ac-cant" type="number" min="0.0001" step="any" value="1" class="w-full bg-white border border-gray-300 rounded-lg px-2 py-2 text-sm text-center font-mono font-bold">
+          <input id="tarjeta-ac-cant" type="number" min="0.0001" step="any" value="1" title="Cantidad para 1 unidad" class="w-full bg-white border border-gray-300 rounded-lg px-2 py-2 text-sm text-center font-mono font-bold">
         </div>
 
         <button onclick="agregarLineaTarjeta()" class="px-4 py-2 rounded-lg bg-rose-500 text-white font-black text-base hover:bg-rose-600 transition-colors shadow-xs" title="Agregar a la receta">+</button>
@@ -279,7 +279,7 @@
       <!-- Summary Total Box -->
       <div id="tarjeta-total-box" class="flex justify-between items-center bg-rose-50 border border-rose-200 rounded-xl px-4 py-2.5 mb-3">
         <div class="flex items-center gap-2">
-          <span class="text-sm font-bold text-rose-900">Costo total de receta:</span>
+          <span class="text-sm font-bold text-rose-900">Costo total × 1 unidad:</span>
           <span class="text-xs text-gray-500 font-normal hidden sm:inline">(Se actualiza al guardar)</span>
         </div>
         <span id="tarjeta-total-val" class="text-lg sm:text-2xl font-black text-rose-600 font-mono">$0.00</span>
@@ -1145,9 +1145,9 @@ function renderLineasTarjeta() {
 
           </th>
 
-          <th onclick="ordenarComponentesModal('cantidad')" class="py-2.5 px-1 text-center font-black cursor-pointer hover:bg-gray-200 transition-colors" style="width:110px;">
+          <th onclick="ordenarComponentesModal('cantidad')" title="Cantidad de cada insumo para producir 1 unidad" class="py-2.5 px-1 text-center font-black cursor-pointer hover:bg-gray-200 transition-colors" style="width:110px;">
 
-            Cant. <span class="${getSortClass('cantidad')}">${getSortIcon('cantidad')}</span>
+            Cant. × 1 ud. <span class="${getSortClass('cantidad')}">${getSortIcon('cantidad')}</span>
 
           </th>
 
@@ -1157,9 +1157,9 @@ function renderLineasTarjeta() {
 
           </th>
 
-          <th onclick="ordenarComponentesModal('subtotal')" class="py-2.5 px-3 text-right font-black cursor-pointer hover:bg-gray-200 transition-colors">
+          <th onclick="ordenarComponentesModal('subtotal')" title="Costo de la línea para 1 unidad" class="py-2.5 px-3 text-right font-black cursor-pointer hover:bg-gray-200 transition-colors">
 
-            Subtotal <span class="${getSortClass('subtotal')}">${getSortIcon('subtotal')}</span>
+            Subtotal × 1 ud. <span class="${getSortClass('subtotal')}">${getSortIcon('subtotal')}</span>
 
           </th>
 

@@ -182,6 +182,10 @@ check('tarjeta total por 1 unidad', 'Costo total × 1 unidad' in tj)
 check('tarjeta th cantidad con title', 'title="Cantidad de cada insumo para producir 1 unidad"' in tj)
 check('tarjeta input cant con title', 'title="Cantidad para 1 unidad"' in tj)
 
+check('tarjeta badge para-1-unidad junto al nombre', 'id="tarjeta-para-1-unidad"' in tj)
+check('tarjeta badge 1 grande', 'text-2xl font-black text-rose-600 font-mono leading-none">1</span>' in tj)
+check('tarjeta badge UNIDAD evidente', 'text-sm font-black text-rose-700">UNIDAD</span>' in tj)
+
 print(f'--- {total[0] - len(fails)}/{total[0]} OK ---')
 if fails:
     print('FALLAS:', fails)

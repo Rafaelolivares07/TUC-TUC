@@ -67,5 +67,10 @@ check('yt: no consume sola', 'currentCola.length > 1' in _RT
 check('yt: fallos reintentan', 'reintentarOSaltar(c)' in R
       and 'reintentarOSaltar()' in R)
 
-print(f'\n{len(fails)} fallos' if fails else '\nOK: 15/15')
+# 2026-11-21: terminada avanza (no reintenta); fallida reintenta (no consume)
+check('yt: prueba sonido', 'idProbadoSonando = cancionActual; pruebaTs = Date.now();' in R)
+check('yt: probada avanza', 'Ya sono, avanzando sin reintentar' in _RT
+      and 'pruebaTs > 30000' in _RT)
+
+print(f'\n{len(fails)} fallos' if fails else '\nOK: 17/17')
 sys.exit(1 if fails else 0)

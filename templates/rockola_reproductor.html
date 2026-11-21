@@ -2749,6 +2749,7 @@ function onYtPlayerStateChange(index, event) {
       reproduciendo = true;
       playPendiente = false;
       fallosPlay = 0;
+      idProbadoSonando = cancionActual; pruebaTs = Date.now();
       setVinylSpinning(true);
       actualizarPlayPauseBtn(true);
       estadoEl.textContent = 'Reproduciendo (YouTube) ✓';
@@ -3035,6 +3036,7 @@ async function intentarReproducir(c) {
           try {
             await player.play();
             reproduciendo = true;
+            idProbadoSonando = cancionActual; pruebaTs = Date.now();
             okNativo = true;
             ytIframeMuerto = true;
             actualizarPlayPauseBtn(true);
@@ -3079,6 +3081,7 @@ async function intentarReproducir(c) {
     reproduciendo = true;
     playPendiente = false;
     fallosPlay = 0;
+    idProbadoSonando = cancionActual; pruebaTs = Date.now();
     setVinylSpinning(true);
     iniciarVisualizerCompacto();
     actualizarPlayPauseBtn(true);
@@ -6935,10 +6938,18 @@ function actualizarPlayPauseBtn(isPlaying) {
 
 let reintentosSola = 0;
 let ultimoReintentoId = null;
+let idProbadoSonando = null;
+let pruebaTs = 0;
 async function reintentarOSaltar(c = null) {
   try {
     const id = (c && c.id) || cancionActual;
     if (id !== ultimoReintentoId) { ultimoReintentoId = id; reintentosSola = 0; }
+    if (id && id === idProbadoSonando && Date.now() - pruebaTs > 30000) {
+      console.warn('[Rockola] Ya sono, avanzando sin reintentar:', id);
+      reintentosSola = 0;
+      await saltarActual();
+      return;
+    }
     const hayMas = currentCola && currentCola.length > 1;
     if (hayMas || reintentosSola >= 5) {
       reintentosSola = 0;
@@ -7286,6 +7297,7 @@ async function iniciarCrossfade(secs, targetSong = null) {
       cancionActual = nextSong.id;
       reproduciendo = true;
       playPendiente = false;
+      idProbadoSonando = cancionActual; pruebaTs = Date.now();
       fallosPlay = 0;
       nombreEl.textContent = limpiarNombre(nextSong.nombre);
       actualizarPlayPauseBtn(true);

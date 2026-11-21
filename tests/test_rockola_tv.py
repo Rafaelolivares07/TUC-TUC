@@ -130,5 +130,10 @@ check('tv: tap arranca motor', 'eTvGo' in TVJ and 'cancionActual = null' in TVJ
       and 'await verificarCola()' in TVJ and '!saltandoCancion' in TVJ)
 check('tv: audible exige tiempo', 'p.currentTime > 0' in TVJ)
 
-print(f'\n{len(fails)} fallos' if fails else '\nOK: 46/46')
+# 2026-11-21: barra pinta progreso YT directo (no negro)
+check('tv: barra lee YT', 'getYtPlayerActivo()' in R and 'getCurrentTime' in R
+      and 'getDuration' in R and "getElementById('tv-prog-fill')" in R)
+check('tv: barra YT tocando', 'getPlayerState() === 1' in R)
+
+print(f'\n{len(fails)} fallos' if fails else '\nOK: 48/48')
 sys.exit(1 if fails else 0)

@@ -8020,6 +8020,21 @@ function tvProgreso() {
   const act = els.find(p => p && !p.paused && p.currentTime > 0) || els.find(p => p && p.currentTime > 0);
   const fill = document.getElementById('tv-prog-fill');
   const time = document.getElementById('tv-time');
+  if (!act && typeof esYouTubeActual !== 'undefined' && esYouTubeActual) {
+    try {
+      const a = (typeof getYtPlayerActivo === 'function') ? getYtPlayerActivo() : null;
+      if (a && typeof isYtActivoReady === 'function' && isYtActivoReady()
+          && typeof a.getPlayerState === 'function' && a.getPlayerState() === 1
+          && typeof a.getCurrentTime === 'function' && typeof a.getDuration === 'function') {
+        const ytT = a.getCurrentTime() || 0, ytD = a.getDuration() || 0;
+        if (ytD && isFinite(ytD) && ytD > 0 && ytT > 0) {
+          fill.style.width = Math.min(100, (ytT / ytD) * 100) + '%';
+          time.textContent = tvFmt(ytT) + ' / ' + tvFmt(ytD);
+          return;
+        }
+      }
+    } catch (eYt) {}
+  }
   if (!act || !act.duration || !isFinite(act.duration)) { fill.style.width = '0%'; time.textContent = ''; return; }
   fill.style.width = Math.min(100, (act.currentTime / act.duration) * 100) + '%';
   time.textContent = tvFmt(act.currentTime) + ' / ' + tvFmt(act.duration);

@@ -2397,12 +2397,15 @@ function handlePlayerError(e) {
 let silencioRachas = 0;
 let transDesde = 0;
 let saltDesde = 0;
+let pendDesde = 0;
+let ultimoAvanceT = -1;
+let ultimoAvanceTs = 0;
 function vigilarSilencioSala() {
   try {
     if (typeof currentCola === 'undefined') return;
-    if (typeof tvEsperandoTap === 'function' && tvEsperandoTap()) { silencioRachas = 0; transDesde = 0; saltDesde = 0; return; }
-    if (typeof ultimoModoPausaVisto !== 'undefined' && ultimoModoPausaVisto === true) { silencioRachas = 0; transDesde = 0; saltDesde = 0; return; }
-    if (!currentCola || !currentCola.length) { silencioRachas = 0; if (!transitioning) transDesde = 0; if (!saltandoCancion) saltDesde = 0; return; }
+    if (typeof tvEsperandoTap === 'function' && tvEsperandoTap()) { silencioRachas = 0; transDesde = 0; saltDesde = 0; pendDesde = 0; return; }
+    if (typeof ultimoModoPausaVisto !== 'undefined' && ultimoModoPausaVisto === true) { silencioRachas = 0; transDesde = 0; saltDesde = 0; pendDesde = 0; return; }
+    if (!currentCola || !currentCola.length) { silencioRachas = 0; if (!transitioning) transDesde = 0; if (!saltandoCancion) saltDesde = 0; if (!playPendiente) pendDesde = 0; return; }
     if (transitioning) {
       if (!transDesde) transDesde = Date.now();
       if (Date.now() - transDesde > 30000) {
@@ -2426,14 +2429,32 @@ function vigilarSilencioSala() {
       return;
     }
     saltDesde = 0;
-    if (playPendiente) { silencioRachas = 0; return; }
+    if (playPendiente) {
+      if (!pendDesde) pendDesde = Date.now();
+      if (Date.now() - pendDesde > 45000) {
+        console.warn('[Rockola] Arranque atorado 45s, liberando y saltando');
+        pendDesde = 0;
+        try { playPendiente = false; } catch (e6) {}
+        try { saltarActual(); } catch (e7) {}
+      }
+      silencioRachas = 0;
+      return;
+    }
+    pendDesde = 0;
     let audible = false;
     try {
-      audible = [document.getElementById('player1'), document.getElementById('player2')]
-        .some(p => p && !p.paused && !p.ended && p.currentTime > 0);
+      const prog = [document.getElementById('player1'), document.getElementById('player2')]
+        .map(p => (p && !p.paused && !p.ended) ? (p.currentTime || 0) : -1);
+      const tMax = Math.max(prog[0], prog[1]);
+      if (tMax > ultimoAvanceT) { ultimoAvanceT = tMax; ultimoAvanceTs = Date.now(); }
+      audible = tMax > 0 && (Date.now() - ultimoAvanceTs) < 10000;
       if (!audible && esYouTubeActual) {
         const a = getYtPlayerActivo();
-        audible = !!(a && isYtActivoReady() && typeof a.getPlayerState === 'function' && a.getPlayerState() === 1);
+        if (a && isYtActivoReady() && typeof a.getPlayerState === 'function' && a.getPlayerState() === 1) {
+          audible = true;
+          ultimoAvanceTs = Date.now();
+          try { ultimoAvanceT = a.getCurrentTime() || ultimoAvanceT; } catch (e8) {}
+        }
       }
     } catch (e2) {}
     if (audible) { silencioRachas = 0; return; }
@@ -6599,6 +6620,11 @@ try {
     habilitarDesbloqueoPorToque();
   }
 } catch(e) { console.warn('Error en init de modos:', e); }
+
+// Volver de apagado/suspension restaura pantalla muerta: recargar honesto
+window.addEventListener('pageshow', (ev) => {
+  try { if (ev && ev.persisted) location.reload(); } catch (ePs) {}
+});
 
 // Escuchar cambios de red para conmutar estado automáticamente
 window.addEventListener('online', () => {

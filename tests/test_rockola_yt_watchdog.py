@@ -49,5 +49,13 @@ check('yt: libera transicion', 'Transicion atorada 30s' in _VS
 check('yt: salta en silencio', 'Silencio 30s con cola' in _VS
       and 'silencioRachas >= 6' in _VS)
 
-print(f'\n{len(fails)} fallos' if fails else '\nOK: 9/9')
+# 2026-11-21 v2: audible por AVANCE (congelado no vale) + pendiente acotado + pageshow
+check('yt: audible avanza', 'ultimoAvanceTs' in _VS
+      and 'tMax > 0' in _VS)
+check('yt: arranque acotado', 'Arranque atorado 45s' in _VS
+      and 'pendDesde' in _VS)
+check('yt: pageshow recarga', "addEventListener('pageshow'" in R
+      and 'ev.persisted' in R and 'location.reload()' in R)
+
+print(f'\n{len(fails)} fallos' if fails else '\nOK: 12/12')
 sys.exit(1 if fails else 0)

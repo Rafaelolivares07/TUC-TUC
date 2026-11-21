@@ -2358,6 +2358,7 @@ async function activar(skipUnlock = false) {
   if (!document.body.classList.contains('tv-mode')) player.pause();
   setInterval(verificarCola, 1500);
   if (!window._vigilanteAtasco) { window._vigilanteAtasco = setInterval(vigilarAtascoAudio, 5000); }
+  if (!window._vigilanteSilencio) { window._vigilanteSilencio = setInterval(vigilarSilencioSala, 5000); }
   verificarCola();
   setInterval(cargarPeticionesRemotas, 4000);
   cargarPeticionesRemotas();
@@ -2392,6 +2393,59 @@ function handlePlayerError(e) {
     saltarActual();
   } catch (e2) {}
 }
+
+let silencioRachas = 0;
+let transDesde = 0;
+let saltDesde = 0;
+function vigilarSilencioSala() {
+  try {
+    if (typeof currentCola === 'undefined') return;
+    if (typeof tvEsperandoTap === 'function' && tvEsperandoTap()) { silencioRachas = 0; transDesde = 0; saltDesde = 0; return; }
+    if (typeof ultimoModoPausaVisto !== 'undefined' && ultimoModoPausaVisto === true) { silencioRachas = 0; transDesde = 0; saltDesde = 0; return; }
+    if (!currentCola || !currentCola.length) { silencioRachas = 0; if (!transitioning) transDesde = 0; if (!saltandoCancion) saltDesde = 0; return; }
+    if (transitioning) {
+      if (!transDesde) transDesde = Date.now();
+      if (Date.now() - transDesde > 30000) {
+        console.warn('[Rockola] Transicion atorada 30s, liberando y saltando');
+        transDesde = 0;
+        try { transitioning = false; if (fadeIntervalTimer) { clearInterval(fadeIntervalTimer); fadeIntervalTimer = null; } } catch (e0) {}
+        silencioRachas = 0;
+        try { saltarActual(); } catch (e1) {}
+      }
+      return;
+    }
+    transDesde = 0;
+    if (typeof saltandoCancion !== 'undefined' && saltandoCancion) {
+      if (!saltDesde) saltDesde = Date.now();
+      if (Date.now() - saltDesde > 30000) {
+        console.warn('[Rockola] Salto atorado 30s, liberando y reintentando');
+        saltDesde = 0;
+        try { saltandoCancion = false; } catch (e4) {}
+        try { saltarActual(); } catch (e5) {}
+      }
+      return;
+    }
+    saltDesde = 0;
+    if (playPendiente) { silencioRachas = 0; return; }
+    let audible = false;
+    try {
+      audible = [document.getElementById('player1'), document.getElementById('player2')]
+        .some(p => p && !p.paused && !p.ended && p.currentTime > 0);
+      if (!audible && esYouTubeActual) {
+        const a = getYtPlayerActivo();
+        audible = !!(a && isYtActivoReady() && typeof a.getPlayerState === 'function' && a.getPlayerState() === 1);
+      }
+    } catch (e2) {}
+    if (audible) { silencioRachas = 0; return; }
+    silencioRachas++;
+    if (silencioRachas >= 6) {
+      silencioRachas = 0;
+      console.warn('[Rockola] Silencio 30s con cola, saltando solo');
+      try { saltarActual(); } catch (e3) {}
+    }
+  } catch (e) {}
+}
+
 function handlePlayerEnded(e) {
   const p = e.target;
   if (p !== player) return;
@@ -2743,11 +2797,17 @@ function actualizarMediaSession(nombre, artista = 'TucTuc Rockola') {
 }
 
 async function resolverAudioEnServidor(cancionId) {
+  let ctrl = null, timer = null;
   try {
+    if (typeof AbortController !== 'undefined') {
+      ctrl = new AbortController();
+      timer = setTimeout(() => { try { ctrl.abort(); } catch (eA) {} }, 25000);
+    }
     const res = await fetch(`/rockola/${SALA}/resolver`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: cancionId })
+      body: JSON.stringify({ id: cancionId }),
+      signal: ctrl ? ctrl.signal : undefined
     });
     const data = await res.json();
     if (data.ok && data.url) {
@@ -2755,6 +2815,8 @@ async function resolverAudioEnServidor(cancionId) {
     }
   } catch(err) {
     console.warn('[Resolver Fallback] Error en llamada a /resolver:', err);
+  } finally {
+    if (timer) clearTimeout(timer);
   }
   return null;
 }

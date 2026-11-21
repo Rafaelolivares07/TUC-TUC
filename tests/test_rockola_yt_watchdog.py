@@ -39,5 +39,15 @@ _IR = R[_iir:R.find('cancionActualObjeto = c;', _iir)] if _iir > -1 else ''
 check('yt: intento resetea bandera', 'playPendiente = true;' in _IR
       and 'reproduciendo = false;' in _IR)
 
-print(f'\n{len(fails)} fallos' if fails else '\nOK: 6/6')
+# 2026-11-21: vigilante anti-silencio (30s sin audio con cola = salta solo)
+_ivs = R.find('function vigilarSilencioSala()')
+_VS = R[_ivs:R.find('\n}\n', _ivs)] if _ivs > -1 else ''
+check('yt: vigila silencio', _ivs > -1
+      and 'setInterval(vigilarSilencioSala, 5000)' in R)
+check('yt: libera transicion', 'Transicion atorada 30s' in _VS
+      and 'transitioning = false' in _VS)
+check('yt: salta en silencio', 'Silencio 30s con cola' in _VS
+      and 'silencioRachas >= 6' in _VS)
+
+print(f'\n{len(fails)} fallos' if fails else '\nOK: 9/9')
 sys.exit(1 if fails else 0)

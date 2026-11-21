@@ -359,6 +359,14 @@ def _upload_dir(sala_id):
     return folder
 
 
+def _archivo_audio_valido(path):
+    """Cache honesto: existe y trae bytes (caza 0-byte de descargas fallidas)."""
+    try:
+        return os.path.isfile(path) and os.path.getsize(path) > 1000
+    except OSError:
+        return False
+
+
 def _limpiar_archivos_antiguos(upload_dir, max_archivos=10):
     try:
         archivos = []
@@ -2548,7 +2556,14 @@ def _buscar_descarga_existente(sala_id, upload_dir, canon, excluir_id):
         for cand in (aid, aid + '.mp3', aid + '.m4a', aid + '.webm'):
             if '/' in cand or chr(92) in cand:
                 continue
-            if os.path.isfile(os.path.join(upload_dir, cand)):
+            ruta = os.path.join(upload_dir, cand)
+            if os.path.isfile(ruta) and not _archivo_audio_valido(ruta):
+                try:
+                    os.remove(ruta)
+                except OSError:
+                    pass
+                continue
+            if _archivo_audio_valido(ruta):
                 return cand
     return None
 
@@ -2562,7 +2577,14 @@ def resolver(sala_id):
         return jsonify(ok=False, error='Id invalido'), 400
     upload_dir = _upload_dir(sala_id)
     for candidato in (item_id, item_id + '.mp3', item_id + '.m4a', item_id + '.webm'):
-        if os.path.isfile(os.path.join(upload_dir, candidato)):
+        ruta = os.path.join(upload_dir, candidato)
+        if os.path.isfile(ruta) and not _archivo_audio_valido(ruta):
+            try:
+                os.remove(ruta)
+            except OSError:
+                pass
+            continue
+        if _archivo_audio_valido(ruta):
             return jsonify(ok=True, url=f'/rockola/{sala_id}/archivo/{candidato}', cache=True)
     conn = _connect()
     try:
@@ -2613,6 +2635,12 @@ def resolver(sala_id):
         _limpiar_archivos_antiguos(upload_dir)
     except Exception as error:
         return jsonify(ok=False, error=f'No se pudo resolver el audio: {error}'), 502
+    if not _archivo_audio_valido(descarga["path"]):
+        try:
+            os.remove(descarga["path"])
+        except OSError:
+            pass
+        return jsonify(ok=False, error='Descarga vacia, se reintenta en el siguiente turno'), 200
     return jsonify(ok=True, url=f'/rockola/{sala_id}/archivo/{os.path.basename(descarga["path"])}')
 
 

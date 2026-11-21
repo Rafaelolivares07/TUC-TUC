@@ -8349,10 +8349,10 @@ def api_gastos_conceptos_buscar(negocio_id):
         conn = get_db_connection()
         query = """
             SELECT DISTINCT p.id AS cuenta_puc_id, p.codigo AS cuenta_codigo, p.nombre AS cuenta_nombre,
-                   COALESCE(p.maneja_terceros, false) AS maneja_terceros
+                   COALESCE(p.maneja_terceros, false) AS maneja_terceros,
+                   COALESCE(p.acepta_movimiento, false) AS acepta_movimiento
             FROM cuentas_puc p
             WHERE (p.creada_por_negocio_id = %s OR p.creada_por_negocio_id IS NULL)
-              AND p.acepta_movimiento = true
               AND p.activo = true
               AND (
                   p.codigo LIKE '51%%' OR p.codigo LIKE '52%%' OR p.codigo LIKE '53%%' 
@@ -8389,7 +8389,8 @@ def api_gastos_conceptos_buscar(negocio_id):
                 'cuenta_codigo': r['cuenta_codigo'],
                 'cuenta_nombre': r['cuenta_nombre'],
                 'categoria_tipo': cat,
-                'maneja_terceros': bool(r['maneja_terceros'])
+                'maneja_terceros': bool(r['maneja_terceros']),
+                'acepta_movimiento': bool(r['acepta_movimiento'])
             })
         return jsonify(results)
     except Exception as e:
@@ -8420,7 +8421,7 @@ def api_gastos_lineas(negocio_id, tipo_doc, num_doc):
         
         # Load configured concept mapping for this document type
         concepts = conn.execute("""
-            SELECT plc.id, plc.cuenta_puc_id, p.codigo AS cuenta_codigo, p.nombre AS cuenta_nombre, COALESCE(p.maneja_terceros, false) AS maneja_terceros
+            SELECT plc.id, plc.cuenta_puc_id, p.codigo AS cuenta_codigo, p.nombre AS cuenta_nombre, COALESCE(p.maneja_terceros, false) AS maneja_terceros, COALESCE(p.acepta_movimiento, false) AS acepta_movimiento
             FROM parametros_lineas_contables plc
             LEFT JOIN cuentas_puc p ON p.id = plc.cuenta_puc_id
             WHERE plc.parametro_id = (
@@ -8487,10 +8488,13 @@ def api_gastos_linea_post(negocio_id):
         _verificar_periodo_cerrado(conn, negocio_id, fecha)
         
         # Verify if account requires third party
-        acc = conn.execute("SELECT id, codigo, nombre, COALESCE(maneja_terceros, false) AS maneja_terceros FROM cuentas_puc WHERE id = %s", (cuenta_puc_id,)).fetchone()
+        acc = conn.execute("SELECT id, codigo, nombre, COALESCE(maneja_terceros, false) AS maneja_terceros, COALESCE(acepta_movimiento, false) AS acepta_movimiento FROM cuentas_puc WHERE id = %s", (cuenta_puc_id,)).fetchone()
         if not acc:
             conn.close()
             return jsonify({'ok': False, 'error': 'Cuenta PUC no encontrada'}), 400
+        if not acc['acepta_movimiento']:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'La cuenta %s es mayor (solo consulta): escoja una auxiliar o cree el rubro.' % acc['codigo']}), 400
             
         if acc['maneja_terceros'] and not tercero_id:
             conn.close()

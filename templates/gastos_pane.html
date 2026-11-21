@@ -1502,7 +1502,8 @@
           cuenta_codigo: c.cuenta_codigo,
           cuenta_nombre: c.cuenta_nombre,
           categoria_tipo: cat,
-          maneja_terceros: c.maneja_terceros === true || c.maneja_terceros === 'true'
+          maneja_terceros: c.maneja_terceros === true || c.maneja_terceros === 'true',
+          acepta_movimiento: c.acepta_movimiento !== false
         };
       });
       clearGasConcepto();
@@ -1685,11 +1686,23 @@
       let html = '<div class="px-3 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider bg-gray-50 border-b border-gray-100">Rubros Frecuentes / Preconfigurados</div>';
       html += gasConceptos.slice(0, 15).map((c, i) => {
         const cat = c.categoria_tipo || 'gasto';
+        const acepta = c.acepta_movimiento !== false;
         let tagHtml = '';
         if (cat === 'activo') tagHtml = '<span class="text-[9px] px-1.5 py-0.2 rounded bg-blue-100 text-blue-800 font-bold">🏭 Activo</span>';
         else if (cat === 'diferido') tagHtml = '<span class="text-[9px] px-1.5 py-0.2 rounded bg-purple-100 text-purple-800 font-bold">⏳ Diferido</span>';
         else tagHtml = '<span class="text-[9px] px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 font-semibold">🧾 Gasto</span>';
         
+        if (!acepta) {
+          return `
+          <div class="ac-mayor px-3 py-2 text-xs flex items-center justify-between opacity-60 cursor-default" title="Cuenta mayor: solo referencia. Escoja una auxiliar o cree el rubro.">
+            <div>
+              <span class="font-semibold text-gray-500">${escapeGasHtml(c.cuenta_nombre)}</span>
+              ${c.cuenta_codigo ? `<span class="text-[10px] text-gray-400 font-mono block">${c.cuenta_codigo}</span>` : ''}
+            </div>
+            <span class="text-[9px] px-1.5 py-0.2 rounded bg-gray-200 text-gray-600 font-bold">🔎 Mayor · solo consulta</span>
+          </div>
+        `;
+        }
         return `
           <div class="ac-item px-3 py-2 hover:bg-gray-100 cursor-pointer text-xs flex items-center justify-between" data-i="${i}"
                 data-id="${c.cuenta_puc_id}" data-tercero="${c.maneja_terceros}" data-cat="${cat}">
@@ -1742,11 +1755,23 @@
 
       let html = items.slice(0, 15).map((c, i) => {
         const cat = c.categoria_tipo || 'gasto';
+        const acepta = c.acepta_movimiento !== false;
         let tagHtml = '';
         if (cat === 'activo') tagHtml = '<span class="text-[9px] px-1.5 py-0.2 rounded bg-blue-100 text-blue-800 font-bold">🏭 Activo</span>';
         else if (cat === 'diferido') tagHtml = '<span class="text-[9px] px-1.5 py-0.2 rounded bg-purple-100 text-purple-800 font-bold">⏳ Diferido</span>';
         else tagHtml = '<span class="text-[9px] px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 font-semibold">🧾 Gasto</span>';
 
+        if (!acepta) {
+          return `
+          <div class="ac-mayor px-3 py-2 text-xs flex items-center justify-between opacity-60 cursor-default" title="Cuenta mayor: solo referencia. Escoja una auxiliar o cree el rubro.">
+            <div>
+              <span class="font-semibold text-gray-500">${escapeGasHtml(c.cuenta_nombre)}</span>
+              ${c.cuenta_codigo ? `<span class="text-[10px] text-gray-400 font-mono block">${c.cuenta_codigo}</span>` : ''}
+            </div>
+            <span class="text-[9px] px-1.5 py-0.2 rounded bg-gray-200 text-gray-600 font-bold">🔎 Mayor · solo consulta</span>
+          </div>
+        `;
+        }
         return `
           <div class="ac-item px-3 py-2 hover:bg-gray-100 cursor-pointer text-xs flex items-center justify-between" data-i="${i}"
                 data-id="${c.cuenta_puc_id}" data-tercero="${c.maneja_terceros}" data-cat="${cat}">
@@ -1844,6 +1869,7 @@
   }
 
   function selectConcepto(el) {
+    if (!el.classList.contains('ac-item')) return;
     const inp = document.getElementById('gas-concept-txt');
     const list = document.getElementById('gas-concept-ac');
     inp.value = el.querySelector('.font-semibold').textContent;

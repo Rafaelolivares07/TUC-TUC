@@ -8350,7 +8350,8 @@ def api_gastos_conceptos_buscar(negocio_id):
         query = """
             SELECT DISTINCT p.id AS cuenta_puc_id, p.codigo AS cuenta_codigo, p.nombre AS cuenta_nombre,
                    COALESCE(p.maneja_terceros, false) AS maneja_terceros,
-                   COALESCE(p.acepta_movimiento, false) AS acepta_movimiento
+                   COALESCE(p.acepta_movimiento, false) AS acepta_movimiento,
+                   p.codigo_padre AS codigo_padre, p.nivel AS nivel
             FROM cuentas_puc p
             WHERE (p.creada_por_negocio_id = %s OR p.creada_por_negocio_id IS NULL)
               AND p.activo = true
@@ -8374,6 +8375,35 @@ def api_gastos_conceptos_buscar(negocio_id):
         query += " ORDER BY p.nombre ASC LIMIT 35"
         
         rows = conn.execute(query, tuple(params)).fetchall()
+        # Arbol: completar padres de referencia por codigo_padre (dato PUC)
+        ids_vistos = set(r['cuenta_puc_id'] for r in rows)
+        cods_vistos = set(str(r['cuenta_codigo'] or '') for r in rows)
+        padres = []
+        pendientes = [str(r['codigo_padre']).strip() for r in rows if (r['codigo_padre'] or '').strip()]
+        for _ in range(6):
+            nuevos = [c for c in dict.fromkeys(pendientes) if c and c not in cods_vistos]
+            if not nuevos:
+                break
+            prol = conn.execute("""SELECT p.id AS cuenta_puc_id, p.codigo AS cuenta_codigo,
+                   p.nombre AS cuenta_nombre, COALESCE(p.maneja_terceros, false) AS maneja_terceros,
+                   COALESCE(p.acepta_movimiento, false) AS acepta_movimiento,
+                   p.codigo_padre AS codigo_padre, p.nivel AS nivel
+                FROM cuentas_puc p
+                WHERE p.codigo = ANY(%s)
+                  AND (p.creada_por_negocio_id = %s OR p.creada_por_negocio_id IS NULL)
+                  AND p.activo = true""", (nuevos, negocio_id)).fetchall()
+            if not prol:
+                break
+            pendientes = []
+            for pr in prol:
+                if pr['cuenta_puc_id'] in ids_vistos:
+                    continue
+                ids_vistos.add(pr['cuenta_puc_id'])
+                cods_vistos.add(str(pr['cuenta_codigo'] or ''))
+                padres.append(pr)
+                if (pr['codigo_padre'] or '').strip():
+                    pendientes.append(str(pr['codigo_padre']).strip())
+        rows = list(rows) + padres
         conn.close()
         
         results = []
@@ -8390,7 +8420,9 @@ def api_gastos_conceptos_buscar(negocio_id):
                 'cuenta_nombre': r['cuenta_nombre'],
                 'categoria_tipo': cat,
                 'maneja_terceros': bool(r['maneja_terceros']),
-                'acepta_movimiento': bool(r['acepta_movimiento'])
+                'acepta_movimiento': bool(r['acepta_movimiento']),
+                'codigo_padre': r['codigo_padre'],
+                'nivel': r['nivel']
             })
         return jsonify(results)
     except Exception as e:
@@ -8421,7 +8453,7 @@ def api_gastos_lineas(negocio_id, tipo_doc, num_doc):
         
         # Load configured concept mapping for this document type
         concepts = conn.execute("""
-            SELECT plc.id, plc.cuenta_puc_id, p.codigo AS cuenta_codigo, p.nombre AS cuenta_nombre, COALESCE(p.maneja_terceros, false) AS maneja_terceros, COALESCE(p.acepta_movimiento, false) AS acepta_movimiento
+            SELECT plc.id, plc.cuenta_puc_id, p.codigo AS cuenta_codigo, p.nombre AS cuenta_nombre, COALESCE(p.maneja_terceros, false) AS maneja_terceros, COALESCE(p.acepta_movimiento, false) AS acepta_movimiento, p.codigo_padre AS codigo_padre, p.nivel AS nivel
             FROM parametros_lineas_contables plc
             LEFT JOIN cuentas_puc p ON p.id = plc.cuenta_puc_id
             WHERE plc.parametro_id = (

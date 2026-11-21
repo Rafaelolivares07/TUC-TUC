@@ -1503,7 +1503,9 @@
           cuenta_nombre: c.cuenta_nombre,
           categoria_tipo: cat,
           maneja_terceros: c.maneja_terceros === true || c.maneja_terceros === 'true',
-          acepta_movimiento: c.acepta_movimiento !== false
+          acepta_movimiento: c.acepta_movimiento !== false,
+          codigo_padre: c.codigo_padre || null,
+          nivel: c.nivel || null
         };
       });
       clearGasConcepto();
@@ -1684,33 +1686,11 @@
 
       gasConceptoIdx = -1;
       let html = '<div class="px-3 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider bg-gray-50 border-b border-gray-100">Rubros Frecuentes / Preconfigurados</div>';
-      html += gasConceptos.slice(0, 15).map((c, i) => {
-        const cat = c.categoria_tipo || 'gasto';
-        const acepta = c.acepta_movimiento !== false;
-        let tagHtml = '';
-        if (cat === 'activo') tagHtml = '<span class="text-[9px] px-1.5 py-0.2 rounded bg-blue-100 text-blue-800 font-bold">🏭 Activo</span>';
-        else if (cat === 'diferido') tagHtml = '<span class="text-[9px] px-1.5 py-0.2 rounded bg-purple-100 text-purple-800 font-bold">⏳ Diferido</span>';
-        else tagHtml = '<span class="text-[9px] px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 font-semibold">🧾 Gasto</span>';
-        
-        if (!acepta) {
-          return `
-          <div class="ac-mayor px-3 py-2 text-xs flex items-center justify-between opacity-60 cursor-default" title="Cuenta mayor: solo referencia. Escoja una auxiliar o cree el rubro.">
-            <div>
-              <span class="font-semibold text-gray-500">${escapeGasHtml(c.cuenta_nombre)}</span>
-              ${c.cuenta_codigo ? `<span class="text-[10px] text-gray-400 font-mono block">${c.cuenta_codigo}</span>` : ''}
-            </div>
-            <span class="text-[9px] px-1.5 py-0.2 rounded bg-gray-200 text-gray-600 font-bold">🔎 Mayor · solo consulta</span>
-          </div>
-        `;
-        }
-        return `
-          <div class="ac-item px-3 py-2 hover:bg-gray-100 cursor-pointer text-xs flex items-center justify-between" data-i="${i}"
-                data-id="${c.cuenta_puc_id}" data-tercero="${c.maneja_terceros}" data-cat="${cat}">
-            <span class="font-semibold text-gray-700">${escapeGasHtml(c.cuenta_nombre)}</span>
-            ${tagHtml}
-          </div>
-        `;
-      }).join('');
+      const arbFreq = buildFilasArbol(gasConceptos.slice(0, 15));
+      if (!arbFreq.hayAux) {
+        html += '<div class="px-3 py-2 text-[11px] bg-amber-50 text-amber-800 border-b border-amber-100">\u26A0\uFE0F Sus frecuentes son solo mayores de referencia: ninguno se puede escoger. Escriba para buscar o cree el rubro.</div>';
+      }
+      html += arbFreq.html;
 
       html += `
         <div class="p-2 border-t border-gray-100 bg-gray-50/80 text-[11px] text-gray-500 flex items-center justify-between">
@@ -1733,6 +1713,71 @@
       return normalizeStr(c.cuenta_nombre).includes(qNorm) || (c.cuenta_codigo && c.cuenta_codigo.includes(rawQ));
     });
 
+    // Arbol del autocomplete: cuelga cada cuenta bajo su padre real
+    // (codigo_padre, dato PUC). Mayor = titulo gris sin clic, auxiliar = escogible.
+    function buildFilasArbol(items) {
+      const porCod = {};
+      (items || []).forEach(c => { if (c && c.cuenta_codigo) porCod[String(c.cuenta_codigo)] = c; });
+      const hijosDe = {};
+      const raices = [];
+      (items || []).forEach(c => {
+        if (!c || !c.cuenta_codigo) return;
+        const pad = c.codigo_padre ? String(c.codigo_padre) : '';
+        if (pad && porCod[pad]) {
+          (hijosDe[pad] = hijosDe[pad] || []).push(c);
+        } else {
+          raices.push(c);
+        }
+      });
+      const porCodigo = (a, b) => String(a.cuenta_codigo).localeCompare(String(b.cuenta_codigo), undefined, {numeric: true});
+      raices.sort(porCodigo);
+      Object.keys(hijosDe).forEach(k => hijosDe[k].sort(porCodigo));
+      let out = '';
+      let hayAux = false;
+      let n = 0;
+      const visitados = {};
+      const pintar = (c, depth) => {
+        const cod = String(c.cuenta_codigo);
+        if (visitados[cod]) return;
+        visitados[cod] = true;
+        const acepta = c.acepta_movimiento !== false;
+        if (acepta) hayAux = true;
+        out += filaArbolConcepto(c, Math.min(depth, 5), n++, acepta);
+        (hijosDe[cod] || []).forEach(h => pintar(h, depth + 1));
+      };
+      raices.forEach(c => pintar(c, 0));
+      (items || []).forEach(c => {
+        if (c && c.cuenta_codigo && !visitados[String(c.cuenta_codigo)]) pintar(c, 0);
+      });
+      return {html: out, hayAux: hayAux};
+    }
+
+    function filaArbolConcepto(c, depth, i, acepta) {
+      const cat = c.categoria_tipo || 'gasto';
+      const pad = 12 + depth * 18;
+      const guia = depth > 0 ? '<span class="text-gray-300 font-normal">\u21B3 </span>' : '';
+      let tagHtml = '';
+      if (cat === 'activo') tagHtml = '<span class="text-[9px] px-1.5 py-0.2 rounded bg-blue-100 text-blue-800 font-bold">\U0001F3ED Activo</span>';
+      else if (cat === 'diferido') tagHtml = '<span class="text-[9px] px-1.5 py-0.2 rounded bg-purple-100 text-purple-800 font-bold">\u23F3 Diferido</span>';
+      else tagHtml = '<span class="text-[9px] px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 font-semibold">\U0001F9FE Gasto</span>';
+      const codHtml = c.cuenta_codigo ? `<span class="text-[10px] text-gray-400 font-mono block">${c.cuenta_codigo}</span>` : '';
+      if (!acepta) {
+        return `
+          <div class="ac-mayor px-3 py-2 text-xs flex items-center justify-between opacity-60 cursor-default" style="padding-left:${pad}px" title="Cuenta mayor: solo referencia. Escoja una auxiliar o cree el rubro.">
+            <div>${guia}<span class="font-semibold text-gray-500">${escapeGasHtml(c.cuenta_nombre)}</span>${codHtml}</div>
+            <span class="text-[9px] px-1.5 py-0.2 rounded bg-gray-200 text-gray-600 font-bold">\U0001F50E Mayor \u00B7 solo consulta</span>
+          </div>
+        `;
+      }
+      return `
+          <div class="ac-item px-3 py-2 hover:bg-gray-100 cursor-pointer text-xs flex items-center justify-between" style="padding-left:${pad}px" data-i="${i}"
+                data-id="${c.cuenta_puc_id}" data-tercero="${c.maneja_terceros}" data-cat="${cat}">
+            <div>${guia}<span class="font-semibold text-gray-700">${escapeGasHtml(c.cuenta_nombre)}</span>${codHtml}</div>
+            ${tagHtml}
+          </div>
+        `;
+    }
+
     // Mostrar render preliminar con locales si existen
     const renderList = (items, esRemoto = false) => {
       if (thisSeq !== _gasConceptoReqSeq) return; // Evitar carrera
@@ -1753,36 +1798,12 @@
         return;
       }
 
-      let html = items.slice(0, 15).map((c, i) => {
-        const cat = c.categoria_tipo || 'gasto';
-        const acepta = c.acepta_movimiento !== false;
-        let tagHtml = '';
-        if (cat === 'activo') tagHtml = '<span class="text-[9px] px-1.5 py-0.2 rounded bg-blue-100 text-blue-800 font-bold">🏭 Activo</span>';
-        else if (cat === 'diferido') tagHtml = '<span class="text-[9px] px-1.5 py-0.2 rounded bg-purple-100 text-purple-800 font-bold">⏳ Diferido</span>';
-        else tagHtml = '<span class="text-[9px] px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 font-semibold">🧾 Gasto</span>';
-
-        if (!acepta) {
-          return `
-          <div class="ac-mayor px-3 py-2 text-xs flex items-center justify-between opacity-60 cursor-default" title="Cuenta mayor: solo referencia. Escoja una auxiliar o cree el rubro.">
-            <div>
-              <span class="font-semibold text-gray-500">${escapeGasHtml(c.cuenta_nombre)}</span>
-              ${c.cuenta_codigo ? `<span class="text-[10px] text-gray-400 font-mono block">${c.cuenta_codigo}</span>` : ''}
-            </div>
-            <span class="text-[9px] px-1.5 py-0.2 rounded bg-gray-200 text-gray-600 font-bold">🔎 Mayor · solo consulta</span>
-          </div>
-        `;
-        }
-        return `
-          <div class="ac-item px-3 py-2 hover:bg-gray-100 cursor-pointer text-xs flex items-center justify-between" data-i="${i}"
-                data-id="${c.cuenta_puc_id}" data-tercero="${c.maneja_terceros}" data-cat="${cat}">
-            <div>
-              <span class="font-semibold text-gray-700">${escapeGasHtml(c.cuenta_nombre)}</span>
-              ${c.cuenta_codigo ? `<span class="text-[10px] text-gray-400 font-mono block">${c.cuenta_codigo}</span>` : ''}
-            </div>
-            ${tagHtml}
-          </div>
-        `;
-      }).join('');
+      const arb = buildFilasArbol(items.slice(0, 15));
+      let html = '';
+      if (!arb.hayAux) {
+        html += `<div class="px-3 py-2 text-[11px] bg-amber-50 text-amber-800 border-b border-amber-100">\u26A0\uFE0F Con &ldquo;${escapeGasHtml(rawQ)}&rdquo; no hay ning\u00FAn rubro para escoger: solo mayores de referencia. Pruebe otra palabra o cree el rubro nuevo abajo.</div>`;
+      }
+      html += arb.html;
 
       html += `
         <div class="p-2.5 border-t border-gray-100 bg-rose-50/70 hover:bg-rose-100 cursor-pointer text-xs text-rose-700 font-bold flex items-center justify-between transition"

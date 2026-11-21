@@ -2315,7 +2315,7 @@ async function vincularEsteReproductor(tomarControl = false) {
 }
 
 async function reclamarReproductor() {
-  player.play().then(() => player.pause()).catch(() => {});
+  if (!document.body.classList.contains('tv-mode')) player.play().then(() => player.pause()).catch(() => {});
   if (await vincularEsteReproductor(true)) {
     if (btnReclamar) btnReclamar.style.display = 'none';
     setDeviceMessage('Control obtenido ✓ Conectando...');
@@ -2355,7 +2355,7 @@ async function activar(skipUnlock = false) {
   });
 
   player.play().catch(() => {});
-  player.pause();
+  if (!document.body.classList.contains('tv-mode')) player.pause();
   setInterval(verificarCola, 1500);
   if (!window._vigilanteAtasco) { window._vigilanteAtasco = setInterval(vigilarAtascoAudio, 5000); }
   verificarCola();
@@ -3038,6 +3038,16 @@ function debeAutoreproducirAlEntrar() {
   return localStorage.getItem('rockola_autoreproducir') === '1';
 }
 
+// TV autonomo (2026-11-21): detras del boton EMPEZAR no debe sonar;
+// el tap es el que echa a andar el motor.
+function tvEsperandoTap() {
+  try {
+    if (!document.body.classList.contains('tv-mode')) return false;
+    const st = document.getElementById('tv-start');
+    return !!(st && st.classList.contains('visible'));
+  } catch (e) { return false; }
+}
+
 function actualizarAutoplayStatus() {
   const activo = debeAutoreproducirAlEntrar();
   const toggle = document.getElementById('autoplay-reproductor-toggle');
@@ -3158,6 +3168,7 @@ function gestionarColaLocalOffline() {
   if (!reproduciendo && !playPendiente && currentCola && currentCola.length > 0) {
     const c = currentCola[0];
     if (c.id !== cancionActual || (!player.src && !esYouTubeActual)) {
+      if (tvEsperandoTap()) { prepararCancionEnPausa(c); return; }
       cancionActual = c.id;
       fallosPlay = 0;
       intentarReproducir(c);
@@ -3236,6 +3247,7 @@ async function verificarCola() {
     if (!reproduciendo && !playPendiente && cola.length > 0) {
       const c = cola[0];
       if (c.id !== cancionActual || (!player.src && !esYouTubeActual)) {
+        if (tvEsperandoTap()) { await prepararCancionEnPausa(c); return; }
         if (primeraVerificacionCola) {
           primeraVerificacionCola = false;
           if (!debeAutoreproducirAlEntrar()) {
@@ -6471,7 +6483,7 @@ function aplicarModosServidor(data) {
     if (ultimoModoPausaVisto === null || quieto !== ultimoModoPausaVisto) {
       ultimoModoPausaVisto = quieto;
       if (quieto && reproduciendo && !transitioning) togglePlayPause('srv');
-      else if (!quieto && !reproduciendo && !transitioning && currentCola && currentCola.length) togglePlayPause('srv');
+      else if (!quieto && !reproduciendo && !transitioning && currentCola && currentCola.length && !tvEsperandoTap()) togglePlayPause('srv');
     }
   }
 }
@@ -7800,6 +7812,16 @@ async function tvEmpezar() {
   if (window._tvVinculoOk) {
     try { postModos({modo_pausa: false}); } catch (ePm) {}
     try { if (!reproduciendo && !playPendiente && !fadeIntervalTimer) transitioning = false; } catch (eTr) {}
+    setTimeout(async () => {
+      try {
+        const audible = [document.getElementById('player1'), document.getElementById('player2')]
+          .some(p => p && !p.paused && !p.ended);
+        if (!audible && !transitioning && !playPendiente && !saltandoCancion && currentCola && currentCola.length) {
+          cancionActual = null;
+          await verificarCola();
+        }
+      } catch (eTvGo) {}
+    }, 900);
   }
   tvCargarCola();
   setInterval(tvCargarCola, 2500);

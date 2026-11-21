@@ -27,10 +27,10 @@ WD = R[_iw:R.find('}, 3500);', _iw)] if _iw > -1 else ''
 check('yt: watchdog existe', _iw > -1 and 'resolverAudioEnServidor(c.id)' in WD)
 check('yt: fallback nativo', 'esYouTubeActual = false' in WD
       and 'player.play()' in WD)
-check('yt: salta sin audio', 'okNativo' in WD and 'saltarActual()' in WD
+check('yt: salta sin audio', 'okNativo' in WD and 'reintentarOSaltar(c)' in WD
       and 'Sin audio' in WD)
 check('yt: skip con guardas',
-      'if (!reproduciendo && cancionActual === c.id && !transitioning) saltarActual()' in WD)
+      'if (!reproduciendo && cancionActual === c.id && !transitioning) reintentarOSaltar(c)' in WD)
 check('yt: ruta error salta', 'Video no reproducible en YouTube' in R)
 
 # 2026-11-21: cada intento arranca de cero (atorada en true varaba YT->YT en TV)
@@ -57,5 +57,15 @@ check('yt: arranque acotado', 'Arranque atorado 45s' in _VS
 check('yt: pageshow recarga', "addEventListener('pageshow'" in R
       and 'ev.persisted' in R and 'location.reload()' in R)
 
-print(f'\n{len(fails)} fallos' if fails else '\nOK: 12/12')
+# 2026-11-21: fallos no consumen la ultima (reintento acotado, no perdida)
+_ir2 = R.find('async function reintentarOSaltar(')
+_RT = R[_ir2:R.find('\n}\n', _ir2)] if _ir2 > -1 else ''
+check('yt: reintenta sola', _ir2 > -1 and 'reintentosSola' in _RT
+      and 'reintentosSola >= 5' in _RT)
+check('yt: no consume sola', 'currentCola.length > 1' in _RT
+      and 'cancionActual = null' in _RT)
+check('yt: fallos reintentan', 'reintentarOSaltar(c)' in R
+      and 'reintentarOSaltar()' in R)
+
+print(f'\n{len(fails)} fallos' if fails else '\nOK: 15/15')
 sys.exit(1 if fails else 0)

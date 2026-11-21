@@ -113,7 +113,7 @@ _VIG = R[_iv:R.find('\n}\n', _iv)] if _iv > -1 else ''
 check('tv: tap quita pausa', 'postModos({modo_pausa: false})' in TVJ)
 check('tv: tap limpia stuck', '!fadeIntervalTimer) transitioning = false' in TVJ)
 check('tv: vigila atasco', 'setInterval(vigilarAtascoAudio, 5000)' in R
-      and 'saltarActual()' in _VIG and 'atascoRachas' in _VIG)
+      and 'reintentarOSaltar()' in _VIG and 'atascoRachas' in _VIG)
 check('tv: error salta', "addEventListener('error', handlePlayerError)" in R
       and 'function handlePlayerError(' in R)
 check('tv: ended reavanza', 'player.ended && !transitioning' in R)

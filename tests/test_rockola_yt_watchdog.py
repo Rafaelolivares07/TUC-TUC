@@ -1,0 +1,43 @@
+"""Regression: watchdog YT salta si no hay audio (2026-10-31 noche).
+
+Sin framework: asserts planos + exit code, solo stdlib. Uso:
+  python tests/test_rockola_yt_watchdog.py
+Cubre: watchdog existe + fallback nativo + si falla/sin-url SALTA
+(no mudo eterno) + skip con guardas (sigue pausado, misma cancion,
+sin transicion) + ruta error tambien salta.
+"""
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+
+fails = []
+
+
+def check(name, cond, extra=''):
+    print(('PASS ' if cond else 'FAIL ') + name + (f' [{extra}]' if extra and not cond else ''))
+    if not cond:
+        fails.append(name)
+
+
+R = (ROOT / 'templates/rockola_reproductor.html').read_text(encoding='utf-8')
+
+_iw = R.find('[Watchdog YouTube] No arrancó en 5s')
+WD = R[_iw:R.find('}, 3500);', _iw)] if _iw > -1 else ''
+check('yt: watchdog existe', _iw > -1 and 'resolverAudioEnServidor(c.id)' in WD)
+check('yt: fallback nativo', 'esYouTubeActual = false' in WD
+      and 'player.play()' in WD)
+check('yt: salta sin audio', 'okNativo' in WD and 'saltarActual()' in WD
+      and 'Sin audio' in WD)
+check('yt: skip con guardas',
+      'if (!reproduciendo && cancionActual === c.id && !transitioning) saltarActual()' in WD)
+check('yt: ruta error salta', 'Video no reproducible en YouTube' in R)
+
+# 2026-11-21: cada intento arranca de cero (atorada en true varaba YT->YT en TV)
+_iir = R.find('async function intentarReproducir(c) {')
+_IR = R[_iir:R.find('cancionActualObjeto = c;', _iir)] if _iir > -1 else ''
+check('yt: intento resetea bandera', 'playPendiente = true;' in _IR
+      and 'reproduciendo = false;' in _IR)
+
+print(f'\n{len(fails)} fallos' if fails else '\nOK: 6/6')
+sys.exit(1 if fails else 0)

@@ -2884,6 +2884,7 @@ function esperarYtPlaying(playerInstance, maxWaitMs = 4500) {
 async function intentarReproducir(c) {
   if (!c || !c.id) return;
   playPendiente = true;
+  reproduciendo = false; // de cero: nada probado sonando hasta play()/PLAYING (2026-11-21: atorada en true varaba YT->YT)
   cancionActual = c.id;
   cancionActualObjeto = c;
   nombreEl.textContent = limpiarNombre(c.nombre);

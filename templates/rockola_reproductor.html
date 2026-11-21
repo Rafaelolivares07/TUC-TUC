@@ -7815,7 +7815,7 @@ async function tvEmpezar() {
     setTimeout(async () => {
       try {
         const audible = [document.getElementById('player1'), document.getElementById('player2')]
-          .some(p => p && !p.paused && !p.ended);
+          .some(p => p && !p.paused && !p.ended && p.currentTime > 0);
         if (!audible && !transitioning && !playPendiente && !saltandoCancion && currentCola && currentCola.length) {
           cancionActual = null;
           await verificarCola();

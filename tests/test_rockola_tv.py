@@ -128,6 +128,7 @@ check('tv: activar no pausa', "if (!document.body.classList.contains('tv-mode'))
 check('tv: flanco respeta tap', 'currentCola.length && !tvEsperandoTap()) togglePlayPause' in R)
 check('tv: tap arranca motor', 'eTvGo' in TVJ and 'cancionActual = null' in TVJ
       and 'await verificarCola()' in TVJ and '!saltandoCancion' in TVJ)
+check('tv: audible exige tiempo', 'p.currentTime > 0' in TVJ)
 
-print(f'\n{len(fails)} fallos' if fails else '\nOK: 45/45')
+print(f'\n{len(fails)} fallos' if fails else '\nOK: 46/46')
 sys.exit(1 if fails else 0)

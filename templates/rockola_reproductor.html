@@ -2411,6 +2411,18 @@ function vigilarSilencioSala() {
     if (typeof ultimoModoPausaVisto !== 'undefined' && ultimoModoPausaVisto === true) { silencioRachas = 0; transDesde = 0; saltDesde = 0; pendDesde = 0; return; }
     if (!currentCola || !currentCola.length) { silencioRachas = 0; if (!transitioning) transDesde = 0; if (!saltandoCancion) saltDesde = 0; if (!playPendiente) pendDesde = 0; ultimoAvanceId = null; return; }
     if (cancionActual !== ultimoAvanceId) { ultimoAvanceId = cancionActual; ultimoAvanceT = -1; ultimoAvanceTs = Date.now(); silencioRachas = 0; }
+    if (typeof resolviendoActual !== 'undefined' && resolviendoActual) {
+      if (!resolviendoDesde) resolviendoDesde = Date.now();
+      if (Date.now() - resolviendoDesde > 270000) {
+        console.warn('[Rockola] Descarga atorada 4.5min, soltando y saltando');
+        resolviendoDesde = 0;
+        try { resolviendoActual = false; } catch (eR) {}
+        try { reintentarOSaltar(); } catch (eR2) {}
+      }
+      silencioRachas = 0;
+      return;
+    }
+    resolviendoDesde = 0;
     if (transitioning) {
       if (!transDesde) transDesde = Date.now();
       if (Date.now() - transDesde > 30000) {
@@ -2446,18 +2458,6 @@ function vigilarSilencioSala() {
       return;
     }
     pendDesde = 0;
-    if (typeof resolviendoActual !== 'undefined' && resolviendoActual) {
-      if (!resolviendoDesde) resolviendoDesde = Date.now();
-      if (Date.now() - resolviendoDesde > 270000) {
-        console.warn('[Rockola] Descarga atorada 4.5min, soltando y saltando');
-        resolviendoDesde = 0;
-        try { resolviendoActual = false; } catch (eR) {}
-        try { reintentarOSaltar(); } catch (eR2) {}
-      }
-      silencioRachas = 0;
-      return;
-    }
-    resolviendoDesde = 0;
     let audible = false;
     try {
       const prog = [document.getElementById('player1'), document.getElementById('player2')]

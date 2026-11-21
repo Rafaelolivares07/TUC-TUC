@@ -135,5 +135,19 @@ check('tv: barra lee YT', 'getYtPlayerActivo()' in R and 'getCurrentTime' in R
       and 'getDuration' in R and "getElementById('tv-prog-fill')" in R)
 check('tv: barra YT tocando', 'getPlayerState() === 1' in R)
 
-print(f'\n{len(fails)} fallos' if fails else '\nOK: 48/48')
+# 2026-11-21: espera honesta mientras descarga + precarga temprana (no saltar lo no-listo)
+_ivig = R.find('function vigilarSilencioSala()')
+_VIGS = R[_ivig:R.find('\n}\n', _ivig)] if _ivig > -1 else ''
+check('tv: watchdog respeta descarga', 'resolviendoActual' in _VIGS
+      and 'Descarga atorada 4.5min' in _VIGS)
+check('tv: resolve paciente', 'async function resolverAudioPaciente(' in R
+      and 'Descargando audio...' in R and 'setTimeout(r, 15000)' in R)
+check('tv: paciente aborta si suena', "typeof reproduciendo !== 'undefined' && reproduciendo) return null" in R)
+check('tv: path iframe-muerto paciente', 'resolverAudioPaciente(c.id, 240000)' in R)
+check('tv: fallback no pisa YT', 'if (audioUrl && cancionActual === c.id && !reproduciendo)' in R)
+check('tv: precarga fondo', 'function precargarSiguientesEnFondo(' in R
+      and 'precargarSiguientesEnFondo(); } catch (ePre) {}' in R
+      and 'precargaFondoTs' in R)
+
+print(f'\n{len(fails)} fallos' if fails else '\nOK: 54/54')
 sys.exit(1 if fails else 0)

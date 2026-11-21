@@ -30,8 +30,8 @@ FN = py[_if:py.find('\n\n\ndef ', _if)] if _if > -1 else ''
 check('resolver: viva primero', CB.find('liubquanti') > -1
       and CB.find('liubquanti') < CB.find('melon.clxxped'))
 check('resolver: timeout realista', 'timeout=25' in FN and 'timeout=6' not in FN)
-check('resolver: descarga disco', "open(tmp_path, 'wb')" in FN
-      and 'timeout=120' in FN)
+check('resolver: descarga disco', "open(parte, 'wb')" in FN
+      and 'timeout=120' in FN and 'os.replace(parte, tmp_path)' in FN)
 _ir = py.find('def resolver(')
 RZ = py[_ir:py.find('\n\n\n@bp.route', _ir)] if _ir > -1 else ''
 check('resolver: responde archivo', '/archivo/' in RZ and "descarga[\"path\"]" in RZ)
@@ -45,5 +45,17 @@ check('resolver: cache honesto', '_archivo_audio_valido(ruta)' in RZ
 check('resolver: descarga valida', '_archivo_audio_valido(descarga["path"])' in RZ
       and 'Descarga vacia' in RZ)
 
-print(f'\n{len(fails)} fallos' if fails else '\nOK: 8/8')
+# 2026-11-21: in-flight (no duplicar descargas) + atomicas (no servir parciales)
+_ip = py.find('def _descargar_youtube_con_pytubefix(')
+PFX = py[_ip:py.find('\n\n\n@bp.route', _ip)] if _ip > -1 else ''
+check('resolver: pytube atomico', "nombre_id + '.part' + ext" in PFX
+      and 'os.replace(out_path, final)' in PFX)
+check('resolver: in-flight', '_DESCARGAS_EN_CURSO' in RZ
+      and 'for _turno in range(2)' in RZ
+      and 'evento_descarga.wait(timeout=100)' in RZ)
+check('resolver: pendiente honesto', 'pendiente=True' in RZ
+      and 'Descarga en curso' in RZ)
+check('resolver: libera turno', RZ.count('_liberar_descarga(clave_descarga, evento_descarga)') >= 4)
+
+print(f'\n{len(fails)} fallos' if fails else '\nOK: 12/12')
 sys.exit(1 if fails else 0)

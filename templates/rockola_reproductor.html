@@ -2398,6 +2398,9 @@ let silencioRachas = 0;
 let transDesde = 0;
 let saltDesde = 0;
 let pendDesde = 0;
+let resolviendoActual = false;
+let resolviendoDesde = 0;
+let precargaFondoTs = {};
 let ultimoAvanceT = -1;
 let ultimoAvanceTs = 0;
 let ultimoAvanceId = null;
@@ -2443,6 +2446,18 @@ function vigilarSilencioSala() {
       return;
     }
     pendDesde = 0;
+    if (typeof resolviendoActual !== 'undefined' && resolviendoActual) {
+      if (!resolviendoDesde) resolviendoDesde = Date.now();
+      if (Date.now() - resolviendoDesde > 270000) {
+        console.warn('[Rockola] Descarga atorada 4.5min, soltando y saltando');
+        resolviendoDesde = 0;
+        try { resolviendoActual = false; } catch (eR) {}
+        try { reintentarOSaltar(); } catch (eR2) {}
+      }
+      silencioRachas = 0;
+      return;
+    }
+    resolviendoDesde = 0;
     let audible = false;
     try {
       const prog = [document.getElementById('player1'), document.getElementById('player2')]
@@ -2846,6 +2861,60 @@ async function resolverAudioEnServidor(cancionId) {
   return null;
 }
 
+async function resolverAudioPaciente(cancionId, maxMs) {
+  const t0 = Date.now();
+  let intento = 0;
+  let primero = true;
+  resolviendoActual = true;
+  resolviendoDesde = Date.now();
+  try {
+    while (Date.now() - t0 < maxMs) {
+      intento++;
+      if (cancionActual !== cancionId) return null;
+      if (typeof reproduciendo !== 'undefined' && reproduciendo) return null;
+      let url = null;
+      try {
+        url = primero ? await resolverAudioConCache(cancionId, 25000)
+                      : await resolverAudioEnServidor(cancionId);
+      } catch (eR) { url = null; }
+      primero = false;
+      if (url) return url;
+      if (cancionActual !== cancionId) return null;
+      if (typeof reproduciendo !== 'undefined' && reproduciendo) return null;
+      try { estadoEl.textContent = 'Descargando audio... (' + intento + ')'; } catch (eSt) {}
+      await new Promise(r => setTimeout(r, 15000));
+    }
+  } finally {
+    try { resolviendoActual = false; resolviendoDesde = 0; } catch (eF) {}
+  }
+  return null;
+}
+
+function precargarSiguientesEnFondo() {
+  try {
+    if (!currentCola || currentCola.length < 2) return;
+    if (typeof SALA === 'undefined' || SALA === 'local') return;
+    const ahora = Date.now();
+    for (let i = 1; i < currentCola.length && i <= 2; i++) {
+      const s = currentCola[i];
+      if (!s || !s.id || !s.youtube_url || s.id === cancionActual) continue;
+      if (precargaFondoTs[s.id] && (ahora - precargaFondoTs[s.id]) < 600000) continue;
+      precargaFondoTs[s.id] = ahora;
+      try {
+        fetch(`/rockola/${SALA}/resolver`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: s.id })
+        }).catch(() => {});
+      } catch (eP) {}
+    }
+    try {
+      const ks = Object.keys(precargaFondoTs);
+      if (ks.length > 200) ks.slice(0, ks.length - 200).forEach(k => { delete precargaFondoTs[k]; });
+    } catch (eC) {}
+  } catch (e) {}
+}
+
 async function onYtPlayerError(index, event) {
   console.warn(`[YouTube ${index}] Error reproduciendo video:`, event.data);
   if (index === activeYtIndex) {
@@ -2984,7 +3053,7 @@ async function intentarReproducir(c) {
 
   if (c.youtube_url) {
     if (ytIframeMuerto) {
-      const audioDirecto = await resolverAudioConCache(c.id, 25000);
+      const audioDirecto = await resolverAudioPaciente(c.id, 240000);
       if (audioDirecto && cancionActual === c.id) {
         esYouTubeActual = false;
         detenerVideoYouTube();
@@ -3038,9 +3107,9 @@ async function intentarReproducir(c) {
       if (!reproduciendo && cancionActual === c.id && esYouTubeActual && !transitioning) {
         console.log('[Watchdog YouTube] No arrancó en 5s (posible bloqueo autoplay en iPhone/Safari), activando fallback...');
         estadoEl.textContent = 'Activando audio nativo para este enlace...';
-        const audioUrl = await resolverAudioEnServidor(c.id);
+        const audioUrl = await resolverAudioPaciente(c.id, 240000);
         let okNativo = false;
-        if (audioUrl && cancionActual === c.id) {
+        if (audioUrl && cancionActual === c.id && !reproduciendo) {
           detenerVideoYouTube();
           esYouTubeActual = false;
           player.src = audioUrl;
@@ -3296,6 +3365,7 @@ async function verificarCola() {
     actualizarEstadoModoLocal(false);
     const cola = data.cola || [];
     currentCola = cola;
+    try { precargarSiguientesEnFondo(); } catch (ePre) {}
     if (cola.length > memoriaListaCola.length) {
       memoriaListaCola = [...cola];
     }

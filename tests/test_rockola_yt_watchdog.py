@@ -24,7 +24,7 @@ R = (ROOT / 'templates/rockola_reproductor.html').read_text(encoding='utf-8')
 
 _iw = R.find('[Watchdog YouTube] No arrancó en 5s')
 WD = R[_iw:R.find('}, 3500);', _iw)] if _iw > -1 else ''
-check('yt: watchdog existe', _iw > -1 and 'resolverAudioEnServidor(c.id)' in WD)
+check('yt: watchdog existe', _iw > -1 and 'resolverAudioPaciente(c.id, 240000)' in WD)
 check('yt: fallback nativo', 'esYouTubeActual = false' in WD
       and 'player.play()' in WD)
 check('yt: salta sin audio', 'okNativo' in WD and 'reintentarOSaltar(c)' in WD

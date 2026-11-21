@@ -123,6 +123,20 @@ ALTER TABLE rockola_compartidos ADD COLUMN IF NOT EXISTS duracion TEXT NOT NULL 
 """
 
 _lock = threading.Lock()
+_DESCARGAS_EN_CURSO = {}
+_DESCARGAS_LOCK = threading.Lock()
+
+
+def _liberar_descarga(clave, evento):
+    """Suelta el turno de descarga para que otro hilo pueda reusar o reintentar."""
+    try:
+        with _DESCARGAS_LOCK:
+            _DESCARGAS_EN_CURSO.pop(clave, None)
+    finally:
+        try:
+            evento.set()
+        except Exception:
+            pass
 _db_ready = False
 
 
@@ -2380,15 +2394,21 @@ def _descargar_youtube_con_cobalt(url, tmp_path):
             dl_req = urllib.request.Request(download_url, headers={
                 'User-Agent': COBALT_HEADERS['User-Agent'],
             })
-            with urllib.request.urlopen(dl_req, timeout=120) as response, open(tmp_path, 'wb') as file:
+            parte = tmp_path + '.part'
+            with urllib.request.urlopen(dl_req, timeout=120) as response, open(parte, 'wb') as file:
                 while True:
                     chunk = response.read(65536)
                     if not chunk:
                         break
                     file.write(chunk)
+            os.replace(parte, tmp_path)
         except Exception as error:
-            if os.path.exists(tmp_path):
-                os.remove(tmp_path)
+            for resto in (locals().get('parte'), tmp_path):
+                try:
+                    if resto and os.path.exists(resto):
+                        os.remove(resto)
+                except OSError:
+                    pass
             errores.append(f'{api_url}: error descargando audio: {error}')
             continue
 
@@ -2445,12 +2465,19 @@ def _descargar_youtube_con_pytubefix(url, upload_dir, nombre_id):
                 errores.append(f"{client_name}: sin audio")
                 continue
             ext = '.m4a' if 'mp4' in (audio.mime_type or '') else '.webm'
-            filename = nombre_id + ext
+            filename = nombre_id + '.part' + ext
             out_path = audio.download(output_path=upload_dir, filename=filename)
             title = yt.title or 'audio'
             if os.path.exists(out_path) and os.path.getsize(out_path) > 1000:
-                return {'path': out_path, 'nombre': title + ext}, None
+                final = os.path.join(upload_dir, nombre_id + ext)
+                os.replace(out_path, final)
+                return {'path': final, 'nombre': title + ext}, None
             else:
+                try:
+                    if os.path.exists(out_path):
+                        os.remove(out_path)
+                except OSError:
+                    pass
                 errores.append(f"{client_name}: archivo vacio o no existe")
         except Exception as e:
             errores.append(f"{client_name}: {e}")
@@ -2616,6 +2643,23 @@ def resolver(sala_id):
         if ya:
             return jsonify(ok=True, url=f'/rockola/{sala_id}/archivo/{ya}', cache=True)
 
+    clave_descarga = (sala_id, item_id)
+    evento_descarga = None
+    for _turno in range(2):
+        with _DESCARGAS_LOCK:
+            evento_descarga = _DESCARGAS_EN_CURSO.get(clave_descarga)
+            if evento_descarga is None:
+                evento_descarga = threading.Event()
+                _DESCARGAS_EN_CURSO[clave_descarga] = evento_descarga
+                break
+        evento_descarga.wait(timeout=100)
+        evento_descarga = None
+        for candidato in (item_id, item_id + '.mp3', item_id + '.m4a', item_id + '.webm'):
+            ruta = os.path.join(upload_dir, candidato)
+            if _archivo_audio_valido(ruta):
+                return jsonify(ok=True, url=f'/rockola/{sala_id}/archivo/{candidato}', cache=True)
+    if evento_descarga is None:
+        return jsonify(ok=False, error='Descarga en curso, reintenta en unos segundos', pendiente=True), 200
     destino = os.path.join(upload_dir, item_id + '.mp3')
     try:
         # 1. Intentar primero con pytubefix MWEB (probado que evade el SABR PoToken de YouTube en servidores AWS)
@@ -2631,16 +2675,20 @@ def resolver(sala_id):
             descarga, error_cobalt = _descargar_youtube_con_cobalt(target_url, destino)
             if not descarga:
                 err_final = 'YouTube bloqueó la descarga automatizada en la IP del servidor en la nube (Sign in to confirm you are not a bot). La canción sonará normalmente en vivo cuando llegue su turno en la cola.'
+                _liberar_descarga(clave_descarga, evento_descarga)
                 return jsonify(ok=False, error=err_final), 200
         _limpiar_archivos_antiguos(upload_dir)
     except Exception as error:
+        _liberar_descarga(clave_descarga, evento_descarga)
         return jsonify(ok=False, error=f'No se pudo resolver el audio: {error}'), 502
     if not _archivo_audio_valido(descarga["path"]):
         try:
             os.remove(descarga["path"])
         except OSError:
             pass
+        _liberar_descarga(clave_descarga, evento_descarga)
         return jsonify(ok=False, error='Descarga vacia, se reintenta en el siguiente turno'), 200
+    _liberar_descarga(clave_descarga, evento_descarga)
     return jsonify(ok=True, url=f'/rockola/{sala_id}/archivo/{os.path.basename(descarga["path"])}')
 
 

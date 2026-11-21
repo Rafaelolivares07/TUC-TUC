@@ -56,6 +56,8 @@ check('resolver: in-flight', '_DESCARGAS_EN_CURSO' in RZ
 check('resolver: pendiente honesto', 'pendiente=True' in RZ
       and 'Descarga en curso' in RZ)
 check('resolver: libera turno', RZ.count('_liberar_descarga(clave_descarga, evento_descarga)') >= 4)
+check('resolver: sin-audio 200', "'Sin audio disponible para este item'), 200" in RZ
+      and '), 404' not in RZ)
 
-print(f'\n{len(fails)} fallos' if fails else '\nOK: 12/12')
+print(f'\n{len(fails)} fallos' if fails else '\nOK: 13/13')
 sys.exit(1 if fails else 0)

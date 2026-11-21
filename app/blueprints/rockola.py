@@ -2634,7 +2634,7 @@ def resolver(sala_id):
         target_url = (item.get('youtube_url') or '').strip()
 
     if not target_url:
-        return jsonify(ok=False, error='Sin audio disponible para este item'), 404
+        return jsonify(ok=False, error='Sin audio disponible para este item'), 200
 
     # Dedup: el mismo video ya descargado se reusa, no se baja otra vez
     canon = _canon_youtube(target_url)

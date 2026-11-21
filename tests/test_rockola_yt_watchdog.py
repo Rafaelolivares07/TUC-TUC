@@ -72,5 +72,11 @@ check('yt: prueba sonido', 'idProbadoSonando = cancionActual; pruebaTs = Date.no
 check('yt: probada avanza', 'Ya sono, avanzando sin reintentar' in _RT
       and 'pruebaTs > 30000' in _RT)
 
-print(f'\n{len(fails)} fallos' if fails else '\nOK: 17/17')
+# 2026-11-21 v3: avance resetea por cancion + watchdog respeta flujo
+check('yt: avance por cancion', 'ultimoAvanceId' in _VS
+      and 'cancionActual !== ultimoAvanceId' in _VS)
+check('yt: watchdog respeta flujo', 'Avanzando, no interfiere' in R
+      and 'ytT0' in R)
+
+print(f'\n{len(fails)} fallos' if fails else '\nOK: 19/19')
 sys.exit(1 if fails else 0)

@@ -2400,12 +2400,14 @@ let saltDesde = 0;
 let pendDesde = 0;
 let ultimoAvanceT = -1;
 let ultimoAvanceTs = 0;
+let ultimoAvanceId = null;
 function vigilarSilencioSala() {
   try {
     if (typeof currentCola === 'undefined') return;
     if (typeof tvEsperandoTap === 'function' && tvEsperandoTap()) { silencioRachas = 0; transDesde = 0; saltDesde = 0; pendDesde = 0; return; }
     if (typeof ultimoModoPausaVisto !== 'undefined' && ultimoModoPausaVisto === true) { silencioRachas = 0; transDesde = 0; saltDesde = 0; pendDesde = 0; return; }
-    if (!currentCola || !currentCola.length) { silencioRachas = 0; if (!transitioning) transDesde = 0; if (!saltandoCancion) saltDesde = 0; if (!playPendiente) pendDesde = 0; return; }
+    if (!currentCola || !currentCola.length) { silencioRachas = 0; if (!transitioning) transDesde = 0; if (!saltandoCancion) saltDesde = 0; if (!playPendiente) pendDesde = 0; ultimoAvanceId = null; return; }
+    if (cancionActual !== ultimoAvanceId) { ultimoAvanceId = cancionActual; ultimoAvanceT = -1; ultimoAvanceTs = Date.now(); silencioRachas = 0; }
     if (transitioning) {
       if (!transDesde) transDesde = Date.now();
       if (Date.now() - transDesde > 30000) {
@@ -2445,17 +2447,18 @@ function vigilarSilencioSala() {
     try {
       const prog = [document.getElementById('player1'), document.getElementById('player2')]
         .map(p => (p && !p.paused && !p.ended) ? (p.currentTime || 0) : -1);
-      const tMax = Math.max(prog[0], prog[1]);
+      let tMax = Math.max(prog[0], prog[1]);
+      if (esYouTubeActual) {
+        try {
+          const a = getYtPlayerActivo();
+          if (a && isYtActivoReady() && typeof a.getCurrentTime === 'function') {
+            const ytT = a.getCurrentTime() || 0;
+            if (ytT > tMax) tMax = ytT;
+          }
+        } catch (e9) {}
+      }
       if (tMax > ultimoAvanceT) { ultimoAvanceT = tMax; ultimoAvanceTs = Date.now(); }
       audible = tMax > 0 && (Date.now() - ultimoAvanceTs) < 10000;
-      if (!audible && esYouTubeActual) {
-        const a = getYtPlayerActivo();
-        if (a && isYtActivoReady() && typeof a.getPlayerState === 'function' && a.getPlayerState() === 1) {
-          audible = true;
-          ultimoAvanceTs = Date.now();
-          try { ultimoAvanceT = a.getCurrentTime() || ultimoAvanceT; } catch (e8) {}
-        }
-      }
     } catch (e2) {}
     if (audible) { silencioRachas = 0; return; }
     silencioRachas++;
@@ -3022,7 +3025,16 @@ async function intentarReproducir(c) {
 
     // Watchdog: si en 5 segundos no arranca (bloqueo de autoplay en Safari/iPhone), activar fallback a /resolver
     if (ytWatchdogTimer) clearTimeout(ytWatchdogTimer);
+    let ytT0 = -1;
+    try { const _yw0 = getYtPlayerActivo(); if (_yw0 && typeof _yw0.getCurrentTime === 'function') ytT0 = _yw0.getCurrentTime() || 0; } catch (eW0) {}
     ytWatchdogTimer = setTimeout(async () => {
+      try {
+        const _yw1 = getYtPlayerActivo();
+        if (_yw1 && typeof _yw1.getCurrentTime === 'function' && ((_yw1.getCurrentTime() || 0) > ytT0 + 0.5)) {
+          console.log('[Watchdog YouTube] Avanzando, no interfiere');
+          return;
+        }
+      } catch (eW1) {}
       if (!reproduciendo && cancionActual === c.id && esYouTubeActual && !transitioning) {
         console.log('[Watchdog YouTube] No arrancó en 5s (posible bloqueo autoplay en iPhone/Safari), activando fallback...');
         estadoEl.textContent = 'Activando audio nativo para este enlace...';

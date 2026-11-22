@@ -14672,20 +14672,22 @@ def _cond_horas_ventas(hora_desde, hora_hasta):
     """(sql, params) filtro horario sobre created_at::time.
 
     Vacias = sin filtro. Solo una = cota abierta. desde > hasta =
-    ventana trasnoche (OR). La fecha de negocio sigue mandando en fechas;
+    ventana trasnoche (OR). El hasta incluye el minuto completo.
+    La fecha de negocio sigue mandando en fechas;
     la hora sale de created_at (ped.fecha es DATE, sin hora).
     """
     base = 'COALESCE(ped.created_at, ped.fecha::timestamp)::time'
+    hi = base + " < (%s::time + interval '1 minute')"
     if hora_desde and hora_hasta:
         if hora_desde <= hora_hasta:
-            return (' AND ' + base + ' >= %s AND ' + base + ' <= %s',
+            return (' AND ' + base + ' >= %s AND ' + hi,
                     [hora_desde, hora_hasta])
-        return (' AND (' + base + ' >= %s OR ' + base + ' <= %s)',
+        return (' AND (' + base + ' >= %s OR ' + hi + ')',
                 [hora_desde, hora_hasta])
     if hora_desde:
         return (' AND ' + base + ' >= %s', [hora_desde])
     if hora_hasta:
-        return (' AND ' + base + ' <= %s', [hora_hasta])
+        return (' AND ' + hi, [hora_hasta])
     return ('', [])
 
 
@@ -15171,8 +15173,10 @@ def _pdf_reporte_ventas_costos(nombre_negocio, desde, hasta, datos, centro_info=
     pdf.cell(0, 6, _pdf_sanitize(sub_title), ln=1, align='C')
     pdf.set_font('Helvetica', '', 9)
     rango_txt = f'Rango: {desde} al {hasta}'
-    if hora_desde or hora_hasta:
-        rango_txt += f" ({hora_desde or '00:00'} - {hora_hasta or '23:59'})"
+    _hd = hora_desde or '00:00'
+    _hh = hora_hasta or '23:59'
+    if (hora_desde or hora_hasta) and not (_hd == '00:00' and _hh == '23:59'):
+        rango_txt += f' ({_hd} - {_hh})'
     pdf.cell(0, 5, rango_txt, ln=1, align='C')
 
     total_ventas = sum(d['total_venta'] for d in datos)

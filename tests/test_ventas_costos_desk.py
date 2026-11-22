@@ -76,12 +76,13 @@ check('solo desde: cota inferior', '>= %s' in c1.sql and '11:00' in c1.params)
 check('solo desde: un param mas', len(c1.params) == 5)
 
 c2 = _corre(hh='15:00')
-check('solo hasta: cota superior', '<= %s' in c2.sql and '15:00' in c2.params)
+check('solo hasta: cota superior', '< (%s::time' in c2.sql and '15:00' in c2.params)
 check('solo hasta: un param mas', len(c2.params) == 5)
 
 c3 = _corre(hd='11:00', hh='15:00')
-check('ambas: ventana diurna', '>= %s' in c3.sql and '<= %s' in c3.sql
+check('ambas: ventana diurna', '>= %s' in c3.sql and '< (%s::time' in c3.sql
       and 'OR COALESCE' not in c3.sql)
+check('hasta incluye minuto completo', "interval '1 minute'" in c3.sql)
 
 c4 = _corre(hd='18:00', hh='02:00')
 check('trasnoche: OR', 'OR COALESCE' in c4.sql
@@ -113,6 +114,20 @@ _qs = html[_ini:_fin] if _ini >= 0 and _fin > _ini else ''
 check('helper horas definido', bool(_qs))
 check('helper lee ambos inputs', 'vc-hora-desde' in _qs and 'vc-hora-hasta' in _qs)
 check('helper usado en reporte+pdf+detalle', html.count('vcHorasQS()') >= 4)
+
+# 6. Parejas fecha+hora y dia completo por defecto (2026-11-22, pedido Rafa)
+p_d = html.find('id="vc-desde"')
+p_hd = html.find('id="vc-hora-desde"')
+p_h = html.find('id="vc-hasta"')
+p_hh = html.find('id="vc-hora-hasta"')
+check('orden: parejas fecha+hora',
+      0 < p_d < p_hd < p_h < p_hh)
+_ini2 = html.find('function inicializarFechasVC(')
+_fin2 = html.find('function vcHorasQS(', _ini2)
+_init = html[_ini2:_fin2] if _ini2 >= 0 and _fin2 > _ini2 else ''
+check('defecto dia completo 00:00-23:59',
+      "'00:00'" in _init and "'23:59'" in _init
+      and 'vc-hora-desde' in _init and 'vc-hora-hasta' in _init)
 
 print('fails:', len(fails))
 sys.exit(1 if fails else 0)

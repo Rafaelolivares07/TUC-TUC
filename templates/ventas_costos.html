@@ -92,13 +92,13 @@
           </div>
 
           <div class="flex flex-col">
-            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Hasta</label>
-            <input type="date" id="vc-hasta" class="border border-slate-200 rounded-xl px-3 py-2 bg-slate-50/80 focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500 font-semibold text-slate-700 shadow-2xs">
+            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Hora desde</label>
+            <input type="time" id="vc-hora-desde" title="Opcional: filtra por hora del dia" class="border border-slate-200 rounded-xl px-3 py-2 bg-slate-50/80 focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500 font-semibold text-slate-700 shadow-2xs">
           </div>
 
           <div class="flex flex-col">
-            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Hora desde</label>
-            <input type="time" id="vc-hora-desde" title="Opcional: filtra por hora del dia" class="border border-slate-200 rounded-xl px-3 py-2 bg-slate-50/80 focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500 font-semibold text-slate-700 shadow-2xs">
+            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Hasta</label>
+            <input type="date" id="vc-hasta" class="border border-slate-200 rounded-xl px-3 py-2 bg-slate-50/80 focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500 font-semibold text-slate-700 shadow-2xs">
           </div>
 
           <div class="flex flex-col">
@@ -681,6 +681,11 @@
         const day = String(d.getDate()).padStart(2, '0');
         hastaInp.value = `${y}-${m}-${day}`;
       }
+
+      const hdInp = document.getElementById('vc-hora-desde');
+      const hhInp = document.getElementById('vc-hora-hasta');
+      if (hdInp && !hdInp.value) hdInp.value = '00:00';
+      if (hhInp && !hhInp.value) hhInp.value = '23:59';
     }
 
     function vcHorasQS() {

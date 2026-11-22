@@ -11261,6 +11261,8 @@ def admin_inventario(negocio_id, tab_name=None):
         tab_pedido = (tab_name or request.args.get('tab', '')).lower()
         if tab_pedido in ('ventas_costos', 'ventas-costos'):
             return redirect(f'/ventas-costos/{negocio_id}')
+        if tab_pedido in ('ventas_clientes', 'ventas-clientes'):
+            return redirect(f'/ventas-clientes/{negocio_id}')
         if tab_pedido in ('entradas', 'entrada'):
             return redirect(f'/entradas/{negocio_id}')
         if tab_pedido in ('produccion', 'producción'):
@@ -11383,6 +11385,66 @@ def ventas_costos_standalone(negocio_id=None):
             centro_activo = centros[0]
 
         return render_template('ventas_costos.html',
+                               negocio_id=negocio_id,
+                               negocio_nombre=contexto['negocio_nombre'],
+                               centros_utilidad=centros,
+                               centro_activo=centro_activo,
+                               volver_url='/inicio')
+    except Exception as e:
+        return f"Error: {e}", 500
+    finally:
+        conn.close()
+
+
+@bp.route('/ventas-clientes')
+@bp.route('/ventas-clientes/<int:negocio_id>')
+def ventas_clientes_standalone(negocio_id=None):
+    """Vista corporativa independiente de Ventas por Cliente y Margen."""
+    if 'usuario_id' not in session and 'rol' not in session:
+        return redirect(url_for('auth.admin_login'))
+    
+    conn = get_db_connection()
+    try:
+        if not negocio_id:
+            negocio_activo = session.get('negocio_activo')
+            if negocio_activo and isinstance(negocio_activo, dict) and negocio_activo.get('id'):
+                negocio_id = negocio_activo['id']
+            elif session.get('negocio_id'):
+                negocio_id = session.get('negocio_id')
+            else:
+                n_row = conn.execute("SELECT id FROM negocios WHERE activo = TRUE ORDER BY id ASC LIMIT 1").fetchone()
+                if not n_row:
+                    n_row = conn.execute("SELECT id FROM terceros WHERE es_empresa = TRUE OR es_proveedor = TRUE ORDER BY id ASC LIMIT 1").fetchone()
+                if n_row:
+                    negocio_id = n_row['id']
+                else:
+                    return "No hay negocios registrados", 404
+
+        contexto = _contexto_negocio(conn, negocio_id)
+        if not contexto:
+            return "Negocio no encontrado", 404
+        if not _puede_gestionar_negocio(contexto):
+            return "No autorizado para este negocio", 403
+
+        centros_rows = conn.execute("""
+            SELECT id, codigo, nombre, tipo, color_badge
+            FROM centros_utilidad
+            WHERE negocio_id = %s AND activo = TRUE
+            ORDER BY id ASC
+        """, (negocio_id,)).fetchall()
+        centros = [dict(c) for c in centros_rows]
+        
+        centro_activo_id = session.get('centro_utilidad_id')
+        centro_activo = None
+        if centro_activo_id:
+            for c in centros:
+                if str(c['id']) == str(centro_activo_id):
+                    centro_activo = c
+                    break
+        if not centro_activo and centros:
+            centro_activo = centros[0]
+
+        return render_template('ventas_clientes.html',
                                negocio_id=negocio_id,
                                negocio_nombre=contexto['negocio_nombre'],
                                centros_utilidad=centros,
@@ -15343,6 +15405,425 @@ def api_reporte_ventas_costos_pdf(negocio_id):
         pdf = _pdf_reporte_ventas_costos(nombre_negocio, desde, hasta, datos, centro_info=centro_info, costo_hora_mod=costo_hora_mod, personas_mod=personas_mod_pdf, hora_desde=hora_desde, hora_hasta=hora_hasta)
         resp = Response(bytes(pdf.output()), mimetype='application/pdf')
         filename = f"reporte_ventas_costos_{centro_info['codigo']}.pdf" if centro_info else "reporte_ventas_costos_consolidado.pdf"
+        resp.headers['Content-Disposition'] = f'inline; filename={filename}'
+        return resp
+    except Exception as e:
+        try: conn.close()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ---------------------------------------------------------------------------
+# Reporte ventas por cliente (2026-11-22, pedido Rafa): espejo del reporte
+# por producto agrupado por cliente. Detalle por documento con columna
+# Producto (no Cliente).
+# ---------------------------------------------------------------------------
+
+def _query_reporte_ventas_clientes(conn, negocio_id, desde, hasta, centro_utilidad_id=None, costo_hora_mod=0.0, personas_mod=1.0, hora_desde=None, hora_hasta=None):
+    cond_cu = ""
+    params = [negocio_id, desde, hasta]
+    if centro_utilidad_id is not None:
+        try:
+            c_id = int(centro_utilidad_id)
+            if c_id > 0:
+                cond_cu = " AND ped.centro_utilidad_id = %s"
+                params.append(c_id)
+        except (ValueError, TypeError):
+            pass
+
+    cond_horas, params_horas = _cond_horas_ventas(hora_desde, hora_hasta)
+    params.extend(params_horas)
+
+    # Agregar negocio_id para costos_kardex
+    params.append(negocio_id)
+
+    rows = conn.execute(f"""
+        WITH pedidos_periodo AS (
+            SELECT ped.id, ped.numero_documento,
+                   COALESCE(ped.cliente_id, ped.id_tercero) AS cli_id,
+                   COALESCE(t.nombre, ped.nombre_cliente, 'Mostrador') AS cli_nombre
+            FROM pedidos ped
+            LEFT JOIN terceros t ON t.id = COALESCE(ped.cliente_id, ped.id_tercero)
+            WHERE ped.negocio_id = %s
+              AND (ped.estado IS NULL OR ped.estado = '' OR ped.estado NOT IN ('anulado', 'premontado'))
+              AND ped.numero_documento IS NOT NULL AND ped.numero_documento != ''
+              AND COALESCE(ped.fecha, ped.created_at::date) >= %s::date
+              AND COALESCE(ped.fecha, ped.created_at::date) <= %s::date
+              {cond_cu}
+              {cond_horas}
+        ),
+        costos_kardex AS (
+            SELECT
+                pp.cli_id AS cli_id,
+                pp.cli_nombre AS cli_nombre,
+                SUM(mi.valor_total) AS costo_kardex_total
+            FROM movimientos_inventario mi
+            JOIN pedidos_periodo pp ON (mi.referencia_id = pp.id OR mi.numero_documento = pp.numero_documento)
+            WHERE mi.negocio_id = %s
+              AND mi.tipo = 'salida'
+            GROUP BY pp.cli_id, pp.cli_nombre
+        )
+        SELECT
+            pp.cli_id AS cli_id,
+            pp.cli_nombre AS cli_nombre,
+            COUNT(DISTINCT ped.id) AS docs,
+            SUM(pi.cantidad) AS cantidad_vendida,
+            SUM(pi.cantidad * pi.precio_unitario) AS total_ventas_pesos,
+            SUM(pi.cantidad * pi.costo_unitario) AS total_costo_pesos,
+            SUM(COALESCE(p.tiempo_preparacion_min, 0) * pi.cantidad) AS minutos_prep_pond,
+            SUM(COALESCE(p.tiempo_ensamble_min, 0) * pi.cantidad) AS minutos_ens_pond,
+            COALESCE(ck.costo_kardex_total, 0) AS total_costo_kardex
+        FROM pedido_items pi
+        JOIN pedidos ped ON ped.id = pi.pedido_id
+        JOIN pedidos_periodo pp ON pp.id = ped.id
+        JOIN productos p ON p.id = pi.producto_id
+        LEFT JOIN costos_kardex ck ON (ck.cli_id IS NOT DISTINCT FROM pp.cli_id AND ck.cli_nombre = pp.cli_nombre)
+        GROUP BY pp.cli_id, pp.cli_nombre, ck.costo_kardex_total
+        ORDER BY total_ventas_pesos DESC
+    """, tuple(params)).fetchall()
+
+    nper = float(personas_mod or 1.0)
+    if nper <= 0:
+        nper = 1.0
+    costo_minuto = (float(costo_hora_mod) / 60.0 * nper) if float(costo_hora_mod) > 0 else 0.0
+
+    datos = []
+    for r in rows:
+        docs = int(r['docs'] or 0)
+        cant = float(r['cantidad_vendida'] or 0)
+        ventas_tot = float(r['total_ventas_pesos'] or 0)
+        costos_insumos_tot = float(r['total_costo_pesos'] or 0)
+        costos_kardex_tot = float(r['total_costo_kardex'] or 0.0)
+        min_prep = float(r['minutos_prep_pond'] or 0.0)
+        min_ens = float(r['minutos_ens_pond'] or 0.0)
+        total_mod = (min_prep + min_ens) * costo_minuto
+        costo_primo_tot = costos_insumos_tot + total_mod
+        ticket = ventas_tot / docs if docs > 0 else 0.0
+        margen_total = ventas_tot - costo_primo_tot
+        margen_porcentual = (margen_total / ventas_tot * 100.0) if ventas_tot > 0 else 0.0
+
+        desfase_kardex = costos_insumos_tot - costos_kardex_tot
+        abs_desfase = abs(desfase_kardex)
+        tiene_desfase = abs_desfase > 100.0 and cant > 0
+        tiene_costo_cero = costos_insumos_tot <= 0 and cant > 0
+        tiene_margen_negativo = margen_total < 0
+
+        datos.append({
+            'cliente_id': r['cli_id'],
+            'nombre_cliente': r['cli_nombre'],
+            'docs': docs,
+            'cantidad': cant,
+            'ticket_promedio': ticket,
+            'total_venta': ventas_tot,
+            'total_costo_insumos': costos_insumos_tot,
+            'total_costo_kardex': costos_kardex_tot,
+            'desfase_kardex': round(desfase_kardex, 2),
+            'tiene_desfase': tiene_desfase,
+            'tiene_costo_cero': tiene_costo_cero,
+            'tiene_margen_negativo': tiene_margen_negativo,
+            'minutos_prep': min_prep,
+            'minutos_ens': min_ens,
+            'total_mod': total_mod,
+            'total_costo': costo_primo_tot,
+            'margen_total': margen_total,
+            'margen_porcentual': margen_porcentual
+        })
+    return datos
+
+
+@bp.route('/api/inventario/<int:negocio_id>/reporte-ventas-clientes')
+def api_reporte_ventas_clientes(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    desde = request.args.get('desde')
+    hasta = request.args.get('hasta')
+    centro_utilidad_id = request.args.get('centro_utilidad_id')
+    if not desde or not hasta:
+        return jsonify({'ok': False, 'error': 'Debe especificar las fechas desde y hasta'}), 400
+    try:
+        hora_desde = _validar_hora(request.args.get('hora_desde'))
+        hora_hasta = _validar_hora(request.args.get('hora_hasta'))
+    except ValueError as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+    conn = get_db_connection()
+    try:
+        cfg_row = conn.execute("SELECT costo_hora_mod, horas_semana_mod, dias_semana_mod, personas_mod, mod_activo_mod FROM config_negocio WHERE tercero_id = %s", (negocio_id,)).fetchone()
+        costo_hora_mod = float(cfg_row['costo_hora_mod']) if cfg_row and cfg_row['costo_hora_mod'] is not None else 0.0
+        horas_semana_mod = float(cfg_row['horas_semana_mod']) if cfg_row and cfg_row.get('horas_semana_mod') is not None else 42.0
+        dias_semana_mod = float(cfg_row['dias_semana_mod']) if cfg_row and cfg_row.get('dias_semana_mod') is not None else 6.0
+        personas_mod = float(cfg_row['personas_mod']) if cfg_row and cfg_row.get('personas_mod') is not None else 1.0
+        mod_activo_mod = bool(cfg_row['mod_activo_mod']) if cfg_row and cfg_row.get('mod_activo_mod') is not None else True
+        costo_hora_ef = costo_hora_mod if mod_activo_mod else 0.0
+
+        datos = _query_reporte_ventas_clientes(conn, negocio_id, desde, hasta, centro_utilidad_id=centro_utilidad_id, costo_hora_mod=costo_hora_ef, personas_mod=personas_mod, hora_desde=hora_desde, hora_hasta=hora_hasta)
+
+        alertas = {
+            'total_con_desfase': sum(1 for d in datos if d.get('tiene_desfase')),
+            'total_con_costo_cero': sum(1 for d in datos if d.get('tiene_costo_cero')),
+            'total_con_margen_neg': sum(1 for d in datos if d.get('tiene_margen_negativo')),
+            'desfase_neto_total': sum(d.get('desfase_kardex', 0) for d in datos if d.get('tiene_desfase')),
+            'desfase_abs_total': sum(abs(d.get('desfase_kardex', 0)) for d in datos if d.get('tiene_desfase')),
+        }
+
+        return jsonify({
+            'ok': True,
+            'reporte': datos,
+            'costo_hora_mod': costo_hora_mod,
+            'horas_semana_mod': horas_semana_mod,
+            'dias_semana_mod': dias_semana_mod,
+            'personas_mod': personas_mod,
+            'mod_activo_mod': mod_activo_mod,
+            'alertas': alertas
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/inventario/<int:negocio_id>/reporte-ventas-clientes/detalle')
+def api_reporte_ventas_clientes_detalle(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    desde = request.args.get('desde')
+    hasta = request.args.get('hasta')
+    cliente_id = request.args.get('cliente_id') or ''
+    cliente_nombre = request.args.get('cliente_nombre') or ''
+    centro_utilidad_id = request.args.get('centro_utilidad_id')
+    if not desde or not hasta:
+        return jsonify({'ok': False, 'error': 'Fechas requeridas'}), 400
+    if not cliente_id and not cliente_nombre:
+        return jsonify({'ok': False, 'error': 'cliente_id o cliente_nombre requerido'}), 400
+    try:
+        hora_desde = _validar_hora(request.args.get('hora_desde'))
+        hora_hasta = _validar_hora(request.args.get('hora_hasta'))
+    except ValueError as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+    from ..db import get_db_connection
+    conn = get_db_connection()
+    try:
+        cond_cu = ""
+        params_det = [negocio_id, desde, hasta]
+        if centro_utilidad_id:
+            try:
+                c_id = int(centro_utilidad_id)
+                if c_id > 0:
+                    cond_cu = " AND ped.centro_utilidad_id = %s"
+                    params_det.append(c_id)
+            except (ValueError, TypeError):
+                pass
+
+        cond_horas_det, params_horas_det = _cond_horas_ventas(hora_desde, hora_hasta)
+        params_det.extend(params_horas_det)
+
+        cond_cli = ""
+        if cliente_id:
+            try:
+                cli_int = int(cliente_id)
+            except ValueError:
+                return jsonify({'ok': False, 'error': 'cliente_id invalido'}), 400
+            cond_cli = " AND COALESCE(ped.cliente_id, ped.id_tercero) = %s"
+            params_det.append(cli_int)
+        else:
+            cond_cli = " AND COALESCE(ped.cliente_id, ped.id_tercero) IS NULL AND COALESCE(ped.nombre_cliente, 'Mostrador') = %s"
+            params_det.append(cliente_nombre)
+
+        rows = conn.execute(f"""
+            WITH items_agrupados AS (
+                SELECT
+                    pi.pedido_id,
+                    pi.producto_id,
+                    p.nombre AS nombre_producto,
+                    SUM(pi.cantidad) AS cantidad,
+                    SUM(pi.cantidad * pi.precio_unitario) AS total_venta,
+                    SUM(pi.cantidad * pi.costo_unitario) AS total_costo,
+                    CASE
+                        WHEN SUM(pi.cantidad) > 0 THEN SUM(pi.cantidad * pi.precio_unitario) / SUM(pi.cantidad)
+                        ELSE 0
+                    END AS precio_unitario,
+                    CASE
+                        WHEN SUM(pi.cantidad) > 0 THEN SUM(pi.cantidad * pi.costo_unitario) / SUM(pi.cantidad)
+                        ELSE 0
+                    END AS costo_unitario
+                FROM pedido_items pi
+                JOIN productos p ON p.id = pi.producto_id
+                GROUP BY pi.pedido_id, pi.producto_id, p.nombre
+            )
+            SELECT
+                ped.id AS pedido_id,
+                COALESCE(ped.fecha, ped.created_at::date) AS fecha,
+                COALESCE(ped.created_at, ped.fecha::timestamp)::time AS hora,
+                ped.numero_documento,
+                ped.tipo_documento_id,
+                ia.producto_id,
+                ia.nombre_producto,
+                ia.cantidad,
+                ia.precio_unitario,
+                ia.costo_unitario,
+                ia.total_venta,
+                ia.total_costo,
+                COALESCE(kardex.costo_kardex, 0) AS total_costo_kardex,
+                (COALESCE(kardex.costo_kardex, 0) - ia.total_costo) AS desfase_kardex,
+                ped.metodo_pago
+            FROM items_agrupados ia
+            JOIN pedidos ped ON ped.id = ia.pedido_id
+            LEFT JOIN LATERAL (
+                SELECT SUM(mi.valor_total) AS costo_kardex
+                FROM movimientos_inventario mi
+                WHERE mi.negocio_id = ped.negocio_id
+                  AND (mi.referencia_id = ped.id OR mi.numero_documento = ped.numero_documento)
+                  AND mi.tipo = 'salida'
+                  AND COALESCE(mi.producto_padre_id, mi.producto_id) = ia.producto_id
+            ) kardex ON true
+            WHERE ped.negocio_id = %s
+              AND (ped.estado IS NULL OR ped.estado = '' OR ped.estado NOT IN ('anulado', 'premontado'))
+              AND ped.numero_documento IS NOT NULL AND ped.numero_documento != ''
+              AND COALESCE(ped.fecha, ped.created_at::date) >= %s::date
+              AND COALESCE(ped.fecha, ped.created_at::date) <= %s::date
+              {cond_cu}
+              {cond_horas_det}
+              {cond_cli}
+            ORDER BY COALESCE(ped.fecha, ped.created_at::date) DESC, ped.id DESC, ia.nombre_producto ASC
+        """, tuple(params_det)).fetchall()
+        documentos = []
+        for r in rows:
+            d = dict(r)
+            if d.get('fecha'):
+                d['fecha'] = d['fecha'].strftime('%Y-%m-%d') if hasattr(d['fecha'], 'strftime') else str(d['fecha'])
+            if d.get('hora'):
+                d['hora'] = d['hora'].strftime('%H:%M') if hasattr(d['hora'], 'strftime') else str(d['hora'])[:5]
+            for k in ('cantidad', 'precio_unitario', 'costo_unitario', 'total_venta', 'total_costo', 'total_costo_kardex', 'desfase_kardex'):
+                d[k] = float(d[k]) if d.get(k) is not None else 0.0
+            d['tiene_desfase'] = abs(d['desfase_kardex']) > 100
+            documentos.append(d)
+        conn.close()
+        return jsonify({'ok': True, 'documentos': documentos})
+    except Exception as e:
+        try: conn.close()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+def _pdf_reporte_ventas_clientes(nombre_negocio, desde, hasta, datos, centro_info=None, costo_hora_mod=0.0, personas_mod=1.0, hora_desde=None, hora_hasta=None):
+    pdf = FPDF(format='letter', unit='mm')
+    pdf.set_auto_page_break(auto=True, margin=14)
+    pdf.add_page()
+
+    pdf.set_font('Helvetica', 'B', 15)
+    pdf.cell(0, 9, _pdf_sanitize(nombre_negocio), ln=1, align='C')
+    pdf.set_font('Helvetica', 'B', 11)
+    sub_title = f"Ventas por Cliente — {centro_info['codigo']} ({centro_info['nombre']})" if centro_info else "Ventas por Cliente (Consolidado)"
+    pdf.cell(0, 6, _pdf_sanitize(sub_title), ln=1, align='C')
+    pdf.set_font('Helvetica', '', 9)
+    rango_txt = f'Rango: {desde} al {hasta}'
+    _hd = hora_desde or '00:00'
+    _hh = hora_hasta or '23:59'
+    if (hora_desde or hora_hasta) and not (_hd == '00:00' and _hh == '23:59'):
+        rango_txt += f' ({_hd} - {_hh})'
+    pdf.cell(0, 5, rango_txt, ln=1, align='C')
+
+    total_ventas = sum(d['total_venta'] for d in datos)
+    total_costos = sum(d['total_costo'] for d in datos)
+    total_insumos = sum(d.get('total_costo_insumos', 0) for d in datos)
+    total_mod = sum(d.get('total_mod', 0) for d in datos)
+    total_margen = total_ventas - total_costos
+    pct = (total_margen / total_ventas * 100.0) if total_ventas else 0.0
+
+    pdf.ln(2)
+    pdf.set_font('Helvetica', 'B', 8.5)
+    if float(costo_hora_mod or 0) > 0 or total_mod > 0:
+        npdf = float(personas_mod or 1.0)
+        if npdf <= 0:
+            npdf = 1.0
+        eq_txt = '' if npdf == 1 else f" (eq. {npdf:g})"
+        resumen_txt = f"Ventas: ${_pdf_money(total_ventas)}   |   Insumos: ${_pdf_money(total_insumos)}   |   MOD (Est{eq_txt}): ${_pdf_money(total_mod)}   |   Costo Total: ${_pdf_money(total_costos)}   |   Margen: ${_pdf_money(total_margen)} ({pct:.1f}%)"
+    else:
+        resumen_txt = f"Ventas: ${_pdf_money(total_ventas)}   |   Costos: ${_pdf_money(total_costos)}   |   Margen: ${_pdf_money(total_margen)} ({pct:.1f}%)"
+    pdf.cell(0, 6, resumen_txt, ln=1, align='C')
+    pdf.ln(2)
+
+    has_mod = (float(costo_hora_mod or 0) > 0 or total_mod > 0)
+    if has_mod:
+        col_w = [62, 12, 14, 24, 18, 24, 24, 14]
+        headers = ['Cliente', 'Docs', 'Cant', 'Venta Tot', 'MOD Est.', 'Costo Tot', 'Margen Tot', '%']
+    else:
+        col_w = [70, 14, 16, 26, 26, 26, 14]
+        headers = ['Cliente', 'Docs', 'Cant', 'Venta Tot', 'Costo Tot', 'Margen Tot', '%']
+    pdf.set_font('Helvetica', 'B', 7.5)
+    for i, h in enumerate(headers):
+        pdf.cell(col_w[i], 6, h, border=1, align='C' if i else 'L')
+    pdf.ln()
+    pdf.set_font('Helvetica', '', 7.5)
+    for d in datos:
+        fila = [d['nombre_cliente'][:32], str(d['docs']), _pdf_money(d['cantidad']),
+                _pdf_money(d['total_venta'])]
+        if has_mod:
+            fila.append(_pdf_money(d.get('total_mod', 0)))
+        fila += [_pdf_money(d['total_costo']), _pdf_money(d['margen_total']),
+                 '%.1f%%' % d['margen_porcentual']]
+        for i, v in enumerate(fila):
+            pdf.cell(col_w[i], 5, _pdf_sanitize(v), border=1, align='R' if i else 'L')
+        pdf.ln()
+    pdf.set_font('Helvetica', 'B', 8)
+    tot = ['TOTAL', '', _pdf_money(sum(d['cantidad'] for d in datos)),
+           _pdf_money(total_ventas)]
+    if has_mod:
+        tot.append(_pdf_money(total_mod))
+    tot += [_pdf_money(total_costos), _pdf_money(total_margen), '%.1f%%' % pct]
+    for i, v in enumerate(tot):
+        pdf.cell(col_w[i], 6, _pdf_sanitize(v), border=1, align='R' if i else 'L')
+    pdf.ln()
+    return pdf
+
+
+@bp.route('/api/inventario/<int:negocio_id>/reporte-ventas-clientes/pdf')
+def api_reporte_ventas_clientes_pdf(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    if FPDF is None:
+        return jsonify({'ok': False, 'error': 'PDF no disponible (falta fpdf2)'}), 500
+
+    desde = request.args.get('desde')
+    hasta = request.args.get('hasta')
+    centro_utilidad_id = request.args.get('centro_utilidad_id')
+    if not desde or not hasta:
+        return jsonify({'ok': False, 'error': 'Debe especificar las fechas desde y hasta'}), 400
+    try:
+        hora_desde = _validar_hora(request.args.get('hora_desde'))
+        hora_hasta = _validar_hora(request.args.get('hora_hasta'))
+    except ValueError as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+    conn = get_db_connection()
+    try:
+        contexto = _contexto_negocio(conn, negocio_id)
+        nombre_negocio = (contexto.get('negocio_nombre') or 'Negocio') if contexto else 'Negocio'
+
+        cfg_row = conn.execute("SELECT costo_hora_mod, personas_mod, mod_activo_mod FROM config_negocio WHERE tercero_id = %s", (negocio_id,)).fetchone()
+        personas_mod_pdf = float(cfg_row['personas_mod']) if cfg_row and cfg_row.get('personas_mod') is not None else 1.0
+        costo_hora_mod = float(cfg_row['costo_hora_mod']) if cfg_row and cfg_row['costo_hora_mod'] is not None else 0.0
+        mod_activo_pdf = bool(cfg_row['mod_activo_mod']) if cfg_row and cfg_row.get('mod_activo_mod') is not None else True
+        costo_hora_mod = costo_hora_mod if mod_activo_pdf else 0.0
+
+        datos = _query_reporte_ventas_clientes(conn, negocio_id, desde, hasta, centro_utilidad_id=centro_utilidad_id, costo_hora_mod=costo_hora_mod, personas_mod=personas_mod_pdf, hora_desde=hora_desde, hora_hasta=hora_hasta)
+
+        centro_info = None
+        if centro_utilidad_id:
+            try:
+                c_id = int(centro_utilidad_id)
+                if c_id > 0:
+                    cu_row = conn.execute("SELECT id, codigo, nombre FROM centros_utilidad WHERE id = %s AND negocio_id = %s", (c_id, negocio_id)).fetchone()
+                    if cu_row:
+                        centro_info = dict(cu_row)
+            except (ValueError, TypeError):
+                pass
+
+        conn.close()
+        pdf = _pdf_reporte_ventas_clientes(nombre_negocio, desde, hasta, datos, centro_info=centro_info, costo_hora_mod=costo_hora_mod, personas_mod=personas_mod_pdf, hora_desde=hora_desde, hora_hasta=hora_hasta)
+        resp = Response(bytes(pdf.output()), mimetype='application/pdf')
+        filename = f"reporte_ventas_clientes_{centro_info['codigo']}.pdf" if centro_info else "reporte_ventas_clientes_consolidado.pdf"
         resp.headers['Content-Disposition'] = f'inline; filename={filename}'
         return resp
     except Exception as e:

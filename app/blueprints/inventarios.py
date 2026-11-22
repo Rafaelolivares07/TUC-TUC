@@ -14668,26 +14668,45 @@ def _validar_hora(valor):
     return v
 
 
+def _fin_minuto(hh):
+    """Minuto siguiente a HH:MM, o None si es 23:59 (nada que recortar).
+
+    El tope se calcula en Python porque PG envuelve la aritmetica de time:
+    '23:59'::time + interval '1 minute' da 00:00, no 24:00 (verificado
+    2026-11-22: ese wrapage dejaba el reporte vacio).
+    """
+    tot = int(hh[:2]) * 60 + int(hh[3:5]) + 1
+    if tot >= 24 * 60:
+        return None
+    return '%02d:%02d' % (tot // 60, tot % 60)
+
+
 def _cond_horas_ventas(hora_desde, hora_hasta):
     """(sql, params) filtro horario sobre created_at::time.
 
     Vacias = sin filtro. Solo una = cota abierta. desde > hasta =
-    ventana trasnoche (OR). El hasta incluye el minuto completo.
-    La fecha de negocio sigue mandando en fechas;
+    ventana trasnoche (OR). El hasta incluye el minuto completo (< min
+    siguiente). La fecha de negocio sigue mandando en fechas;
     la hora sale de created_at (ped.fecha es DATE, sin hora).
     """
     base = 'COALESCE(ped.created_at, ped.fecha::timestamp)::time'
-    hi = base + " < (%s::time + interval '1 minute')"
+    lo = base + ' >= %s'
+    fin = _fin_minuto(hora_hasta) if hora_hasta else None
+    hi = base + ' < %s' if fin else None
     if hora_desde and hora_hasta:
         if hora_desde <= hora_hasta:
-            return (' AND ' + base + ' >= %s AND ' + hi,
-                    [hora_desde, hora_hasta])
-        return (' AND (' + base + ' >= %s OR ' + hi + ')',
-                [hora_desde, hora_hasta])
+            if hi:
+                return (' AND ' + lo + ' AND ' + hi, [hora_desde, fin])
+            return (' AND ' + lo, [hora_desde])
+        if hi:
+            return (' AND (' + lo + ' OR ' + hi + ')', [hora_desde, fin])
+        return (' AND ' + lo, [hora_desde])
     if hora_desde:
-        return (' AND ' + base + ' >= %s', [hora_desde])
+        return (' AND ' + lo, [hora_desde])
     if hora_hasta:
-        return (' AND ' + hi, [hora_hasta])
+        if hi:
+            return (' AND ' + hi, [fin])
+        return ('', [])
     return ('', [])
 
 

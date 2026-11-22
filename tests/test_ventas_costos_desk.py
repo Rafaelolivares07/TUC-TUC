@@ -40,7 +40,8 @@ check('marca TUC TUC intacta', 'TUC TUC' in html and 'negocio_nombre' in html)
 # completo, identico a hoy. Solo-hasta recorta el inicio, solo-desde el
 # final; si desde > hasta se lee como ventana trasnoche (OR).
 sys.path.insert(0, BASE)
-from app.blueprints.inventarios import _query_reporte_ventas_costos, _validar_hora
+from app.blueprints.inventarios import (
+    _query_reporte_ventas_costos, _validar_hora, _cond_horas_ventas)
 
 
 class _FakeCur:
@@ -76,17 +77,22 @@ check('solo desde: cota inferior', '>= %s' in c1.sql and '11:00' in c1.params)
 check('solo desde: un param mas', len(c1.params) == 5)
 
 c2 = _corre(hh='15:00')
-check('solo hasta: cota superior', '< (%s::time' in c2.sql and '15:00' in c2.params)
+check('solo hasta: cota superior', '< %s' in c2.sql
+      and c2.sql.count('>= %s') == 1 and '15:01' in c2.params)
 check('solo hasta: un param mas', len(c2.params) == 5)
 
 c3 = _corre(hd='11:00', hh='15:00')
-check('ambas: ventana diurna', '>= %s' in c3.sql and '< (%s::time' in c3.sql
-      and 'OR COALESCE' not in c3.sql)
-check('hasta incluye minuto completo', "interval '1 minute'" in c3.sql)
+check('ambas: ventana diurna', '>= %s' in c3.sql and '< %s' in c3.sql
+      and 'OR COALESCE' not in c3.sql
+      and '11:00' in c3.params and '15:01' in c3.params)
+check('hasta incluye minuto completo', _cond_horas_ventas(None, '15:00')[1] == ['15:01'])
+check('tope 23:59 no filtra nada', _cond_horas_ventas(None, '23:59') == ('', []))
+_sql_full, _par_full = _cond_horas_ventas('00:00', '23:59')
+check('dia completo: solo cota inferior', '<' not in _sql_full and _par_full == ['00:00'])
 
 c4 = _corre(hd='18:00', hh='02:00')
 check('trasnoche: OR', 'OR COALESCE' in c4.sql
-      and '18:00' in c4.params and '02:00' in c4.params)
+      and '18:00' in c4.params and '02:01' in c4.params)
 
 check('valida: vacio es None', _validar_hora('') is None and _validar_hora(None) is None)
 check('valida: formato ok', _validar_hora('07:30') == '07:30')

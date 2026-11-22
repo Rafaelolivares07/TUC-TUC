@@ -2,6 +2,8 @@
 
 Fecha: 2026-06-05
 
+Estado vigente: ver Actualizacion 2026-11-18 al final del documento.
+
 ## Contexto
 
 TUC TUC es una plataforma web que comparte tablas comunes para diferentes unidades de negocio, como restaurantes y tiendas. Solo se crean tablas especificas para una unidad cuando la necesidad lo justifica.
@@ -820,3 +822,115 @@ La pantalla `compras_admin.html` permite crear cotizaciones sencillas con:
 - observaciones
 
 Al guardar o eliminar una cotizacion, la propuesta de compras se recalcula para que las sugerencias por proveedor queden actualizadas.
+
+## Actualizacion 2026-11-18 — Unimotor de agotados (contrato FINAL, live 9b8c547)
+
+Doctrina (orden Rafa): un solo motor decide el veredicto de agotado; todo lo demas
+invoca y presenta. Las promos van adentro del motor.
+
+### Las 7 decisiones (grill con Rafa, `docs/_conversacion/INVENTARIOS.md`)
+
+1. Demanda = TODAS las salidas (ventas, produccion, ajustes, anulaciones). Sin filtro por motivo.
+2. Forma = CON TENDENCIA bilateral (ventana reciente vs completa, con topes). Si sube, sube; si baja, baja.
+3. Denominador = dias CALENDARIO de la ventana (incluidos ceros).
+4. Minimo fijo por producto MUERE (era override silencioso e invisible).
+5. Sin historia = sin recomendacion. Mueren el piso 1.0 y la frecuencia defecto.
+6. Telegram avisa SOLO entradas a la lista; recuperadas en silencio; pendientes pegados.
+7. Escala BINARIA: dias minimos = CUANDO (entra a agotado, punto); dias maximos = CUANTO.
+
+Doctrinas sentadas: nunca se suma toda la historia (la ventana trunca); cada movimiento
+re-evalua su item (sin barridos); bandera sin historia se cae sola en lectura.
+
+### Contrato del motor
+
+`_motor_evaluar(conn, negocio_id, producto_id, stock_actual)` en `app/blueprints/inventarios.py`:
+
+- Lee demanda (ventana+tendencia+topes) y dias (por producto, si no global) SOLO de BD.
+- Sin demanda en ventana -> `sin_historia` (ceros, sin recomendacion).
+- Con demanda: `cobertura = stock / demanda_proyectada`; `agotado` si `cobertura < dias_min`, si no `sano`.
+- Retorna veredicto + `demanda_diaria`, `demanda_proyectada`, `growth_rate`, `frecuencia_dias`,
+  `cobertura_dias`, `dias_min/max/entrega`, `stock_min_unidades`, `cantidad_sugerida`.
+
+### Invocadores (llaman y presentan, jamas deciden)
+
+- Hook de movimientos: tras cada entrada/salida re-evalua el item; persiste transiciones
+  (flaggea/recupera en ambos sentidos) y encola despacho solo si ENTRA a la lista.
+- Promos: solo evalua oportunidades sobre items YA flaggeados. Sin escritura propia de banderas.
+- Telegram: redacta nuevos + pendientes. Sin calculos propios.
+- Pantalla Compras (`/api/inventario/<neg>/compras/sugerencias`): pide veredictos, pinta.
+  Lee los 7 params de BD; ignora query. Depura sin-historia al leer (con commit).
+- Sobre-stock y pronosticos produccion: usan `_motor_params_demanda` (misma demanda).
+
+### Parametros persistidos (`parametros_sistema`, UI con autoguardado al salir)
+
+- `inventario_stock_max_dias` (15), `inventario_stock_min_dias` (3), `inventario_dias_entrega` (2),
+  `inventario_dias_historial` (30), `inventario_growth_window` (7),
+  `inventario_max_growth` (100), `inventario_min_growth` (-50).
+- Por producto: `productos.dias_min_stock`, `productos.dias_max_stock` (NULL = global).
+
+### Muertes del 2026-11-18
+
+- `_obtener_config_stock_minimo` (sustituido por el motor), piso 1.0, `stock_minimo` fijo
+  (columna queda, motor y UI lo ignoran), `dias_defecto`, toggle dias-con-stock, cuenta
+  propia de la pantalla, sync de promos con escritura, motor rotacion huerfano en `compras.py`.
+
+### Que cambio del diseno de junio
+
+- Demanda: solo-ventas -> todas las salidas.
+- Formula: `max(promedio_7, promedio_30)` -> ventana configurable + tendencia con topes.
+- Estados: 5 peldaños -> binario (adentro/afuera de lista).
+- Confianza: no implementada; en su lugar sin-historia = sin recomendacion.
+- Flujo orden -> WhatsApp -> recepcion con estados: implementado (Enviada/Confirmada/
+  Propuesta con Cambios/Recibida). Registrar Entrada transfiere a pestaña Entradas.
+
+### Pruebas
+
+- `tests/test_unimotor_agotados.py` 32/32 (motor, invocadores, muertes, UI, CRLF).
+- `tests/test_compras_autoguardado.py` 18/18 (7 autosaves globales + por linea).
+- Manual de usuario: `docs/manuales/compras_usuario.md` (nuevo 2026-11-18).
+
+## Actualizacion 2026-11-22 — Enlace del proveedor + doctrinas de venta (afinado con Rafa)
+
+### Enlace del proveedor (existe en codigo, `app/blueprints/compras.py`)
+
+- `ordenes_compra` lleva `token_publico` + `url_publica`: el proveedor abre su
+  enlace propio sin cuenta y ve la orden.
+- Desde su pantalla confirma o propone cambios (`cantidad_confirmada`,
+  `precio_confirmado`, `total_confirmado`, `observaciones_proveedor`).
+- Si propone cambios el estado pasa a `propuesta_cambios`; el comprador revisa
+  y aprueba (`aprobar-cambios`) -> `confirmada`. Estados: Enviada / Confirmada /
+  Propuesta con Cambios / Recibida en Almacen.
+- Cada orden trae su chat comprador-proveedor (conversacion por token).
+- La entrada al inventario viaja desde la orden (Registrar Entrada -> pestana
+  Entradas), sin digitar dos veces.
+
+### Seleccion efectiva (codigo manda, `api_compras_sugerencias`)
+
+- Cotizaciones vigentes ordenadas por: empaque comercial primero (>1 und, no
+  'unidad'), luego menor costo unitario, luego mas reciente.
+- Solo compiten las que caben en la capacidad de compra; la mejor descartada
+  se reporta como oportunidad de ahorro (con dias necesarios para desbloquearla).
+- Sin cotizaciones: ultimo proveedor historico; sin historial: "Sin Proveedor
+  Registrado" (cantidad si, proveedor/valor no).
+- Doctrina (orden Rafa): tu descartas al que falla en calidad o no cumple;
+  entre los que quedan, la app sugiere al del mejor precio. Antes de ordenar
+  el usuario puede cambiar proveedor o descartar lineas.
+
+### Palabra "consumo" (doctrina, orden Rafa)
+
+- Demanda = TODAS las salidas (decision 1 del 18-11) se dice "consumo": lo que
+  se vende y lo que se gasta operando (carnes, empaques, condimentos,
+  servilletas). Manuales y ventas ya hablan asi; "ventas" solo donde sea
+  literalmente venta.
+
+### Alertas: solo-novedad, una vez (refuerza decision 6 del 18-11)
+
+- Cada aviso sale una vez por novedad (item manana, otro tarde); jamas se
+  repite lo ya dicho ni se cansa al usuario. No hay boletin diario programado.
+- Futuro (NO prometer): resumenes generales programados por el usuario con lo
+  disponible en la app.
+
+### Dias: referencia del usuario (refuerza decision 7 del 18-11)
+
+- "Tu pones los dias, el consumo pone las cantidades": min/max en dias son
+  politica del dueno (CUANDO/CUANTO); las cantidades exactas salen del consumo.

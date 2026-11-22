@@ -14612,6 +14612,11 @@ def api_reporte_ventas_costos(negocio_id):
     centro_utilidad_id = request.args.get('centro_utilidad_id')
     if not desde or not hasta:
         return jsonify({'ok': False, 'error': 'Debe especificar las fechas desde y hasta'}), 400
+    try:
+        hora_desde = _validar_hora(request.args.get('hora_desde'))
+        hora_hasta = _validar_hora(request.args.get('hora_hasta'))
+    except ValueError as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
         
     conn = get_db_connection()
     try:
@@ -14623,7 +14628,7 @@ def api_reporte_ventas_costos(negocio_id):
         mod_activo_mod = bool(cfg_row['mod_activo_mod']) if cfg_row and cfg_row.get('mod_activo_mod') is not None else True
         costo_hora_ef = costo_hora_mod if mod_activo_mod else 0.0
 
-        datos = _query_reporte_ventas_costos(conn, negocio_id, desde, hasta, centro_utilidad_id=centro_utilidad_id, costo_hora_mod=costo_hora_ef, personas_mod=personas_mod)
+        datos = _query_reporte_ventas_costos(conn, negocio_id, desde, hasta, centro_utilidad_id=centro_utilidad_id, costo_hora_mod=costo_hora_ef, personas_mod=personas_mod, hora_desde=hora_desde, hora_hasta=hora_hasta)
 
         # Resumen de alertas de auditoría
         alertas = {
@@ -14650,7 +14655,41 @@ def api_reporte_ventas_costos(negocio_id):
         conn.close()
 
 
-def _query_reporte_ventas_costos(conn, negocio_id, desde, hasta, centro_utilidad_id=None, costo_hora_mod=0.0, personas_mod=1.0):
+def _validar_hora(valor):
+    """HH:MM 24h validada o None si vacia. ValueError si malformada."""
+    import re
+    if valor is None:
+        return None
+    v = str(valor).strip()
+    if not v:
+        return None
+    if not re.match(r'^([01]\d|2[0-3]):[0-5]\d$', v):
+        raise ValueError('hora invalida: %r (use HH:MM 24h)' % (valor,))
+    return v
+
+
+def _cond_horas_ventas(hora_desde, hora_hasta):
+    """(sql, params) filtro horario sobre created_at::time.
+
+    Vacias = sin filtro. Solo una = cota abierta. desde > hasta =
+    ventana trasnoche (OR). La fecha de negocio sigue mandando en fechas;
+    la hora sale de created_at (ped.fecha es DATE, sin hora).
+    """
+    base = 'COALESCE(ped.created_at, ped.fecha::timestamp)::time'
+    if hora_desde and hora_hasta:
+        if hora_desde <= hora_hasta:
+            return (' AND ' + base + ' >= %s AND ' + base + ' <= %s',
+                    [hora_desde, hora_hasta])
+        return (' AND (' + base + ' >= %s OR ' + base + ' <= %s)',
+                [hora_desde, hora_hasta])
+    if hora_desde:
+        return (' AND ' + base + ' >= %s', [hora_desde])
+    if hora_hasta:
+        return (' AND ' + base + ' <= %s', [hora_hasta])
+    return ('', [])
+
+
+def _query_reporte_ventas_costos(conn, negocio_id, desde, hasta, centro_utilidad_id=None, costo_hora_mod=0.0, personas_mod=1.0, hora_desde=None, hora_hasta=None):
     cond_cu = ""
     params = [negocio_id, desde, hasta]
     if centro_utilidad_id is not None:
@@ -14661,6 +14700,9 @@ def _query_reporte_ventas_costos(conn, negocio_id, desde, hasta, centro_utilidad
                 params.append(c_id)
         except (ValueError, TypeError):
             pass
+
+    cond_horas, params_horas = _cond_horas_ventas(hora_desde, hora_hasta)
+    params.extend(params_horas)
 
     # Agregar negocio_id para costos_kardex
     params.append(negocio_id)
@@ -14675,6 +14717,7 @@ def _query_reporte_ventas_costos(conn, negocio_id, desde, hasta, centro_utilidad
               AND COALESCE(ped.fecha, ped.created_at::date) >= %s::date
               AND COALESCE(ped.fecha, ped.created_at::date) <= %s::date
               {cond_cu}
+              {cond_horas}
         ),
         costos_kardex AS (
             SELECT 
@@ -14779,6 +14822,11 @@ def api_reporte_ventas_costos_detalle(negocio_id):
         producto_id = int(producto_id)
     except ValueError:
         return jsonify({'ok': False, 'error': 'producto_id inválido'}), 400
+    try:
+        hora_desde = _validar_hora(request.args.get('hora_desde'))
+        hora_hasta = _validar_hora(request.args.get('hora_hasta'))
+    except ValueError as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
     from ..db import get_db_connection
     conn = get_db_connection()
     try:
@@ -14792,6 +14840,9 @@ def api_reporte_ventas_costos_detalle(negocio_id):
                     params_det.append(c_id)
             except (ValueError, TypeError):
                 pass
+
+        cond_horas_det, params_horas_det = _cond_horas_ventas(hora_desde, hora_hasta)
+        params_det.extend(params_horas_det)
 
         rows = conn.execute(f"""
             WITH items_agrupados AS (
@@ -14816,6 +14867,7 @@ def api_reporte_ventas_costos_detalle(negocio_id):
             SELECT 
                 ped.id AS pedido_id,
                 COALESCE(ped.fecha, ped.created_at::date) AS fecha,
+                COALESCE(ped.created_at, ped.fecha::timestamp)::time AS hora,
                 ped.numero_documento,
                 ped.tipo_documento_id,
                 COALESCE(ped.cliente_id, ped.id_tercero) AS cliente_tercero_id,
@@ -14845,6 +14897,7 @@ def api_reporte_ventas_costos_detalle(negocio_id):
               AND COALESCE(ped.fecha, ped.created_at::date) >= %s::date
               AND COALESCE(ped.fecha, ped.created_at::date) <= %s::date
               {cond_cu}
+              {cond_horas_det}
             ORDER BY COALESCE(ped.fecha, ped.created_at::date) DESC, ped.id DESC
         """, tuple(params_det)).fetchall()
         documentos = []
@@ -14852,6 +14905,8 @@ def api_reporte_ventas_costos_detalle(negocio_id):
             d = dict(r)
             if d.get('fecha'):
                 d['fecha'] = d['fecha'].strftime('%Y-%m-%d') if hasattr(d['fecha'], 'strftime') else str(d['fecha'])
+            if d.get('hora'):
+                d['hora'] = d['hora'].strftime('%H:%M') if hasattr(d['hora'], 'strftime') else str(d['hora'])[:5]
             for k in ('cantidad', 'precio_unitario', 'costo_unitario', 'total_venta', 'total_costo', 'total_costo_kardex', 'desfase_kardex'):
                 d[k] = float(d[k]) if d.get(k) is not None else 0.0
             d['tiene_desfase'] = abs(d['desfase_kardex']) > 100
@@ -15104,7 +15159,7 @@ def _pdf_kardex_producto(nombre_negocio, nombre_producto, codigo_producto,
     return pdf
 
 
-def _pdf_reporte_ventas_costos(nombre_negocio, desde, hasta, datos, centro_info=None, costo_hora_mod=0.0, personas_mod=1.0):
+def _pdf_reporte_ventas_costos(nombre_negocio, desde, hasta, datos, centro_info=None, costo_hora_mod=0.0, personas_mod=1.0, hora_desde=None, hora_hasta=None):
     pdf = FPDF(format='letter', unit='mm')
     pdf.set_auto_page_break(auto=True, margin=14)
     pdf.add_page()
@@ -15115,7 +15170,10 @@ def _pdf_reporte_ventas_costos(nombre_negocio, desde, hasta, datos, centro_info=
     sub_title = f"Informe de Ventas y Costos — {centro_info['codigo']} ({centro_info['nombre']})" if centro_info else "Informe de Ventas y Costos (Consolidado)"
     pdf.cell(0, 6, _pdf_sanitize(sub_title), ln=1, align='C')
     pdf.set_font('Helvetica', '', 9)
-    pdf.cell(0, 5, f'Rango: {desde} al {hasta}', ln=1, align='C')
+    rango_txt = f'Rango: {desde} al {hasta}'
+    if hora_desde or hora_hasta:
+        rango_txt += f" ({hora_desde or '00:00'} - {hora_hasta or '23:59'})"
+    pdf.cell(0, 5, rango_txt, ln=1, align='C')
 
     total_ventas = sum(d['total_venta'] for d in datos)
     total_costos = sum(d['total_costo'] for d in datos)
@@ -15228,6 +15286,11 @@ def api_reporte_ventas_costos_pdf(negocio_id):
     centro_utilidad_id = request.args.get('centro_utilidad_id')
     if not desde or not hasta:
         return jsonify({'ok': False, 'error': 'Debe especificar las fechas desde y hasta'}), 400
+    try:
+        hora_desde = _validar_hora(request.args.get('hora_desde'))
+        hora_hasta = _validar_hora(request.args.get('hora_hasta'))
+    except ValueError as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
 
     conn = get_db_connection()
     try:
@@ -15240,7 +15303,7 @@ def api_reporte_ventas_costos_pdf(negocio_id):
         mod_activo_pdf = bool(cfg_row['mod_activo_mod']) if cfg_row and cfg_row.get('mod_activo_mod') is not None else True
         costo_hora_mod = costo_hora_mod if mod_activo_pdf else 0.0
 
-        datos = _query_reporte_ventas_costos(conn, negocio_id, desde, hasta, centro_utilidad_id=centro_utilidad_id, costo_hora_mod=costo_hora_mod, personas_mod=personas_mod_pdf)
+        datos = _query_reporte_ventas_costos(conn, negocio_id, desde, hasta, centro_utilidad_id=centro_utilidad_id, costo_hora_mod=costo_hora_mod, personas_mod=personas_mod_pdf, hora_desde=hora_desde, hora_hasta=hora_hasta)
         
         centro_info = None
         if centro_utilidad_id:
@@ -15254,7 +15317,7 @@ def api_reporte_ventas_costos_pdf(negocio_id):
                 pass
 
         conn.close()
-        pdf = _pdf_reporte_ventas_costos(nombre_negocio, desde, hasta, datos, centro_info=centro_info, costo_hora_mod=costo_hora_mod, personas_mod=personas_mod_pdf)
+        pdf = _pdf_reporte_ventas_costos(nombre_negocio, desde, hasta, datos, centro_info=centro_info, costo_hora_mod=costo_hora_mod, personas_mod=personas_mod_pdf, hora_desde=hora_desde, hora_hasta=hora_hasta)
         resp = Response(bytes(pdf.output()), mimetype='application/pdf')
         filename = f"reporte_ventas_costos_{centro_info['codigo']}.pdf" if centro_info else "reporte_ventas_costos_consolidado.pdf"
         resp.headers['Content-Disposition'] = f'inline; filename={filename}'

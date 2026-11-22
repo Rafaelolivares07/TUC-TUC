@@ -97,6 +97,16 @@
           </div>
 
           <div class="flex flex-col">
+            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Hora desde</label>
+            <input type="time" id="vc-hora-desde" title="Opcional: filtra por hora del dia" class="border border-slate-200 rounded-xl px-3 py-2 bg-slate-50/80 focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500 font-semibold text-slate-700 shadow-2xs">
+          </div>
+
+          <div class="flex flex-col">
+            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Hora hasta</label>
+            <input type="time" id="vc-hora-hasta" title="Opcional: filtra por hora del dia" class="border border-slate-200 rounded-xl px-3 py-2 bg-slate-50/80 focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500 font-semibold text-slate-700 shadow-2xs">
+          </div>
+
+          <div class="flex flex-col">
             <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Centro de Utilidad</label>
             <select id="vc-centro-utilidad" onchange="consultarVentasCostos()" class="border border-slate-200 rounded-xl px-3 py-2 bg-white font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-rose-500 shadow-2xs">
               <option value="">🏛️ Todos (Consolidado)</option>
@@ -673,6 +683,15 @@
       }
     }
 
+    function vcHorasQS() {
+      const hd = (document.getElementById('vc-hora-desde') || {}).value || '';
+      const hh = (document.getElementById('vc-hora-hasta') || {}).value || '';
+      let qs = '';
+      if (hd) qs += `&hora_desde=${encodeURIComponent(hd)}`;
+      if (hh) qs += `&hora_hasta=${encodeURIComponent(hh)}`;
+      return qs;
+    }
+
     async function consultarVentasCostos() {
       const desde = document.getElementById('vc-desde').value;
       const hasta = document.getElementById('vc-hasta').value;
@@ -688,7 +707,7 @@
       }
 
       try {
-        let url = `/api/inventario/${NEGOCIO_ID}/reporte-ventas-costos?desde=${desde}&hasta=${hasta}`;
+        let url = `/api/inventario/${NEGOCIO_ID}/reporte-ventas-costos?desde=${desde}&hasta=${hasta}${vcHorasQS()}`;
         if (centroId) url += `&centro_utilidad_id=${encodeURIComponent(centroId)}`;
         const r = await fetch(url);
         const d = await r.json();
@@ -747,7 +766,7 @@
 
       if (!desde || !hasta) { toast('Selecciona el rango de fechas primero', true); return; }
 
-      let url = `/api/inventario/${NEGOCIO_ID}/reporte-ventas-costos/pdf?desde=${desde}&hasta=${hasta}`;
+      let url = `/api/inventario/${NEGOCIO_ID}/reporte-ventas-costos/pdf?desde=${desde}&hasta=${hasta}${vcHorasQS()}`;
       if (centroId) url += `&centro_utilidad_id=${encodeURIComponent(centroId)}`;
       window.open(url, '_blank');
     }
@@ -1047,7 +1066,7 @@
       const centroId = cuInp ? cuInp.value : '';
 
       try {
-        let url = `/api/inventario/${NEGOCIO_ID}/reporte-ventas-costos/detalle?desde=${desde}&hasta=${hasta}&producto_id=${productoId}`;
+        let url = `/api/inventario/${NEGOCIO_ID}/reporte-ventas-costos/detalle?desde=${desde}&hasta=${hasta}&producto_id=${productoId}${vcHorasQS()}`;
         if (centroId) url += `&centro_utilidad_id=${encodeURIComponent(centroId)}`;
         const r = await fetch(url);
         const d = await r.json();
@@ -1126,7 +1145,7 @@
           const tieneDesfase = Math.abs(desfase) > 100;
 
           html += `<tr class="hover:bg-amber-50/20 transition-colors">
-            <td class="px-2 py-1 font-mono text-gray-600 whitespace-nowrap">${doc.fecha || ''}</td>
+            <td class="px-2 py-1 font-mono text-gray-600 whitespace-nowrap">${doc.fecha || ''}${doc.hora ? ' ' + doc.hora : ''}</td>
             <td class="px-2 py-1 font-mono font-bold text-blue-700 whitespace-nowrap">#${numLimpio}${audUrl ? ` <a href="${audUrl}" target="_blank" rel="noopener noreferrer" title="Auditar documento en pestaña nueva" class="text-blue-500 hover:text-blue-700 transition">🔗</a>` : ''}</td>
             <td class="px-2 py-1 truncate max-w-[130px] text-gray-700" title="${doc.nombre_cliente || ''}">${doc.nombre_cliente || '—'}</td>
             <td class="px-2 py-1 text-right font-semibold text-gray-700">${fmt(doc.cantidad)}</td>

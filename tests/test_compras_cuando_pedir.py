@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Pin: 7 ventajas compras (orden y texto vigentes) + defaults min8/max15.
-Doctrinas Rafa: cuando = momento de empezar (ni antes ni despues);
-#1 avisa cuando SE AGOTA (2 estados: incluido/no en solicitud);
+Doctrinas Rafa: marco 'Como funciona', cada punto se defiende solo;
+cuando = momento de empezar; #1 avisa cuando SE AGOTA (2 estados);
 dias primero (8/15 por defecto, dueno personaliza)."""
 import sys
 
@@ -33,15 +33,16 @@ check("sin 'Fecha límite' visible", "Fecha límite" not in tpl)
 check("backend key fecha_limite intacta", "fecha_limite" in tpl)
 check("ids compras-fecha-limite intactos", "compras-fecha-limite-" in tpl)
 
-# Manual ventas: 7 ventajas en orden vigente (dias primero)
+# Manual ventas: 7 ventajas autocontenidas (dias primero)
 check("ventas titulo Las 7 ventajas", "## Las 7 ventajas" in ventas)
 check("ventas sin titulo Las 8", "## Las 8 ventajas" not in ventas)
 check("ventas #1 es dias primero",
       "**1. Usted pone los días, el consumo pone las cantidades.**" in ventas)
-check("ventas #1 trae 8/15 + personalizable",
-      "8/15 días por defecto, ajustables a su negocio" in ventas)
+check("ventas #1 trae 8/15 por defecto", "8/15 por defecto" in ventas)
 check("ventas #1 habilita que comprar",
       "el algoritmo ya define qué comprar" in ventas)
+check("ventas #1 explica minimos", "días mínimos (su colchón" in ventas)
+check("ventas #1 explica maximos", "días máximos (hasta dónde" in ventas)
 check("ventas #2 entra en agotado",
       "**2. Qué comprar: entra en agotado.**" in ventas)
 check("ventas #2 dos estados",
@@ -49,12 +50,17 @@ check("ventas #2 dos estados",
 check("ventas sin viejo #1 titulo", "**1. Qué comprar: lo ve venir.**" not in ventas)
 check("ventas sin viejo #1 cuerpo",
       "avisa qué se va a agotar antes de que falte" not in ventas)
+check("ventas #2 sin jerga cobertura", "cobertura de un ítem" not in ventas)
+check("ventas #2 re-ancla dias", "días mínimos que usted definió" in ventas)
 check("ventas #3 es cuando",
       "**3. Cuándo comprar: el momento justo de empezar.**" in ventas)
 check("ventas cuando ni antes ni después",
-      "ni antes (te sobrestockeas) ni después (sufres agotados)" in ventas)
-check("ventas cuando trae el aviso", "te cae un aviso oportuno al celular" in ventas)
+      "ni antes (se sobrestockea) ni después (sufre agotados)" in ventas)
+check("ventas cuando en usted",
+      "te sobrestockeas" not in ventas and "te cae un aviso" not in ventas)
+check("ventas cuando trae el aviso", "le cae un aviso oportuno al celular" in ventas)
 check("ventas #4 es cuanto", "**4. Cuánto comprar: la cantidad exacta.**" in ventas)
+check("ventas #4 ancla maximos", "hasta sus días máximos" in ventas)
 check("ventas #5 es a cuanto",
       "**5. A cuánto comprar: caza el mejor precio.**" in ventas)
 check("ventas #6 es a quien",
@@ -85,6 +91,6 @@ check("pantalla cfg min value 8", 'id="cfg-compras-stock-min" value="8"' in tpl)
 check("pantalla placeholder min 8", "dias_min_stock_aplicado || 8}" in tpl)
 check("manual usuario min inicial 8", "| Stock Mín (días) | 8 |" in usuario)
 
-TOTAL = 38
+TOTAL = 44
 print(f"--- {TOTAL - len(fails)}/{TOTAL} ---")
 sys.exit(1 if fails else 0)

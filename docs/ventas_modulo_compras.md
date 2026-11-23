@@ -3,7 +3,7 @@
 **Documento:** guion comercial para vendedores
 **Versión:** 1.1
 **Fecha:** 2026-11-18
-**Actualizado:** 2026-11-22 (8 ventajas afinadas con Rafael: consumo, sin canales, proveedor confirma); 2026-11-23 (#2 precisado: momento de empezar, columna Cuándo pedir); 2026-11-23 (#6 avisos absorbido por #2, quedan 7); 2026-11-23 (reorden: dias primero; #1 avisa cuando se agota, 2 estados)
+**Actualizado:** 2026-11-22 (8 ventajas afinadas con Rafael: consumo, sin canales, proveedor confirma); 2026-11-23 (#2 precisado: momento de empezar, columna Cuándo pedir); 2026-11-23 (#6 avisos absorbido por #2, quedan 7); 2026-11-23 (reorden: dias primero; #1 avisa cuando se agota, 2 estados); 2026-11-23 (#1 autocontenido 8/15; cada punto se defiende solo)
 **Audiencia:** vendedores ante un posible comprador (dueño de restaurante, tienda o negocio con inventario)
 
 > Regla de oro: todo lo que sigue existe y funciona hoy en producción. Si el cliente pide algo fuera de aquí, se anota como solicitud, no se promete.
@@ -37,16 +37,16 @@ Pregunta de apertura: *"¿Cuántas veces este mes se quedaron sin algo en plena 
 ## Las 7 ventajas (para cuando pregunte "¿y eso qué tiene de especial?")
 
 **1. Usted pone los días, el consumo pone las cantidades.**
-Lo primero lo decide usted: 8/15 días por defecto, ajustables a su negocio. Desde ese momento, con sus estadísticas de consumo, el algoritmo ya define qué comprar. Las cantidades exactas salen de su consumo real, y si sube o baja, la sugerencia se mueve sola.
+Todo empieza con dos números que usted decide: días mínimos (su colchón — debajo de ahí, hay que comprar) y días máximos (hasta dónde lo deja cubierta la sugerencia). Vienen en 8/15 por defecto y los ajusta a su negocio. Con eso y sus estadísticas de consumo, el algoritmo ya define qué comprar; las cantidades exactas salen de su consumo real, y si sube o baja, la sugerencia se mueve sola.
 
 **2. Qué comprar: entra en agotado.**
-Cuando la cobertura de un ítem cae debajo de sus días mínimos, entra en estado de agotado y se incluye en la solicitud de compra. Ese es el aviso: no "se va a agotar", se agota. Solo dos estados: incluido o no incluido.
+Cuando lo que hay de un ítem ya no cubre los días mínimos que usted definió, entra en estado de agotado y se incluye en la solicitud de compra. Ese es el aviso: no "se va a agotar", se agota. Solo dos estados: incluido o no incluido.
 
 **3. Cuándo comprar: el momento justo de empezar.**
-Cada ítem marca el día en que debes empezar a pedirlo: ni antes (te sobrestockeas) ni después (sufres agotados). Se calcula con tu consumo y lo que tarda el proveedor en entregar. Y cuando llega ese momento, te cae un aviso oportuno al celular: qué es, cuánto queda y a quién pedirle, una sola vez, sin repetir ni cansar.
+Cada ítem marca el día en que debe empezar a pedirlo: ni antes (se sobrestockea) ni después (sufre agotados). Se calcula con su consumo y lo que tarda el proveedor en entregar. Y cuando llega ese momento, le cae un aviso oportuno al celular: qué es, cuánto queda y a quién pedirle, una sola vez, sin repetir ni cansar.
 
 **4. Cuánto comprar: la cantidad exacta.**
-Lo que lo deja cubierto sus días. Ni bodega llena de más ni carrera de última hora.
+La cantidad que lo deja cubierto hasta sus días máximos: ni bodega llena de más ni carrera de última hora.
 
 **5. A cuánto comprar: caza el mejor precio.**
 Compara cotizaciones, presentaciones, ofertas y días de descuento del proveedor. Paga menos sin buscarlo.

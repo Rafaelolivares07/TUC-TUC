@@ -3,7 +3,7 @@
 **Documento:** guion comercial para vendedores
 **Versión:** 1.1
 **Fecha:** 2026-11-18
-**Actualizado:** 2026-11-22 (8 ventajas afinadas con Rafael: consumo, sin canales, proveedor confirma); 2026-11-23 (#2 precisado: momento de empezar, columna Cuándo pedir)
+**Actualizado:** 2026-11-22 (8 ventajas afinadas con Rafael: consumo, sin canales, proveedor confirma); 2026-11-23 (#2 precisado: momento de empezar, columna Cuándo pedir); 2026-11-23 (#6 avisos absorbido por #2, quedan 7)
 **Audiencia:** vendedores ante un posible comprador (dueño de restaurante, tienda o negocio con inventario)
 
 > Regla de oro: todo lo que sigue existe y funciona hoy en producción. Si el cliente pide algo fuera de aquí, se anota como solicitud, no se promete.
@@ -34,13 +34,13 @@ Pregunta de apertura: *"¿Cuántas veces este mes se quedaron sin algo en plena 
 
 ---
 
-## Las 8 ventajas (para cuando pregunte "¿y eso qué tiene de especial?")
+## Las 7 ventajas (para cuando pregunte "¿y eso qué tiene de especial?")
 
 **1. Qué comprar: lo ve venir.**
 El sistema mira su consumo diario — se venda o se gaste operando — y avisa qué se va a agotar antes de que falte.
 
 **2. Cuándo comprar: el momento justo de empezar.**
-Cada ítem marca el día en que debes empezar a pedirlo: ni antes (te sobrestockeas) ni después (sufres agotados). Se calcula con tu consumo y lo que tarda el proveedor en entregar.
+Cada ítem marca el día en que debes empezar a pedirlo: ni antes (te sobrestockeas) ni después (sufres agotados). Se calcula con tu consumo y lo que tarda el proveedor en entregar. Y cuando llega ese momento, te cae un aviso oportuno al celular: qué es, cuánto queda y a quién pedirle, una sola vez, sin repetir ni cansar.
 
 **3. Cuánto comprar: la cantidad exacta.**
 Lo que lo deja cubierto sus días. Ni bodega llena de más ni carrera de última hora.
@@ -51,13 +51,10 @@ Compara cotizaciones, presentaciones, ofertas y días de descuento del proveedor
 **5. A quién comprar, de punta a punta.**
 Usted descarta al que falla en calidad o no cumple; entre los que quedan, el sistema sugiere al del mejor precio. La propuesta llega agrupada por proveedor y la orden viaja con enlace propio: él la confirma o la ajusta desde su pantalla, y usted ve el estado sin llamar a nadie.
 
-**6. Avisos oportunos en su celular.**
-Solo cuando hay novedad, una sola vez cada uno, sin repetir ni cansar.
-
-**7. Usted pone los días, el consumo pone las cantidades.**
+**6. Usted pone los días, el consumo pone las cantidades.**
 Los días mín/máx son su referencia; las cantidades exactas salen de su consumo real, y si sube o baja, la sugerencia se mueve sola.
 
-**8. Nada se pide sin que usted lo confirme.**
+**7. Nada se pide sin que usted lo confirme.**
 La app propone, usted chulea, ajusta y confirma. Y si un producto no tiene historia, el sistema lo dice de frente y no inventa.
 
 ---

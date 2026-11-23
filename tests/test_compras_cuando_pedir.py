@@ -34,6 +34,7 @@ check("ids compras-fecha-limite intactos", "compras-fecha-limite-" in tpl)
 
 # Manual ventas: COMO FUNCIONA final (5 + cierre)
 check("ventas titulo Como funciona", "## ¿Cómo funciona?" in ventas)
+check("ventas encabezado Bistro", "# BISTRÓ - MODULO DE COMPRAS" in ventas)
 check("ventas sin titulo Las 7", "## Las 7 ventajas" not in ventas)
 check("ventas #1 fusionado",
       "**1. ¿QUÉ COMPRAR? -> Lo que entra en agotado.**" in ventas)
@@ -46,7 +47,7 @@ check("ventas #2 es cuando",
 check("ventas cuando ni antes ni después",
       "ni antes (se sobrestockea) ni después (sufre agotados)" in ventas)
 check("ventas cuando trae el aviso", "le cae un aviso oportuno al celular" in ventas)
-check("ventas #3 es cuanto", "**3. Cuánto comprar: la cantidad exacta.**" in ventas)
+check("ventas #3 es cuanto", "**3. Cuánto comprar: la cantidad ideal.**" in ventas)
 check("ventas #3 ancla maximos", "hasta sus días máximos" in ventas)
 check("ventas #4 es a precio",
       "**4. A qué precio comprar: selecciona el mejor precio.**" in ventas)
@@ -85,6 +86,6 @@ check("pantalla cfg min value 8", 'id="cfg-compras-stock-min" value="8"' in tpl)
 check("pantalla placeholder min 8", "dias_min_stock_aplicado || 8}" in tpl)
 check("manual usuario min inicial 8", "| Stock Mín (días) | 8 |" in usuario)
 
-TOTAL = 44
+TOTAL = 45
 print(f"--- {TOTAL - len(fails)}/{TOTAL} ---")
 sys.exit(1 if fails else 0)

@@ -42,7 +42,7 @@ check("ventas #1 solicitud", "se incluye en la solicitud de compra" in ventas)
 check("ventas #1 detecta solo", "el algoritmo lo detecta solo" in ventas)
 check("ventas sin viejo #1 dias", "**1. Usted pone los días" not in ventas)
 check("ventas #2 es cuando",
-      "**2. Cuándo comprar: el momento justo de empezar.**" in ventas)
+      "**2. Cuándo comprar.**" in ventas)
 check("ventas cuando ni antes ni después",
       "ni antes (se sobrestockea) ni después (sufre agotados)" in ventas)
 check("ventas cuando trae el aviso", "le cae un aviso oportuno al celular" in ventas)
@@ -55,7 +55,7 @@ check("ventas #4 asiste decide", "La aplicación asiste, usted decide" in ventas
 check("ventas sin viejo a-cuanto", "A cuánto comprar" not in ventas)
 check("ventas sin paga-menos", "Paga menos sin buscarlo" not in ventas)
 check("ventas #5 es a quien",
-      "**5. A quién comprar, de punta a punta.**" in ventas)
+      "**5. A quién comprar.**" in ventas)
 check("ventas #5 precio define", "El mejor precio define al proveedor" in ventas)
 check("ventas #5 orden de compra", "orden de compra viaja con enlace propio" in ventas)
 check("ventas #5 proveedor explicito", "el proveedor la confirma o la ajusta" in ventas)

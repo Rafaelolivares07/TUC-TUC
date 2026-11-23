@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
-"""Pin: 7 ventajas compras (orden y texto vigentes) + defaults min8/max15.
-Doctrinas Rafa: marco 'Como funciona', cada punto se defiende solo;
-cuando = momento de empezar; #1 avisa cuando SE AGOTA (2 estados);
-dias primero (8/15 por defecto, dueno personaliza)."""
+"""Pin: COMO FUNCIONA final (5 puntos + cierre) + defaults min8/max15.
+Doctrinas Rafa: cada punto se defiende solo; #1 fusionado (dias+que);
+avisa cuando SE AGOTA; a-precio define proveedor; app asiste, usted decide."""
 import sys
 
 fails = []
@@ -33,42 +32,37 @@ check("sin 'Fecha límite' visible", "Fecha límite" not in tpl)
 check("backend key fecha_limite intacta", "fecha_limite" in tpl)
 check("ids compras-fecha-limite intactos", "compras-fecha-limite-" in tpl)
 
-# Manual ventas: 7 ventajas autocontenidas (dias primero)
-check("ventas titulo Las 7 ventajas", "## Las 7 ventajas" in ventas)
-check("ventas sin titulo Las 8", "## Las 8 ventajas" not in ventas)
-check("ventas #1 es dias primero",
-      "**1. Usted pone los días, el consumo pone las cantidades.**" in ventas)
-check("ventas #1 trae 8/15 por defecto", "8/15 por defecto" in ventas)
-check("ventas #1 habilita que comprar",
-      "el algoritmo ya define qué comprar" in ventas)
-check("ventas #1 explica minimos", "días mínimos (su colchón" in ventas)
-check("ventas #1 explica maximos", "días máximos (hasta dónde" in ventas)
-check("ventas #2 entra en agotado",
-      "**2. Qué comprar: entra en agotado.**" in ventas)
-check("ventas #2 dos estados",
-      "Solo dos estados: incluido o no incluido" in ventas)
-check("ventas sin viejo #1 titulo", "**1. Qué comprar: lo ve venir.**" not in ventas)
-check("ventas sin viejo #1 cuerpo",
-      "avisa qué se va a agotar antes de que falte" not in ventas)
-check("ventas #2 sin jerga cobertura", "cobertura de un ítem" not in ventas)
-check("ventas #2 re-ancla dias", "días mínimos que usted definió" in ventas)
-check("ventas #3 es cuando",
-      "**3. Cuándo comprar: el momento justo de empezar.**" in ventas)
+# Manual ventas: COMO FUNCIONA final (5 + cierre)
+check("ventas titulo Como funciona", "## ¿Cómo funciona?" in ventas)
+check("ventas sin titulo Las 7", "## Las 7 ventajas" not in ventas)
+check("ventas #1 fusionado",
+      "**1. ¿QUÉ COMPRAR? -> Lo que entra en agotado.**" in ventas)
+check("ventas #1 trae 8/15", "8/15 por defecto" in ventas)
+check("ventas #1 solicitud", "se incluye en la solicitud de compra" in ventas)
+check("ventas #1 detecta solo", "el algoritmo lo detecta solo" in ventas)
+check("ventas sin viejo #1 dias", "**1. Usted pone los días" not in ventas)
+check("ventas #2 es cuando",
+      "**2. Cuándo comprar: el momento justo de empezar.**" in ventas)
 check("ventas cuando ni antes ni después",
       "ni antes (se sobrestockea) ni después (sufre agotados)" in ventas)
-check("ventas cuando en usted",
-      "te sobrestockeas" not in ventas and "te cae un aviso" not in ventas)
 check("ventas cuando trae el aviso", "le cae un aviso oportuno al celular" in ventas)
-check("ventas #4 es cuanto", "**4. Cuánto comprar: la cantidad exacta.**" in ventas)
-check("ventas #4 ancla maximos", "hasta sus días máximos" in ventas)
-check("ventas #5 es a cuanto",
-      "**5. A cuánto comprar: caza el mejor precio.**" in ventas)
-check("ventas #6 es a quien",
-      "**6. A quién comprar, de punta a punta.**" in ventas)
-check("ventas #7 es confirmacion",
-      "**7. Nada se pide sin que usted lo confirme.**" in ventas)
-check("ventas sin #8", "**8. Nada" not in ventas)
-check("ventas sin #6 avisos standalone", "**6. Avisos oportunos" not in ventas)
+check("ventas #3 es cuanto", "**3. Cuánto comprar: la cantidad exacta.**" in ventas)
+check("ventas #3 ancla maximos", "hasta sus días máximos" in ventas)
+check("ventas #4 es a precio",
+      "**4. A qué precio comprar: selecciona el mejor precio.**" in ventas)
+check("ventas #4 descarte calidad", "fallan en calidad de producto o servicio" in ventas)
+check("ventas #4 asiste decide", "La aplicación asiste, usted decide" in ventas)
+check("ventas sin viejo a-cuanto", "A cuánto comprar" not in ventas)
+check("ventas sin paga-menos", "Paga menos sin buscarlo" not in ventas)
+check("ventas #5 es a quien",
+      "**5. A quién comprar, de punta a punta.**" in ventas)
+check("ventas #5 precio define", "El mejor precio define al proveedor" in ventas)
+check("ventas #5 orden de compra", "orden de compra viaja con enlace propio" in ventas)
+check("ventas #5 proveedor explicito", "el proveedor la confirma o la ajusta" in ventas)
+check("ventas cierre sin numero",
+      "*La app propone, usted chulea, ajusta y confirma.*" in ventas)
+check("ventas sin #6 numerado", "**6." not in ventas)
+check("ventas sin #7", "**7. Nada" not in ventas)
 check("ventas sin fecha límite", "fecha límite" not in ventas and "Fecha límite" not in ventas)
 check("ventas pitch momento justo",
       "el momento justo de empezar a pedir cada cosa" in ventas)

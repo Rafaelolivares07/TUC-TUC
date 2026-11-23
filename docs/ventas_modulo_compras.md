@@ -3,7 +3,7 @@
 **Documento:** guion comercial para vendedores
 **Versión:** 1.1
 **Fecha:** 2026-11-18
-**Actualizado:** 2026-11-22 (8 ventajas afinadas con Rafael: consumo, sin canales, proveedor confirma); 2026-11-23 (#2 precisado: momento de empezar, columna Cuándo pedir); 2026-11-23 (#6 avisos absorbido por #2, quedan 7); 2026-11-23 (reorden: dias primero; #1 avisa cuando se agota, 2 estados); 2026-11-23 (#1 autocontenido 8/15; cada punto se defiende solo)
+**Actualizado:** 2026-11-22 (8 ventajas afinadas con Rafael: consumo, sin canales, proveedor confirma); 2026-11-23 (#2 precisado: momento de empezar, columna Cuándo pedir); 2026-11-23 (#6 avisos absorbido por #2, quedan 7); 2026-11-23 (reorden: dias primero; #1 avisa cuando se agota, 2 estados); 2026-11-23 (#1 autocontenido 8/15; cada punto se defiende solo); 2026-11-23 (COMO FUNCIONA final: fusion 1+2, 5 puntos + cierre)
 **Audiencia:** vendedores ante un posible comprador (dueño de restaurante, tienda o negocio con inventario)
 
 > Regla de oro: todo lo que sigue existe y funciona hoy en producción. Si el cliente pide algo fuera de aquí, se anota como solicitud, no se promete.
@@ -34,28 +34,24 @@ Pregunta de apertura: *"¿Cuántas veces este mes se quedaron sin algo en plena 
 
 ---
 
-## Las 7 ventajas (para cuando pregunte "¿y eso qué tiene de especial?")
+## ¿Cómo funciona?
 
-**1. Usted pone los días, el consumo pone las cantidades.**
-Todo empieza con dos números que usted decide: días mínimos (su colchón — debajo de ahí, hay que comprar) y días máximos (hasta dónde lo deja cubierta la sugerencia). Vienen en 8/15 por defecto y los ajusta a su negocio. Con eso y sus estadísticas de consumo, el algoritmo ya define qué comprar; las cantidades exactas salen de su consumo real, y si sube o baja, la sugerencia se mueve sola.
+**1. ¿QUÉ COMPRAR? -> Lo que entra en agotado.**
+Usted pone los días: mínimos (su colchón — debajo de ahí, hay que comprar) y máximos (hasta dónde lo deja cubierta la sugerencia). Vienen en 8/15 por defecto y los ajusta a su negocio. Cuando lo que hay de un ítem ya no cubre sus días mínimos, entra en estado de agotado y se incluye en la solicitud de compra; con sus estadísticas de consumo, el algoritmo lo detecta solo.
 
-**2. Qué comprar: entra en agotado.**
-Cuando lo que hay de un ítem ya no cubre los días mínimos que usted definió, entra en estado de agotado y se incluye en la solicitud de compra. Ese es el aviso: no "se va a agotar", se agota. Solo dos estados: incluido o no incluido.
-
-**3. Cuándo comprar: el momento justo de empezar.**
+**2. Cuándo comprar: el momento justo de empezar.**
 Cada ítem marca el día en que debe empezar a pedirlo: ni antes (se sobrestockea) ni después (sufre agotados). Se calcula con su consumo y lo que tarda el proveedor en entregar. Y cuando llega ese momento, le cae un aviso oportuno al celular: qué es, cuánto queda y a quién pedirle, una sola vez, sin repetir ni cansar.
 
-**4. Cuánto comprar: la cantidad exacta.**
+**3. Cuánto comprar: la cantidad exacta.**
 La cantidad que lo deja cubierto hasta sus días máximos: ni bodega llena de más ni carrera de última hora.
 
-**5. A cuánto comprar: caza el mejor precio.**
-Compara cotizaciones, presentaciones, ofertas y días de descuento del proveedor. Paga menos sin buscarlo.
+**4. A qué precio comprar: selecciona el mejor precio.**
+Usted descarta primero las ofertas o cotizaciones que fallan en calidad de producto o servicio, y se queda con las que sí cumplen. Entre esas, la aplicación hace la búsqueda por usted: compara cotizaciones, presentaciones, ofertas y días de descuento, para que usted pague menos. La aplicación asiste, usted decide.
 
-**6. A quién comprar, de punta a punta.**
-Usted descarta al que falla en calidad o no cumple; entre los que quedan, el sistema sugiere al del mejor precio. La propuesta llega agrupada por proveedor y la orden viaja con enlace propio: él la confirma o la ajusta desde su pantalla, y usted ve el estado sin llamar a nadie.
+**5. A quién comprar, de punta a punta.**
+El mejor precio define al proveedor: la propuesta llega agrupada por proveedor y la orden de compra viaja con enlace propio: el proveedor la confirma o la ajusta desde su pantalla, y usted ve el estado sin llamar a nadie.
 
-**7. Nada se pide sin que usted lo confirme.**
-La app propone, usted chulea, ajusta y confirma. Y si un producto no tiene historia, el sistema lo dice de frente y no inventa.
+*La app propone, usted chulea, ajusta y confirma.*
 
 ---
 

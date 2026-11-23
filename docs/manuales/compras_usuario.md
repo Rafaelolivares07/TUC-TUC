@@ -47,7 +47,7 @@ Tú pones los días, el consumo pone las cantidades. Son 7 números que aplican 
 | Parámetro | Valor inicial | ¿Qué es? |
 |---|---|---|
 | Stock Máx (días) | 15 | Hasta cuántos días de consumo te deja cubierta la cantidad sugerida |
-| Stock Mín (días) | 3 | Si te cubre menos que esto, el producto entra a agotado |
+| Stock Mín (días) | 8 | Si te cubre menos que esto, el producto entra a agotado |
 | Días entrega | 2 | Cuánto tarda tu proveedor en entregar (para calcular el Cuándo pedir) |
 | Historial (días) | 30 | Hasta dónde se mira atrás para calcular el consumo. Lo más viejo no cuenta |
 | Ventana tendencia | 7 | Con cuántos días recientes se compara para detectar si sube o baja |

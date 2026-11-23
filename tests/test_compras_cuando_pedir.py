@@ -16,10 +16,12 @@ def check(nombre, cond):
 TPL = "templates/inventario_admin.html"
 VENTAS = "docs/ventas_modulo_compras.md"
 USUARIO = "docs/manuales/compras_usuario.md"
+INV = "app/blueprints/inventarios.py"
 
 tpl = open(TPL, encoding="utf-8").read()
 ventas = open(VENTAS, encoding="utf-8").read()
 usuario = open(USUARIO, encoding="utf-8").read()
+inv = open(INV, encoding="utf-8").read()
 
 # Pantalla: rotulos nuevos, palabra clave Cuando intacta
 check("header columna Cuándo pedir x1",
@@ -54,6 +56,18 @@ check("usuario explica sobrestock/agotados",
       "Antes te sobrestockeas, después sufres agotados" in usuario)
 check("usuario sin fecha límite", "fecha límite" not in usuario and "Fecha límite" not in usuario)
 
-TOTAL = 20
+# Defaults min 8 / max 15 cuando no definido (orden Rafa 2026-11-23, fuera respaldo a entrega)
+check("motor min default 8 x2",
+      inv.count("'inventario_stock_min_dias', 8, 1, 365") == 2)
+check("sin min->None", "'inventario_stock_min_dias', None" not in inv)
+check("sin respaldo min->entrega", "dias_entrega_global or 3" not in inv)
+check("sin fallback entrega como min", "_motor_param_int(conn, negocio_id, 'inventario_dias_entrega', 3, 1, 365)" not in inv)
+check("red seguridad min 8", "dias_min if (dias_min and dias_min > 0) else 8" in inv)
+check("api params min default 8", "'dias_stock_min_global': 8" in inv)
+check("pantalla cfg min value 8", 'id="cfg-compras-stock-min" value="8"' in tpl)
+check("pantalla placeholder min 8", "dias_min_stock_aplicado || 8}" in tpl)
+check("manual usuario min inicial 8", "| Stock Mín (días) | 8 |" in usuario)
+
+TOTAL = 29
 print(f"--- {TOTAL - len(fails)}/{TOTAL} ---")
 sys.exit(1 if fails else 0)

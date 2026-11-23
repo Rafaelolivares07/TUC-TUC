@@ -658,9 +658,7 @@ def _motor_params_demanda(conn, negocio_id):
 
 def _motor_params_cobertura(conn, negocio_id, producto_id):
     """Retorna (dias_min, dias_max, dias_entrega). Fijo MUERTO: stock_minimo no se lee."""
-    dias_min_global = _motor_param_int(conn, negocio_id, 'inventario_stock_min_dias', None)
-    if dias_min_global is None:
-        dias_min_global = _motor_param_int(conn, negocio_id, 'inventario_dias_entrega', 3, 1, 365)
+    dias_min_global = _motor_param_int(conn, negocio_id, 'inventario_stock_min_dias', 8, 1, 365)
     dias_max_global = _motor_param_int(conn, negocio_id, 'inventario_stock_max_dias', 15, 1, 365)
     dias_entrega = _motor_param_int(conn, negocio_id, 'inventario_dias_entrega', 2, 0, 365)
     p = conn.execute(
@@ -668,7 +666,7 @@ def _motor_params_cobertura(conn, negocio_id, producto_id):
         (producto_id,)).fetchone()
     dias_min = p['dias_min_stock'] if (p and p['dias_min_stock'] is not None) else dias_min_global
     dias_max = p['dias_max_stock'] if (p and p['dias_max_stock'] is not None) else dias_max_global
-    dias_min = dias_min if (dias_min and dias_min > 0) else 3
+    dias_min = dias_min if (dias_min and dias_min > 0) else 8
     dias_max = dias_max if (dias_max and dias_max > 0) else 15
     return dias_min, dias_max, dias_entrega
 
@@ -683,7 +681,7 @@ def _motor_evaluar(conn, negocio_id, producto_id, stock_actual):
     base = {
         'veredicto': 'sin_historia', 'demanda_diaria': 0.0, 'demanda_proyectada': 0.0,
         'growth_rate': 0.0, 'frecuencia_dias': 0, 'cobertura_dias': 0.0,
-        'dias_min': 3, 'dias_max': 15, 'dias_entrega': 2,
+        'dias_min': 8, 'dias_max': 15, 'dias_entrega': 2,
         'stock_min_unidades': 0.0, 'cantidad_sugerida': 0.0,
     }
     dias_historial, gw, maxg, ming = _motor_params_demanda(conn, negocio_id)
@@ -13035,7 +13033,7 @@ def api_parametros_compras(negocio_id):
         return jsonify({'ok': False, 'error': 'No autorizado'}), 403
     conn = get_db_connection()
     try:
-        params = {'dias_stock_max_global': 15, 'dias_stock_min_global': 3, 'dias_entrega_global': 2,
+        params = {'dias_stock_max_global': 15, 'dias_stock_min_global': 8, 'dias_entrega_global': 2,
                   'dias_historial': 30, 'growth_window': 7, 'max_growth': 100.0, 'min_growth': -50.0}
         row = conn.execute("SELECT valor_texto FROM parametros_sistema WHERE nombre = 'inventario_stock_max_dias' AND negocio_id = %s", (negocio_id,)).fetchone()
         if row and row[0]: params['dias_stock_max_global'] = int(row[0])
@@ -17067,9 +17065,8 @@ def api_compras_sugerencias(negocio_id):
         # Unimotor: params solo de BD (contrato FINAL 2026-11-18)
         dias_historial, growth_window, max_growth, min_growth = _motor_params_demanda(conn, negocio_id)
         dias_stock_max_global = _motor_param_int(conn, negocio_id, 'inventario_stock_max_dias', 15, 1, 365)
-        _min_g = _motor_param_int(conn, negocio_id, 'inventario_stock_min_dias', None)
         dias_entrega_global = _motor_param_int(conn, negocio_id, 'inventario_dias_entrega', 2, 0, 365)
-        dias_stock_min_global = _min_g if _min_g is not None else (dias_entrega_global or 3)
+        dias_stock_min_global = _motor_param_int(conn, negocio_id, 'inventario_stock_min_dias', 8, 1, 365)
 
         # Alertas activas de ítems agotados para esta sede
         alertas_rows = conn.execute("""

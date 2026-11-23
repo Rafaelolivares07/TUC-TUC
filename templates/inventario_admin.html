@@ -11896,7 +11896,7 @@ function renderizarComprasTabla(proveedores) {
 
             <div class="flex items-center gap-2">
 
-              <span class="font-normal text-slate-500 text-[10px]">Fecha límite:</span>
+              <span class="font-normal text-slate-500 text-[10px]">Cuándo pedir:</span>
 
               ${deadlineBadge}
 
@@ -11973,7 +11973,7 @@ function renderizarComprasTabla(proveedores) {
 
                 <th class="px-3 py-2 text-center">Cobertura (Mín / Máx Días)</th>
 
-                <th class="px-3 py-2 text-center">Límite Compra</th>
+                <th class="px-3 py-2 text-center">Cuándo pedir</th>
 
                 <th class="px-3 py-2 text-center">Pedido Sugerido</th>
 
@@ -12189,7 +12189,7 @@ function recalcularLineaMaxStock(pIdx, productoId, inputId) {
     qtyInput.value = unidadesPresentacion <= 1.0001 ? cantidadComprarUnidades : paquetes;
   }
   
-  // Recalcular fecha límite
+  // Recalcular cuándo pedir
   const diasEntrega = prod.dias_entrega_global || 2;
   let coberturaDias = 0;
   if (stockActual > 0.0001 && prod.demanda_proyectada > 0.0001) {

@@ -3,7 +3,7 @@
 **Documento:** guion comercial para vendedores
 **Versión:** 1.1
 **Fecha:** 2026-11-18
-**Actualizado:** 2026-11-22 (8 ventajas afinadas con Rafael: consumo, sin canales, proveedor confirma)
+**Actualizado:** 2026-11-22 (8 ventajas afinadas con Rafael: consumo, sin canales, proveedor confirma); 2026-11-23 (#2 precisado: momento de empezar, columna Cuándo pedir)
 **Audiencia:** vendedores ante un posible comprador (dueño de restaurante, tienda o negocio con inventario)
 
 > Regla de oro: todo lo que sigue existe y funciona hoy en producción. Si el cliente pide algo fuera de aquí, se anota como solicitud, no se promete.
@@ -30,7 +30,7 @@ Pregunta de apertura: *"¿Cuántas veces este mes se quedaron sin algo en plena 
 
 ## El pitch de 60 segundos (léelo tal cual)
 
-*"Mire cómo funciona. El sistema aprende de su consumo real — se venda o se gaste operando — no de números que usted tenga que inventar. Cuando algo se acerca a agotarse, le llega un aviso oportuno a su celular: qué es, cuánto queda y a quién pedirle, una sola vez, sin cansar. Usted abre Compras y la propuesta viene armada por proveedor: cantidades de su consumo, mejor precio entre sus cotizaciones, ofertas y días de descuento cazados, y fecha límite para pedir sin quedarse sin nada. Revisa, ajusta si quiere y genera la orden: el proveedor la confirma o la ajusta desde su pantalla, y usted ve el estado sin llamar a nadie. Cuando llega la mercancía, la entrada viaja sola al inventario, sin digitar dos veces. Usted siempre aprueba — nada se pide sin que usted lo confirme."*
+*"Mire cómo funciona. El sistema aprende de su consumo real — se venda o se gaste operando — no de números que usted tenga que inventar. Cuando algo se acerca a agotarse, le llega un aviso oportuno a su celular: qué es, cuánto queda y a quién pedirle, una sola vez, sin cansar. Usted abre Compras y la propuesta viene armada por proveedor: cantidades de su consumo, mejor precio entre sus cotizaciones, ofertas y días de descuento cazados, y el momento justo de empezar a pedir cada cosa: ni antes ni después. Revisa, ajusta si quiere y genera la orden: el proveedor la confirma o la ajusta desde su pantalla, y usted ve el estado sin llamar a nadie. Cuando llega la mercancía, la entrada viaja sola al inventario, sin digitar dos veces. Usted siempre aprueba — nada se pide sin que usted lo confirme."*
 
 ---
 
@@ -39,8 +39,8 @@ Pregunta de apertura: *"¿Cuántas veces este mes se quedaron sin algo en plena 
 **1. Qué comprar: lo ve venir.**
 El sistema mira su consumo diario — se venda o se gaste operando — y avisa qué se va a agotar antes de que falte.
 
-**2. Cuándo comprar: fecha límite por producto.**
-Cada ítem trae su último día para pedir sin quedarse sin nada, calculado con su consumo y lo que tarda el proveedor.
+**2. Cuándo comprar: el momento justo de empezar.**
+Cada ítem marca el día en que debes empezar a pedirlo: ni antes (te sobrestockeas) ni después (sufres agotados). Se calcula con tu consumo y lo que tarda el proveedor en entregar.
 
 **3. Cuánto comprar: la cantidad exacta.**
 Lo que lo deja cubierto sus días. Ni bodega llena de más ni carrera de última hora.
@@ -81,8 +81,8 @@ La app propone, usted chulea, ajusta y confirma. Y si un producto no tiene histo
 ## La demo de 5 minutos (paso a paso)
 
 1. **Muestre un aviso real en el celular** (1 min): un agotado con stock, mínimo y el "pedir a".
-2. **Abra Compras** (1 min): señale el banner de agotados y una tarjeta de proveedor con su total y fecha límite.
-3. **Abra una tarjeta** (1 min): señale una línea — stock, demanda con flecha de tendencia, fecha límite y cantidad sugerida editable.
+2. **Abra Compras** (1 min): señale el banner de agotados y una tarjeta de proveedor con su total y su Cuándo pedir.
+3. **Abra una tarjeta** (1 min): señale una línea — stock, demanda con flecha de tendencia, Cuándo pedir y cantidad sugerida editable.
 4. **Cambie los días de un producto** (1 min): salga del campo y muestre el ✓ verde. *"Usted pone los días, el consumo pone las cantidades."*
 5. **Muestre una orden** (1 min): estados, total, respuesta del proveedor y botón de enviar. *"Y cuando llega, viaja sola a Entradas."*
 

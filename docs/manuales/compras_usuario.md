@@ -2,7 +2,7 @@
 
 **Módulo:** Compras (sugerencias, órdenes y alertas de agotados)
 **Versión:** 1.1
-**Última actualización:** 2026-11-22
+**Última actualización:** 2026-11-23
 **Audiencia:** Dueños y encargados que compran mercancía para el negocio
 
 ---
@@ -48,7 +48,7 @@ Tú pones los días, el consumo pone las cantidades. Son 7 números que aplican 
 |---|---|---|
 | Stock Máx (días) | 15 | Hasta cuántos días de consumo te deja cubierta la cantidad sugerida |
 | Stock Mín (días) | 3 | Si te cubre menos que esto, el producto entra a agotado |
-| Días entrega | 2 | Cuánto tarda tu proveedor en entregar (para calcular la fecha límite) |
+| Días entrega | 2 | Cuánto tarda tu proveedor en entregar (para calcular el Cuándo pedir) |
 | Historial (días) | 30 | Hasta dónde se mira atrás para calcular el consumo. Lo más viejo no cuenta |
 | Ventana tendencia | 7 | Con cuántos días recientes se compara para detectar si sube o baja |
 | Tope sube (%) | 100 | Máximo que se permite proyectar hacia arriba |
@@ -62,7 +62,7 @@ El botón **Recalcular Sugerencias de Compra** guarda todo y refresca la propues
 
 ## Sugerencias por proveedor
 
-Cada proveedor tiene su tarjeta con nombre, teléfono, total estimado, fecha límite y los insumos incluidos. Ábrela para ver el detalle por producto:
+Cada proveedor tiene su tarjeta con nombre, teléfono, total estimado, Cuándo pedir y los insumos incluidos. Ábrela para ver el detalle por producto:
 
 | Columna | ¿Qué significa? |
 |---|---|
@@ -72,11 +72,11 @@ Cada proveedor tiene su tarjeta con nombre, teléfono, total estimado, fecha lí
 | Stock | Lo que tienes hoy (en rojo si está en negativo) |
 | Demanda | `hist`: promedio real; `proy`: proyectado con tendencia; `↑/↓ %`: hacia dónde va |
 | Días Mín/Máx | Días propios de ESE producto (vacío = usa el global). Se guardan solos al salir |
-| Fecha límite | Último día para pedir sin quedarte sin nada. `Inmediato` (rojo) = pide ya |
+| Cuándo pedir | Día de empezar a pedir: ni antes (sobrestock) ni después (agotados). `Inmediato` (rojo) = pide ya |
 | Sugerido | Cantidad propuesta (puedes editarla antes de ordenar) |
 | Costo / Subtotal | Valor estimado con el empaque elegido |
 
-**¿Para qué sirve la fecha límite?** Se calcula con tu consumo y los días de entrega: si te quedan 5 días de producto y el proveedor tarda 2, la fecha límite es en 3 días.
+**¿Para qué sirve el Cuándo pedir?** Es el día de empezar a pedir, calculado con tu consumo y los días de entrega: si te quedan 5 días de producto y el proveedor tarda 2, empiezas a pedir en 3 días. Antes te sobrestockeas, después sufres agotados.
 
 **¿Cómo elige al proveedor?** Compara tus cotizaciones vigentes y sugiere al del mejor precio: menor costo por unidad, en empaque que te sirve. Si no hay cotizaciones, usa tu último proveedor; si nunca hubo, te lo dice de frente. Antes de ordenar puedes cambiarlo o descartar la línea.
 

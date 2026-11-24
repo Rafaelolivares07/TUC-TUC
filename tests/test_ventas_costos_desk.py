@@ -146,5 +146,19 @@ check('defecto dia completo 00:00-23:59',
       "'00:00'" in _init and "'23:59'" in _init
       and 'vc-hora-desde' in _init and 'vc-hora-hasta' in _init)
 
+# 7. Conmutador documento/agrupado en detalle (2026-11-24, pedido Rafa)
+check('toggle vistas', "vcVistaCostos(this,'doc')" in html and "vcVistaCostos(this,'grupo')" in html)
+check('toggle rotulos', 'Por documento' in html and 'Por cliente' in html)
+check('titulo dual', 'Agrupado por Cliente' in html and 'vc-det-titulo' in html)
+check('cuerpo detalle', 'vc-det-cuerpo' in html)
+check('cache doc+docs', 'detailRow._vcDocs = docs' in html and 'detailRow._vcHtmlDoc' in html)
+check('agrupador puro', 'function vcAgruparDocs(docs, modo)' in html)
+check('grupo clientes', 'function vcGrupoClientesHTML(docs)' in html)
+check('grupo usa modo cliente', "vcAgruparDocs(docs, 'cliente')" in html)
+_gc = html.split('function vcGrupoClientesHTML(docs)')
+_gc = (_gc[1].split('function vcVistaCostos')[0]) if len(_gc) > 1 else ''
+check('grupo cols Cliente+Docs+Margen', '>Cliente</th>' in _gc and '>Docs</th>' in _gc
+      and '>Margen</th>' in _gc)
+
 print('fails:', len(fails))
 sys.exit(1 if fails else 0)

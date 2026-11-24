@@ -108,14 +108,17 @@ check('plantilla existe', TPL.exists())
 html = TPL.read_text(encoding='utf-8') if TPL.exists() else ''
 check('titulo por cliente', 'Margen de Contribuci\u00f3n por Cliente' in html)
 _parts = html.split('<thead')
-check('dos thead (tabla + detalle)', len(_parts) == 3, str(len(_parts)))
+check('tres thead (tabla + detalle doc + detalle grupo)', len(_parts) == 4, str(len(_parts)))
 _main = _parts[1] if len(_parts) > 1 else ''
 _det = _parts[2] if len(_parts) > 2 else ''
+_gru = _parts[3] if len(_parts) > 3 else ''
 check('tabla: Cliente+Docs+Ticket', '>Cliente<' in _main and '>Docs<' in _main
       and 'Ticket' in _main)
 check('tabla: sin columna Producto', '>Producto<' not in _main)
 check('detalle: columna Producto', '>Producto<' in _det)
 check('detalle: sin columna Cliente', '>Cliente<' not in _det)
+check('grupo: cols Producto+Docs+Margen', '>Producto</th>' in _gru and '>Docs</th>' in _gru
+      and '>Margen</th>' in _gru)
 check('detalle: pasa cliente', 'cliente_id=' in html and 'cliente_nombre=' in html)
 check('urls api clientes', 'reporte-ventas-clientes?' in html
       and 'reporte-ventas-clientes/detalle?' in html
@@ -132,6 +135,17 @@ check('franja explicada', 'dentro de cada d' in html
       and '6:00 PM a 2:00 AM' in html and 'trasnoche' in html)
 check('colspan 8/10', 'desgloseVisibleVC ? 10 : 8' in html)
 check('sin editor tiempos', 'actualizarTiempoProdVC' not in html)
+
+# 5. Conmutador documento/agrupado en detalle (2026-11-24, pedido Rafa)
+check('toggle vistas', "vcVistaClientes(this,'doc')" in html and "vcVistaClientes(this,'grupo')" in html)
+check('toggle rotulos', 'Por documento' in html and 'Por producto' in html)
+check('titulo dual', 'Agrupado por Producto' in html and 'vc-det-titulo' in html)
+check('cuerpo detalle', 'vc-det-cuerpo' in html)
+check('cache doc+docs', 'detailRow._vcDocs = docs' in html and 'detailRow._vcHtmlDoc' in html)
+check('agrupador puro', 'function vcAgruparDocs(docs, modo)' in html)
+check('grupo productos', 'function vcGrupoProductosHTML(docs)' in html)
+check('grupo usa modo producto', "vcAgruparDocs(docs, 'producto')" in html)
+check('grupo col Producto', '>Producto</th>' in html)
 
 print('fails:', len(fails))
 sys.exit(1 if fails else 0)

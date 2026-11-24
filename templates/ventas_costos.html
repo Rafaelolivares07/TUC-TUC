@@ -1101,8 +1101,12 @@
             <div class="flex flex-wrap items-center justify-between gap-3 pb-2.5 mb-2.5 border-b border-gray-100 text-xs">
               <div class="flex items-center gap-2 flex-wrap">
                 <span class="font-bold text-slate-800 flex items-center gap-1">
-                  <span>📄 Desglose por Documento / Factura</span>
+                  <span class="vc-det-titulo" data-t-doc="📄 Desglose por Documento / Factura" data-t-grupo="👥 Agrupado por Cliente">📄 Desglose por Documento / Factura</span>
                   <span class="text-[11px] font-normal text-slate-500">(${docs.length} movimientos)</span>
+                </span>
+                <span class="inline-flex rounded-lg border border-slate-200 overflow-hidden">
+                  <button type="button" data-vista="doc" onclick="vcVistaCostos(this,'doc')" class="px-2 py-0.5 text-[10px] font-bold transition bg-slate-800 text-white">Por documento</button>
+                  <button type="button" data-vista="grupo" onclick="vcVistaCostos(this,'grupo')" class="px-2 py-0.5 text-[10px] font-bold transition bg-white text-slate-500 hover:bg-slate-100">Por cliente</button>
                 </span>
                 ${hayDesfaseTotal ? `
                   <button type="button"
@@ -1127,7 +1131,7 @@
             </div>
 
             <!-- Tabla detallada por factura -->
-            <div class="overflow-x-auto">
+            <div class="overflow-x-auto vc-det-cuerpo">
               <table class="w-full text-[11px]">
                 <thead class="sticky top-0">
                   <tr class="text-gray-500 bg-gray-50 border-b border-gray-200 text-[10px] uppercase tracking-wider font-semibold">
@@ -1190,11 +1194,113 @@
 
         html += `</tbody></table></div></div></td>`;
         detailRow.innerHTML = html;
+        detailRow._vcDocs = docs;
+        const _cuerpo0 = detailRow.querySelector('.vc-det-cuerpo');
+        if (_cuerpo0) detailRow._vcHtmlDoc = _cuerpo0.innerHTML;
       } catch (e) {
         detailRow.innerHTML = `<td colspan="${colsSpan}" class="text-xs text-red-500 px-3 py-2">Error de conexión: ${e.message}</td>`;
       }
     }
 
+    // INICIO vcAgruparDocs (puro: sin DOM; probado en node)
+    function vcAgruparDocs(docs, modo) {
+      const grupos = {};
+      for (const doc of (docs || [])) {
+        let key, nombre;
+        if (modo === 'cliente') {
+          const tid = doc.cliente_tercero_id;
+          key = (tid !== null && tid !== undefined && tid !== '') ? 'id:' + tid : 'nom:' + (doc.nombre_cliente || 'Mostrador');
+          nombre = doc.nombre_cliente || 'Mostrador';
+        } else {
+          key = 'p:' + doc.producto_id;
+          nombre = doc.nombre_producto || ('#' + doc.producto_id);
+        }
+        if (!grupos[key]) grupos[key] = { nombre: nombre, ndocs: 0, cant: 0, venta: 0, costoPos: 0, costoKardex: 0 };
+        const g = grupos[key];
+        g.ndocs += 1;
+        g.cant += (+doc.cantidad) || 0;
+        g.venta += (+doc.total_venta) || 0;
+        g.costoPos += (+doc.total_costo) || 0;
+        g.costoKardex += (+doc.total_costo_kardex) || 0;
+      }
+      return Object.values(grupos).sort((a, b) => b.venta - a.venta);
+    }
+    // FIN vcAgruparDocs
+
+    function vcGrupoClientesHTML(docs) {
+      const grupos = vcAgruparDocs(docs, 'cliente');
+      let tN = 0, tV = 0, tC = 0, tK = 0;
+      let filas = '';
+      for (const g of grupos) {
+        const desf = g.costoKardex - g.costoPos;
+        const marg = g.venta - g.costoPos;
+        const pct = g.venta ? (marg / g.venta * 100) : 0;
+        const mal = Math.abs(desf) > 100;
+        tN += g.cant; tV += g.venta; tC += g.costoPos; tK += g.costoKardex;
+        filas += `<tr class="hover:bg-amber-50/20 transition-colors">
+          <td class="px-2 py-1 truncate max-w-[220px] text-gray-700 font-semibold" title="${g.nombre}">${g.nombre}</td>
+          <td class="px-2 py-1 text-right font-mono text-gray-600">${g.ndocs}</td>
+          <td class="px-2 py-1 text-right font-semibold text-gray-700">${fmt(g.cant)}</td>
+          <td class="px-2 py-1 text-right font-mono font-bold text-emerald-700">${fmtMon(g.venta)}</td>
+          <td class="px-2 py-1 text-right font-mono text-slate-800 bg-slate-50/50">${fmtMon(g.costoPos)}</td>
+          <td class="px-2 py-1 text-right font-mono font-bold text-indigo-700 bg-indigo-50/30">${fmtMon(g.costoKardex)}</td>
+          <td class="px-2 py-1 text-right font-mono font-bold whitespace-nowrap ${mal ? (desf > 0 ? 'text-amber-700' : 'text-rose-600') : 'text-gray-400'}">${mal ? (desf > 0 ? '+' : '') + fmtMon(desf) : '$0'}</td>
+          <td class="px-2 py-1 text-right font-mono font-bold ${marg >= 0 ? 'text-emerald-700' : 'text-rose-600'}">${fmtMon(marg)}</td>
+          <td class="px-2 py-1 text-right font-mono text-gray-600">${pct.toFixed(1)}%</td>
+        </tr>`;
+      }
+      const tDesf = tK - tC, tMarg = tV - tC, tPct = tV ? (tMarg / tV * 100) : 0;
+      return `<table class="w-full text-[11px]">
+        <thead class="sticky top-0">
+          <tr class="text-gray-500 bg-gray-50 border-b border-gray-200 text-[10px] uppercase tracking-wider font-semibold">
+            <th class="px-2 py-1.5 text-left">Cliente</th>
+            <th class="px-2 py-1.5 text-right">Docs</th>
+            <th class="px-2 py-1.5 text-right">Cant</th>
+            <th class="px-2 py-1.5 text-right">Venta Total</th>
+            <th class="px-2 py-1.5 text-right bg-slate-100/50">Costo POS</th>
+            <th class="px-2 py-1.5 text-right bg-indigo-50/40">Costo Kardex</th>
+            <th class="px-2 py-1.5 text-right">Desfase</th>
+            <th class="px-2 py-1.5 text-right">Margen</th>
+            <th class="px-2 py-1.5 text-right">%</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">${filas}</tbody>
+        <tfoot><tr class="bg-gray-50 border-t border-gray-200 font-bold">
+          <td class="px-2 py-1 text-gray-700">Total</td>
+          <td class="px-2 py-1"></td>
+          <td class="px-2 py-1 text-right text-gray-700">${fmt(tN)}</td>
+          <td class="px-2 py-1 text-right font-mono text-emerald-700">${fmtMon(tV)}</td>
+          <td class="px-2 py-1 text-right font-mono text-slate-800">${fmtMon(tC)}</td>
+          <td class="px-2 py-1 text-right font-mono text-indigo-700">${fmtMon(tK)}</td>
+          <td class="px-2 py-1 text-right font-mono text-gray-600">${fmtMon(tDesf)}</td>
+          <td class="px-2 py-1 text-right font-mono text-gray-800">${fmtMon(tMarg)}</td>
+          <td class="px-2 py-1 text-right font-mono text-gray-600">${tPct.toFixed(1)}%</td>
+        </tr></tfoot>
+      </table>`;
+    }
+
+    function vcVistaCostos(btn, vista) {
+      const row = btn.closest('tr');
+      if (!row) return;
+      const cuerpo = row.querySelector('.vc-det-cuerpo');
+      if (!cuerpo) return;
+      if (vista === 'grupo') {
+        if (row._vcHtmlGrupo === undefined) {
+          if (!row._vcDocs) return;
+          row._vcHtmlGrupo = vcGrupoClientesHTML(row._vcDocs);
+        }
+        cuerpo.innerHTML = row._vcHtmlGrupo;
+      } else {
+        if (row._vcHtmlDoc === undefined) return;
+        cuerpo.innerHTML = row._vcHtmlDoc;
+      }
+      const t = row.querySelector('.vc-det-titulo');
+      if (t) t.textContent = vista === 'grupo' ? t.dataset.tGrupo : t.dataset.tDoc;
+      row.querySelectorAll('[data-vista]').forEach(b => {
+        const on = b.dataset.vista === vista;
+        b.className = 'px-2 py-0.5 text-[10px] font-bold transition ' + (on ? 'bg-slate-800 text-white' : 'bg-white text-slate-500 hover:bg-slate-100');
+      });
+    }
     function ordenarVC(col) {
       if (sortColVC === col) {
         sortAscVC = !sortAscVC;

@@ -92,18 +92,8 @@
           </div>
 
           <div class="flex flex-col">
-            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Hora desde</label>
-            <input type="time" id="vc-hora-desde" title="Opcional: filtra por hora del dia" class="border border-slate-200 rounded-xl px-3 py-2 bg-slate-50/80 focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500 font-semibold text-slate-700 shadow-2xs">
-          </div>
-
-          <div class="flex flex-col">
             <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Hasta</label>
             <input type="date" id="vc-hasta" class="border border-slate-200 rounded-xl px-3 py-2 bg-slate-50/80 focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500 font-semibold text-slate-700 shadow-2xs">
-          </div>
-
-          <div class="flex flex-col">
-            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Hora hasta</label>
-            <input type="time" id="vc-hora-hasta" title="Opcional: filtra por hora del dia" class="border border-slate-200 rounded-xl px-3 py-2 bg-slate-50/80 focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500 font-semibold text-slate-700 shadow-2xs">
           </div>
 
           <div class="flex flex-col">
@@ -137,6 +127,21 @@
             <span>⏱️</span> <span id="btn-toggle-tiempos-txt">Ver Desglose MOD / Insumos</span>
           </button>
         </div>
+      </div>
+
+      <!-- Franja horaria: filtra por hora dentro de cada dia (opcional) -->
+      <div class="flex items-end gap-4 flex-wrap text-xs mt-1 mb-5">
+        <div class="flex items-end gap-3">
+          <div class="flex flex-col">
+            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Hora desde</label>
+            <input type="time" id="vc-hora-desde" title="Opcional: filtra por hora dentro de cada dia" class="border border-slate-200 rounded-xl px-3 py-2 bg-slate-50/80 focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500 font-semibold text-slate-700 shadow-2xs">
+          </div>
+          <div class="flex flex-col">
+            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Hora hasta</label>
+            <input type="time" id="vc-hora-hasta" title="Opcional: filtra por hora dentro de cada dia" class="border border-slate-200 rounded-xl px-3 py-2 bg-slate-50/80 focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500 font-semibold text-slate-700 shadow-2xs">
+          </div>
+        </div>
+        <p class="text-[11px] text-slate-500 font-medium leading-relaxed max-w-2xl pb-1">La franja horaria recorta las mismas horas <b>dentro de cada día</b> del rango de fechas: ej. del 20 al 22, de 11:00 a 15:00, trae lo vendido de 11 a 3 cada día. Con 00:00 a 23:59 trae el día completo. Si la hora desde es mayor que la hasta, se entiende horario de trasnoche.</p>
       </div>
 
       <!-- BANNER DE AUDITORÍA COMPARATIVO CON KARDEX -->

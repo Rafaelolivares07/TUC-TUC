@@ -121,13 +121,22 @@ check('helper horas definido', bool(_qs))
 check('helper lee ambos inputs', 'vc-hora-desde' in _qs and 'vc-hora-hasta' in _qs)
 check('helper usado en reporte+pdf+detalle', html.count('vcHorasQS()') >= 4)
 
-# 6. Parejas fecha+hora y dia completo por defecto (2026-11-22, pedido Rafa)
+# 6. Franja horaria aparte + explicacion (2026-11-24, pedido Rafa):
+# las horas ya NO van en parejas junto a las fechas; fechas juntas
+# arriba, horas en bloque propio debajo, con texto que explica que
+# el recorte es por dia (no rango exacto fecha-hora).
 p_d = html.find('id="vc-desde"')
 p_hd = html.find('id="vc-hora-desde"')
 p_h = html.find('id="vc-hasta"')
 p_hh = html.find('id="vc-hora-hasta"')
-check('orden: parejas fecha+hora',
-      0 < p_d < p_hd < p_h < p_hh)
+check('orden: fechas juntas, horas aparte despues',
+      0 < p_d < p_h < p_hd < p_hh)
+check('ids hora unicos',
+      html.count('id="vc-hora-desde"') == 1
+      and html.count('id="vc-hora-hasta"') == 1)
+check('explicacion: dentro de cada dia', 'dentro de cada d' in html)
+check('explicacion: ejemplo por dia', 'de 11 a 3 cada d' in html)
+check('explicacion: trasnoche', 'trasnoche' in html)
 _ini2 = html.find('function inicializarFechasVC(')
 _fin2 = html.find('function vcHorasQS(', _ini2)
 _init = html[_ini2:_fin2] if _ini2 >= 0 and _fin2 > _ini2 else ''

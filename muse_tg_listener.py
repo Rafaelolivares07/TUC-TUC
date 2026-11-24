@@ -143,6 +143,29 @@ def fetch_voice_text(base, file_id):
     return text, dur
 
 
+def pick_video_file(msg):
+    """(file_id, sufijo) de video/documento-mp4, o None."""
+    v = msg.get('video')
+    if v and v.get('file_id'):
+        return v['file_id'], '.mp4'
+    d = msg.get('document')
+    if d and d.get('mime_type') == 'video/mp4' and d.get('file_id'):
+        return d['file_id'], '.mp4'
+    return None
+
+
+def fetch_video_file(base, file_id, tag):
+    """Descarga video de Telegram a TEMP/muse_clip_<tag>.mp4 -> ruta."""
+    info = tg_call(base, '/getFile', {'file_id': file_id}, timeout=20)
+    fpath = (info.get('result') or {}).get('file_path')
+    if not fpath:
+        raise ValueError('sin file_path')
+    tok = base.split('/bot', 1)[1]
+    local = os.path.join(tempfile.gettempdir(), 'muse_clip_%s.mp4' % tag)
+    urllib.request.urlretrieve('https://api.telegram.org/file/bot' + tok + '/' + fpath, local)
+    return local
+
+
 _lockfh = None
 
 
@@ -254,7 +277,18 @@ def run():
                             text = '[audio fallo, reenviar por favor]'
                             log('stt error %s file_id=%s' % (type(e).__name__, vid))
                     else:
-                        text = '[mensaje sin texto]'
+                        vm = pick_video_file(m)
+                        if vm:
+                            try:
+                                tag = '%s_%s' % (mid, datetime.now().strftime('%H%M%S')) if mid is not None else datetime.now().strftime('%H%M%S')
+                                vpath = fetch_video_file(base, vm[0], tag)
+                                text = '[video %s]' % vpath
+                                log('video ok %s' % vpath)
+                            except Exception as e:
+                                text = '[video fallo descarga, reenviar por favor]'
+                                log('video error %s' % type(e).__name__)
+                        else:
+                            text = '[mensaje sin texto]'
                 if kind == 'edited_message':
                     text = '[editado] ' + text
                 if mid is not None:
@@ -264,7 +298,16 @@ def run():
                 try:
                     import muse_wake as wake
                     wake.ensure_started(log, lambda: (base, chat_id))
-                    wake.notify(text, chat_id, m.get('message_id'))
+                    try:
+                        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+                        import muse_bus
+                        dest = muse_bus.receptor_telegram()
+                    except Exception:
+                        dest = None
+                    if dest:
+                        wake.notify(text, chat_id, m.get('message_id'), 'telegram', dest)
+                    else:
+                        wake.notify(text, chat_id, m.get('message_id'))
                 except Exception as e:
                     log('wake fallo %s' % type(e).__name__)
         except KeyboardInterrupt:

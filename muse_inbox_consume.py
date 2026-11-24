@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """muse_inbox_consume: borra del inbox solo los message_id indicados.
 Uso: muse_inbox_consume.py <id1> [<id2> ...]
+     muse_inbox_consume.py --para <tag> <carta_id...>  (bus: consumo por destinatario)
 Si no queda nada, borra el archivo. Imprime restantes.
 Nunca borra a ciegas: lo no visto se conserva para el proximo wake.
 """
@@ -31,5 +32,22 @@ def main(ids):
     return 0
 
 
+def main_para(tag, ids):
+    """Bus dirigido: saca a tag de cada carta (sin doble-respuesta)."""
+    sys.path.insert(0, BASE)
+    import muse_bus
+    n = 0
+    for i in ids:
+        if muse_bus.consumir(i, tag):
+            n += 1
+    rest = len(muse_bus.leer_cartas())
+    print('consumidas: %d, restantes: %d' % (n, rest))
+    return 0
+
+
 if __name__ == '__main__':
-    main(sys.argv[1:])
+    args = sys.argv[1:]
+    if len(args) >= 3 and args[0] == '--para':
+        main_para(args[1], args[2:])
+    else:
+        main(args)

@@ -40,9 +40,20 @@ def configure(logfn):
     _log = logfn
 
 
-def build_inbox(text, chat_id, message_id):
-    return {'texto': text, 'chat_id': str(chat_id), 'message_id': message_id,
-            'fecha': time.strftime('%Y-%m-%d %H:%M:%S')}
+def build_inbox(text, chat_id, message_id, remitente=None, para=None):
+    # Bus dirigido (2026-11-24): carta con remitente + para:. Sin para:
+    # comportamiento legado intacto (bandeja comun, wake ciego).
+    d = {'texto': text, 'chat_id': str(chat_id), 'message_id': message_id,
+         'fecha': time.strftime('%Y-%m-%d %H:%M:%S')}
+    if remitente:
+        d['remitente'] = remitente
+    if para:
+        import sys as _s
+        _s.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import muse_bus
+        d['para'] = muse_bus.expandir(para)
+        d['id'] = 'b%d-%s' % (int(time.time() * 1000), remitente)
+    return d
 
 
 def write_inbox(payload, path=INBOX):
@@ -309,9 +320,19 @@ def _delayed_wake(delay, ids):
         threading.Thread(target=_verify_loop, args=(ids,), daemon=True).start()
 
 
-def notify(text, chat_id, message_id):
-    """Escribe inbox y despierta (con cooldown). True si inbox quedo."""
+def notify(text, chat_id, message_id, remitente=None, para=None):
+    """Escribe inbox y despierta (con cooldown). True si inbox quedo.
+    Con para: timbra solo a aludidos (bus); sin para: wake legado."""
     global _last_wake, _wake_scheduled
+    if para:
+        try:
+            import sys as _s
+            _s.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+            import muse_bus
+            muse_bus.notify_dirigido(text, remitente, para, chat_id, message_id)
+            return True
+        except Exception as e:
+            _l('wake bus fallo %s, caigo a legado' % type(e).__name__)
     write_inbox(build_inbox(text, chat_id, message_id))
     now = time.time()
     if now - _last_wake < COOLDOWN_SEC:

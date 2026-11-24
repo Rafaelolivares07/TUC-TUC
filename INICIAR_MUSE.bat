@@ -105,6 +105,7 @@ set "HHMM=!HHMM: =0!"
 set "ETIQUETA=MUSE !HHMM!"
 echo   Titulo: !ETIQUETA!
 echo !ETIQUETA!>%TEMP%\muse_tab_title.txt
+if defined MUSE_TAG echo !ETIQUETA!>%TEMP%\muse_tab_title_!MUSE_TAG!.txt
 echo BOOT>%TEMP%\muse_boot.mark
 del "%TEMP%\muse_menu_listo.mark" 2>nul
 start "" /min C:\Tools\Python313\pythonw.exe "%V2%\muse_menu_voz.py"

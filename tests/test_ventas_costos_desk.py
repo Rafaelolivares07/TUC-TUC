@@ -135,7 +135,9 @@ check('ids hora unicos',
       html.count('id="vc-hora-desde"') == 1
       and html.count('id="vc-hora-hasta"') == 1)
 check('explicacion: dentro de cada dia', 'dentro de cada d' in html)
-check('explicacion: ejemplo por dia', 'de 11 a 3 cada d' in html)
+check('explicacion: ejemplo AM/PM', '11:00 AM a 3:00 PM' in html)
+check('explicacion: dia completo AM/PM', '12:00 AM a 11:59 PM' in html)
+check('explicacion: trasnoche AM/PM', '6:00 PM a 2:00 AM' in html)
 check('explicacion: trasnoche', 'trasnoche' in html)
 _ini2 = html.find('function inicializarFechasVC(')
 _fin2 = html.find('function vcHorasQS(', _ini2)

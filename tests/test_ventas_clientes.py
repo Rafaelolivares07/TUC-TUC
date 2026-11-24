@@ -128,7 +128,8 @@ _c_hh = html.find('id="vc-hora-hasta"')
 check('orden: fechas juntas, horas aparte despues',
       0 < _c_d < _c_h < _c_hd < _c_hh)
 check('franja explicada', 'dentro de cada d' in html
-      and 'de 11 a 3 cada d' in html and 'trasnoche' in html)
+      and '11:00 AM a 3:00 PM' in html and '12:00 AM a 11:59 PM' in html
+      and '6:00 PM a 2:00 AM' in html and 'trasnoche' in html)
 check('colspan 8/10', 'desgloseVisibleVC ? 10 : 8' in html)
 check('sin editor tiempos', 'actualizarTiempoProdVC' not in html)
 

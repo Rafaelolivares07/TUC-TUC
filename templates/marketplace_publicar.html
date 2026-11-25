@@ -5,6 +5,20 @@
 <title>Publicar gratis · Tuc-Tuc</title>
 <meta name="description" content="Explora restaurantes y tiendas de Tuc-Tuc. Compra directo y publica gratis.">
 {% include 'marketplace_estilos.html' %}
+<style>
+.publication .photo-help {margin:0;font-weight:400}
+.publication .photo-preview {display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:9px;padding:0;margin:0;list-style:none}
+.publication .photo-preview li {display:grid;align-content:start;gap:4px}
+.publication .photo-preview img {width:100%;height:auto;aspect-ratio:1;object-fit:cover;border-radius:8px}
+.publication .photo-preview small {font-weight:700}
+.publication .photo-preview button {min-height:35px;padding:4px 9px}
+.publication #market-fotos-error:empty {display:none}
+.publication button:disabled {opacity:.65;cursor:wait}
+</style>
+{% if token %}
+<script src="{{ url_for('static', filename='JS/imagen_producto.js', v=1) }}" defer></script>
+<script src="{{ url_for('static', filename='marketplace/publicar_fotos.js', v=1) }}" defer></script>
+{% endif %}
 </head>
 <body>
 <header class="head"><div class="head-inner wrap"><a class="logo" href="{{ url_for('marketplace.portada') }}"><span class="logo-mark" aria-hidden="true">tt</span><strong>tuc-tuc.</strong></a></div></header>
@@ -13,13 +27,19 @@
 <p>Envíanos lo que vendes. Usaremos tu celular para confirmar la publicación.</p>
 {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
 {% if token %}
-<form method="post" action="{{ url_for('marketplace.recibir_publicacion') }}">
+<form id="market-publicacion" method="post" enctype="multipart/form-data" action="{{ url_for('marketplace.recibir_publicacion') }}">
 <input type="hidden" name="token" value="{{ token }}">
 <label>Tu nombre<input name="nombre" autocomplete="name" maxlength="100" required value="{{ datos.get('nombre') or (comprador or {}).get('nombre','') }}"></label>
 <label>Celular<input type="tel" name="telefono" autocomplete="tel" maxlength="25" required value="{{ datos.get('telefono') or (comprador or {}).get('telefono','') }}"></label>
 <label>Qué ofreces<select name="tipo"><option value="producto">Un producto</option><option value="servicio"{% if datos.get('tipo') == 'servicio' %} selected{% endif %}>Un servicio</option></select></label>
 <label>Título<input name="titulo" maxlength="120" required value="{{ datos.get('titulo','') }}"></label>
 <label>Descripción<textarea name="descripcion" maxlength="1000" required>{{ datos.get('descripcion','') }}</textarea></label>
+<label>Fotos <span class="photo-help">La primera será la portada. Puedes agregar o quitar fotos. El total comprimido admite {{ limite_fotos // 1048576 }} MB.</span>
+<input id="market-fotos" type="file" accept="image/jpeg,image/png,image/webp" multiple disabled aria-describedby="market-fotos-error" data-limite-fotos="{{ limite_fotos }}" data-limite-foto="{{ limite_foto }}">
+</label>
+<ul class="photo-preview" id="market-fotos-preview" aria-label="Fotos seleccionadas"></ul>
+<p id="market-fotos-error" class="error" role="alert"></p>
+<noscript><p>Activa JavaScript para adjuntar fotos.</p></noscript>
 <button class="btn dark" type="submit">Enviar publicación</button>
 </form>
 {% else %}<p><a class="btn dark" href="{{ url_for('marketplace.publicar') }}">Volver al formulario</a></p>{% endif %}

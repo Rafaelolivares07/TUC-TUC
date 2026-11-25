@@ -1,7 +1,9 @@
 """Portada pública y datos de compra de invitado de Tuc-Tuc."""
+import json
 import os
 from base64 import b64decode
 from binascii import Error as ErrorBase64
+from io import BytesIO
 import re
 import secrets
 from urllib.parse import urlsplit
@@ -16,6 +18,8 @@ bp = Blueprint("marketplace", __name__)
 COMPRADOR = "__Host-tuctuc_comprador"
 PUBLICACION = "__Host-tuctuc_publicar"
 VIGENCIA_PUBLICACION = 1800
+LIMITE_FOTOS_PUBLICACION = 7 * 1024 * 1024
+LIMITE_FOTO_PUBLICACION = 450_000
 VIGENCIA_COMPRADOR = 90 * 24 * 60 * 60
 CATEGORIAS = frozenset(("productos", "restaurantes"))
 LIMITE = 24
@@ -477,7 +481,41 @@ def _crear_solicitudes(conn):
             creado_en timestamptz NOT NULL DEFAULT now()
         )
     """)
+    conn.execute("""
+        ALTER TABLE marketplace_solicitudes
+        ADD COLUMN IF NOT EXISTS fotos jsonb NOT NULL DEFAULT '[]'::jsonb
+    """)
     conn.commit()
+
+
+def _formulario_publicacion(token, datos, error=None):
+    return render_template(
+        "marketplace_publicar.html", token=token, comprador=datos_comprador(), datos=datos,
+        error=error, limite_fotos=LIMITE_FOTOS_PUBLICACION, limite_foto=LIMITE_FOTO_PUBLICACION,
+    )
+
+
+def _fotos_publicacion(fotos):
+    if sum(map(len, fotos)) > LIMITE_FOTOS_PUBLICACION:
+        raise ValueError("Las fotos superan el tamaño total permitido.")
+    if not fotos:
+        return fotos
+    from PIL import Image
+
+    for foto in fotos:
+        encabezado, separador, contenido = foto.partition(",")
+        if (len(foto) > LIMITE_FOTO_PUBLICACION or not separador
+                or encabezado != "data:image/jpeg;base64"):
+            raise ValueError("Una foto supera el tamaño permitido o tiene un formato inválido.")
+        try:
+            datos = b64decode(contenido, validate=True)
+            with Image.open(BytesIO(datos), formats=("JPEG",)) as imagen:
+                if max(imagen.size) > 800:
+                    raise ValueError("Una foto supera el tamaño permitido. Vuelve a seleccionarla.")
+                imagen.load()
+        except (ErrorBase64, OSError, Image.DecompressionBombError):
+            raise ValueError("No se pudo leer una de las fotos. Vuelve a seleccionarla.") from None
+    return fotos
 
 
 def _token_publicacion():
@@ -494,9 +532,7 @@ def _token_publicacion():
 def publicar():
     anterior = _token_publicacion()
     token = anterior or secrets.token_urlsafe(32)
-    respuesta = make_response(render_template(
-        "marketplace_publicar.html", token=token, comprador=datos_comprador(), datos={}, error=None,
-    ))
+    respuesta = make_response(_formulario_publicacion(token, {}))
     if not anterior:
         respuesta.set_cookie(PUBLICACION, _firma("publicar").dumps(token),
                              max_age=VIGENCIA_PUBLICACION, secure=True, httponly=True, samesite="Lax")
@@ -506,29 +542,33 @@ def publicar():
 @bp.post("/marketplace/publicar")
 def recibir_publicacion():
     token = _token_publicacion()
+    if request.content_length and request.content_length > 8 * 1024 * 1024:
+        return _formulario_publicacion(token, {}, "Las fotos superan el tamaño total permitido."), 413
     if not token or not secrets.compare_digest(token.encode(), _texto(request.form.get("token"), 60).encode()):
-        return render_template("marketplace_publicar.html", token=None, comprador=datos_comprador(),
-                               datos={}, error="Abre de nuevo el formulario para enviar tu publicación."), 400
+        return _formulario_publicacion(None, {}, "Abre de nuevo el formulario para enviar tu publicación."), 400
     datos = {clave: _texto(request.form.get(clave), limite) for clave, limite in
              (("nombre", 100), ("telefono", 25), ("tipo", 12), ("titulo", 120), ("descripcion", 1000))}
     datos["telefono"] = _telefono(datos["telefono"])
     if (not all(datos.values()) or datos["tipo"] not in ("producto", "servicio")):
-        return render_template("marketplace_publicar.html", token=token, comprador=datos_comprador(),
-                               datos=datos, error="Completa los datos y escribe un celular colombiano válido."), 400
+        return _formulario_publicacion(token, datos, "Completa los datos y escribe un celular colombiano válido."), 400
+    try:
+        fotos = _fotos_publicacion(request.form.getlist("fotos"))
+    except ValueError as error:
+        return _formulario_publicacion(token, datos, str(error)), 400
     conn = get_db_connection()
     try:
         asegurar_una_vez("marketplace.solicitudes", lambda: _crear_solicitudes(conn))
         conn.execute(
-            """INSERT INTO marketplace_solicitudes (token, nombre, telefono, tipo, titulo, descripcion)
-               VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT (token) DO NOTHING""",
-            (token, datos["nombre"], datos["telefono"], datos["tipo"], datos["titulo"], datos["descripcion"]),
+            """INSERT INTO marketplace_solicitudes (token, nombre, telefono, tipo, titulo, descripcion, fotos)
+               VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb) ON CONFLICT (token) DO NOTHING""",
+            (token, datos["nombre"], datos["telefono"], datos["tipo"], datos["titulo"], datos["descripcion"],
+             json.dumps(fotos)),
         )
         conn.commit()
     except Exception:
         current_app.logger.exception("Error al registrar solicitud de Marketplace")
         conn.rollback()
-        return render_template("marketplace_publicar.html", token=token, comprador=datos_comprador(),
-                               datos=datos, error="No pudimos guardar tu solicitud. Intenta otra vez."), 503
+        return _formulario_publicacion(token, datos, "No pudimos guardar tu solicitud. Intenta otra vez."), 503
     finally:
         conn.close()
     respuesta = redirect(url_for("marketplace.portada", publicacion="recibida"), code=303)

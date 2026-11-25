@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% if tienda %}{{ tienda.nombre }}{% else %}Tiendas{% endif %}</title>
     <script src="/static/js/tailwind.js"></script>
+    <script src="{{ url_for('static', filename='JS/imagen_producto.js', v=1) }}" defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://unpkg.com/maplibre-gl@5.17.0/dist/maplibre-gl.js"></script>
     <link href="https://unpkg.com/maplibre-gl@5.17.0/dist/maplibre-gl.css" rel="stylesheet"/>
@@ -4519,26 +4520,6 @@ async function cargarDocumentosProducto() {
             </div>
         `).join('');
     } catch(e) { toast('Error cargando documentos', true); }
-}
-
-function procesarImagen(file, maxSize, quality, callback) {
-    const reader = new FileReader();
-    reader.onload = e => {
-        const img = new Image();
-        img.onload = () => {
-            const canvas = document.createElement('canvas');
-            let w = img.width, h = img.height;
-            if (w > maxSize || h > maxSize) {
-                if (w > h) { h = h * maxSize / w; w = maxSize; }
-                else { w = w * maxSize / h; h = maxSize; }
-            }
-            canvas.width = w; canvas.height = h;
-            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-            callback(canvas.toDataURL('image/jpeg', quality));
-        };
-        img.src = e.target.result;
-    };
-    reader.readAsDataURL(file);
 }
 
 async function subirFotoPrincipal(input) {

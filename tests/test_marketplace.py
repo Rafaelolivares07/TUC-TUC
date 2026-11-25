@@ -136,6 +136,34 @@ class MarketplaceTest(unittest.TestCase):
             with patch.object(marketplace, "get_db_connection", return_value=Registro({"imagen": invalida})):
                 self.assertEqual(self.client.get(ruta).status_code, 404)
 
+    def test_publicacion_guarda_mas_de_cuatro_fotos_en_orden(self):
+        from base64 import b64encode
+        from io import BytesIO
+        from PIL import Image
+        from werkzeug.datastructures import MultiDict
+        import json
+        import re
+
+        fotos = []
+        for n in range(6):
+            buffer = BytesIO()
+            Image.new("RGB", (20, 30), (n * 30, 120, 40)).save(buffer, "JPEG")
+            fotos.append("data:image/jpeg;base64," + b64encode(buffer.getvalue()).decode())
+        pagina = self.client.get("/marketplace/publicar")
+        token = re.search(r'name="token" value="([^"]+)"', pagina.get_data(as_text=True)).group(1)
+        form = MultiDict([("token", token), ("nombre", "Diana"), ("telefono", "3151112222"),
+                          ("tipo", "producto"), ("titulo", "Oferta de prueba"),
+                          ("descripcion", "Descripción de prueba"), *[("fotos", foto) for foto in fotos]])
+        conn = Registro()
+        with patch.object(marketplace, "get_db_connection", return_value=conn):
+            respuesta = self.client.post("/marketplace/publicar", data=form, content_type="multipart/form-data")
+        self.assertEqual(respuesta.status_code, 303)
+        guardado = next(params for sql, params in conn.sql if "INSERT INTO marketplace_solicitudes" in sql)
+        self.assertEqual(json.loads(guardado[-1]), fotos)
+        self.assertEqual(marketplace._fotos_publicacion([]), [])
+        with self.assertRaises(ValueError):
+            marketplace._fotos_publicacion(["data:image/jpeg;base64,AAAA"])
+
     def test_campos_publicos_y_rechazo_de_url_no_apta(self):
         tienda = Blueprint("tiendas", __name__)
 

@@ -63,7 +63,108 @@ SELECT tipo, id, nombre, categoria, negocio, slug, precio, imagen
  LIMIT %s OFFSET %s
 """
 
+_PLATOS_PUBLICOS = """
+      FROM productos p
+      JOIN restaurantes r ON r.tercero_id = p.negocio_id
+     WHERE r.activo IS TRUE AND COALESCE(r.es_ejemplo, FALSE) = FALSE
+       AND r.tipo_restaurante IN ('carta', 'ambos')
+       AND p.disponible IS TRUE AND p.precio > 0 AND COALESCE(p.es_adicion, FALSE) = FALSE
+       AND (r.tipo_restaurante = 'carta' OR lower(btrim(COALESCE(p.categoria, '')))
+            NOT IN ('sopa', 'proteina', 'proteína', 'principio'))
+"""
+_ACENTOS = "áéíóúüñ"
+_SIN_ACENTOS = "aeiouun"
+_TRADUCCION = str.maketrans(_ACENTOS, _SIN_ACENTOS)
+
+
+def _normalizar_busqueda(texto):
+    return " ".join(re.findall(r"\w+", texto.lower().translate(_TRADUCCION)))
+
+
+_CATEGORIA_BUSQUEDA = """
+    btrim(regexp_replace(COALESCE(p.categoria, ''),
+          '^[[:space:]]*[0-9]+[.)-][[:space:]]*', ''))
+"""
+
+
+_BUSQUEDA = f"""
+WITH venta AS (
+    SELECT 'productos' AS tipo, p.id, p.nombre, {_CATEGORIA_BUSQUEDA} AS categoria,
+           t.nombre AS negocio, t.slug, p.precio, 'productos' AS ambito, 0 AS grupo
+      {_PRODUCTOS_PUBLICOS}
+    UNION ALL
+    SELECT 'platos', p.id, p.nombre, {_CATEGORIA_BUSQUEDA}, r.nombre, r.slug, p.precio, 'restaurantes', 0
+      {_PLATOS_PUBLICOS}
+), fichas AS (
+    SELECT * FROM venta
+    UNION ALL
+    SELECT 'categorias', 0, min(categoria), NULL, NULL, NULL, NULL, '', 1
+      FROM venta
+     WHERE NULLIF(categoria, '') IS NOT NULL
+       AND lower(categoria) NOT IN ('carta', 'sin categoria', 'sin categoría')
+       AND (%(ambito)s = '' OR ambito = %(ambito)s)
+     GROUP BY translate(lower(categoria), '{_ACENTOS}', '{_SIN_ACENTOS}')
+    UNION ALL
+    SELECT 'tiendas', t.id, t.nombre, 'Tienda', t.nombre, t.slug, NULL, 'productos', 2
+      FROM tiendas t
+     WHERE t.activo IS TRUE AND (t.fecha_vence IS NULL OR t.fecha_vence >= CURRENT_DATE)
+    UNION ALL
+    SELECT 'restaurantes', r.id, r.nombre, 'Restaurante', r.nombre, r.slug, NULL, 'restaurantes', 2
+      {_RESTAURANTES_PUBLICOS}
+), nombres AS (
+    SELECT *, translate(lower(btrim(regexp_replace(nombre, '[^[:alnum:]_]+', ' ', 'g'))),
+                        '{_ACENTOS}', '{_SIN_ACENTOS}') AS termino
+      FROM fichas
+     WHERE (%(ambito)s = '' OR ambito IN ('', %(ambito)s))
+       AND (%(rubro)s = '' OR (grupo = 0 AND
+            translate(lower(btrim(regexp_replace(categoria, '[^[:alnum:]_]+', ' ', 'g'))),
+                      '{_ACENTOS}', '{_SIN_ACENTOS}') = %(rubro)s))
+), coincidencias AS (
+    SELECT *, CASE
+            WHEN termino = %(q)s THEN 3
+            WHEN starts_with(termino, %(q)s) THEN 2
+            WHEN strpos(termino, %(q)s) > 0 THEN 1
+            ELSE 0 END AS relevancia
+      FROM nombres
+     WHERE %(q)s = '' OR NOT EXISTS (
+        SELECT 1 FROM unnest(string_to_array(%(q)s, ' ')) AS palabras(palabra)
+         WHERE NOT EXISTS (
+            SELECT 1 FROM unnest(string_to_array(termino, ' ')) AS nombre(palabra_publica)
+             WHERE starts_with(palabra_publica, palabra)
+         )
+     )
+), enumeradas AS (
+    SELECT *, row_number() OVER (
+        PARTITION BY grupo ORDER BY relevancia DESC, termino, negocio, tipo, id
+    ) AS posicion
+      FROM coincidencias
+), pagina AS (
+    SELECT * FROM enumeradas
+     WHERE NOT %(sugerencias)s OR posicion <= CASE WHEN grupo = 0 THEN 3 ELSE 2 END
+     ORDER BY grupo, posicion
+     LIMIT %(limite)s OFFSET %(offset)s
+)
+SELECT f.*, CASE f.tipo
+        WHEN 'productos' THEN (SELECT left({_FOTO_PRODUCTO}, 1501) FROM productos p WHERE p.id = f.id)
+        WHEN 'platos' THEN (SELECT left({_FOTO_PRODUCTO}, 1501) FROM productos p WHERE p.id = f.id)
+        WHEN 'restaurantes' THEN (SELECT left(r.imagen_header, 1501) FROM restaurantes r WHERE r.id = f.id)
+        ELSE NULL END AS imagen
+  FROM pagina f
+ ORDER BY f.grupo, f.posicion
+"""
+
+
+def _buscar(conn, q, ambito="", rubro="", pagina=1, sugerencias=False):
+    return conn.execute(_BUSQUEDA, {
+        "q": _normalizar_busqueda(q), "ambito": ambito,
+        "rubro": _normalizar_busqueda(rubro), "sugerencias": sugerencias,
+        "limite": 7 if sugerencias else LIMITE + 1,
+        "offset": (pagina - 1) * LIMITE,
+    }).fetchall()
+
+
 _CONSULTAS_FOTO = {
+    "platos": f"SELECT {_FOTO_PRODUCTO} AS imagen {_PLATOS_PUBLICOS} AND p.id = %s LIMIT 1",
     "productos": f"SELECT {_FOTO_PRODUCTO} AS imagen {_PRODUCTOS_PUBLICOS} AND p.id = %s LIMIT 1",
     "restaurantes": f"SELECT r.imagen_header AS imagen {_RESTAURANTES_PUBLICOS} AND r.id = %s",
 }
@@ -129,23 +230,30 @@ def foto(tipo, oferta_id):
     return respuesta.make_conditional(request)
 
 
-def _oferta(fila):
-    producto = fila["tipo"] == "productos"
-    if producto:
+def _oferta(fila, ambito=""):
+    tipo = fila["tipo"]
+    if tipo == "productos":
         enlace = url_for("tiendas.tienda_publica", slug=fila["slug"],
                          producto=fila["id"], origen="marketplace")
-    else:
+    elif tipo == "platos":
         enlace = url_for("restaurantes.restaurante_publico", slug=fila["slug"],
-                         origen="marketplace")
+                         plato=fila["id"], origen="marketplace")
+    elif tipo == "categorias":
+        enlace = url_for("marketplace.portada", categoria=ambito, rubro=fila["nombre"], _anchor="explorar")
+    elif tipo == "tiendas":
+        enlace = url_for("tiendas.tienda_publica", slug=fila["slug"], origen="marketplace")
+    else:
+        enlace = url_for("restaurantes.restaurante_publico", slug=fila["slug"], origen="marketplace")
+
     precio = fila["precio"]
     origen_foto = fila["imagen"] or ""
     if origen_foto.partition(",")[0].lower() in _FORMATOS_FOTO:
-        imagen = url_for("marketplace.foto", tipo=fila["tipo"], oferta_id=fila["id"])
+        imagen = url_for("marketplace.foto", tipo=tipo, oferta_id=fila["id"])
     else:
         imagen = _foto_publica(origen_foto)
     return dict(
         nombre=fila["nombre"], categoria=fila["categoria"], negocio=fila["negocio"],
-        tipo=fila["tipo"], enlace=enlace, imagen=imagen,
+        tipo=tipo, enlace=enlace, imagen=imagen,
         precio=("$" + f"{precio:,.2f}".rstrip("0").rstrip(".").replace(",", "X").replace(".", ",").replace("X", "."))
         if precio is not None else "",
     )
@@ -156,19 +264,30 @@ def portada():
     busqueda = _texto(request.args.get("q"), 100)
     categoria = _texto(request.args.get("categoria"), 20)
     categoria = categoria if categoria in CATEGORIAS else ""
-    pagina = min(max(request.args.get("pagina", 1, type=int), 1), 1000)
+    rubro = _texto(request.args.get("rubro"), 100)
+    sugerencias = request.args.get("sugerencias") == "1"
+    pagina = 1 if sugerencias else min(max(request.args.get("pagina", 1, type=int), 1), 1000)
+    if sugerencias and len(_normalizar_busqueda(busqueda)) < 2:
+        return jsonify(sugerencias=[])
     conn = get_db_connection()
     try:
-        filas = conn.execute(
-            _OFERTAS, (categoria, categoria, busqueda, busqueda, LIMITE + 1,
-                       (pagina - 1) * LIMITE)
-        ).fetchall()
+        if busqueda and not _normalizar_busqueda(busqueda):
+            filas = []
+        elif busqueda or rubro:
+            filas = _buscar(conn, busqueda, categoria, rubro, pagina, sugerencias)
+        else:
+            filas = conn.execute(
+                _OFERTAS, (categoria, categoria, "", "", LIMITE + 1, (pagina - 1) * LIMITE)
+            ).fetchall()
     finally:
         conn.close()
+    ofertas = [_oferta(fila, categoria) for fila in filas[:LIMITE]]
+    if sugerencias:
+        return jsonify(sugerencias=ofertas)
     return render_template(
-        "marketplace.html", ofertas=[_oferta(fila) for fila in filas[:LIMITE]],
-        busqueda=busqueda, categoria=categoria, pagina=pagina, siguiente=len(filas) > LIMITE,
-        comprador=datos_comprador(), aviso=request.args.get("publicacion") == "recibida",
+        "marketplace.html", ofertas=ofertas, busqueda=busqueda, categoria=categoria,
+        rubro=rubro, pagina=pagina, siguiente=len(filas) > LIMITE, comprador=datos_comprador(),
+        aviso=request.args.get("publicacion") == "recibida",
     )
 
 

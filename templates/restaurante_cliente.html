@@ -338,6 +338,7 @@ const TERCERO_ID = {{ (restaurante.tercero_id or restaurante.admin_id) | tojson 
 const SOLO_CARTA = {{ solo_carta | tojson }};
 const BASE = `/api/restaurante/${SLUG}`;
 const MARKETPLACE = {{ marketplace_compra|default(false)|tojson }};
+const PLATO_BUSCADO = MARKETPLACE ? new URLSearchParams(location.search).get('plato') : null;
 const PEDIDO_URL = MARKETPLACE ? '/api/marketplace/restaurante/' + SLUG + '/pedido' : BASE + '/pedido';
 const STORAGE_KEY = `cliente_nombre_${SLUG}`;
 const CLIENTE_DATA = {{ cliente_data | tojson | safe if cliente_data else 'null' }};
@@ -885,7 +886,7 @@ async function cargarCartaCliente() {
                     <h3 class="font-bold txt-primary text-sm uppercase tracking-wide mb-3">${cat}</h3>
                     <div class="grid grid-cols-2 gap-3">
                         ${platoscat.map(p => `
-                            <div class="card rounded-2xl shadow overflow-hidden">
+                            <div id="plato-busqueda-${p.id}" class="card rounded-2xl shadow overflow-hidden">
                                 ${p.imagen
                                     ? `<div class="plato-img-wrap" onclick="abrirZoom('${p.imagen}')">
                                           <img src="${p.imagen}" alt="" class="img-bg-blur" onerror="this.style.display='none'">
@@ -923,7 +924,7 @@ async function cargarCartaCliente() {
                     <h3 class="font-bold txt-primary text-sm uppercase tracking-wide mb-2">${cat}</h3>
                     <div class="space-y-2">
                         ${platoscat.map(p => `
-                            <div class="card rounded-xl shadow px-4 py-3">
+                            <div id="plato-busqueda-${p.id}" class="card rounded-xl shadow px-4 py-3">
                                 <div class="flex items-center justify-between gap-3">
                                     <div class="flex-1 min-w-0">
                                         <span class="font-semibold txt-primary text-sm block leading-tight">${p.nombre}</span>
@@ -951,6 +952,12 @@ async function cargarCartaCliente() {
                 </div>`;
             }
         }).join('');
+
+        const platoBuscado = PLATO_BUSCADO && document.getElementById('plato-busqueda-' + PLATO_BUSCADO);
+        if (platoBuscado) {
+            platoBuscado.classList.add('ring-2', 'ring-amber-500', 'scroll-mt-24');
+            platoBuscado.scrollIntoView({ block: 'center' });
+        }
 
         // Mostrar barra pedir (solo si no es solo_carta) y ocultar campo nota global
         if (!SOLO_CARTA) {
@@ -1278,7 +1285,9 @@ const saludoEl = document.getElementById('saludo-menu');
 if (saludoEl) saludoEl.textContent = '¿Qué vas a pedir?';
 inicializarVideosExperiencia();
 actualizarInfoEntrega();
-if (TIPO_REST === 'carta') {
+if (TIPO_REST === 'ambos' && PLATO_BUSCADO) {
+    activarModo('carta');
+} else if (TIPO_REST === 'carta') {
     cargarCartaCliente();
 } else {
     cargarMenuHoy();

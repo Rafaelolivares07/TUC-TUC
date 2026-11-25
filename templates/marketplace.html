@@ -5,6 +5,8 @@
 <title>Tuc-Tuc · Tu mercado local</title>
 <meta name="description" content="Explora restaurantes y tiendas de Tuc-Tuc. Compra directo y publica gratis.">
 {% include 'marketplace_estilos.html' %}
+<link rel="stylesheet" href="{{ url_for('static', filename='marketplace/busqueda.css', v=1) }}">
+<script src="{{ url_for('static', filename='marketplace/busqueda.js', v=1) }}" defer></script>
 </head>
 <body>
 <header class="head"><div class="head-inner wrap">
@@ -19,7 +21,19 @@
 <div class="tagline"><span class="pin" aria-hidden="true"></span>Compra local en Cali</div>
 <h1 id="hero-title">Lo mejor de tu<br>barrio, <em>más cerca.</em></h1>
 <p>Descubre restaurantes y tiendas de Tuc-Tuc. Explora sus catálogos y compra directo.</p>
-<form id="search" class="search" role="search" action="{{ url_for('marketplace.portada') }}#explorar"><span class="search-icon" aria-hidden="true"></span><input name="q" type="search" aria-label="Buscar en Tuc-Tuc" placeholder="Busca un producto o negocio" value="{{ busqueda }}" maxlength="100"><button class="btn lime" type="submit">Buscar</button></form>
+<div class="market-search">
+<form id="search" class="search" role="search" action="{{ url_for('marketplace.portada') }}#explorar" data-sugerencias="{{ url_for('marketplace.portada', sugerencias=1) }}">
+<span class="search-icon" aria-hidden="true"></span>
+<input name="q" type="search" aria-label="Buscar en Tuc-Tuc" placeholder="Busca productos, servicios o negocios" value="{{ busqueda }}" maxlength="100" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="market-sugerencias">
+{% if categoria %}<input type="hidden" name="categoria" value="{{ categoria }}">{% endif %}
+<button class="btn lime" type="submit">Buscar</button>
+</form>
+<div class="market-suggestions" id="market-menu" hidden>
+<div id="market-sugerencias" role="listbox" aria-label="Sugerencias de búsqueda"></div>
+<p id="market-sin-sugerencias" hidden>Sin coincidencias.</p>
+<a id="market-todos" class="market-all">Ver todos los resultados</a>
+</div>
+</div>
 </div>
 <div class="hero-media"><img src="{{ url_for('static',filename='marketplace/barrio.webp') }}" alt="Dos mujeres intercambian una bolsa de mercado en una tienda de barrio" width="1400" height="933" fetchpriority="high"></div>
 </section>
@@ -29,18 +43,18 @@
 <a class="cat" href="{{ url_for('marketplace.portada', categoria=clave, q=busqueda) }}#explorar"{% if categoria == clave %} aria-current="true"{% endif %}>{{ etiqueta }}</a>
 {% endfor %}
 </div>
-<div class="section-head"><div><h2 id="browse-title">Explora negocios y productos</h2><p>{% if busqueda %}Resultados para «{{ busqueda }}».{% else %}Elige lo que quieres y haz el pedido directamente al negocio.{% endif %}</p></div></div>
+<div class="section-head"><div><h2 id="browse-title">Explora negocios y productos</h2><p>{% if busqueda %}Resultados para «{{ busqueda }}».{% elif rubro %}Categoría «{{ rubro }}».{% else %}Elige lo que quieres y haz el pedido directamente al negocio.{% endif %}</p></div></div>
 <div class="cards">
 {% for oferta in ofertas %}
-<article class="card"><a href="{{ oferta.enlace }}"><span class="card-photo">{% if oferta.imagen %}<img src="{{ oferta.imagen }}" alt="" loading="lazy" referrerpolicy="no-referrer">{% else %}<span class="fallback">{{ oferta.categoria or oferta.negocio }}</span>{% endif %}</span><span class="card-info"><small>{{ oferta.negocio if oferta.tipo == 'productos' else oferta.categoria }}</small><strong>{{ oferta.nombre }}</strong><span class="price">{{ oferta.precio or 'Ver carta' }}</span></span></a></article>
+<article class="card"><a href="{{ oferta.enlace }}"><span class="card-photo">{% if oferta.imagen %}<img src="{{ oferta.imagen }}" alt="" loading="lazy" referrerpolicy="no-referrer">{% else %}<span class="fallback">{{ oferta.categoria or oferta.negocio or 'Categoría' }}</span>{% endif %}</span><span class="card-info"><small>{{ oferta.negocio if oferta.tipo in ('productos','platos') else (oferta.categoria or 'Categoría') }}</small><strong>{{ oferta.nombre }}</strong><span class="price">{{ oferta.precio or ('Ver categoría' if oferta.tipo == 'categorias' else 'Ver tienda' if oferta.tipo == 'tiendas' else 'Ver carta') }}</span></span></a></article>
 {% else %}
 <p class="empty">No encontramos ofertas para esta búsqueda.</p>
 {% endfor %}
 </div>
 {% if pagina > 1 or siguiente %}
 <div class="pagination">
-{% if pagina > 1 %}<a class="btn clear" href="{{ url_for('marketplace.portada', pagina=pagina-1, categoria=categoria, q=busqueda) }}#explorar">Anterior</a>{% endif %}
-{% if siguiente %}<a class="btn dark" href="{{ url_for('marketplace.portada', pagina=pagina+1, categoria=categoria, q=busqueda) }}#explorar">Ver más</a>{% endif %}
+{% if pagina > 1 %}<a class="btn clear" href="{{ url_for('marketplace.portada', pagina=pagina-1, categoria=categoria, q=busqueda, rubro=rubro) }}#explorar">Anterior</a>{% endif %}
+{% if siguiente %}<a class="btn dark" href="{{ url_for('marketplace.portada', pagina=pagina+1, categoria=categoria, q=busqueda, rubro=rubro) }}#explorar">Ver más</a>{% endif %}
 </div>
 {% endif %}
 </section>

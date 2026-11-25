@@ -95,6 +95,30 @@ class MarketplaceTest(unittest.TestCase):
             self.assertIn("__Host-tuctuc_publicar=", response.headers["Set-Cookie"])
             self.assertEqual(self.client.post("/marketplace/publicar", data={"token": "ajeno"}).status_code, 400)
 
+    def test_sugerencias_comparten_busqueda_y_conservan_el_enlace_del_plato(self):
+        restaurantes = Blueprint("restaurantes", __name__)
+
+        @restaurantes.get("/r/<slug>")
+        def restaurante_publico(slug):
+            return slug
+
+        self.app.register_blueprint(restaurantes)
+        plato = dict(tipo="platos", id=81, nombre="Sándwich", categoria="Sándwiches",
+                     negocio="Pitt", slug="pitt", precio=Decimal("18000"), imagen=None)
+        categoria = dict(tipo="categorias", id=0, nombre="Sándwiches", categoria=None,
+                         negocio=None, slug=None, precio=None, imagen=None)
+        with patch.object(marketplace, "get_db_connection", return_value=Registro()), \
+             patch.object(marketplace, "_buscar", return_value=[plato, categoria]) as buscar:
+            corto = self.client.get("/marketplace", query_string={"sugerencias": 1, "q": "s"})
+            self.assertEqual(corto.json, {"sugerencias": []})
+            buscar.assert_not_called()
+            resultado = self.client.get("/marketplace", query_string={"sugerencias": 1, "q": "sándwich"})
+            self.assertEqual(resultado.status_code, 200)
+            self.assertIn("plato=81", resultado.json["sugerencias"][0]["enlace"])
+            self.assertIn("rubro=", resultado.json["sugerencias"][1]["enlace"])
+            self.assertEqual([r["tipo"] for r in resultado.json["sugerencias"]], ["platos", "categorias"])
+        self.assertEqual(marketplace._normalizar_busqueda(" SÁNDWICH  de Atún "), "sandwich de atun")
+
     def test_serve_foto_publica_con_mime_y_cache(self):
         conn = Registro({"imagen": "data:image/jpeg;base64,/9j/2Q=="})
         ruta = "/static/marketplace/fotos/productos/14"

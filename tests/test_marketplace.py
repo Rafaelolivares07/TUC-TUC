@@ -216,6 +216,29 @@ class MarketplaceTest(unittest.TestCase):
         login_revision = self.client.get("/admin/marketplace", base_url=host)
         self.assertIn("Ingresa con tu usuario administrador", login_revision.get_data(as_text=True))
 
+    def test_desk_reusa_su_inicio_de_sesion_para_revision(self):
+        from app.blueprints import auth
+
+        class RegistroDesk(Registro):
+            def fetchall(self):
+                return []
+
+        host = "https://desk.tuc-tuc.co"
+        self.app.register_blueprint(auth.bp)
+        conn = RegistroDesk(dict(id=9, rol="Administrador", nombre="Admin"))
+        with patch.object(auth, "get_db_connection", return_value=conn):
+            login = self.client.post("/entrar", base_url=host,
+                                     data={"usuario": "admin-prueba", "password": "clave-prueba"})
+        self.assertTrue(any(marketplace.MODERACION in h and "Domain=" not in h
+                            for h in login.headers.getlist("Set-Cookie")))
+        with patch.object(marketplace, "_conexion_publicaciones", return_value=conn):
+            revision = self.client.get("/admin/marketplace", base_url=host)
+        self.assertIn("Aún no hay solicitudes", revision.get_data(as_text=True))
+        salida = self.client.get("/logout", base_url=host)
+        self.assertTrue(salida.location.endswith("/entrar"))
+        self.assertTrue(any(marketplace.MODERACION in h and "Max-Age=0" in h
+                            for h in salida.headers.getlist("Set-Cookie")))
+
     def test_revision_requiere_la_cookie_de_moderacion(self):
         host = "https://admin.tuc-tuc.co"
         with self.client.session_transaction(base_url=host) as acceso:

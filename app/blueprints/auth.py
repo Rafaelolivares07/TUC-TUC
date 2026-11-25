@@ -115,8 +115,8 @@ def _procesar_login(ok_url, fail_endpoint):
             session.permanent          = True
             session.modified           = True
             respuesta = redirect(ok_url)
-            if request.host.split(":", 1)[0].lower().rstrip(".") == "admin.tuc-tuc.co":
-                from .marketplace import _dar_permiso_revision
+            from .marketplace import _dar_permiso_revision, _es_host_revision
+            if _es_host_revision(request.host):
                 _dar_permiso_revision(respuesta, admin["id"])
             return respuesta
         else:
@@ -139,11 +139,10 @@ def admin_logout():
     flash('Has cerrado la sesión.', 'info')
     host = (request.host or '').split(':')[0].strip().lower()
     from ..dominios_negocio import slug_subdominio_publico
-    if host == 'desk.tuc-tuc.co' or slug_subdominio_publico(host):
-        return redirect(url_for('auth.entrar'))
-    respuesta = redirect(url_for('auth.admin_login'))
-    if host == 'admin.tuc-tuc.co':
-        from .marketplace import MODERACION
+    destino = 'auth.entrar' if host == 'desk.tuc-tuc.co' or slug_subdominio_publico(host) else 'auth.admin_login'
+    respuesta = redirect(url_for(destino))
+    from .marketplace import MODERACION, _es_host_revision
+    if _es_host_revision(request.host):
         respuesta.delete_cookie(MODERACION, secure=True, httponly=True, samesite="Lax")
     return respuesta
 

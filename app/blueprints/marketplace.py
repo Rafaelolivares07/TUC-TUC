@@ -745,9 +745,12 @@ VIGENCIA_MODERACION = 30 * 86400
 VIGENCIA_FORMULARIO_REVISION = 2 * 3600
 
 
+def _es_host_revision(host):
+    return host.split(":", 1)[0].lower().rstrip(".") in ("admin.tuc-tuc.co", "desk.tuc-tuc.co")
+
+
 def _host_revision():
-    host = request.host.split(":", 1)[0].lower().rstrip(".")
-    if host != "admin.tuc-tuc.co" and not current_app.testing:
+    if not _es_host_revision(request.host) and not current_app.testing:
         abort(404)
 
 

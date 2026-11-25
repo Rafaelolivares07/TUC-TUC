@@ -151,6 +151,12 @@
       </button>
     </div>
     <nav class="flex-1 overflow-y-auto p-2">
+      {% if session.get('rol') == 'Administrador' %}
+      <a href="{{ url_for('marketplace.revisar_publicaciones') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-semibold text-slate-700 hover:bg-slate-50 no-underline">
+        <i class="bi bi-shop w-5 shrink-0 text-center text-slate-400" aria-hidden="true"></i>
+        <span>Revisar publicaciones</span>
+      </a>
+      {% endif %}
       {% for sec in menu_secciones %}
       <div class="mb-1">
         <button type="button" data-acordeon aria-expanded="false" class="w-full flex items-center justify-between px-3 py-2 rounded-lg text-[13px] font-semibold text-slate-700 hover:bg-slate-50 transition bg-transparent border-0 cursor-pointer">

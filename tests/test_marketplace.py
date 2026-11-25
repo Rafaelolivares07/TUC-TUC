@@ -185,6 +185,31 @@ class MarketplaceTest(unittest.TestCase):
         self.assertIn("Guardar cambios", html)
         self.assertIn('id="market-fotos"', html)
 
+    def test_login_administrativo_habilita_revision_y_logout_la_cierra(self):
+        from app.blueprints import auth
+
+        class RegistroAdmin(Registro):
+            def fetchall(self):
+                return []
+
+        host = "https://admin.tuc-tuc.co"
+        self.app.register_blueprint(auth.bp)
+        conn = RegistroAdmin(dict(id=9, rol="Administrador", nombre="Admin"))
+        with patch.object(auth, "get_db_connection", return_value=conn):
+            login = self.client.post("/admin/login", base_url=host,
+                                     data={"usuario": "admin-prueba", "password": "clave-prueba"})
+        self.assertEqual(login.status_code, 302)
+        self.assertTrue(any(marketplace.MODERACION in h and "HttpOnly" in h and "Secure" in h
+                            for h in login.headers.getlist("Set-Cookie")))
+        with patch.object(marketplace, "_conexion_publicaciones", return_value=conn):
+            tablero = self.client.get("/admin/marketplace", base_url=host)
+        self.assertIn("Aún no hay solicitudes", tablero.get_data(as_text=True))
+        salida = self.client.get("/admin/logout", base_url=host)
+        self.assertTrue(any(marketplace.MODERACION in h and "Max-Age=0" in h
+                            for h in salida.headers.getlist("Set-Cookie")))
+        login_revision = self.client.get("/admin/marketplace", base_url=host)
+        self.assertIn("Ingresa con tu usuario administrador", login_revision.get_data(as_text=True))
+
     def test_revision_requiere_la_cookie_de_moderacion(self):
         host = "https://admin.tuc-tuc.co"
         with self.client.session_transaction(base_url=host) as acceso:

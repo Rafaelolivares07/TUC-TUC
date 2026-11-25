@@ -72,7 +72,7 @@ def entrar_post():
     return _procesar_login('/', 'auth.entrar')
 
 
-def _procesar_login(ok_url, fail_endpoint, al_autenticar=None):
+def _procesar_login(ok_url, fail_endpoint):
     usuario = request.form.get('usuario', '').strip()
     password = request.form.get('password', '').strip()
 
@@ -115,7 +115,10 @@ def _procesar_login(ok_url, fail_endpoint, al_autenticar=None):
             session.permanent          = True
             session.modified           = True
             respuesta = redirect(ok_url)
-            return al_autenticar(respuesta, admin["id"]) if al_autenticar else respuesta
+            if request.host.split(":", 1)[0].lower().rstrip(".") == "admin.tuc-tuc.co":
+                from .marketplace import _dar_permiso_revision
+                _dar_permiso_revision(respuesta, admin["id"])
+            return respuesta
         else:
             flash('Usuario o contraseña incorrectos', 'danger')
             return redirect(url_for(fail_endpoint))
@@ -138,7 +141,11 @@ def admin_logout():
     from ..dominios_negocio import slug_subdominio_publico
     if host == 'desk.tuc-tuc.co' or slug_subdominio_publico(host):
         return redirect(url_for('auth.entrar'))
-    return redirect(url_for('auth.admin_login'))
+    respuesta = redirect(url_for('auth.admin_login'))
+    if host == 'admin.tuc-tuc.co':
+        from .marketplace import MODERACION
+        respuesta.delete_cookie(MODERACION, secure=True, httponly=True, samesite="Lax")
+    return respuesta
 
 
 @bp.route('/login')

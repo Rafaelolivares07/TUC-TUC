@@ -741,7 +741,8 @@ def recibir_publicacion():
 
 
 MODERACION = "__Host-tuctuc_revision"
-VIGENCIA_MODERACION = 2 * 3600
+VIGENCIA_MODERACION = 30 * 86400
+VIGENCIA_FORMULARIO_REVISION = 2 * 3600
 
 
 def _host_revision():
@@ -751,6 +752,10 @@ def _host_revision():
 
 
 def _dar_permiso_revision(respuesta, usuario_id):
+    # Una instalación sin una clave válida conserva su flujo habitual de acceso.
+    clave = os.environ.get("MARKETPLACE_SIGNING_KEY") or current_app.secret_key
+    if not clave or clave == "dev-secret-key":
+        return respuesta
     respuesta.set_cookie(MODERACION, _firma("moderador").dumps(usuario_id),
                          max_age=VIGENCIA_MODERACION, secure=True, httponly=True, samesite="Lax")
     return respuesta
@@ -775,7 +780,7 @@ def acceso_revision():
     from .auth import _procesar_login
 
     return _procesar_login(url_for("marketplace.revisar_publicaciones"),
-                           "marketplace.revisar_publicaciones", al_autenticar=_dar_permiso_revision)
+                           "marketplace.revisar_publicaciones")
 
 
 @bp.get("/admin/marketplace")
@@ -788,6 +793,10 @@ def revisar_publicaciones():
     solicitud_id = request.args.get("solicitud", type=int)
     conn = _conexion_publicaciones()
     try:
+        if not conn.execute("SELECT 1 FROM usuarios WHERE id=%s AND rol='Administrador'", (moderador,)).fetchone():
+            respuesta = make_response(render_template("marketplace_revision.html", autenticado=False))
+            respuesta.delete_cookie(MODERACION, secure=True, httponly=True, samesite="Lax")
+            return respuesta
         solicitudes = conn.execute(
             """SELECT id, titulo, nombre, tipo, estado, jsonb_array_length(fotos) AS n_fotos
                  FROM marketplace_solicitudes
@@ -869,7 +878,7 @@ def aprobar_publicacion():
     if moderador is None:
         abort(403)
     try:
-        validez = _firma("revision-csrf").loads(request.form.get("token", ""), max_age=VIGENCIA_MODERACION)
+        validez = _firma("revision-csrf").loads(request.form.get("token", ""), max_age=VIGENCIA_FORMULARIO_REVISION)
     except BadData:
         abort(403)
     if validez != moderador:

@@ -851,8 +851,13 @@ def tienda_publica(slug):
         ).fetchone()
         if not tienda:
             return "Tienda no encontrada", 404
+        marketplace_compra = (request.args.get('origen') == 'marketplace'
+                              or request.host.split(':', 1)[0] in ('tuc-tuc.co', 'www.tuc-tuc.co'))
         cliente_data = None
-        if session.get('usuario_id'):
+        if marketplace_compra:
+            from .marketplace import datos_comprador
+            cliente_data = datos_comprador()
+        elif session.get('usuario_id'):
             conn2 = get_db_connection()
             try:
                 tercero = conn2.execute(
@@ -890,6 +895,7 @@ def tienda_publica(slug):
             'tienda_cliente.html',
             tienda=tienda,
             cliente_data=cliente_data,
+            marketplace_compra=marketplace_compra,
             bloques_experiencia=bloques_experiencia,
         ))
         return _respuesta_con_visitante(response, visita)
@@ -1510,6 +1516,9 @@ def api_tienda_productos(slug):
                 'es_adicion': cat_p in ad_cats,
                 'componentes': comps
             })
+        if solo_publicos and request.host.split(':', 1)[0] in ('tuc-tuc.co', 'www.tuc-tuc.co'):
+            for producto in resultado:
+                producto.pop('costo', None)
         categorias = []
         vistas = set()
         for p in productos:
@@ -2384,8 +2393,16 @@ def api_tienda_registrar_cliente(slug):
 
 @bp.route('/api/caja/<slug>/pedido', methods=['POST'])
 @bp.route('/api/tienda/<slug>/pedido', methods=['POST'])
+@bp.route('/api/marketplace/tienda/<slug>/pedido', methods=['POST'])
 def api_tienda_pedido_crear(slug):
     data             = request.get_json() or {}
+    marketplace_compra = request.path.startswith('/api/marketplace/')
+    if marketplace_compra:
+        from .marketplace import datos_pedido
+        try:
+            data = datos_pedido(data)
+        except ValueError as error:
+            return jsonify(ok=False, error=str(error)), 400
     nombre_cliente   = data.get('nombre_cliente', '').strip()
     telefono_cliente = data.get('telefono_cliente', '').strip()
     direccion_cliente = data.get('direccion_cliente', '').strip()
@@ -2490,12 +2507,23 @@ def api_tienda_pedido_crear(slug):
                 (item.get('producto_id'), negocio['tercero_id'])
             ).fetchone()
             if not producto:
+                if marketplace_compra:
+                    return jsonify(ok=False, error='Un producto del pedido ya no está disponible.'), 409
                 continue
             cantidad  = max(1, int(item.get('cantidad', 1)))
             
             # Allow custom unit price if passed from POS client
             precio_unitario_client = item.get('precio_unitario')
-            if precio_unitario_client is not None:
+            if marketplace_compra and item.get('variante_id'):
+                variante = conn.execute(
+                    "SELECT precio FROM producto_variantes "
+                    "WHERE id = %s AND producto_id = %s AND disponible IS TRUE AND precio > 0",
+                    (item['variante_id'], producto['id']),
+                ).fetchone()
+                if not variante:
+                    return jsonify(ok=False, error='La variante ya no está disponible.'), 409
+                precio_u = float(variante['precio'])
+            elif precio_unitario_client is not None:
                 try:
                     precio_u = float(precio_unitario_client)
                     if precio_u < 0:
@@ -2952,7 +2980,13 @@ def api_tienda_pedido_crear(slug):
         except Exception as _pdf_err:
             print(f'[pdf auto-save] error guardando pdf pedido {pedido_id}: {_pdf_err}')
 
-        return jsonify({'ok': True, 'pedido_id': pedido_id, 'total': total, 'numero_documento': numero_documento, 'entrega_texto': entrega if (imprimir_entrega and entrega) else None})
+        cuerpo = {'ok': True, 'pedido_id': pedido_id, 'total': total,
+                  'numero_documento': numero_documento,
+                  'entrega_texto': entrega if (imprimir_entrega and entrega) else None}
+        if marketplace_compra:
+            from .marketplace import respuesta_pedido
+            return respuesta_pedido('tienda', pedido_id, cuerpo)
+        return jsonify(cuerpo)
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:

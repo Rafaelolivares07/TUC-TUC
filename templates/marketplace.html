@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="es-CO">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tuc-Tuc · Tu mercado local</title>
+<meta name="description" content="Explora restaurantes y tiendas de Tuc-Tuc. Compra directo y publica gratis.">
+{% include 'marketplace_estilos.html' %}
+</head>
+<body>
+<header class="head"><div class="head-inner wrap">
+<a class="logo" href="{{ url_for('marketplace.portada') }}" aria-label="Tuc-Tuc, inicio"><span class="logo-mark" aria-hidden="true">tt</span><strong>tuc-tuc.</strong></a>
+<nav aria-label="Navegación principal"><a href="#explorar">Explorar</a><a href="#negocios">Para negocios</a><a href="#reparto">Reparto</a></nav>
+<a class="btn dark publish" href="{{ url_for('marketplace.publicar') }}">Publicar gratis</a>
+</div></header>
+<main id="inicio">
+{% if aviso %}<p class="wrap notice" role="status">Recibimos tu solicitud. Tu oferta aparecerá cuando quede confirmada.</p>{% endif %}
+<section class="hero wrap" aria-labelledby="hero-title">
+<div class="hero-copy">
+<div class="tagline"><span class="pin" aria-hidden="true"></span>Compra local en Cali</div>
+<h1 id="hero-title">Lo mejor de tu<br>barrio, <em>más cerca.</em></h1>
+<p>Descubre restaurantes y tiendas de Tuc-Tuc. Explora sus catálogos y compra directo.</p>
+<form id="search" class="search" role="search" action="{{ url_for('marketplace.portada') }}#explorar"><span class="search-icon" aria-hidden="true"></span><input name="q" type="search" aria-label="Buscar en Tuc-Tuc" placeholder="Busca un producto o negocio" value="{{ busqueda }}" maxlength="100"><button class="btn lime" type="submit">Buscar</button></form>
+</div>
+<div class="hero-media"><img src="{{ url_for('static',filename='marketplace/barrio.webp') }}" alt="Dos mujeres intercambian una bolsa de mercado en una tienda de barrio" width="1400" height="933" fetchpriority="high"></div>
+</section>
+<section class="browse wrap" id="explorar" aria-labelledby="browse-title">
+<div class="cats market-tabs" aria-label="Categorías">
+{% for clave, etiqueta in [('', 'Todo'), ('restaurantes', 'Restaurantes'), ('productos', 'Productos')] %}
+<a class="cat" href="{{ url_for('marketplace.portada', categoria=clave, q=busqueda) }}#explorar"{% if categoria == clave %} aria-current="true"{% endif %}>{{ etiqueta }}</a>
+{% endfor %}
+</div>
+<div class="section-head"><div><h2 id="browse-title">Explora negocios y productos</h2><p>{% if busqueda %}Resultados para «{{ busqueda }}».{% else %}Elige lo que quieres y haz el pedido directamente al negocio.{% endif %}</p></div></div>
+<div class="cards">
+{% for oferta in ofertas %}
+<article class="card"><a href="{{ oferta.enlace }}"><span class="card-photo">{% if oferta.imagen %}<img src="{{ oferta.imagen }}" alt="" loading="lazy" referrerpolicy="no-referrer">{% else %}<span class="fallback">{{ oferta.categoria or oferta.negocio }}</span>{% endif %}</span><span class="card-info"><small>{{ oferta.negocio if oferta.tipo == 'productos' else oferta.categoria }}</small><strong>{{ oferta.nombre }}</strong><span class="price">{{ oferta.precio or 'Ver carta' }}</span></span></a></article>
+{% else %}
+<p class="empty">No encontramos ofertas para esta búsqueda.</p>
+{% endfor %}
+</div>
+{% if pagina > 1 or siguiente %}
+<div class="pagination">
+{% if pagina > 1 %}<a class="btn clear" href="{{ url_for('marketplace.portada', pagina=pagina-1, categoria=categoria, q=busqueda) }}#explorar">Anterior</a>{% endif %}
+{% if siguiente %}<a class="btn dark" href="{{ url_for('marketplace.portada', pagina=pagina+1, categoria=categoria, q=busqueda) }}#explorar">Ver más</a>{% endif %}
+</div>
+{% endif %}
+</section>
+<section class="sell" id="negocios" aria-labelledby="sell-title"><div class="wrap">
+<div class="sell-copy"><h2 id="sell-title">Tu negocio también tiene un lugar aquí.</h2><div class="sell-intro"><p class="lead">Si ya usas Tuc-Tuc, tu catálogo público puede aparecer automáticamente. Si vendes por tu cuenta, envía gratis un producto o servicio para publicarlo.</p><a class="btn lime publish" href="{{ url_for('marketplace.publicar') }}">Empezar a publicar</a></div></div>
+<span class="plan-label" id="plan-label">Compara los planes para tu negocio</span>
+<div class="segments" role="group" aria-labelledby="plan-label"><button type="button" data-plan="rest" aria-pressed="true">Restaurantes</button><button type="button" data-plan="other" aria-pressed="false">Otros negocios</button></div>
+<div class="plans">
+<article class="plan"><h3>Marketplace</h3><strong class="amount">Gratis</strong><p>Publicación de productos y servicios.</p></article>
+<article class="plan"><h3>Básico</h3><strong class="amount">$50.000 <small>/ mes</small></strong><p>Todo lo anterior, más página propia, pedidos y gestión de envíos.</p></article>
+<article class="plan special" aria-live="polite"><h3 id="plan-title">Intermedio · Bistró</h3><strong class="amount">$90.000 <small>/ mes</small></strong><p id="plan-copy">Todo lo de Básico, más meseros, cocina y gestión de mesas.</p></article>
+<article class="plan"><h3>Full</h3><strong class="amount">$140.000 <small>/ mes</small></strong><p>Todo lo de Intermedio, más inventarios, contabilidad y gestión integral.</p></article>
+</div></div></section>
+<section class="delivery wrap" id="reparto"><h2>Reparto con Tuc-Tuc</h2><p>Cada negocio informa en su catálogo cómo entrega sus pedidos. Estamos preparando el reparto de Tuc-Tuc por zonas.</p></section>
+</main>
+<footer class="foot"><div class="wrap"><strong>tuc-tuc.co</strong><span>Marketplace · Cali, Colombia</span></div></footer>
+<script>
+const plans = [...document.querySelectorAll('[data-plan]')];
+for (const button of plans) {
+  button.addEventListener('click', () => {
+    const other = button.dataset.plan === 'other';
+    for (const plan of plans) plan.setAttribute('aria-pressed', String(plan === button));
+    document.getElementById('plan-title').textContent = other ? 'Intermedio · Operación comercial' : 'Intermedio · Bistró';
+    document.getElementById('plan-copy').textContent = other
+      ? 'Propuesta en diseño: caja, equipo de ventas y cotizaciones, más lo de Básico.'
+      : 'Todo lo de Básico, más meseros, cocina y gestión de mesas.';
+  });
+}
+</script>
+</body></html>

@@ -337,6 +337,8 @@ const TIPO_REST = '{{ restaurante.tipo_restaurante }}';
 const TERCERO_ID = {{ (restaurante.tercero_id or restaurante.admin_id) | tojson }};
 const SOLO_CARTA = {{ solo_carta | tojson }};
 const BASE = `/api/restaurante/${SLUG}`;
+const MARKETPLACE = {{ marketplace_compra|default(false)|tojson }};
+const PEDIDO_URL = MARKETPLACE ? '/api/marketplace/restaurante/' + SLUG + '/pedido' : BASE + '/pedido';
 const STORAGE_KEY = `cliente_nombre_${SLUG}`;
 const CLIENTE_DATA = {{ cliente_data | tojson | safe if cliente_data else 'null' }};
 let clienteId = CLIENTE_DATA ? CLIENTE_DATA.cliente_id : null;
@@ -726,7 +728,7 @@ async function enviarPedido() {
     const btn = document.getElementById('btn-pedir');
     if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
     try {
-        const r = await fetch(`${BASE}/pedido`, {
+        const r = await fetch(PEDIDO_URL, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
@@ -764,7 +766,7 @@ async function enviarPedido() {
                 b.classList.add('border-transparent');
             });
                 if (MESA === '') {
-                    window.location.href = `/pagar/${data.pedido_id}?tipo=restaurante&slug=${SLUG}`;
+                    window.location.href = data.url_pago || `/pagar/${data.pedido_id}?tipo=restaurante&slug=${SLUG}`;
                 } else {
                     mostrarPedidoActivo(resumenMenu, data.pedido_id);
                     mostrarAvisoPedido();
@@ -786,6 +788,7 @@ async function enviarPedido() {
 
 // ===== MIS PEDIDOS =====
 async function cargarMisPedidos() {
+    if (MARKETPLACE) return;
     try {
         const r = await fetch(`${BASE}/pedidos?estado=pendiente,listo`);
         const data = await r.json();
@@ -1070,7 +1073,7 @@ enviarPedido = async function() {
         const btn = document.getElementById('btn-pedir');
         if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
         try {
-            const r = await fetch(`${BASE}/pedido`, {
+            const r = await fetch(PEDIDO_URL, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
@@ -1112,7 +1115,7 @@ enviarPedido = async function() {
                 });
                 cartaClienteTotal();
                 if (MESA === '') {
-                    window.location.href = `/pagar/${data.pedido_id}?tipo=restaurante&slug=${SLUG}`;
+                    window.location.href = data.url_pago || `/pagar/${data.pedido_id}?tipo=restaurante&slug=${SLUG}`;
                 } else {
                     mostrarPedidoActivo(resumenCarta, data.pedido_id);
                     mostrarAvisoPedido();
@@ -1177,7 +1180,8 @@ async function confirmarRegistro() {
     if (dom.estado === 'fuera_cobertura') return toast('Tu ubicacion esta fuera de cobertura', false);
 
     try {
-        const r = await fetch(`${BASE}/registrar-cliente`, {
+        const registrar = {{ (url_for('marketplace.registrar_comprador') if marketplace_compra else '') | tojson }} || `${BASE}/registrar-cliente`;
+        const r = await fetch(registrar, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ nombre, telefono, direccion })

@@ -45,6 +45,7 @@ def create_app():
     from .blueprints.auth import bp as auth_bp
     from .blueprints.restaurantes import bp as restaurantes_bp
     from .blueprints.tiendas import bp as tiendas_bp
+    from .blueprints.marketplace import bp as marketplace_bp
     from .blueprints.domotica import bp as domotica_bp
     from .blueprints.crm import bp as crm_bp
     from .blueprints.admin_agent_bp import bp as admin_agent_bp
@@ -67,6 +68,7 @@ def create_app():
     app.register_blueprint(auth_bp)
     app.register_blueprint(restaurantes_bp)
     app.register_blueprint(tiendas_bp)
+    app.register_blueprint(marketplace_bp)
     app.register_blueprint(domotica_bp)
     app.register_blueprint(crm_bp)
     app.register_blueprint(admin_agent_bp)

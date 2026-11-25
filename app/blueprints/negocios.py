@@ -141,7 +141,7 @@ def _datos_cambio_pago(pago):
     return recibido, max(0.0, recibido - monto)
 
 
-def _restaurante_pedidos_para_pago(conn, pedido_id):
+def _restaurante_pedidos_para_pago(conn, pedido_id, ids_autorizados=None):
     pedido = conn.execute("""
         SELECT p.id, p.restaurante_id, p.cliente_id, p.mesa_nombre, p.tipo_entrega,
                r.tercero_id, r.nombre, r.slug
@@ -152,7 +152,14 @@ def _restaurante_pedidos_para_pago(conn, pedido_id):
     if not pedido:
         return None, [], 0.0
 
-    if pedido['cliente_id'] and not (pedido['mesa_nombre'] or '').strip():
+    if ids_autorizados is not None:
+        pedidos = conn.execute("""
+            SELECT id, COALESCE(precio, 0) AS precio, COALESCE(valor_domicilio, 0) AS valor_domicilio
+            FROM pedidos
+            WHERE restaurante_id = %s AND id = ANY(%s)
+            ORDER BY id
+        """, (pedido['restaurante_id'], list(ids_autorizados))).fetchall()
+    elif pedido['cliente_id'] and not (pedido['mesa_nombre'] or '').strip():
         pedidos = conn.execute("""
             SELECT id, COALESCE(precio, 0) AS precio, COALESCE(valor_domicilio, 0) AS valor_domicilio
             FROM pedidos
@@ -1022,8 +1029,16 @@ def api_config_publica(tercero_id):
 
 
 @bp.route('/pagar/<int:pedido_id>')
+@bp.route('/marketplace/pagar/<int:pedido_id>', endpoint='pagar_marketplace')
 def pagar(pedido_id):
     tipo = request.args.get('tipo', '')
+    marketplace = request.endpoint == 'negocios.pagar_marketplace'
+    ids_autorizados = None
+    if marketplace:
+        from .marketplace import ids_pago
+        ids_autorizados = ids_pago(pedido_id, tipo)
+        if not ids_autorizados:
+            return 'El enlace de este pedido no está disponible en este navegador.', 403
     conn = get_db_connection()
     try:
         total_pago = 0.0
@@ -1036,16 +1051,23 @@ def pagar(pedido_id):
             total_pago = float(row['total'] or 0) if row else 0.0
         else:
             _asegurar_domicilio_restaurante(conn)
-            row, _pedidos_pago, total_pago = _restaurante_pedidos_para_pago(conn, pedido_id)
+            row, _pedidos_pago, total_pago = _restaurante_pedidos_para_pago(conn, pedido_id, ids_autorizados)
         if not row:
             return "Pedido no encontrado", 404
+        opciones = {}
+        if marketplace:
+            opciones['api_url'] = url_for('negocios.api_pagar_marketplace', pedido_id=pedido_id)
+            opciones['volver_url'] = url_for(
+                'tiendas.tienda_publica' if tipo == 'tienda' else 'restaurantes.restaurante_publico',
+                slug=row['slug'], origen='marketplace',
+            )
         return render_template('pagar.html',
                                pedido_id=pedido_id,
                                tipo=tipo,
                                tercero_id=row['tercero_id'],
                                negocio_nombre=row['nombre'],
                                negocio_slug=row['slug'],
-                               total=float(total_pago or 0))
+                               total=float(total_pago or 0), **opciones)
     except Exception as e:
         return f"Error: {e}", 500
     finally:
@@ -1053,9 +1075,16 @@ def pagar(pedido_id):
 
 
 @bp.route('/api/pagar/<int:pedido_id>', methods=['POST'])
+@bp.route('/api/marketplace/pagar/<int:pedido_id>', methods=['POST'], endpoint='api_pagar_marketplace')
 def api_pagar(pedido_id):
     data = request.get_json() or {}
     tipo        = data.get('tipo', '')
+    ids_autorizados = None
+    if request.endpoint == 'negocios.api_pagar_marketplace':
+        from .marketplace import ids_pago
+        ids_autorizados = ids_pago(pedido_id, tipo)
+        if not ids_autorizados:
+            return jsonify(ok=False, error='Este pedido no está disponible en este navegador.'), 403
     pagos       = data.get('pagos') or []
     comprobante = data.get('comprobante') or None
     metodo_pago = (pagos[0].get('codigo') if pagos and isinstance(pagos[0], dict) else None) or (data.get('metodo_pago') or '').strip() or None
@@ -1102,7 +1131,7 @@ def api_pagar(pedido_id):
         else:
             _asegurar_pagos_restaurante(conn)
             _asegurar_domicilio_restaurante(conn)
-            _row_pago, pedidos_pago, total_pedido = _restaurante_pedidos_para_pago(conn, pedido_id)
+            _row_pago, pedidos_pago, total_pedido = _restaurante_pedidos_para_pago(conn, pedido_id, ids_autorizados)
             if not pedidos_pago:
                 return jsonify({'ok': False, 'error': 'Pedido no encontrado'}), 404
             pedido_ids = [p['id'] for p in pedidos_pago]

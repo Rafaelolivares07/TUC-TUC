@@ -1841,9 +1841,14 @@ def restaurante_publico(slug):
         if not rest:
             conn.close()
             return "Restaurante no encontrado", 404
+        marketplace_compra = (request.args.get('origen') == 'marketplace'
+                              or request.host.split(':', 1)[0] in ('tuc-tuc.co', 'www.tuc-tuc.co'))
         cliente_data = None
         tercero_id = session.get('chat_tercero_id')
-        if tercero_id and session.get('rol') not in ('Administrador', 'ClienteVFP'):
+        if marketplace_compra:
+            from .marketplace import datos_comprador
+            cliente_data = datos_comprador()
+        elif tercero_id and session.get('rol') not in ('Administrador', 'ClienteVFP'):
             conn2 = get_db_connection()
             tercero = conn2.execute(
                 "SELECT nombre, telefono, direccion FROM terceros WHERE id = %s", (tercero_id,)
@@ -1864,6 +1869,7 @@ def restaurante_publico(slug):
         conn.close()
         response = make_response(render_template('restaurante_cliente.html', restaurante=rest, mesa_nombre='',
                                                  cliente_data=cliente_data, solo_carta=solo_carta,
+                                                 marketplace_compra=marketplace_compra,
                                                  bloques_experiencia=bloques_experiencia))
         return respuesta_con_visitante(response, visita)
     except Exception as e:
@@ -2046,9 +2052,17 @@ def api_registrar_cliente(slug):
 
 
 @bp.route('/api/restaurante/<slug>/pedido', methods=['POST'])
+@bp.route('/api/marketplace/restaurante/<slug>/pedido', methods=['POST'])
 def api_pedido_crear(slug):
     try:
-        data = request.get_json(force=True) or {}
+        data = request.get_json(silent=True) or {}
+        marketplace_compra = request.path.startswith('/api/marketplace/')
+        if marketplace_compra:
+            from .marketplace import datos_pedido
+            try:
+                data = datos_pedido(data, restaurante=True)
+            except ValueError as error:
+                return jsonify(ok=False, error=str(error)), 400
         mesa_nombre = str(data.get('mesa_nombre') or '').strip() or None
         nombre_cliente = data.get('nombre_cliente', '').strip() or None
         notas = data.get('notas', '').strip()
@@ -2110,6 +2124,12 @@ def api_pedido_crear(slug):
         if not rest:
             conn.close()
             return jsonify({'ok': False, 'error': 'Restaurante no encontrado'}), 404
+
+        if marketplace_compra and not conn.execute(
+                "SELECT 1 FROM restaurantes WHERE id = %s AND activo IS TRUE AND COALESCE(es_ejemplo, FALSE) = FALSE",
+                (rest['id'],)).fetchone():
+            conn.close()
+            return jsonify(ok=False, error="El restaurante no está disponible."), 404
 
         # Verificar suscripción
         dias_pagados = rest['dias_pagados'] or 0
@@ -2552,7 +2572,12 @@ def api_pedido_crear(slug):
         except Exception as _e:
             print(f'[telegram] pedido rest {slug}: {_e}')
         conn.close()
-        return jsonify({'ok': True, 'precio': precio_total, 'pedido_id': pedido_id})
+        cuerpo = {'ok': True, 'precio': precio_total, 'pedido_id': pedido_id}
+        if marketplace_compra:
+            from .marketplace import respuesta_pedido
+            return respuesta_pedido('restaurante', pedido_id, cuerpo,
+                                    pedidos_insertados if es_carta else None)
+        return jsonify(cuerpo)
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 

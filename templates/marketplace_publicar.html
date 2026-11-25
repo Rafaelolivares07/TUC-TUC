@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="es-CO">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Publicar gratis · Tuc-Tuc</title>
+<meta name="description" content="Explora restaurantes y tiendas de Tuc-Tuc. Compra directo y publica gratis.">
+{% include 'marketplace_estilos.html' %}
+</head>
+<body>
+<header class="head"><div class="head-inner wrap"><a class="logo" href="{{ url_for('marketplace.portada') }}"><span class="logo-mark" aria-hidden="true">tt</span><strong>tuc-tuc.</strong></a></div></header>
+<main class="wrap"><section class="publication">
+<h1>Publica tu primera oferta</h1>
+<p>Envíanos lo que vendes. Usaremos tu celular para confirmar la publicación.</p>
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+{% if token %}
+<form method="post" action="{{ url_for('marketplace.recibir_publicacion') }}">
+<input type="hidden" name="token" value="{{ token }}">
+<label>Tu nombre<input name="nombre" autocomplete="name" maxlength="100" required value="{{ datos.get('nombre') or (comprador or {}).get('nombre','') }}"></label>
+<label>Celular<input type="tel" name="telefono" autocomplete="tel" maxlength="25" required value="{{ datos.get('telefono') or (comprador or {}).get('telefono','') }}"></label>
+<label>Qué ofreces<select name="tipo"><option value="producto">Un producto</option><option value="servicio"{% if datos.get('tipo') == 'servicio' %} selected{% endif %}>Un servicio</option></select></label>
+<label>Título<input name="titulo" maxlength="120" required value="{{ datos.get('titulo','') }}"></label>
+<label>Descripción<textarea name="descripcion" maxlength="1000" required>{{ datos.get('descripcion','') }}</textarea></label>
+<button class="btn dark" type="submit">Enviar publicación</button>
+</form>
+{% else %}<p><a class="btn dark" href="{{ url_for('marketplace.publicar') }}">Volver al formulario</a></p>{% endif %}
+</section></main>
+</body></html>

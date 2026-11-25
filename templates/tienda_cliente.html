@@ -361,6 +361,7 @@
 const SLUG = '{{ tienda.slug }}';
 const TERCERO_ID = {{ (tienda.tercero_id or tienda.admin_id) | tojson }};
 const BASE = '/api/tienda/' + SLUG;
+const MARKETPLACE = {{ marketplace_compra|default(false)|tojson }};
 let productos = [];
 let categorias = [];
 let productoInicialEnfocado = false;
@@ -711,7 +712,8 @@ function abrirPedido() {
     if (clienteData) {
         document.getElementById('inp-nombre').value = clienteData.nombre || '';
         document.getElementById('inp-telefono').value = clienteData.telefono || '';
-        document.getElementById('inp-direccion').value = clienteData.direccion || '';
+        document.getElementById('inp-direccion').value = clienteData.direccion ||
+            (saved.telefono === clienteData.telefono ? saved.direccion || '' : '');
     } else if (saved.nombre) {
         document.getElementById('inp-nombre').value = saved.nombre || '';
         document.getElementById('inp-telefono').value = saved.telefono || '';
@@ -744,7 +746,8 @@ async function enviarPedido() {
 
     try {
         // Registrar cliente primero
-        const rCliente = await fetch(BASE + '/registrar-cliente', {
+        const registrar = {{ (url_for('marketplace.registrar_comprador') if marketplace_compra else '') | tojson }} || BASE + '/registrar-cliente';
+        const rCliente = await fetch(registrar, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({nombre, telefono: telLimpio, direccion})
@@ -770,7 +773,8 @@ async function enviarPedido() {
                 label_variante: meta ? meta.label : null
             };
         });
-        const rPedido = await fetch(BASE + '/pedido', {
+        const pedidoUrl = MARKETPLACE ? '/api/marketplace/tienda/' + SLUG + '/pedido' : BASE + '/pedido';
+        const rPedido = await fetch(pedidoUrl, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
@@ -793,7 +797,7 @@ async function enviarPedido() {
             carritoMeta = {};
             localStorage.removeItem('carrito_' + SLUG);
             localStorage.removeItem('carrito_meta_' + SLUG);
-            window.location.href = `/pagar/${pedidoId}?tipo=tienda&slug=${SLUG}`;
+            window.location.href = dataPedido.url_pago || `/pagar/${pedidoId}?tipo=tienda&slug=${SLUG}`;
         } else {
             if (dataPedido.error === 'suscripcion_agotada') {
                 toast('La tienda no esta disponible en este momento', true);

@@ -182,6 +182,10 @@ def ping():
 
 @bp.route('/')
 def index():
+    host = request.host.split(':', 1)[0].lower().rstrip('.')
+    if host in ('tuc-tuc.co', 'www.tuc-tuc.co'):
+        from .marketplace import portada
+        return portada()
     if session.get('usuario_id') or session.get('rol'):
         return redirect(url_for('core.colaborador_inicio'))
     return redirect(url_for('auth.admin_login'))

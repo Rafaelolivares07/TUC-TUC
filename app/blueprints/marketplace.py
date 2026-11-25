@@ -1,5 +1,7 @@
 """Portada pública y datos de compra de invitado de Tuc-Tuc."""
 import os
+from base64 import b64decode
+from binascii import Error as ErrorBase64
 import re
 import secrets
 from urllib.parse import urlsplit
@@ -18,27 +20,53 @@ VIGENCIA_COMPRADOR = 90 * 24 * 60 * 60
 CATEGORIAS = frozenset(("productos", "restaurantes"))
 LIMITE = 24
 
-_OFERTAS = """
-WITH ofertas AS (
-    SELECT 'productos' AS tipo, p.id, p.nombre, p.categoria,
-           t.nombre AS negocio, t.slug, p.precio, p.imagen
+_PRODUCTOS_PUBLICOS = """
       FROM productos p
       JOIN tiendas t ON t.tercero_id = p.negocio_id
      WHERE t.activo IS TRUE AND (t.fecha_vence IS NULL OR t.fecha_vence >= CURRENT_DATE)
        AND p.disponible IS TRUE AND p.precio > 0 AND COALESCE(p.es_adicion, FALSE) = FALSE
-    UNION ALL
-    SELECT 'restaurantes', r.id, r.nombre, 'Carta y menú', r.nombre,
-           r.slug, NULL::numeric, r.imagen_header
+"""
+_RESTAURANTES_PUBLICOS = """
       FROM restaurantes r
      WHERE r.activo IS TRUE AND COALESCE(r.es_ejemplo, FALSE) = FALSE
+"""
+_FOTO_PRODUCTO = """
+    COALESCE(NULLIF(btrim(p.imagen), ''), (
+        SELECT pi.imagen FROM producto_imagenes pi
+         WHERE pi.producto_id = p.id AND NULLIF(btrim(pi.imagen), '') IS NOT NULL
+         ORDER BY pi.orden, pi.id LIMIT 1
+    ))
+"""
+_FORMATOS_FOTO = {
+    "data:image/jpeg;base64": "image/jpeg",
+    "data:image/png;base64": "image/png",
+    "data:image/webp;base64": "image/webp",
+    "data:image/gif;base64": "image/gif",
+}
+_LIMITE_FOTO = 8 * 1024 * 1024
+
+_OFERTAS = f"""
+WITH ofertas AS (
+    SELECT 'productos' AS tipo, p.id, p.nombre, p.categoria,
+           t.nombre AS negocio, t.slug, p.precio, left({_FOTO_PRODUCTO}, 1501) AS imagen
+      {_PRODUCTOS_PUBLICOS}
+    UNION ALL
+    SELECT 'restaurantes', r.id, r.nombre, 'Carta y menú', r.nombre,
+           r.slug, NULL::numeric, left(r.imagen_header, 1501)
+      {_RESTAURANTES_PUBLICOS}
 )
 SELECT tipo, id, nombre, categoria, negocio, slug, precio, imagen
   FROM ofertas
  WHERE (%s = '' OR tipo = %s)
    AND (%s = '' OR strpos(lower(concat_ws(' ', nombre, categoria, negocio)), lower(%s)) > 0)
- ORDER BY negocio, nombre, tipo, id
+ ORDER BY (NULLIF(btrim(imagen), '') IS NOT NULL) DESC, negocio, nombre, tipo, id
  LIMIT %s OFFSET %s
 """
+
+_CONSULTAS_FOTO = {
+    "productos": f"SELECT {_FOTO_PRODUCTO} AS imagen {_PRODUCTOS_PUBLICOS} AND p.id = %s LIMIT 1",
+    "restaurantes": f"SELECT r.imagen_header AS imagen {_RESTAURANTES_PUBLICOS} AND r.id = %s",
+}
 
 
 def _texto(valor, maximo):
@@ -67,6 +95,40 @@ def _foto_publica(valor):
     return ""
 
 
+@bp.get("/static/marketplace/fotos/<tipo>/<int:oferta_id>")
+def foto(tipo, oferta_id):
+    consulta = _CONSULTAS_FOTO.get(tipo)
+    if consulta is None or not 1 <= oferta_id <= 2_147_483_647:
+        abort(404)
+    conn = get_db_connection()
+    try:
+        fila = conn.execute(consulta, (oferta_id,)).fetchone()
+    finally:
+        conn.close()
+
+    imagen = fila["imagen"] if fila else None
+    if not imagen or len(imagen) > _LIMITE_FOTO:
+        abort(404)
+    encabezado, separador, contenido = imagen.partition(",")
+    formato = _FORMATOS_FOTO.get(encabezado.lower())
+    if not separador or not formato:
+        abort(404)
+    try:
+        datos = b64decode(contenido, validate=True)
+    except ErrorBase64:
+        abort(404)
+    if not datos:
+        abort(404)
+
+    respuesta = make_response(datos)
+    respuesta.mimetype = formato
+    respuesta.headers["X-Content-Type-Options"] = "nosniff"
+    respuesta.cache_control.public = True
+    respuesta.cache_control.max_age = 300
+    respuesta.add_etag()
+    return respuesta.make_conditional(request)
+
+
 def _oferta(fila):
     producto = fila["tipo"] == "productos"
     if producto:
@@ -76,9 +138,14 @@ def _oferta(fila):
         enlace = url_for("restaurantes.restaurante_publico", slug=fila["slug"],
                          origen="marketplace")
     precio = fila["precio"]
+    origen_foto = fila["imagen"] or ""
+    if origen_foto.partition(",")[0].lower() in _FORMATOS_FOTO:
+        imagen = url_for("marketplace.foto", tipo=fila["tipo"], oferta_id=fila["id"])
+    else:
+        imagen = _foto_publica(origen_foto)
     return dict(
         nombre=fila["nombre"], categoria=fila["categoria"], negocio=fila["negocio"],
-        tipo=fila["tipo"], enlace=enlace, imagen=_foto_publica(fila["imagen"]),
+        tipo=fila["tipo"], enlace=enlace, imagen=imagen,
         precio=("$" + f"{precio:,.2f}".rstrip("0").rstrip(".").replace(",", "X").replace(".", ",").replace("X", "."))
         if precio is not None else "",
     )

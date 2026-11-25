@@ -95,6 +95,23 @@ class MarketplaceTest(unittest.TestCase):
             self.assertIn("__Host-tuctuc_publicar=", response.headers["Set-Cookie"])
             self.assertEqual(self.client.post("/marketplace/publicar", data={"token": "ajeno"}).status_code, 400)
 
+    def test_serve_foto_publica_con_mime_y_cache(self):
+        conn = Registro({"imagen": "data:image/jpeg;base64,/9j/2Q=="})
+        ruta = "/static/marketplace/fotos/productos/14"
+        with patch.object(marketplace, "get_db_connection", return_value=conn):
+            foto = self.client.get(ruta)
+            self.assertEqual(foto.status_code, 200)
+            self.assertEqual(foto.mimetype, "image/jpeg")
+            self.assertEqual(foto.data, bytes([255, 216, 255, 217]))
+            self.assertEqual(foto.headers["X-Content-Type-Options"], "nosniff")
+            self.assertEqual(self.client.get(
+                ruta, headers={"If-None-Match": foto.headers["ETag"]}
+            ).status_code, 304)
+            self.assertEqual(self.client.get("/static/marketplace/fotos/interna/14").status_code, 404)
+        for invalida in (None, "data:image/jpeg;base64,@@@", "data:image/svg+xml;base64,AAAA"):
+            with patch.object(marketplace, "get_db_connection", return_value=Registro({"imagen": invalida})):
+                self.assertEqual(self.client.get(ruta).status_code, 404)
+
     def test_campos_publicos_y_rechazo_de_url_no_apta(self):
         tienda = Blueprint("tiendas", __name__)
 

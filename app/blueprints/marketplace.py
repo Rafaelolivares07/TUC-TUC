@@ -762,16 +762,14 @@ def _dar_permiso_revision(respuesta, usuario_id):
 
 
 def _moderador():
-    from flask import session
-
     cookie = request.cookies.get(MODERACION)
-    if not cookie or session.get("rol") != "Administrador":
+    if not cookie:
         return None
     try:
         usuario_id = _firma("moderador").loads(cookie, max_age=VIGENCIA_MODERACION)
     except BadData:
         return None
-    return usuario_id if usuario_id == session.get("usuario_id") else None
+    return usuario_id if type(usuario_id) is int and usuario_id > 0 else None
 
 
 @bp.post("/admin/marketplace/acceso")
@@ -809,6 +807,8 @@ def revisar_publicaciones():
                  FROM marketplace_solicitudes WHERE id=%s""",
             (solicitud_id,),
         ).fetchone() if solicitud_id is not None else None
+        terceros = (_terceros_de_publicacion(conn, solicitud["telefono"])
+                    if solicitud and solicitud["producto_id"] is None else ())
     finally:
         conn.close()
     if solicitud_id is not None and solicitud is None:
@@ -823,12 +823,24 @@ def revisar_publicaciones():
             oferta = "https://tuc-tuc.co" + url_for("marketplace.portada", oferta=solicitud["producto_id"])
     return render_template(
         "marketplace_revision.html", autenticado=True, solicitudes=solicitudes[:30], solicitud=solicitud,
-        enlace=enlace, oferta=oferta, aviso=request.args.get("aprobada") == "1",
+        enlace=enlace, oferta=oferta, terceros=terceros, aviso=request.args.get("aprobada") == "1",
         token=_firma("revision-csrf").dumps(moderador), pagina=pagina, siguiente=len(solicitudes) > 30,
     )
 
 
-def _aprobar_publicacion(conn, solicitud):
+def _terceros_de_publicacion(conn, telefono):
+    return conn.execute(
+        """SELECT id,nombre,tipo_tercero,
+                  NULLIF(btrim(pin_seguridad),'') IS NOT NULL AS tiene_pin
+             FROM terceros
+            WHERE regexp_replace(COALESCE(telefono,''),'[^0-9]','','g') IN (%s,%s)
+              AND COALESCE(tipo_tercero,'') <> 'negocio' AND es_empresa IS NOT TRUE
+            ORDER BY tiene_pin DESC, id""",
+        (telefono, "57" + telefono),
+    ).fetchall()
+
+
+def _aprobar_publicacion(conn, solicitud, tercero_elegido=None):
     telefono = solicitud["telefono"]
     fotos = solicitud["fotos"] or []
     categoria = "Servicios" if solicitud["tipo"] == "servicio" else "Productos"
@@ -836,13 +848,15 @@ def _aprobar_publicacion(conn, solicitud):
     datos = (solicitud["titulo"], categoria, solicitud["descripcion"], fotos[0] if fotos else None)
     if producto_id is None:
         conn.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", ("comprador:" + telefono,))
-        tercero = conn.execute(
-            """SELECT id FROM terceros
-                WHERE telefono IN (%s,%s,%s) AND COALESCE(tipo_tercero,'') <> 'negocio'
-                  AND es_empresa IS NOT TRUE
-                ORDER BY CASE WHEN telefono=%s THEN 0 ELSE 1 END, id LIMIT 1""",
-            (telefono, "57" + telefono, "+57" + telefono, telefono),
-        ).fetchone()
+        coincidencias = _terceros_de_publicacion(conn, telefono)
+        if tercero_elegido is not None:
+            tercero = next((t for t in coincidencias if t["id"] == tercero_elegido), None)
+            if tercero is None:
+                abort(409, "El usuario seleccionado ya no coincide con el celular de la solicitud.")
+        elif len(coincidencias) > 1:
+            abort(409, "Elige el usuario correcto entre los que comparten este celular.")
+        else:
+            tercero = coincidencias[0] if coincidencias else None
         if not tercero:
             tercero = conn.execute(
                 """INSERT INTO terceros (nombre, telefono, tipo_tercero, fecha_creacion)
@@ -901,7 +915,7 @@ def aprobar_publicacion():
         if solicitud["estado"] != "aprobada":
             if solicitud["revision"] != revision:
                 abort(409, "La solicitud cambió. Vuelve a abrirla para revisar la versión más reciente.")
-            _aprobar_publicacion(conn, solicitud)
+            _aprobar_publicacion(conn, solicitud, request.form.get("tercero", type=int))
         conn.commit()
     except Exception:
         conn.rollback()

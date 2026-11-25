@@ -44,6 +44,12 @@
 <input type="hidden" name="token" value="{{ token }}">
 <input type="hidden" name="solicitud" value="{{ solicitud.id }}">
 <input type="hidden" name="revision" value="{{ solicitud.revision }}">
+{% if terceros|length > 1 %}
+<label>Usuario de Tuc-Tuc
+<select name="tercero" required><option value="">Elige a quién pertenece la publicación</option>
+{% for tercero in terceros %}<option value="{{ tercero.id }}">{{ tercero.nombre or tercero.tipo_tercero or "Usuario" }} · #{{ tercero.id }}{% if tercero.tiene_pin %} · PIN configurado{% endif %}</option>{% endfor %}</select></label>
+<p>El celular coincide con varios usuarios. Elige el del autor para conservar su cuenta.</p>
+{% elif terceros %}<p>Se asociará a {{ terceros[0].nombre }} · #{{ terceros[0].id }}.</p>{% endif %}
 <button type="submit" class="btn dark">Aprobar publicación</button>
 </form>
 {% endif %}

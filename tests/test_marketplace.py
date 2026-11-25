@@ -22,6 +22,9 @@ class Registro:
             return {"id": 27, "nombre": "Diana", "telefono": "3151112222"}
         return {"id": 51} if "INSERT INTO terceros" in self.sql[-1][0] else self.tercero
 
+    def fetchall(self):
+        return [self.tercero] if self.tercero else []
+
     def commit(self):
         pass
 
@@ -201,6 +204,9 @@ class MarketplaceTest(unittest.TestCase):
         self.assertEqual(login.status_code, 302)
         self.assertTrue(any(marketplace.MODERACION in h and "HttpOnly" in h and "Secure" in h
                             for h in login.headers.getlist("Set-Cookie")))
+        with self.client.session_transaction(base_url=host) as sesion_compartida:
+            sesion_compartida["rol"] = "Cliente"
+            sesion_compartida["usuario_id"] = 101
         with patch.object(marketplace, "_conexion_publicaciones", return_value=conn):
             tablero = self.client.get("/admin/marketplace", base_url=host)
         self.assertIn("Aún no hay solicitudes", tablero.get_data(as_text=True))
@@ -236,6 +242,20 @@ class MarketplaceTest(unittest.TestCase):
         marketplace._aprobar_publicacion(conn, solicitud)
         self.assertFalse(any("INSERT INTO productos" in sql for sql, _ in conn.sql))
         self.assertTrue(any("UPDATE productos" in sql for sql, _ in conn.sql))
+
+    def test_aprobacion_exige_seleccion_si_hay_dos_terceros(self):
+        from werkzeug.exceptions import Conflict
+
+        conn = Registro({"id": 95})
+        solicitud = dict(id=27, nombre="Diana", telefono="3151112222", tipo="producto",
+                         titulo="Oferta", descripcion="Detalles", fotos=[], producto_id=None)
+        with patch.object(marketplace, "_terceros_de_publicacion", return_value=[{"id": 95}, {"id": 122}]):
+            with self.assertRaises(Conflict):
+                marketplace._aprobar_publicacion(conn, solicitud)
+            self.assertFalse(any("INSERT INTO productos" in sql for sql, _ in conn.sql))
+            marketplace._aprobar_publicacion(conn, solicitud, 122)
+        alta = next(params for sql, params in conn.sql if "INSERT INTO productos" in sql)
+        self.assertEqual(alta[0], 122)
 
     def test_campos_publicos_y_rechazo_de_url_no_apta(self):
         tienda = Blueprint("tiendas", __name__)

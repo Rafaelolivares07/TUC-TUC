@@ -18,6 +18,8 @@ class Registro:
         return self
 
     def fetchone(self):
+        if "INSERT INTO marketplace_solicitudes" in self.sql[-1][0]:
+            return {"id": 27, "nombre": "Diana", "telefono": "3151112222"}
         return {"id": 51} if "INSERT INTO terceros" in self.sql[-1][0] else self.tercero
 
     def commit(self):
@@ -159,10 +161,56 @@ class MarketplaceTest(unittest.TestCase):
             respuesta = self.client.post("/marketplace/publicar", data=form, content_type="multipart/form-data")
         self.assertEqual(respuesta.status_code, 303)
         guardado = next(params for sql, params in conn.sql if "INSERT INTO marketplace_solicitudes" in sql)
-        self.assertEqual(json.loads(guardado[-1]), fotos)
+        self.assertEqual(json.loads(guardado[-2]), fotos)
         self.assertEqual(marketplace._fotos_publicacion([]), [])
         with self.assertRaises(ValueError):
             marketplace._fotos_publicacion(["data:image/jpeg;base64,AAAA"])
+
+    def test_enlace_recupera_solicitud_anterior_y_rechaza_id_ajeno(self):
+        with self.app.test_request_context():
+            acceso = marketplace._firma("enlace-edicion").dumps(27)
+        self.assertEqual(self.client.get("/marketplace/publicar?solicitud=27").status_code, 404)
+        conn = Registro({"id": 27})
+        with patch.object(marketplace, "_conexion_publicaciones", return_value=conn):
+            respuesta = self.client.get("/marketplace/publicar", query_string={"acceso": acceso})
+        self.assertEqual(respuesta.status_code, 303)
+        self.assertIn("solicitud=27", respuesta.location)
+        self.assertNotIn(acceso, respuesta.location)
+        self.assertEqual(self.client.get("/marketplace/publicar?solicitud=28").status_code, 404)
+        actual = dict(id=27, nombre="Diana", telefono="3151112222", tipo="servicio", titulo="Oferta recuperada",
+                      descripcion="Descripción", fotos=[], estado="recibida", revision=1, contacto_publico=False)
+        with patch.object(marketplace, "_solicitudes_editor", return_value=(actual, [actual])):
+            html = self.client.get(respuesta.location).get_data(as_text=True)
+        self.assertIn("Oferta recuperada", html)
+        self.assertIn("Guardar cambios", html)
+        self.assertIn('id="market-fotos"', html)
+
+    def test_revision_requiere_la_cookie_de_moderacion(self):
+        host = "https://admin.tuc-tuc.co"
+        with self.client.session_transaction(base_url=host) as acceso:
+            acceso["rol"] = "Administrador"
+            acceso["usuario_id"] = 9
+        self.assertEqual(self.client.post("/admin/marketplace/aprobar", base_url=host,
+                                          data={"solicitud": 27}).status_code, 403)
+        portada = self.client.get("/admin/marketplace", base_url=host)
+        self.assertIn("Ingresa con tu usuario administrador", portada.get_data(as_text=True))
+        self.assertEqual(self.client.get("/admin/marketplace", base_url="https://tuc-tuc.co").status_code, 404)
+
+    def test_aprobacion_reusa_producto_y_su_galeria_en_la_revision(self):
+        conn = Registro({"id": 95})
+        solicitud = dict(id=27, nombre="Diana", telefono="3151112222", tipo="servicio",
+                         titulo="Oferta", descripcion="Detalles", fotos=["portada", "galeria"],
+                         estado="recibida", revision=2, producto_id=None)
+        marketplace._aprobar_publicacion(conn, solicitud)
+        alta = next(params for sql, params in conn.sql if "INSERT INTO productos" in sql)
+        self.assertEqual(alta, (95, "Oferta", "Servicios", "Detalles", "portada"))
+        self.assertTrue(any(params == (95, "galeria", 1) for sql, params in conn.sql
+                            if "INSERT INTO producto_imagenes" in sql))
+        conn.sql.clear()
+        solicitud["producto_id"] = 95
+        marketplace._aprobar_publicacion(conn, solicitud)
+        self.assertFalse(any("INSERT INTO productos" in sql for sql, _ in conn.sql))
+        self.assertTrue(any("UPDATE productos" in sql for sql, _ in conn.sql))
 
     def test_campos_publicos_y_rechazo_de_url_no_apta(self):
         tienda = Blueprint("tiendas", __name__)

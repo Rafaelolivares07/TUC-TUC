@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="es-CO">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ producto.nombre }} · Tuc-Tuc</title>
+{% include 'marketplace_estilos.html' %}
+<style>
+.oferta-fotos{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin-top:18px}
+.oferta-fotos img{width:100%;height:auto;aspect-ratio:1;object-fit:cover;border-radius:12px}
+.oferta-fotos a:first-child{grid-column:1/-1}
+.oferta-fotos a:first-child img{max-height:410px;aspect-ratio:auto;object-fit:contain;background:#fff}
+</style>
+</head>
+<body>
+<header class="head"><div class="head-inner wrap"><a class="logo" href="{{ url_for('marketplace.portada') }}">tuc-tuc.</a></div></header>
+<main class="wrap"><article class="publication">
+<p>{{ producto.categoria }} · Publicación particular</p>
+<h1>{{ producto.nombre }}</h1>
+{% if fotos %}<div class="oferta-fotos">{% for foto in fotos %}<a href="{{ foto }}"><img src="{{ foto }}" alt="{{ 'Portada de ' ~ producto.nombre if loop.first else 'Foto ' ~ loop.index }}" loading="lazy"></a>{% endfor %}</div>{% endif %}
+<p>{{ producto.descripcion }}</p>
+{% if producto.contacto %}<p><a class="btn lime" href="https://wa.me/57{{ producto.contacto }}" rel="noreferrer">Contactar por WhatsApp</a></p>{% endif %}
+<p><a class="btn clear" href="{{ url_for('marketplace.portada') }}#explorar">Volver al Marketplace</a></p>
+</article></main>
+</body></html>

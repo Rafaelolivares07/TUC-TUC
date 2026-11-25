@@ -4,7 +4,7 @@
   const preview = document.getElementById('market-fotos-preview');
   const feedback = document.getElementById('market-fotos-error');
   const submit = form.querySelector('button[type=submit]');
-  const fotos = [];
+  const fotos = Array.from(preview.querySelectorAll('input[name=fotos]'), input => input.value);
   let occupied = false;
 
   function render() {
@@ -46,6 +46,7 @@
     picker.disabled = value;
   }
 
+  render();
   picker.disabled = false;
   picker.addEventListener('change', async () => {
     const files = Array.from(picker.files);

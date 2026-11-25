@@ -14,33 +14,47 @@
 .publication .photo-preview button {min-height:35px;padding:4px 9px}
 .publication #market-fotos-error:empty {display:none}
 .publication button:disabled {opacity:.65;cursor:wait}
+.publication .market-consent{display:flex;align-items:center;gap:8px}
+.publication .market-consent input{width:auto}
+.publication .market-mias{padding:0;list-style:none}
+.publication .market-mias a{display:block;padding:8px 0}
 </style>
 {% if token %}
 <script src="{{ url_for('static', filename='JS/imagen_producto.js', v=1) }}" defer></script>
-<script src="{{ url_for('static', filename='marketplace/publicar_fotos.js', v=1) }}" defer></script>
+<script src="{{ url_for('static', filename='marketplace/publicar_fotos.js', v=2) }}" defer></script>
 {% endif %}
 </head>
 <body>
 <header class="head"><div class="head-inner wrap"><a class="logo" href="{{ url_for('marketplace.portada') }}"><span class="logo-mark" aria-hidden="true">tt</span><strong>tuc-tuc.</strong></a></div></header>
 <main class="wrap"><section class="publication">
-<h1>Publica tu primera oferta</h1>
-<p>Envíanos lo que vendes. Usaremos tu celular para confirmar la publicación.</p>
+<h1>{{ 'Editar publicación' if datos.get('id') else 'Publicar gratis' }}</h1>
+{% if aviso %}<p class="notice" role="status">Guardamos tu publicación. Puedes volver desde Mis publicaciones.</p>{% endif %}
+{% if solicitudes %}
+<h2>Mis publicaciones</h2>
+<ul class="market-mias">{% for item in solicitudes %}<li><a href="{{ url_for('marketplace.publicar', solicitud=item.id) }}">{{ item.titulo }} · {{ 'Aprobada' if item.estado == 'aprobada' else 'En revisión' }}</a></li>{% endfor %}</ul>
+{% if datos.get('id') %}<p><a href="{{ url_for('marketplace.publicar') }}">Crear otra publicación</a></p>{% endif %}
+{% endif %}
+<p>{% if datos.get('id') %}Puedes guardar cambios y fotos aquí. Volverán a revisión.{% else %}Envíanos lo que vendes. Usaremos tu celular para confirmar la publicación.{% endif %}</p>
 {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
 {% if token %}
 <form id="market-publicacion" method="post" enctype="multipart/form-data" action="{{ url_for('marketplace.recibir_publicacion') }}">
 <input type="hidden" name="token" value="{{ token }}">
-<label>Tu nombre<input name="nombre" autocomplete="name" maxlength="100" required value="{{ datos.get('nombre') or (comprador or {}).get('nombre','') }}"></label>
-<label>Celular<input type="tel" name="telefono" autocomplete="tel" maxlength="25" required value="{{ datos.get('telefono') or (comprador or {}).get('telefono','') }}"></label>
+{% if datos.get('id') %}<input type="hidden" name="solicitud" value="{{ datos.id }}"><input type="hidden" name="revision" value="{{ datos.revision }}">{% endif %}
+<label>Tu nombre<input name="nombre" autocomplete="name" maxlength="100" required{% if datos.get('id') %} readonly{% endif %} value="{{ datos.get('nombre') or (comprador or {}).get('nombre','') }}"></label>
+<label>Celular<input type="tel" name="telefono" autocomplete="tel" maxlength="25" required{% if datos.get('id') %} readonly{% endif %} value="{{ datos.get('telefono') or (comprador or {}).get('telefono','') }}"></label>
 <label>Qué ofreces<select name="tipo"><option value="producto">Un producto</option><option value="servicio"{% if datos.get('tipo') == 'servicio' %} selected{% endif %}>Un servicio</option></select></label>
 <label>Título<input name="titulo" maxlength="120" required value="{{ datos.get('titulo','') }}"></label>
 <label>Descripción<textarea name="descripcion" maxlength="1000" required>{{ datos.get('descripcion','') }}</textarea></label>
+<label class="market-consent"><input type="checkbox" name="contacto_publico" value="1"{% if datos.get('contacto_publico') %} checked{% endif %}>Mostrar mi celular para contacto por WhatsApp</label>
 <label>Fotos <span class="photo-help">La primera será la portada. Puedes agregar o quitar fotos. El total comprimido admite {{ limite_fotos // 1048576 }} MB.</span>
 <input id="market-fotos" type="file" accept="image/jpeg,image/png,image/webp" multiple disabled aria-describedby="market-fotos-error" data-limite-fotos="{{ limite_fotos }}" data-limite-foto="{{ limite_foto }}">
 </label>
-<ul class="photo-preview" id="market-fotos-preview" aria-label="Fotos seleccionadas"></ul>
+<ul class="photo-preview" id="market-fotos-preview" aria-label="Fotos seleccionadas">
+{% for foto in datos.get('fotos', []) %}<li hidden><input type="hidden" name="fotos" value="{{ foto }}"></li>{% endfor %}
+</ul>
 <p id="market-fotos-error" class="error" role="alert"></p>
 <noscript><p>Activa JavaScript para adjuntar fotos.</p></noscript>
-<button class="btn dark" type="submit">Enviar publicación</button>
+<button class="btn dark" type="submit">{{ 'Guardar cambios' if datos.get('id') else 'Enviar publicación' }}</button>
 </form>
 {% else %}<p><a class="btn dark" href="{{ url_for('marketplace.publicar') }}">Volver al formulario</a></p>{% endif %}
 </section></main>

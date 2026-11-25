@@ -17,7 +17,7 @@ from ..db import get_db_connection
 bp = Blueprint("marketplace", __name__)
 COMPRADOR = "__Host-tuctuc_comprador"
 PUBLICACION = "__Host-tuctuc_publicar"
-VIGENCIA_PUBLICACION = 1800
+VIGENCIA_PUBLICACION = 30 * 86400
 LIMITE_FOTOS_PUBLICACION = 7 * 1024 * 1024
 LIMITE_FOTO_PUBLICACION = 450_000
 VIGENCIA_COMPRADOR = 90 * 24 * 60 * 60
@@ -49,19 +49,31 @@ _FORMATOS_FOTO = {
 }
 _LIMITE_FOTO = 8 * 1024 * 1024
 
+_PUBLICACIONES_APROBADAS = """
+      FROM marketplace_solicitudes s JOIN productos p ON p.id=s.producto_id
+     WHERE p.disponible IS TRUE
+"""
+_ORIGEN_PUBLICACION = "CASE WHEN s.contacto_aprobado THEN s.nombre ELSE 'Publicación particular' END"
+
+
 _OFERTAS = f"""
 WITH ofertas AS (
     SELECT 'productos' AS tipo, p.id, p.nombre, p.categoria,
-           t.nombre AS negocio, t.slug, p.precio, left({_FOTO_PRODUCTO}, 1501) AS imagen
+           t.nombre AS negocio, t.slug, p.precio, left({_FOTO_PRODUCTO}, 1501) AS imagen,
+           'productos' AS ambito
       {_PRODUCTOS_PUBLICOS}
     UNION ALL
     SELECT 'restaurantes', r.id, r.nombre, 'Carta y menú', r.nombre,
-           r.slug, NULL::numeric, left(r.imagen_header, 1501)
+           r.slug, NULL::numeric, left(r.imagen_header, 1501), 'restaurantes'
       {_RESTAURANTES_PUBLICOS}
+    UNION ALL
+    SELECT 'publicaciones', p.id, p.nombre, p.categoria, {_ORIGEN_PUBLICACION}, NULL,
+           NULLIF(p.precio,0), left(p.imagen,1501), 'productos'
+      {_PUBLICACIONES_APROBADAS}
 )
 SELECT tipo, id, nombre, categoria, negocio, slug, precio, imagen
   FROM ofertas
- WHERE (%s = '' OR tipo = %s)
+ WHERE (%s = '' OR ambito = %s)
    AND (%s = '' OR strpos(lower(concat_ws(' ', nombre, categoria, negocio)), lower(%s)) > 0)
  ORDER BY (NULLIF(btrim(imagen), '') IS NOT NULL) DESC, negocio, nombre, tipo, id
  LIMIT %s OFFSET %s
@@ -99,6 +111,10 @@ WITH venta AS (
     UNION ALL
     SELECT 'platos', p.id, p.nombre, {_CATEGORIA_BUSQUEDA}, r.nombre, r.slug, p.precio, 'restaurantes', 0
       {_PLATOS_PUBLICOS}
+    UNION ALL
+    SELECT 'publicaciones', p.id, p.nombre, p.categoria, {_ORIGEN_PUBLICACION},
+           NULL, NULLIF(p.precio,0), 'productos', 0
+      {_PUBLICACIONES_APROBADAS}
 ), fichas AS (
     SELECT * FROM venta
     UNION ALL
@@ -151,6 +167,7 @@ WITH venta AS (
 SELECT f.*, CASE f.tipo
         WHEN 'productos' THEN (SELECT left({_FOTO_PRODUCTO}, 1501) FROM productos p WHERE p.id = f.id)
         WHEN 'platos' THEN (SELECT left({_FOTO_PRODUCTO}, 1501) FROM productos p WHERE p.id = f.id)
+        WHEN 'publicaciones' THEN (SELECT left(p.imagen,1501) FROM productos p WHERE p.id=f.id)
         WHEN 'restaurantes' THEN (SELECT left(r.imagen_header, 1501) FROM restaurantes r WHERE r.id = f.id)
         ELSE NULL END AS imagen
   FROM pagina f
@@ -168,6 +185,7 @@ def _buscar(conn, q, ambito="", rubro="", pagina=1, sugerencias=False):
 
 
 _CONSULTAS_FOTO = {
+    "publicaciones": f"SELECT p.imagen AS imagen {_PUBLICACIONES_APROBADAS} AND p.id = %s",
     "platos": f"SELECT {_FOTO_PRODUCTO} AS imagen {_PLATOS_PUBLICOS} AND p.id = %s LIMIT 1",
     "productos": f"SELECT {_FOTO_PRODUCTO} AS imagen {_PRODUCTOS_PUBLICOS} AND p.id = %s LIMIT 1",
     "restaurantes": f"SELECT r.imagen_header AS imagen {_RESTAURANTES_PUBLICOS} AND r.id = %s",
@@ -205,12 +223,16 @@ def foto(tipo, oferta_id):
     consulta = _CONSULTAS_FOTO.get(tipo)
     if consulta is None or not 1 <= oferta_id <= 2_147_483_647:
         abort(404)
-    conn = get_db_connection()
+    conn = _conexion_publicaciones() if tipo == "publicaciones" else get_db_connection()
     try:
         fila = conn.execute(consulta, (oferta_id,)).fetchone()
     finally:
         conn.close()
 
+    return _servir_imagen(fila)
+
+
+def _servir_imagen(fila):
     imagen = fila["imagen"] if fila else None
     if not imagen or len(imagen) > _LIMITE_FOTO:
         abort(404)
@@ -242,6 +264,8 @@ def _oferta(fila, ambito=""):
     elif tipo == "platos":
         enlace = url_for("restaurantes.restaurante_publico", slug=fila["slug"],
                          plato=fila["id"], origen="marketplace")
+    elif tipo == "publicaciones":
+        enlace = url_for("marketplace.portada", oferta=fila["id"])
     elif tipo == "categorias":
         enlace = url_for("marketplace.portada", categoria=ambito, rubro=fila["nombre"], _anchor="explorar")
     elif tipo == "tiendas":
@@ -263,8 +287,52 @@ def _oferta(fila, ambito=""):
     )
 
 
+def _detalle_publicacion(producto_id):
+    conn = _conexion_publicaciones()
+    try:
+        fila = conn.execute(f"""
+            SELECT p.id,p.nombre,p.categoria,p.descripcion, left(p.imagen,1501) AS imagen,
+                   CASE WHEN s.contacto_aprobado THEN s.telefono ELSE NULL END AS contacto
+              {_PUBLICACIONES_APROBADAS} AND p.id=%s
+        """, (producto_id,)).fetchone()
+        if not fila:
+            abort(404)
+        galeria = conn.execute(
+            "SELECT id FROM producto_imagenes WHERE producto_id=%s ORDER BY orden,id", (producto_id,)
+        ).fetchall()
+    finally:
+        conn.close()
+    fotos = []
+    if fila["imagen"]:
+        fotos.append(url_for("marketplace.foto", tipo="publicaciones", oferta_id=producto_id))
+    fotos.extend(url_for("marketplace.foto_publicacion_extra", producto_id=producto_id, foto_id=img["id"])
+                 for img in galeria)
+    return render_template("marketplace_oferta.html", producto=fila, fotos=fotos)
+
+
+@bp.get("/static/marketplace/fotos/publicaciones/<int:producto_id>/<int:foto_id>")
+def foto_publicacion_extra(producto_id, foto_id):
+    if not 1 <= producto_id <= 2_147_483_647 or not 1 <= foto_id <= 2_147_483_647:
+        abort(404)
+    conn = _conexion_publicaciones()
+    try:
+        fila = conn.execute(f"""
+            SELECT (SELECT pi.imagen FROM producto_imagenes pi
+                        WHERE pi.producto_id=p.id AND pi.id=%s) AS imagen
+              {_PUBLICACIONES_APROBADAS} AND p.id=%s
+        """, (foto_id, producto_id)).fetchone()
+    finally:
+        conn.close()
+    return _servir_imagen(fila)
+
+
 @bp.get("/marketplace")
 def portada():
+    producto_id = request.args.get("oferta", type=int)
+    if producto_id is not None:
+        if not 1 <= producto_id <= 2_147_483_647:
+            abort(404)
+        return _detalle_publicacion(producto_id)
     busqueda = _texto(request.args.get("q"), 100)
     categoria = _texto(request.args.get("categoria"), 20)
     categoria = categoria if categoria in CATEGORIAS else ""
@@ -273,7 +341,7 @@ def portada():
     pagina = 1 if sugerencias else min(max(request.args.get("pagina", 1, type=int), 1), 1000)
     if sugerencias and len(_normalizar_busqueda(busqueda)) < 2:
         return jsonify(sugerencias=[])
-    conn = get_db_connection()
+    conn = _conexion_publicaciones()
     try:
         if busqueda and not _normalizar_busqueda(busqueda):
             filas = []
@@ -483,16 +551,13 @@ def _crear_solicitudes(conn):
     """)
     conn.execute("""
         ALTER TABLE marketplace_solicitudes
-        ADD COLUMN IF NOT EXISTS fotos jsonb NOT NULL DEFAULT '[]'::jsonb
+        ADD COLUMN IF NOT EXISTS fotos jsonb NOT NULL DEFAULT '[]'::jsonb,
+        ADD COLUMN IF NOT EXISTS producto_id integer REFERENCES productos(id),
+        ADD COLUMN IF NOT EXISTS revision integer NOT NULL DEFAULT 1,
+        ADD COLUMN IF NOT EXISTS contacto_publico boolean NOT NULL DEFAULT FALSE,
+        ADD COLUMN IF NOT EXISTS contacto_aprobado boolean NOT NULL DEFAULT FALSE
     """)
     conn.commit()
-
-
-def _formulario_publicacion(token, datos, error=None):
-    return render_template(
-        "marketplace_publicar.html", token=token, comprador=datos_comprador(), datos=datos,
-        error=error, limite_fotos=LIMITE_FOTOS_PUBLICACION, limite_foto=LIMITE_FOTO_PUBLICACION,
-    )
 
 
 def _fotos_publicacion(fotos):
@@ -518,59 +583,320 @@ def _fotos_publicacion(fotos):
     return fotos
 
 
-def _token_publicacion():
+def _formulario_publicacion(token, datos, error=None, solicitudes=(), aviso=False):
+    return render_template(
+        "marketplace_publicar.html", token=token, comprador=datos_comprador(), datos=datos,
+        error=error, limite_fotos=LIMITE_FOTOS_PUBLICACION, limite_foto=LIMITE_FOTO_PUBLICACION,
+        solicitudes=solicitudes, aviso=aviso,
+    )
+
+
+def _sesion_publicacion():
     valor = request.cookies.get(PUBLICACION)
-    if valor:
-        try:
-            return _firma("publicar").loads(valor, max_age=VIGENCIA_PUBLICACION)
-        except BadData:
-            pass
-    return None
+    if not valor:
+        return {}
+    try:
+        datos = _firma("publicar").loads(valor, max_age=VIGENCIA_PUBLICACION)
+    except BadData:
+        return {}
+    # Los navegadores que ya tenían abierto el formulario conservan su token.
+    return {"token": datos} if isinstance(datos, str) else datos
+
+
+def _cookie_editor(respuesta, sesion, solicitud_id=None):
+    if solicitud_id is not None:
+        anteriores = sesion.get("solicitudes", [])
+        sesion["solicitudes"] = [x for x in anteriores if x != solicitud_id][-49:] + [solicitud_id]
+    respuesta.set_cookie(PUBLICACION, _firma("publicar").dumps(sesion),
+                         max_age=VIGENCIA_PUBLICACION, secure=True, httponly=True, samesite="Lax")
+    return respuesta
+
+
+def _conexion_publicaciones():
+    conn = get_db_connection()
+    asegurar_una_vez("marketplace.solicitudes", lambda: _crear_solicitudes(conn))
+    return conn
+
+
+def _solicitudes_editor(identidades, actual=None):
+    if not identidades:
+        return None, []
+    conn = _conexion_publicaciones()
+    try:
+        resumen = conn.execute(
+            """SELECT id, titulo, estado FROM marketplace_solicitudes
+                WHERE id = ANY(%s) ORDER BY id DESC""", (identidades,)
+        ).fetchall()
+        seleccion = conn.execute(
+            """SELECT id, nombre, telefono, tipo, titulo, descripcion, fotos, estado, revision, contacto_publico
+                 FROM marketplace_solicitudes WHERE id = %s""", (actual,)
+        ).fetchone() if actual is not None else None
+        return seleccion, resumen
+    finally:
+        conn.close()
 
 
 @bp.get("/marketplace/publicar")
 def publicar():
-    anterior = _token_publicacion()
-    token = anterior or secrets.token_urlsafe(32)
-    respuesta = make_response(_formulario_publicacion(token, {}))
-    if not anterior:
-        respuesta.set_cookie(PUBLICACION, _firma("publicar").dumps(token),
-                             max_age=VIGENCIA_PUBLICACION, secure=True, httponly=True, samesite="Lax")
+    sesion = _sesion_publicacion()
+    renovar = not sesion.get("token")
+    if renovar:
+        sesion["token"] = secrets.token_urlsafe(32)
+    acceso = request.args.get("acceso")
+    if acceso:
+        try:
+            solicitud_id = _firma("enlace-edicion").loads(acceso, max_age=7 * 86400)
+        except BadData:
+            return _formulario_publicacion(None, {}, "Este enlace venció. Pide un nuevo enlace de edición."), 400
+        conn = _conexion_publicaciones()
+        try:
+            existe = conn.execute("SELECT 1 FROM marketplace_solicitudes WHERE id = %s", (solicitud_id,)).fetchone()
+        finally:
+            conn.close()
+        if not existe:
+            abort(404)
+        respuesta = redirect(url_for("marketplace.publicar", solicitud=solicitud_id), code=303)
+        respuesta.headers["Referrer-Policy"] = "no-referrer"
+        return _cookie_editor(respuesta, sesion, solicitud_id)
+
+    solicitud_id = request.args.get("solicitud", type=int)
+    acceso_local = sesion.get("solicitudes", [])
+    if solicitud_id is not None and solicitud_id not in acceso_local:
+        abort(404)
+    actual, solicitudes = _solicitudes_editor(acceso_local, solicitud_id)
+    if solicitud_id is not None and actual is None:
+        abort(404)
+    respuesta = make_response(_formulario_publicacion(
+        sesion["token"], actual or {}, solicitudes=solicitudes, aviso=request.args.get("guardada") == "1",
+    ))
+    if renovar:
+        return _cookie_editor(respuesta, sesion)
     return respuesta
 
 
 @bp.post("/marketplace/publicar")
 def recibir_publicacion():
-    token = _token_publicacion()
+    sesion = _sesion_publicacion()
+    token = sesion.get("token")
     if request.content_length and request.content_length > 8 * 1024 * 1024:
         return _formulario_publicacion(token, {}, "Las fotos superan el tamaño total permitido."), 413
     if not token or not secrets.compare_digest(token.encode(), _texto(request.form.get("token"), 60).encode()):
-        return _formulario_publicacion(None, {}, "Abre de nuevo el formulario para enviar tu publicación."), 400
+        return _formulario_publicacion(None, {}, "Abre de nuevo el formulario para guardar tu publicación."), 400
+    solicitud_id = request.form.get("solicitud", type=int)
+    editando = solicitud_id is not None
+    if editando and solicitud_id not in sesion.get("solicitudes", []):
+        abort(404)
     datos = {clave: _texto(request.form.get(clave), limite) for clave, limite in
              (("nombre", 100), ("telefono", 25), ("tipo", 12), ("titulo", 120), ("descripcion", 1000))}
     datos["telefono"] = _telefono(datos["telefono"])
-    if (not all(datos.values()) or datos["tipo"] not in ("producto", "servicio")):
+    datos["id"] = solicitud_id
+    datos["revision"] = request.form.get("revision", type=int)
+    datos["contacto_publico"] = request.form.get("contacto_publico") == "1"
+    if not all(datos[k] for k in ("nombre", "telefono", "tipo", "titulo", "descripcion")) or datos["tipo"] not in ("producto", "servicio"):
         return _formulario_publicacion(token, datos, "Completa los datos y escribe un celular colombiano válido."), 400
     try:
         fotos = _fotos_publicacion(request.form.getlist("fotos"))
     except ValueError as error:
         return _formulario_publicacion(token, datos, str(error)), 400
-    conn = get_db_connection()
+    datos["fotos"] = fotos
+    conn = _conexion_publicaciones()
     try:
-        asegurar_una_vez("marketplace.solicitudes", lambda: _crear_solicitudes(conn))
-        conn.execute(
-            """INSERT INTO marketplace_solicitudes (token, nombre, telefono, tipo, titulo, descripcion, fotos)
-               VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb) ON CONFLICT (token) DO NOTHING""",
-            (token, datos["nombre"], datos["telefono"], datos["tipo"], datos["titulo"], datos["descripcion"],
-             json.dumps(fotos)),
-        )
+        if editando:
+            # El enlace conserva la identidad ya comprobada por quien lo entregó.
+            fila = conn.execute(
+                """UPDATE marketplace_solicitudes
+                      SET tipo=%s, titulo=%s, descripcion=%s, fotos=%s::jsonb,
+                          contacto_publico=%s, contacto_aprobado=contacto_aprobado AND %s,
+                          estado='recibida', revision=revision+1
+                    WHERE id=%s AND revision=%s RETURNING id, nombre, telefono""",
+                (datos["tipo"], datos["titulo"], datos["descripcion"], json.dumps(fotos),
+                 datos["contacto_publico"], datos["contacto_publico"], solicitud_id, datos["revision"]),
+            ).fetchone()
+            if not fila:
+                return _formulario_publicacion(token, datos, "La publicación cambió. Ábrela de nuevo antes de guardar."), 409
+        else:
+            fila = conn.execute(
+                """INSERT INTO marketplace_solicitudes
+                          (token, nombre, telefono, tipo, titulo, descripcion, fotos, contacto_publico)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s)
+                   ON CONFLICT (token) DO NOTHING RETURNING id, nombre, telefono""",
+                (token, datos["nombre"], datos["telefono"], datos["tipo"], datos["titulo"],
+                 datos["descripcion"], json.dumps(fotos), datos["contacto_publico"]),
+            ).fetchone()
+            if not fila:
+                fila = conn.execute(
+                    "SELECT id, nombre, telefono FROM marketplace_solicitudes WHERE token=%s", (token,)
+                ).fetchone()
         conn.commit()
     except Exception:
-        current_app.logger.exception("Error al registrar solicitud de Marketplace")
+        current_app.logger.exception("Error al guardar solicitud de Marketplace")
         conn.rollback()
         return _formulario_publicacion(token, datos, "No pudimos guardar tu solicitud. Intenta otra vez."), 503
     finally:
         conn.close()
-    respuesta = redirect(url_for("marketplace.portada", publicacion="recibida"), code=303)
-    respuesta.delete_cookie(PUBLICACION, secure=True, httponly=True, samesite="Lax")
-    return _recordar(respuesta, datos["nombre"], datos["telefono"])
+    respuesta = redirect(url_for("marketplace.publicar", solicitud=fila["id"], guardada=1), code=303)
+    sesion["token"] = secrets.token_urlsafe(32)
+    _cookie_editor(respuesta, sesion, fila["id"])
+    return _recordar(respuesta, fila["nombre"], fila["telefono"])
+
+
+MODERACION = "__Host-tuctuc_revision"
+VIGENCIA_MODERACION = 2 * 3600
+
+
+def _host_revision():
+    host = request.host.split(":", 1)[0].lower().rstrip(".")
+    if host != "admin.tuc-tuc.co" and not current_app.testing:
+        abort(404)
+
+
+def _dar_permiso_revision(respuesta, usuario_id):
+    respuesta.set_cookie(MODERACION, _firma("moderador").dumps(usuario_id),
+                         max_age=VIGENCIA_MODERACION, secure=True, httponly=True, samesite="Lax")
+    return respuesta
+
+
+def _moderador():
+    from flask import session
+
+    cookie = request.cookies.get(MODERACION)
+    if not cookie or session.get("rol") != "Administrador":
+        return None
+    try:
+        usuario_id = _firma("moderador").loads(cookie, max_age=VIGENCIA_MODERACION)
+    except BadData:
+        return None
+    return usuario_id if usuario_id == session.get("usuario_id") else None
+
+
+@bp.post("/admin/marketplace/acceso")
+def acceso_revision():
+    _host_revision()
+    from .auth import _procesar_login
+
+    return _procesar_login(url_for("marketplace.revisar_publicaciones"),
+                           "marketplace.revisar_publicaciones", al_autenticar=_dar_permiso_revision)
+
+
+@bp.get("/admin/marketplace")
+def revisar_publicaciones():
+    _host_revision()
+    moderador = _moderador()
+    if moderador is None:
+        return render_template("marketplace_revision.html", autenticado=False)
+    pagina = max(1, min(request.args.get("pagina", 1, type=int), 1000))
+    solicitud_id = request.args.get("solicitud", type=int)
+    conn = _conexion_publicaciones()
+    try:
+        solicitudes = conn.execute(
+            """SELECT id, titulo, nombre, tipo, estado, jsonb_array_length(fotos) AS n_fotos
+                 FROM marketplace_solicitudes
+                ORDER BY (estado='recibida') DESC, id DESC LIMIT 31 OFFSET %s""",
+            ((pagina - 1) * 30,),
+        ).fetchall()
+        solicitud = conn.execute(
+            """SELECT id, titulo, nombre, telefono, tipo, estado, descripcion, fotos, revision,
+                      producto_id, contacto_publico
+                 FROM marketplace_solicitudes WHERE id=%s""",
+            (solicitud_id,),
+        ).fetchone() if solicitud_id is not None else None
+    finally:
+        conn.close()
+    if solicitud_id is not None and solicitud is None:
+        abort(404)
+
+    enlace = None
+    oferta = None
+    if solicitud:
+        codigo = _firma("enlace-edicion").dumps(solicitud["id"])
+        enlace = "https://tuc-tuc.co" + url_for("marketplace.publicar", acceso=codigo)
+        if solicitud["producto_id"]:
+            oferta = "https://tuc-tuc.co" + url_for("marketplace.portada", oferta=solicitud["producto_id"])
+    return render_template(
+        "marketplace_revision.html", autenticado=True, solicitudes=solicitudes[:30], solicitud=solicitud,
+        enlace=enlace, oferta=oferta, aviso=request.args.get("aprobada") == "1",
+        token=_firma("revision-csrf").dumps(moderador), pagina=pagina, siguiente=len(solicitudes) > 30,
+    )
+
+
+def _aprobar_publicacion(conn, solicitud):
+    telefono = solicitud["telefono"]
+    fotos = solicitud["fotos"] or []
+    categoria = "Servicios" if solicitud["tipo"] == "servicio" else "Productos"
+    producto_id = solicitud["producto_id"]
+    datos = (solicitud["titulo"], categoria, solicitud["descripcion"], fotos[0] if fotos else None)
+    if producto_id is None:
+        conn.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", ("comprador:" + telefono,))
+        tercero = conn.execute(
+            """SELECT id FROM terceros
+                WHERE telefono IN (%s,%s,%s) AND COALESCE(tipo_tercero,'') <> 'negocio'
+                  AND es_empresa IS NOT TRUE
+                ORDER BY CASE WHEN telefono=%s THEN 0 ELSE 1 END, id LIMIT 1""",
+            (telefono, "57" + telefono, "+57" + telefono, telefono),
+        ).fetchone()
+        if not tercero:
+            tercero = conn.execute(
+                """INSERT INTO terceros (nombre, telefono, tipo_tercero, fecha_creacion)
+                   VALUES (%s,%s,'persona',NOW()) RETURNING id""",
+                (solicitud["nombre"], telefono),
+            ).fetchone()
+        producto_id = conn.execute(
+            """INSERT INTO productos (negocio_id,nombre,categoria,descripcion,imagen,precio,disponible)
+               VALUES (%s,%s,%s,%s,%s,0,TRUE) RETURNING id""",
+            (tercero["id"], *datos),
+        ).fetchone()["id"]
+    else:
+        conn.execute(
+            """UPDATE productos SET nombre=%s,categoria=%s,descripcion=%s,imagen=%s WHERE id=%s""",
+            (*datos, producto_id),
+        )
+        conn.execute("DELETE FROM producto_imagenes WHERE producto_id=%s", (producto_id,))
+    for orden, foto in enumerate(fotos[1:], 1):
+        conn.execute("INSERT INTO producto_imagenes (producto_id,imagen,orden) VALUES (%s,%s,%s)",
+                     (producto_id, foto, orden))
+    conn.execute(
+        """UPDATE marketplace_solicitudes
+              SET producto_id=%s, estado='aprobada', revision=revision+1, contacto_aprobado=contacto_publico
+            WHERE id=%s""",
+        (producto_id, solicitud["id"]),
+    )
+
+
+@bp.post("/admin/marketplace/aprobar")
+def aprobar_publicacion():
+    _host_revision()
+    moderador = _moderador()
+    if moderador is None:
+        abort(403)
+    try:
+        validez = _firma("revision-csrf").loads(request.form.get("token", ""), max_age=VIGENCIA_MODERACION)
+    except BadData:
+        abort(403)
+    if validez != moderador:
+        abort(403)
+    solicitud_id = request.form.get("solicitud", type=int)
+    revision = request.form.get("revision", type=int)
+    if not solicitud_id or not revision:
+        abort(400)
+    conn = _conexion_publicaciones()
+    try:
+        if not conn.execute("SELECT 1 FROM usuarios WHERE id=%s AND rol='Administrador'", (moderador,)).fetchone():
+            abort(403)
+        solicitud = conn.execute(
+            """SELECT id,nombre,telefono,titulo,tipo,descripcion,fotos,estado,revision,producto_id
+                 FROM marketplace_solicitudes WHERE id=%s FOR UPDATE""",
+            (solicitud_id,),
+        ).fetchone()
+        if not solicitud:
+            abort(404)
+        if solicitud["estado"] != "aprobada":
+            if solicitud["revision"] != revision:
+                abort(409, "La solicitud cambió. Vuelve a abrirla para revisar la versión más reciente.")
+            _aprobar_publicacion(conn, solicitud)
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+    return redirect(url_for("marketplace.revisar_publicaciones", solicitud=solicitud_id, aprobada=1), code=303)

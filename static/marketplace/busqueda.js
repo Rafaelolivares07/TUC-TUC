@@ -7,7 +7,7 @@
   const todos = document.getElementById('market-todos');
   const scope = form.elements.categoria?.value || '';
   const titles = ['Productos y servicios', 'Categorías', 'Negocios'];
-  const types = { productos: 0, platos: 0, categorias: 1, tiendas: 2, restaurantes: 2 };
+  const types = { productos: 0, platos: 0, publicaciones: 0, categorias: 1, tiendas: 2, restaurantes: 2 };
   const marks = ['·', '▦', '⌂'];
   let options = [];
   let active = -1;

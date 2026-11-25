@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="es-CO">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Revisar publicaciones · Tuc-Tuc</title>
+{% include 'marketplace_estilos.html' %}
+<style>
+.revision-lista{display:grid;gap:7px;list-style:none;padding:0}
+.revision-lista a{display:block;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:white}
+.revision-lista small{color:var(--muted)}
+.revision-detalle{padding:18px 0 25px}
+.revision-galeria{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:9px;margin-top:10px}
+.revision-galeria img{width:100%;height:auto;aspect-ratio:1;object-fit:cover;border-radius:9px}
+</style>
+</head>
+<body>
+<header class="head"><div class="head-inner wrap"><a class="logo" href="{{ url_for('marketplace.revisar_publicaciones') }}">tuc-tuc.</a></div></header>
+<main class="wrap"><section class="publication">
+<h1>Revisar publicaciones</h1>
+{% if not autenticado %}
+<p>Ingresa con tu usuario administrador de Tuc-Tuc.</p>
+{% for mensaje in get_flashed_messages() %}<p class="error" role="alert">{{ mensaje }}</p>{% endfor %}
+<form method="post" action="{{ url_for('marketplace.acceso_revision') }}">
+<label>Usuario<input name="usuario" autocomplete="username" required></label>
+<label>Contraseña<input name="password" type="password" autocomplete="current-password" required></label>
+<button type="submit" class="btn dark">Entrar</button>
+</form>
+{% else %}
+{% if aviso %}<p class="notice" role="status">Publicación aprobada.</p>{% endif %}
+{% if solicitud %}
+<article class="revision-detalle">
+<h2>{{ solicitud.titulo }}</h2>
+<p>{{ solicitud.nombre }} · {{ solicitud.telefono }} · {{ solicitud.tipo }}</p>
+<p>{{ solicitud.descripcion }}</p>
+{% if solicitud.fotos %}<div class="revision-galeria">{% for foto in solicitud.fotos %}<img src="{{ foto }}" alt="{{ 'Portada' if loop.first else 'Foto ' ~ loop.index }}" loading="lazy">{% endfor %}</div>{% else %}<p>La solicitud aún no tiene fotos.</p>{% endif %}
+<p>{{ 'El autor autorizó mostrar su contacto.' if solicitud.contacto_publico else 'El contacto queda privado.' }}</p>
+<form>
+<label>Enlace de edición<input type="text" value="{{ enlace }}" readonly id="enlace-edicion"></label>
+<button class="btn clear" type="button" id="copiar-enlace">Copiar enlace</button>
+</form>
+{% if oferta %}<p><a class="btn clear" href="{{ oferta }}">Ver publicación en el Marketplace</a></p>{% endif %}
+{% if solicitud.estado != 'aprobada' %}
+<form method="post" action="{{ url_for('marketplace.aprobar_publicacion') }}">
+<input type="hidden" name="token" value="{{ token }}">
+<input type="hidden" name="solicitud" value="{{ solicitud.id }}">
+<input type="hidden" name="revision" value="{{ solicitud.revision }}">
+<button type="submit" class="btn dark">Aprobar publicación</button>
+</form>
+{% endif %}
+</article>
+<script>
+const copia = document.getElementById('copiar-enlace');
+copia.addEventListener('click', async () => {
+  const input = document.getElementById('enlace-edicion');
+  input.select();
+  try {
+    await navigator.clipboard.writeText(input.value);
+    copia.textContent = 'Enlace copiado';
+  } catch { input.focus(); }
+});
+</script>
+{% endif %}
+<h2>Solicitudes</h2>
+<ul class="revision-lista">
+{% for fila in solicitudes %}
+<li><a href="{{ url_for('marketplace.revisar_publicaciones', solicitud=fila.id, pagina=pagina) }}"><strong>{{ fila.titulo }}</strong><br><small>{{ fila.nombre }} · {{ 'Aprobada' if fila.estado == 'aprobada' else 'Pendiente' }} · {{ fila.n_fotos }} fotos</small></a></li>
+{% else %}<li>Aún no hay solicitudes.</li>{% endfor %}
+</ul>
+{% if pagina > 1 %}<a class="btn clear" href="{{ url_for('marketplace.revisar_publicaciones', pagina=pagina-1) }}">Anterior</a>{% endif %}
+{% if siguiente %}<a class="btn clear" href="{{ url_for('marketplace.revisar_publicaciones', pagina=pagina+1) }}">Ver más</a>{% endif %}
+{% endif %}
+</section></main>
+</body></html>

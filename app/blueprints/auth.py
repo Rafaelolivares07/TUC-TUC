@@ -72,7 +72,7 @@ def entrar_post():
     return _procesar_login('/', 'auth.entrar')
 
 
-def _procesar_login(ok_url, fail_endpoint):
+def _procesar_login(ok_url, fail_endpoint, al_autenticar=None):
     usuario = request.form.get('usuario', '').strip()
     password = request.form.get('password', '').strip()
 
@@ -114,7 +114,8 @@ def _procesar_login(ok_url, fail_endpoint):
             session['dispositivo_id']  = admin.get('dispositivo_id', '')
             session.permanent          = True
             session.modified           = True
-            return redirect(ok_url)
+            respuesta = redirect(ok_url)
+            return al_autenticar(respuesta, admin["id"]) if al_autenticar else respuesta
         else:
             flash('Usuario o contraseña incorrectos', 'danger')
             return redirect(url_for(fail_endpoint))

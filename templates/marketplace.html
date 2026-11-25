@@ -6,7 +6,7 @@
 <meta name="description" content="Explora restaurantes y tiendas de Tuc-Tuc. Compra directo y publica gratis.">
 {% include 'marketplace_estilos.html' %}
 <link rel="stylesheet" href="{{ url_for('static', filename='marketplace/busqueda.css', v=1) }}">
-<script src="{{ url_for('static', filename='marketplace/busqueda.js', v=1) }}" defer></script>
+<script src="{{ url_for('static', filename='marketplace/busqueda.js', v=2) }}" defer></script>
 </head>
 <body>
 <header class="head"><div class="head-inner wrap">
@@ -46,7 +46,7 @@
 <div class="section-head"><div><h2 id="browse-title">Explora negocios y productos</h2><p>{% if busqueda %}Resultados para «{{ busqueda }}».{% elif rubro %}Categoría «{{ rubro }}».{% else %}Elige lo que quieres y haz el pedido directamente al negocio.{% endif %}</p></div></div>
 <div class="cards">
 {% for oferta in ofertas %}
-<article class="card"><a href="{{ oferta.enlace }}"><span class="card-photo">{% if oferta.imagen %}<img src="{{ oferta.imagen }}" alt="" loading="lazy" referrerpolicy="no-referrer">{% else %}<span class="fallback">{{ oferta.categoria or oferta.negocio or 'Categoría' }}</span>{% endif %}</span><span class="card-info"><small>{{ oferta.negocio if oferta.tipo in ('productos','platos') else (oferta.categoria or 'Categoría') }}</small><strong>{{ oferta.nombre }}</strong><span class="price">{{ oferta.precio or ('Ver categoría' if oferta.tipo == 'categorias' else 'Ver tienda' if oferta.tipo == 'tiendas' else 'Ver carta') }}</span></span></a></article>
+<article class="card"><a href="{{ oferta.enlace }}"><span class="card-photo">{% if oferta.imagen %}<img src="{{ oferta.imagen }}" alt="" loading="lazy" referrerpolicy="no-referrer">{% else %}<span class="fallback">{{ oferta.categoria or oferta.negocio or 'Categoría' }}</span>{% endif %}</span><span class="card-info"><small>{{ oferta.negocio if oferta.tipo in ('productos','platos','publicaciones') else (oferta.categoria or 'Categoría') }}</small><strong>{{ oferta.nombre }}</strong><span class="price">{{ oferta.precio or ('Ver categoría' if oferta.tipo == 'categorias' else 'Ver tienda' if oferta.tipo == 'tiendas' else 'Ver publicación' if oferta.tipo == 'publicaciones' else 'Ver carta') }}</span></span></a></article>
 {% else %}
 <p class="empty">No encontramos ofertas para esta búsqueda.</p>
 {% endfor %}

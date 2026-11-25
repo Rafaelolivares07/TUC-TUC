@@ -7,6 +7,7 @@ desk, misma regla del kardex (b3e85d8): las salidas al monstruo no usan
 /inicio relativo.
 """
 import io
+import os
 import sys
 
 BASE = 'C:/Users/RAFAEL OLIVARES/Documents/TucTucV2'
@@ -159,6 +160,16 @@ _gc = html.split('function vcGrupoClientesHTML(docs)')
 _gc = (_gc[1].split('function vcVistaCostos')[0]) if len(_gc) > 1 else ''
 check('grupo cols Cliente+Docs+Margen', '>Cliente</th>' in _gc and '>Docs</th>' in _gc
       and '>Margen</th>' in _gc)
+
+# 8. CSS propio sin CDN (2026-11-25, caso Margarita: tablet sin estilos por CDN bloqueado)
+check('sin tailwind CDN', 'cdn.tailwindcss.com' not in html)
+check('sin google fonts', 'fonts.googleapis.com' not in html and 'fonts.gstatic.com' not in html)
+check('link css propio', '/static/CSS/app.css?v=' in html)
+_css = io.open(BASE + '/static/CSS/app.css', encoding='utf-8').read()
+check('css existe y pesa', len(_css) > 50000)
+check('css trae Inter self-host', 'font-family:Inter' in _css and '/static/fonts/Inter-' in _css)
+check('css trae tailwind', '.bg-slate-50' in _css and '.text-emerald-700' in _css)
+check('woff2 en disco', os.path.exists(BASE + '/static/fonts/Inter-700.woff2') and os.path.exists(BASE + '/static/fonts/JetBrainsMono-400.woff2'))
 
 print('fails:', len(fails))
 sys.exit(1 if fails else 0)

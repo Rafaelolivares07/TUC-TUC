@@ -8,6 +8,7 @@ tabla por cliente
 con columna Producto (no Cliente). Sin edicion de tiempos (eso vive
 en la pagina por producto).
 """
+import os
 import sys
 from pathlib import Path
 
@@ -146,6 +147,16 @@ check('agrupador puro', 'function vcAgruparDocs(docs, modo)' in html)
 check('grupo productos', 'function vcGrupoProductosHTML(docs)' in html)
 check('grupo usa modo producto', "vcAgruparDocs(docs, 'producto')" in html)
 check('grupo col Producto', '>Producto</th>' in html)
+
+# 6. CSS propio sin CDN (2026-11-25, caso Margarita)
+check('sin tailwind CDN', 'cdn.tailwindcss.com' not in html)
+check('sin google fonts', 'fonts.googleapis.com' not in html and 'fonts.gstatic.com' not in html)
+check('link css propio', '/static/CSS/app.css?v=' in html)
+_css = (BASE / 'static' / 'CSS' / 'app.css').read_text(encoding='utf-8')
+check('css existe y pesa', len(_css) > 50000)
+check('css trae Inter self-host', 'font-family:Inter' in _css and '/static/fonts/Inter-' in _css)
+check('css trae tailwind', '.bg-slate-50' in _css and '.text-emerald-700' in _css)
+check('woff2 en disco', os.path.exists(BASE / 'static' / 'fonts' / 'Inter-700.woff2') and os.path.exists(BASE / 'static' / 'fonts' / 'JetBrainsMono-400.woff2'))
 
 print('fails:', len(fails))
 sys.exit(1 if fails else 0)

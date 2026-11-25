@@ -1,3 +1,4 @@
+import os
 import unittest
 from decimal import Decimal
 from unittest.mock import patch
@@ -83,6 +84,16 @@ class MarketplaceTest(unittest.TestCase):
             self.assertEqual(marketplace.ids_pago(10, "restaurante"), [8, 10])
             self.assertFalse(marketplace.ids_pago(10, "tienda"))
             self.assertFalse(marketplace.ids_pago(11, "restaurante"))
+
+    def test_publicacion_rechaza_la_clave_de_desarrollo_y_usa_la_del_marketplace(self):
+        self.app.secret_key = "dev-secret-key"
+        with patch.dict(os.environ, {"MARKETPLACE_SIGNING_KEY": ""}):
+            self.assertEqual(self.client.get("/marketplace/publicar").status_code, 503)
+        with patch.dict(os.environ, {"MARKETPLACE_SIGNING_KEY": "clave-de-prueba-independiente"}):
+            response = self.client.get("/marketplace/publicar")
+            self.assertEqual(response.status_code, 200)
+            self.assertIn("__Host-tuctuc_publicar=", response.headers["Set-Cookie"])
+            self.assertEqual(self.client.post("/marketplace/publicar", data={"token": "ajeno"}).status_code, 400)
 
     def test_campos_publicos_y_rechazo_de_url_no_apta(self):
         tienda = Blueprint("tiendas", __name__)

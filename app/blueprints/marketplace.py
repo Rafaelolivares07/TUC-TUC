@@ -1,9 +1,10 @@
 """Portada pública y datos de compra de invitado de Tuc-Tuc."""
+import os
 import re
 import secrets
 from urllib.parse import urlsplit
 
-from flask import Blueprint, current_app, jsonify, redirect, render_template, request, session, url_for
+from flask import Blueprint, abort, current_app, jsonify, make_response, redirect, render_template, request, url_for
 from itsdangerous import BadData, URLSafeTimedSerializer
 
 from ..asegurar import asegurar_una_vez
@@ -11,6 +12,8 @@ from ..db import get_db_connection
 
 bp = Blueprint("marketplace", __name__)
 COMPRADOR = "__Host-tuctuc_comprador"
+PUBLICACION = "__Host-tuctuc_publicar"
+VIGENCIA_PUBLICACION = 1800
 VIGENCIA_COMPRADOR = 90 * 24 * 60 * 60
 CATEGORIAS = frozenset(("productos", "restaurantes"))
 LIMITE = 24
@@ -102,8 +105,15 @@ def portada():
     )
 
 
+def _firma(uso):
+    clave = os.environ.get("MARKETPLACE_SIGNING_KEY") or current_app.secret_key
+    if not clave or clave == "dev-secret-key":
+        abort(503)
+    return URLSafeTimedSerializer(clave, salt="tuctuc-marketplace-" + uso)
+
+
 def _firma_comprador():
-    return URLSafeTimedSerializer(current_app.secret_key, salt="tuctuc-marketplace-comprador")
+    return _firma("comprador")
 
 
 def _perfil_comprador():
@@ -238,7 +248,7 @@ def registrar_comprador():
     return _recordar(jsonify(ok=True, cliente_id=tercero["id"]), nombre, telefono, tercero["id"])
 
 def _firma_pedidos():
-    return URLSafeTimedSerializer(current_app.secret_key, salt="tuctuc-marketplace-pedidos")
+    return _firma("pedidos")
 
 
 def _pedidos_navegador():
@@ -284,19 +294,32 @@ def _crear_solicitudes(conn):
     conn.commit()
 
 
+def _token_publicacion():
+    valor = request.cookies.get(PUBLICACION)
+    if valor:
+        try:
+            return _firma("publicar").loads(valor, max_age=VIGENCIA_PUBLICACION)
+        except BadData:
+            pass
+    return None
+
+
 @bp.get("/marketplace/publicar")
 def publicar():
-    token = session.get("marketplace_solicitud")
-    if not token:
-        token = secrets.token_urlsafe(32)
-        session["marketplace_solicitud"] = token
-    return render_template("marketplace_publicar.html", token=token, comprador=datos_comprador(),
-                           datos={}, error=None)
+    anterior = _token_publicacion()
+    token = anterior or secrets.token_urlsafe(32)
+    respuesta = make_response(render_template(
+        "marketplace_publicar.html", token=token, comprador=datos_comprador(), datos={}, error=None,
+    ))
+    if not anterior:
+        respuesta.set_cookie(PUBLICACION, _firma("publicar").dumps(token),
+                             max_age=VIGENCIA_PUBLICACION, secure=True, httponly=True, samesite="Lax")
+    return respuesta
 
 
 @bp.post("/marketplace/publicar")
 def recibir_publicacion():
-    token = session.get("marketplace_solicitud")
+    token = _token_publicacion()
     if not token or not secrets.compare_digest(token.encode(), _texto(request.form.get("token"), 60).encode()):
         return render_template("marketplace_publicar.html", token=None, comprador=datos_comprador(),
                                datos={}, error="Abre de nuevo el formulario para enviar tu publicación."), 400
@@ -322,6 +345,6 @@ def recibir_publicacion():
                                datos=datos, error="No pudimos guardar tu solicitud. Intenta otra vez."), 503
     finally:
         conn.close()
-    session.pop("marketplace_solicitud", None)
     respuesta = redirect(url_for("marketplace.portada", publicacion="recibida"), code=303)
+    respuesta.delete_cookie(PUBLICACION, secure=True, httponly=True, samesite="Lax")
     return _recordar(respuesta, datos["nombre"], datos["telefono"])

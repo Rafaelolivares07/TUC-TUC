@@ -2250,6 +2250,8 @@ def _endpoints_otorgados(conn, ses):
 
 @bp.route('/api/buscador/omni', methods=['GET'])
 def api_buscador_omni():
+    from .auth import administrador_autenticado
+    from .marketplace import _es_host_revision
     from ..buscador_motor import buscar_omni
     q = request.args.get('q', '').strip()
     negocio_id = request.args.get('negocio_id') or session.get('active_negocio_id')
@@ -2295,7 +2297,8 @@ def api_buscador_omni():
             manuales = set()
     incluir_manuales = request.args.get('incluir_manuales', '1') not in ('0', 'false', 'no')
     res = buscar_omni(q, negocio_id=negocio_id, slug=slug, otorgados=otorgados,
-                      manuales_otorgados=manuales, incluir_manuales=incluir_manuales)
+                      manuales_otorgados=manuales, incluir_manuales=incluir_manuales,
+                      revision_marketplace=bool(administrador_autenticado()) and _es_host_revision(request.host))
     datos = []
     terceros = []
     notas = []

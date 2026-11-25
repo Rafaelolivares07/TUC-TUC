@@ -18,13 +18,8 @@
 <main class="wrap"><section class="publication">
 <h1>Revisar publicaciones</h1>
 {% if not autenticado %}
-<p>Ingresa con tu usuario administrador de Tuc-Tuc.</p>
-{% for mensaje in get_flashed_messages() %}<p class="error" role="alert">{{ mensaje }}</p>{% endfor %}
-<form method="post" action="{{ url_for('marketplace.acceso_revision') }}">
-<label>Usuario<input name="usuario" autocomplete="username" required></label>
-<label>Contraseña<input name="password" type="password" autocomplete="current-password" required></label>
-<button type="submit" class="btn dark">Entrar</button>
-</form>
+<p>Esta sección requiere una cuenta administradora de Tuc-Tuc.</p>
+<a class="btn dark" href="{{ url_for('auth.entrar', destino='revision-marketplace') }}">Entrar con una cuenta administradora</a>
 {% else %}
 {% if aviso %}<p class="notice" role="status">Publicación aprobada.</p>{% endif %}
 {% if solicitud %}

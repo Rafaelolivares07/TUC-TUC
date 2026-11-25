@@ -1,6 +1,6 @@
 from functools import wraps
 from flask import (Blueprint, render_template, request, session,
-                   redirect, url_for, flash, jsonify)
+                   redirect, url_for, flash, jsonify, current_app)
 from ..db import get_db_connection
 
 bp = Blueprint('auth', __name__)
@@ -60,25 +60,36 @@ def admin_login_post():
     return _procesar_login('/inicio', 'auth.admin_login')
 
 
-@bp.route('/entrar', methods=['GET'])
+def administrador_autenticado():
+    """Identifica al administrador que entró con las credenciales de Tuc-Tuc."""
+    uid = session.get('usuario_id')
+    if (not current_app.secret_key or current_app.secret_key == 'dev-secret-key'
+            or session.get('rol') != 'Administrador'
+            or type(uid) is not int or uid <= 0
+            or session.get('admin_autenticado_id') != uid):
+        return None
+    return uid
+
+
+@bp.route('/entrar', methods=['GET', 'POST'])
 def entrar():
-    if session.get('usuario_id') or session.get('rol'):
+    revision = request.args.get('destino') == 'revision-marketplace'
+    acceso = url_for('auth.entrar', destino='revision-marketplace') if revision else url_for('auth.entrar')
+    destino = url_for('marketplace.revisar_publicaciones') if revision else '/'
+    if request.method == 'POST':
+        return _procesar_login(destino, 'auth.entrar', acceso)
+    if not revision and (session.get('usuario_id') or session.get('rol')):
         return redirect('/')
-    return render_template('admin_login.html', form_action='/entrar')
+    return render_template('admin_login.html', form_action=acceso)
 
 
-@bp.route('/entrar', methods=['POST'])
-def entrar_post():
-    return _procesar_login('/', 'auth.entrar')
-
-
-def _procesar_login(ok_url, fail_endpoint):
+def _procesar_login(ok_url, fail_endpoint, fail_url=None):
     usuario = request.form.get('usuario', '').strip()
     password = request.form.get('password', '').strip()
 
     if not usuario or not password:
         flash('Por favor completa todos los campos', 'danger')
-        return redirect(url_for(fail_endpoint))
+        return redirect(fail_url or url_for(fail_endpoint))
 
     conn = get_db_connection()
     try:
@@ -92,7 +103,7 @@ def _procesar_login(ok_url, fail_endpoint):
             if admin['rol'] == 'ClienteVFP':
                 # Cuentas VFP: solo agente SAR de escritorio (/api/sar/login), sin web
                 flash('Esta cuenta usa el agente SAR, no la web.', 'warning')
-                return redirect(url_for(fail_endpoint))
+                return redirect(fail_url or url_for(fail_endpoint))
 
             tercero = conn.execute(
                 "SELECT id FROM terceros WHERE tipo_tercero = 'admin' AND nombre = %s LIMIT 1",
@@ -108,20 +119,17 @@ def _procesar_login(ok_url, fail_endpoint):
 
             session.clear()
             session['usuario_id']      = admin['id']
+            session['admin_autenticado_id'] = admin['id']
             session['chat_tercero_id'] = tercero['id']
             session['nombre']          = admin['nombre']
             session['rol']             = admin['rol']
             session['dispositivo_id']  = admin.get('dispositivo_id', '')
             session.permanent          = True
             session.modified           = True
-            respuesta = redirect(ok_url)
-            from .marketplace import _dar_permiso_revision, _es_host_revision
-            if _es_host_revision(request.host):
-                _dar_permiso_revision(respuesta, admin["id"])
-            return respuesta
+            return redirect(ok_url)
         else:
             flash('Usuario o contraseña incorrectos', 'danger')
-            return redirect(url_for(fail_endpoint))
+            return redirect(fail_url or url_for(fail_endpoint))
     finally:
         conn.close()
 
@@ -140,11 +148,7 @@ def admin_logout():
     host = (request.host or '').split(':')[0].strip().lower()
     from ..dominios_negocio import slug_subdominio_publico
     destino = 'auth.entrar' if host == 'desk.tuc-tuc.co' or slug_subdominio_publico(host) else 'auth.admin_login'
-    respuesta = redirect(url_for(destino))
-    from .marketplace import MODERACION, _es_host_revision
-    if _es_host_revision(request.host):
-        respuesta.delete_cookie(MODERACION, secure=True, httponly=True, samesite="Lax")
-    return respuesta
+    return redirect(url_for(destino))
 
 
 @bp.route('/login')

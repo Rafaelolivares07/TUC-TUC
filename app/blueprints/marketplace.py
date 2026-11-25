@@ -8,7 +8,7 @@ import re
 import secrets
 from urllib.parse import urlsplit
 
-from flask import Blueprint, abort, current_app, jsonify, make_response, redirect, render_template, request, url_for
+from flask import Blueprint, abort, current_app, jsonify, make_response, redirect, render_template, request, session, url_for
 from itsdangerous import BadData, URLSafeTimedSerializer
 
 from ..asegurar import asegurar_una_vez
@@ -740,8 +740,6 @@ def recibir_publicacion():
     return _recordar(respuesta, fila["nombre"], fila["telefono"])
 
 
-MODERACION = "__Host-tuctuc_revision"
-VIGENCIA_MODERACION = 30 * 86400
 VIGENCIA_FORMULARIO_REVISION = 2 * 3600
 
 
@@ -754,50 +752,22 @@ def _host_revision():
         abort(404)
 
 
-def _dar_permiso_revision(respuesta, usuario_id):
-    # Una instalación sin una clave válida conserva su flujo habitual de acceso.
-    clave = os.environ.get("MARKETPLACE_SIGNING_KEY") or current_app.secret_key
-    if not clave or clave == "dev-secret-key":
-        return respuesta
-    respuesta.set_cookie(MODERACION, _firma("moderador").dumps(usuario_id),
-                         max_age=VIGENCIA_MODERACION, secure=True, httponly=True, samesite="Lax")
-    return respuesta
-
-
-def _moderador():
-    cookie = request.cookies.get(MODERACION)
-    if not cookie:
-        return None
-    try:
-        usuario_id = _firma("moderador").loads(cookie, max_age=VIGENCIA_MODERACION)
-    except BadData:
-        return None
-    return usuario_id if type(usuario_id) is int and usuario_id > 0 else None
-
-
-@bp.post("/admin/marketplace/acceso")
-def acceso_revision():
-    _host_revision()
-    from .auth import _procesar_login
-
-    return _procesar_login(url_for("marketplace.revisar_publicaciones"),
-                           "marketplace.revisar_publicaciones")
-
-
 @bp.get("/admin/marketplace")
 def revisar_publicaciones():
     _host_revision()
-    moderador = _moderador()
+    from .auth import administrador_autenticado
+
+    moderador = administrador_autenticado()
     if moderador is None:
-        return render_template("marketplace_revision.html", autenticado=False)
+        if not session.get("usuario_id"):
+            return redirect(url_for("auth.entrar", destino="revision-marketplace"))
+        return render_template("marketplace_revision.html", autenticado=False), 403
     pagina = max(1, min(request.args.get("pagina", 1, type=int), 1000))
     solicitud_id = request.args.get("solicitud", type=int)
     conn = _conexion_publicaciones()
     try:
         if not conn.execute("SELECT 1 FROM usuarios WHERE id=%s AND rol='Administrador'", (moderador,)).fetchone():
-            respuesta = make_response(render_template("marketplace_revision.html", autenticado=False))
-            respuesta.delete_cookie(MODERACION, secure=True, httponly=True, samesite="Lax")
-            return respuesta
+            return render_template("marketplace_revision.html", autenticado=False), 403
         solicitudes = conn.execute(
             """SELECT id, titulo, nombre, tipo, estado, jsonb_array_length(fotos) AS n_fotos
                  FROM marketplace_solicitudes
@@ -891,7 +861,9 @@ def _aprobar_publicacion(conn, solicitud, tercero_elegido=None):
 @bp.post("/admin/marketplace/aprobar")
 def aprobar_publicacion():
     _host_revision()
-    moderador = _moderador()
+    from .auth import administrador_autenticado
+
+    moderador = administrador_autenticado()
     if moderador is None:
         abort(403)
     try:

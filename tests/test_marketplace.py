@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 from flask import Blueprint, Flask, jsonify, request, session
 
-from app.blueprints import marketplace
+from app.blueprints import auth, marketplace
 
 
 class Registro:
@@ -37,6 +37,7 @@ class MarketplaceTest(unittest.TestCase):
         self.app = Flask(__name__, template_folder="../templates")
         self.app.secret_key = "llave-de-pruebas"
         self.app.register_blueprint(marketplace.bp)
+        self.app.register_blueprint(auth.bp)
         pagos = Blueprint("negocios", __name__)
 
         @pagos.get("/marketplace/pagar/<int:pedido_id>", endpoint="pagar_marketplace")
@@ -188,67 +189,69 @@ class MarketplaceTest(unittest.TestCase):
         self.assertIn("Guardar cambios", html)
         self.assertIn('id="market-fotos"', html)
 
-    def test_login_administrativo_habilita_revision_y_logout_la_cierra(self):
-        from app.blueprints import auth
-
+    def test_desk_reusa_su_inicio_de_sesion_para_revision(self):
         class RegistroAdmin(Registro):
             def fetchall(self):
                 return []
 
-        host = "https://admin.tuc-tuc.co"
-        self.app.register_blueprint(auth.bp)
+        host = "https://desk.tuc-tuc.co"
+        acceso = "/entrar?destino=revision-marketplace"
+        anonimo = self.client.get("/admin/marketplace", base_url=host)
+        self.assertEqual(anonimo.location, acceso)
+        self.assertIn(acceso, self.client.get(acceso, base_url=host).get_data(as_text=True))
         conn = RegistroAdmin(dict(id=9, rol="Administrador", nombre="Admin"))
         with patch.object(auth, "get_db_connection", return_value=conn):
-            login = self.client.post("/admin/login", base_url=host,
+            login = self.client.post(acceso, base_url=host,
                                      data={"usuario": "admin-prueba", "password": "clave-prueba"})
-        self.assertEqual(login.status_code, 302)
-        self.assertTrue(any(marketplace.MODERACION in h and "HttpOnly" in h and "Secure" in h
-                            for h in login.headers.getlist("Set-Cookie")))
-        with self.client.session_transaction(base_url=host) as sesion_compartida:
-            sesion_compartida["rol"] = "Cliente"
-            sesion_compartida["usuario_id"] = 101
+        self.assertEqual(login.location, "/admin/marketplace")
+        cookies = login.headers.getlist("Set-Cookie")
+        self.assertEqual(len(cookies), 1)
+        self.assertTrue(cookies[0].startswith("session="))
         with patch.object(marketplace, "_conexion_publicaciones", return_value=conn):
-            tablero = self.client.get("/admin/marketplace", base_url=host)
-        self.assertIn("Aún no hay solicitudes", tablero.get_data(as_text=True))
-        salida = self.client.get("/admin/logout", base_url=host)
-        self.assertTrue(any(marketplace.MODERACION in h and "Max-Age=0" in h
-                            for h in salida.headers.getlist("Set-Cookie")))
-        login_revision = self.client.get("/admin/marketplace", base_url=host)
-        self.assertIn("Ingresa con tu usuario administrador", login_revision.get_data(as_text=True))
-
-    def test_desk_reusa_su_inicio_de_sesion_para_revision(self):
-        from app.blueprints import auth
-
-        class RegistroDesk(Registro):
-            def fetchall(self):
-                return []
-
-        host = "https://desk.tuc-tuc.co"
-        self.app.register_blueprint(auth.bp)
-        conn = RegistroDesk(dict(id=9, rol="Administrador", nombre="Admin"))
-        with patch.object(auth, "get_db_connection", return_value=conn):
-            login = self.client.post("/entrar", base_url=host,
-                                     data={"usuario": "admin-prueba", "password": "clave-prueba"})
-        self.assertTrue(any(marketplace.MODERACION in h and "Domain=" not in h
-                            for h in login.headers.getlist("Set-Cookie")))
-        with patch.object(marketplace, "_conexion_publicaciones", return_value=conn):
-            revision = self.client.get("/admin/marketplace", base_url=host)
+            revision = self.client.get(login.location, base_url=host)
         self.assertIn("Aún no hay solicitudes", revision.get_data(as_text=True))
+        with patch.object(marketplace, "_conexion_publicaciones", return_value=Registro()):
+            self.assertEqual(self.client.get(login.location, base_url=host).status_code, 403)
         salida = self.client.get("/logout", base_url=host)
-        self.assertTrue(salida.location.endswith("/entrar"))
-        self.assertTrue(any(marketplace.MODERACION in h and "Max-Age=0" in h
-                            for h in salida.headers.getlist("Set-Cookie")))
+        self.assertEqual(salida.location, "/entrar")
+        self.assertEqual(self.client.get(login.location, base_url=host).location, acceso)
 
-    def test_revision_requiere_la_cookie_de_moderacion(self):
-        host = "https://admin.tuc-tuc.co"
-        with self.client.session_transaction(base_url=host) as acceso:
-            acceso["rol"] = "Administrador"
-            acceso["usuario_id"] = 9
-        self.assertEqual(self.client.post("/admin/marketplace/aprobar", base_url=host,
-                                          data={"solicitud": 27}).status_code, 403)
-        portada = self.client.get("/admin/marketplace", base_url=host)
-        self.assertIn("Ingresa con tu usuario administrador", portada.get_data(as_text=True))
+        with patch.object(auth, "get_db_connection", return_value=conn):
+            login_normal = self.client.post("/entrar", base_url=host,
+                                            data={"usuario": "admin-prueba", "password": "clave-prueba"})
+        self.assertEqual(login_normal.location, "/")
+        with patch.object(marketplace, "_conexion_publicaciones", return_value=conn):
+            self.assertEqual(self.client.get("/admin/marketplace", base_url=host).status_code, 200)
+
+    def test_revision_rechaza_dispositivo_reconocido_y_sesion_admin_heredada(self):
+        host = "https://desk.tuc-tuc.co"
+        for rol in ("Vendedor", "Administrador"):
+            with self.client.session_transaction(base_url=host) as acceso:
+                acceso["rol"] = rol
+                acceso["usuario_id"] = 9
+            portada = self.client.get("/admin/marketplace", base_url=host)
+            self.assertEqual(portada.status_code, 403)
+            self.assertIn("requiere una cuenta administradora", portada.get_data(as_text=True))
+            self.assertEqual(self.client.post("/admin/marketplace/aprobar", base_url=host,
+                                              data={"solicitud": 27}).status_code, 403)
         self.assertEqual(self.client.get("/admin/marketplace", base_url="https://tuc-tuc.co").status_code, 404)
+
+    def test_revision_no_usa_la_clave_de_desarrollo(self):
+        self.app.secret_key = "dev-secret-key"
+        host = "https://desk.tuc-tuc.co"
+        with self.client.session_transaction(base_url=host) as acceso:
+            acceso.update(rol="Administrador", usuario_id=9, admin_autenticado_id=9)
+        self.assertEqual(self.client.get("/admin/marketplace", base_url=host).status_code, 403)
+
+    def test_omni_encuentra_revision_solo_para_admin_autenticado(self):
+        from app.buscador_motor import _filas_desde_semilla, buscar_omni
+
+        filas = _filas_desde_semilla()
+        for texto in ("revisar", "aprobar"):
+            for acceso in (False, True):
+                rutas = buscar_omni(texto, filas=filas, incluir_manuales=False,
+                                    revision_marketplace=acceso)["rutas"]
+                self.assertEqual(any(r["url"] == "/admin/marketplace" for r in rutas), acceso)
 
     def test_aprobacion_reusa_producto_y_su_galeria_en_la_revision(self):
         conn = Registro({"id": 95})

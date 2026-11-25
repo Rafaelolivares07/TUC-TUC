@@ -149,6 +149,7 @@ _CATALOGO_PANTALLAS = [
     ('auditor_documentos', 'Auditoría de Documentos (Nueva versión)', 'inventarios.auditor_documentos_standalone', '🔍', 'Mantenimiento', None, '/auditor-documentos/{nid}', ['auditoria documentos', 'auditoria de documentos', 'auditor documentos', 'buscar documento', 'anular documento', 'factura proveedor', 'factura venta', 'descuadres', 'kardex auditoria', 'desk', 'nueva version'], 225, True),
     ('mant_global', 'Mantenimiento del Sistema (Global)', 'core.admin_mantenimiento', '🔧', 'Administración', None, '/admin/mantenimiento', ['mantenimiento', 'logs', 'git', 'version', 'diagnostico', 'base de datos'], 230, True),
     ('gestion_permisos', 'Gestión de Permisos y Colaboradores', 'core.core_gestion_permisos', '👥', 'Administración', None, '/admin/permisos', ['permisos', 'usuarios', 'colaboradores', 'roles', 'accesos', 'empleados'], 240, True),
+    ('marketplace_revision', 'Revisar publicaciones del Marketplace', 'marketplace.revisar_publicaciones', '🛍️', 'Administración', None, '/admin/marketplace', ['revisar', 'revisión', 'aprobar', 'moderación', 'solicitudes', 'publicaciones', 'marketplace'], 245, False),
     ('pantallas_catalogo', 'Catálogo Técnico de Pantallas', 'core.core_pantallas_catalogo', '🖥️', 'Administración', None, '/admin/pantallas-catalogo', ['pantallas catalogo', 'modulos', 'endpoints', 'permisos', 'vistas'], 250, True),
     ('negocio_config', 'Configuración de Negocio', 'negocios.admin_config_negocio', '⚙️', 'Administración', None, '/admin/negocio/{nid}/config', ['configuracion negocio', 'logo', 'razon social', 'nit', 'datos empresa', 'horarios'], 260, True),
     ('conta_tab_puc', 'Plan Único de Cuentas (PUC)', 'contabilidad.admin_contabilidad', '📋', 'Contabilidad > Cuentas', 'tab=puc', '/contabilidad/{nid}?tab=puc', ['puc', 'plan de cuentas', 'catalogo de cuentas', 'adoptar cuenta', 'codigo contable', 'subcuenta'], 1010, False),
@@ -281,7 +282,7 @@ _DESCRIPCIONES = {
 }
 
 
-def _obtener_catalogo_base(negocio_id=None, slug=None, otorgados=None, filas=None):
+def _obtener_catalogo_base(negocio_id=None, slug=None, otorgados=None, filas=None, revision_marketplace=False):
     """Entradas omni desde el catalogo unico. otorgados=None muestra todo."""
     out = []
     vistos = set()
@@ -289,6 +290,8 @@ def _obtener_catalogo_base(negocio_id=None, slug=None, otorgados=None, filas=Non
         if (r.get('modulo') or '') == 'Manuales de ayuda':
             continue  # omni los muestra como secciones de ayuda, no como rutas
         ep = r.get('endpoint') or ''
+        if ep == 'marketplace.revisar_publicaciones' and not revision_marketplace:
+            continue
         _k = (ep, r.get('query') or '')
         if _k in vistos:
             continue
@@ -376,11 +379,12 @@ def _extraer_fragmento_coincidente(texto, tokens, radio=55):
             return frag
     return ''
 
-def buscar_omni(q, negocio_id=None, slug=None, otorgados=None, filas=None, manuales_otorgados=None, incluir_manuales=True):
+def buscar_omni(q, negocio_id=None, slug=None, otorgados=None, filas=None, manuales_otorgados=None, incluir_manuales=True, revision_marketplace=False):
     q_limpio = (q or '').strip()
     q_norm = quitar_tildes(q_limpio).lower()
     
-    rutas_base = _obtener_catalogo_base(negocio_id=negocio_id, slug=slug, otorgados=otorgados, filas=filas)
+    rutas_base = _obtener_catalogo_base(negocio_id=negocio_id, slug=slug, otorgados=otorgados, filas=filas,
+                                       revision_marketplace=revision_marketplace)
     secciones_manuales = _cargar_indice_manuales() if incluir_manuales else []
 
     if not q_norm:

@@ -12,7 +12,7 @@
 </head>
 <body>
 <header class="head"><div class="head-inner wrap">
-<a class="logo" href="{{ url_for('marketplace.portada') }}" aria-label="Tuc-Tuc, inicio"><span class="logo-mark" aria-hidden="true">tt</span><strong>tuc-tuc.</strong></a>
+{% include 'marketplace_logo.html' %}
 <nav aria-label="Navegación principal"><a href="#explorar">Explorar</a><a href="#negocios">Para negocios</a><a href="#reparto">Reparto</a></nav>
 <a class="btn dark publish" href="{{ url_for('marketplace.publicar') }}">Publicar gratis</a>
 </div></header>

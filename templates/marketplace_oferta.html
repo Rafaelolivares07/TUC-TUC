@@ -12,7 +12,7 @@
 </style>
 </head>
 <body>
-<header class="head"><div class="head-inner wrap"><a class="logo" href="{{ url_for('marketplace.portada') }}">tuc-tuc.</a></div></header>
+<header class="head"><div class="head-inner wrap">{% include 'marketplace_logo.html' %}</div></header>
 <main class="wrap"><article class="publication">
 <p>{{ producto.categoria }} · Publicación particular</p>
 <h1>{{ producto.nombre }}</h1>

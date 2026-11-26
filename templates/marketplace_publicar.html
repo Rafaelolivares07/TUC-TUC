@@ -25,7 +25,7 @@
 {% endif %}
 </head>
 <body>
-<header class="head"><div class="head-inner wrap"><a class="logo" href="{{ url_for('marketplace.portada') }}"><span class="logo-mark" aria-hidden="true">tt</span><strong>tuc-tuc.</strong></a></div></header>
+<header class="head"><div class="head-inner wrap">{% include 'marketplace_logo.html' %}</div></header>
 <main class="wrap"><section class="publication">
 <h1>{{ 'Editar publicación' if datos.get('id') else 'Publicar gratis' }}</h1>
 {% if aviso %}<p class="notice" role="status">Guardamos tu publicación. Puedes volver desde Mis publicaciones.</p>{% endif %}

@@ -4,7 +4,8 @@ import unicodedata
 import secrets
 from datetime import datetime, timedelta
 
-from flask import Blueprint, current_app, jsonify, redirect, render_template_string, request, session, url_for
+from flask import (Blueprint, abort, current_app, jsonify, make_response, redirect,
+                   render_template, render_template_string, request, session, url_for)
 
 from ..db import get_db_connection
 
@@ -367,43 +368,37 @@ def api_vendedor_invitar():
 
 
 def _procesar_invitacion(token):
+    dev = _get_device_id()
     try:
-        conn = get_db_connection()
-        row = conn.execute(
-            "SELECT * FROM vendedor_invitaciones WHERE token = %s AND usado = FALSE",
-            (token,)).fetchone()
-        if not row:
-            conn.close()
-            return False
-        conn.execute("UPDATE vendedor_invitaciones SET usado = TRUE WHERE token = %s", (token,))
-        conn.execute("""
-            INSERT INTO vendedor_negocios (vendedor_id, negocio_id, activo)
-            VALUES (%s, %s, TRUE)
-            ON CONFLICT (vendedor_id, negocio_id) DO UPDATE SET activo = TRUE
-        """, (row['tercero_id'], row['negocio_id']))
-        conn.commit()
-        t = conn.execute("SELECT id, nombre, telefono FROM terceros WHERE id = %s", (row['tercero_id'],)).fetchone()
-        conn.close()
-        if not t:
-            return False
-        session.clear()
-        session['usuario_id'] = t['id']
-        session['chat_tercero_id'] = t['id']
-        session['nombre'] = t['nombre'] or ''
-        session['rol'] = 'Vendedor'
-        session.permanent = True
-        dev = _get_device_id()
-        session['dispositivo_id'] = dev
-        try:
-            conn2 = get_db_connection()
-            _vincular_dispositivo(conn2, dev, t['id'])
-            conn2.commit(); conn2.close()
-        except Exception:
-            try: conn2.close()
-            except: pass
-        return True
+        with get_db_connection() as conn:
+            invitacion = conn.execute("""
+                UPDATE vendedor_invitaciones SET usado = TRUE
+                WHERE token = %s AND usado IS FALSE
+                RETURNING tercero_id, negocio_id
+            """, (token,)).fetchone()
+            if not invitacion:
+                return False
+            tercero = conn.execute(
+                "SELECT id, nombre FROM terceros WHERE id = %s",
+                (invitacion['tercero_id'],),
+            ).fetchone()
+            if not tercero:
+                return False
+            conn.execute("""
+                INSERT INTO vendedor_negocios (vendedor_id, negocio_id, activo)
+                VALUES (%s, %s, TRUE)
+                ON CONFLICT (vendedor_id, negocio_id) DO UPDATE SET activo = TRUE
+            """, (tercero['id'], invitacion['negocio_id']))
+            _vincular_dispositivo(conn, dev, tercero['id'])
+            conn.commit()
     except Exception:
+        current_app.logger.exception('Error al confirmar una invitación de Vendedor')
         return False
+    session.clear()
+    session.update(usuario_id=tercero['id'], chat_tercero_id=tercero['id'],
+                   nombre=tercero['nombre'] or '', rol='Vendedor', dispositivo_id=dev)
+    session.permanent = True
+    return True
 
 
 @bp.route('/api/vendedor/citas', methods=['GET'])
@@ -1475,16 +1470,38 @@ def api_vendedor_pedido_toggle_cartera(pedido_id):
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────
 
+def _pantalla_invitacion(token=None, csrf=None, status=200):
+    respuesta = make_response(render_template('vendedor_invitacion.html', token=token, csrf=csrf), status)
+    respuesta.headers['Cache-Control'] = 'no-store'
+    respuesta.headers['Referrer-Policy'] = 'no-referrer'
+    return respuesta
+
+
+@bp.post('/vendedor/invitacion')
+def confirmar_invitacion():
+    csrf = session.get('vendedor_invitacion_csrf')
+    recibido = request.form.get('csrf', '')
+    if not csrf or not secrets.compare_digest(csrf.encode(), recibido.encode()):
+        abort(400, 'Abre otra vez el enlace de acceso y pulsa Continuar.')
+    token = request.form.get('invite', '').strip()
+    if not token or len(token) > 64 or not _procesar_invitacion(token):
+        return _pantalla_invitacion(status=410)
+
+    respuesta = redirect(url_for('vendedor.vendedor_dashboard'), code=303)
+    _set_device_cookie(respuesta, session['dispositivo_id'])
+    return respuesta
+
+
 @bp.route('/vendedor')
 def vendedor_dashboard():
-    # Invitación prelogueada (el invitador ya creó el tercero)
     invite = request.args.get('invite', '').strip()
     if invite:
-        if _procesar_invitacion(invite):
-            resp = redirect(url_for('vendedor.vendedor_dashboard'))
-            _set_device_cookie(resp, session.get('dispositivo_id'))
-            return resp
-        return redirect(url_for('vendedor.vendedor_dashboard'))
+        if len(invite) > 64:
+            return _pantalla_invitacion(status=410)
+        csrf = session.get('vendedor_invitacion_csrf')
+        if not csrf:
+            csrf = session['vendedor_invitacion_csrf'] = secrets.token_urlsafe(24)
+        return _pantalla_invitacion(invite, csrf)
 
     # Soporte para login directo por parámetro tel en la URL
     tel_param = request.args.get('tel', '').strip()

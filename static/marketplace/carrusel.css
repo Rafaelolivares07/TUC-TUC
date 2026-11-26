@@ -1,0 +1,76 @@
+.market-carousel [hidden] {
+  display: none;
+}
+
+.market-carousel-controls {
+  position: absolute;
+  inset: auto 0 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.market-carousel-controls button {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  padding: 0 0 4px;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+  color: var(--ink);
+  font-size: 30px;
+  line-height: 1;
+  box-shadow: 0 2px 10px #0003;
+}
+
+.market-carousel-controls button:hover {
+  background: var(--lime);
+}
+
+.market-carousel-controls button:focus-visible {
+  outline: 3px solid var(--lime);
+  outline-offset: 2px;
+}
+
+.market-carousel-dots {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  padding: 9px 11px;
+  border-radius: 20px;
+  background: #16372ce6;
+}
+
+.market-carousel-dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 6px;
+  background: #fff9;
+}
+
+.market-carousel-dots .is-current {
+  width: 15px;
+  background: var(--lime);
+}
+
+.market-carousel-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+.market-carousel-controls .market-carousel-toggle {
+  color: #fff;
+  background: #16372ce6;
+  padding: 0;
+  font-size: 16px;
+}
+
+.market-carousel-controls .market-carousel-toggle:hover {
+  background: var(--ink);
+}

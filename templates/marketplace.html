@@ -6,7 +6,9 @@
 <meta name="description" content="Descubre restaurantes y tiendas de tu zona. Encuentra productos y servicios y consulta dónde entregan.">
 {% include 'marketplace_estilos.html' %}
 <link rel="stylesheet" href="{{ url_for('static', filename='marketplace/busqueda.css', v=1) }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='marketplace/carrusel.css', v=1) }}">
 <script src="{{ url_for('static', filename='marketplace/busqueda.js', v=2) }}" defer></script>
+<script src="{{ url_for('static', filename='marketplace/carrusel.js', v=1) }}" defer></script>
 </head>
 <body>
 <header class="head"><div class="head-inner wrap">
@@ -35,7 +37,18 @@
 </div>
 </div>
 </div>
-<div class="hero-media"><img src="{{ url_for('static',filename='marketplace/barrio.webp') }}" alt="Dos mujeres intercambian una bolsa de mercado en una tienda" width="1400" height="933" fetchpriority="high"></div>
+<div class="hero-media market-carousel" role="group" aria-label="Escenas del Marketplace">
+  <img src="{{ url_for('static', filename='marketplace/barrio.webp') }}" alt="Dos mujeres intercambian una bolsa de mercado en una tienda" width="1400" height="933" fetchpriority="high" draggable="false">
+  <img src="{{ url_for('static', filename='marketplace/compra-zona.webp') }}" alt="Una clienta elige productos frescos en un mercado de su zona" width="1399" height="933" decoding="async" loading="lazy" draggable="false" hidden>
+  <img src="{{ url_for('static', filename='marketplace/envios-ciudades.webp') }}" alt="Un negocio entrega a un repartidor un paquete listo para enviar" width="1399" height="933" decoding="async" loading="lazy" draggable="false" hidden>
+  <div class="market-carousel-controls" hidden>
+    <button type="button" class="market-carousel-prev" aria-label="Imagen anterior"><span aria-hidden="true">‹</span></button>
+    <span class="market-carousel-dots" aria-hidden="true"><i class="is-current"></i><i></i><i></i></span>
+    <button type="button" class="market-carousel-next" aria-label="Imagen siguiente"><span aria-hidden="true">›</span></button>
+    <button type="button" class="market-carousel-toggle" aria-label="Pausar carrusel"><span aria-hidden="true">❚❚</span></button>
+  </div>
+  <span class="market-carousel-status" role="status"></span>
+</div>
 </section>
 <section class="browse wrap" id="explorar" aria-labelledby="browse-title">
 <div class="cats market-tabs" aria-label="Categorías">

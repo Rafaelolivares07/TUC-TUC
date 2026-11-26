@@ -22,7 +22,8 @@ VIGENCIA_PUBLICACION = 30 * 86400
 LIMITE_FOTOS_PUBLICACION = 7 * 1024 * 1024
 LIMITE_FOTO_PUBLICACION = 450_000
 VIGENCIA_COMPRADOR = 90 * 24 * 60 * 60
-CATEGORIAS = frozenset(("productos", "restaurantes"))
+CATEGORIAS = {"": "Todo", "restaurantes": "Comida y bebidas",
+              "productos": "Productos", "servicios": "Servicios"}
 LIMITE = 24
 METODO_CONTRAENTREGA = "contraentrega"
 
@@ -56,6 +57,8 @@ _PUBLICACIONES_APROBADAS = """
      WHERE p.disponible IS TRUE
 """
 _ORIGEN_PUBLICACION = "CASE WHEN s.contacto_aprobado THEN s.nombre ELSE 'Publicación particular' END"
+# La categoría aprobada del producto se conserva mientras se revisa una nueva edición.
+_AMBITO_PUBLICACION = "CASE WHEN p.categoria = 'Servicios' THEN 'servicios' ELSE 'productos' END"
 
 
 _OFERTAS = f"""
@@ -70,7 +73,7 @@ WITH ofertas AS (
       {_RESTAURANTES_PUBLICOS}
     UNION ALL
     SELECT 'publicaciones', p.id, p.nombre, p.categoria, {_ORIGEN_PUBLICACION}, NULL,
-           NULLIF(p.precio,0), left(p.imagen,1501), 'productos'
+           NULLIF(p.precio,0), left(p.imagen,1501), {_AMBITO_PUBLICACION}
       {_PUBLICACIONES_APROBADAS}
 )
 SELECT tipo, id, nombre, categoria, negocio, slug, precio, imagen
@@ -115,7 +118,7 @@ WITH venta AS (
       {_PLATOS_PUBLICOS}
     UNION ALL
     SELECT 'publicaciones', p.id, p.nombre, p.categoria, {_ORIGEN_PUBLICACION},
-           NULL, NULLIF(p.precio,0), 'productos', 0
+           NULL, NULLIF(p.precio,0), {_AMBITO_PUBLICACION}, 0
       {_PUBLICACIONES_APROBADAS}
 ), fichas AS (
     SELECT * FROM venta
@@ -365,7 +368,7 @@ def portada():
     if sugerencias:
         return jsonify(sugerencias=ofertas)
     return render_template(
-        "marketplace.html", ofertas=ofertas, busqueda=busqueda, categoria=categoria,
+        "marketplace.html", ofertas=ofertas, busqueda=busqueda, categoria=categoria, categorias=CATEGORIAS,
         rubro=rubro, pagina=pagina, siguiente=len(filas) > LIMITE, comprador=datos_comprador(),
         aviso=request.args.get("publicacion") == "recibida",
     )

@@ -125,6 +125,23 @@ class MarketplaceTest(unittest.TestCase):
             self.assertEqual([r["tipo"] for r in resultado.json["sugerencias"]], ["platos", "categorias"])
         self.assertEqual(marketplace._normalizar_busqueda(" SÁNDWICH  de Atún "), "sandwich de atun")
 
+    def test_servicios_tiene_filtro_propio_para_la_lista_y_las_sugerencias(self):
+        servicio = dict(tipo="publicaciones", id=367, nombre="Servicio técnico",
+                        categoria="Servicios", negocio="Publicación particular",
+                        slug=None, precio=Decimal("50000"), imagen=None)
+        conn = Registro(servicio)
+        with patch.object(marketplace, "_conexion_publicaciones", return_value=conn):
+            portada = self.client.get("/marketplace", query_string={"categoria": "servicios"})
+            self.assertEqual(portada.status_code, 200)
+            self.assertIn('aria-current="true">Servicios', portada.get_data(as_text=True))
+            self.assertEqual(conn.sql[-1][1][:2], ("servicios", "servicios"))
+            sugerencias = self.client.get("/marketplace", query_string={
+                "categoria": "servicios", "sugerencias": 1, "q": "técnico",
+            })
+            self.assertEqual(sugerencias.status_code, 200)
+            self.assertEqual(conn.sql[-1][1]["ambito"], "servicios")
+            self.assertIn("oferta=367", sugerencias.json["sugerencias"][0]["enlace"])
+
     def test_serve_foto_publica_con_mime_y_cache(self):
         conn = Registro({"imagen": "data:image/jpeg;base64,/9j/2Q=="})
         ruta = "/static/marketplace/fotos/productos/14"

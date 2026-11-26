@@ -52,11 +52,11 @@
 </section>
 <section class="browse wrap" id="explorar" aria-labelledby="browse-title">
 <div class="cats market-tabs" aria-label="Categorías">
-{% for clave, etiqueta in [('', 'Todo'), ('restaurantes', 'Comida y bebidas'), ('productos', 'Productos')] %}
+{% for clave, etiqueta in categorias.items() %}
 <a class="cat" href="{{ url_for('marketplace.portada', categoria=clave, q=busqueda) }}#explorar"{% if categoria == clave %} aria-current="true"{% endif %}>{{ etiqueta }}</a>
 {% endfor %}
 </div>
-<div class="section-head"><div><h2 id="browse-title">Explora negocios y productos</h2>{% if busqueda %}<p>Resultados para «{{ busqueda }}».</p>{% elif rubro %}<p>Categoría «{{ rubro }}».</p>{% endif %}</div></div>
+<div class="section-head"><div><h2 id="browse-title">Explora productos, servicios y negocios</h2>{% if busqueda %}<p>Resultados para «{{ busqueda }}».</p>{% elif rubro %}<p>Categoría «{{ rubro }}».</p>{% endif %}</div></div>
 <div class="cards">
 {% for oferta in ofertas %}
 <article class="card"><a href="{{ oferta.enlace }}"><span class="card-photo">{% if oferta.imagen %}<img src="{{ oferta.imagen }}" alt="" loading="lazy" referrerpolicy="no-referrer">{% else %}<span class="fallback">{{ oferta.categoria or oferta.negocio or 'Categoría' }}</span>{% endif %}</span><span class="card-info"><small>{{ oferta.negocio if oferta.tipo in ('productos','platos','publicaciones') else (oferta.categoria or 'Categoría') }}</small><strong>{{ oferta.nombre }}</strong><span class="price">{{ oferta.precio or ('Ver categoría' if oferta.tipo == 'categorias' else 'Ver tienda' if oferta.tipo == 'tiendas' else 'Ver publicación' if oferta.tipo == 'publicaciones' else 'Ver carta') }}</span></span></a></article>

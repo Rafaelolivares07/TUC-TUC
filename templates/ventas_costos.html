@@ -385,8 +385,11 @@
               <div class="flex-1 text-xs text-amber-950 leading-relaxed">
                 <h5 class="text-xs font-black uppercase tracking-wider text-amber-950 mb-1.5 flex items-center gap-1.5">
                   <span>Análisis de Capacidad:</span>
-                  <span class="text-amber-800 font-normal">¿Cuántas personas y cuántos días de trabajo demandó esta producción?</span>
+                  <span class="text-amber-800 font-normal">¿Cuántas personas y cuántos días de trabajo demandó esta operación?</span>
                 </h5>
+                <p id="vc-card-def-operacion" class="text-[11px] text-amber-900 mt-1 leading-relaxed">
+                  <strong>Operación</strong> = <strong>Producción</strong> (preparación previa de los componentes) + <strong>Ensambles</strong> (armado al momento de la venta) + <strong>Servicio</strong> (todo lo concerniente a terminar de entregar y disponer de la atención al cliente idónea en el recibo y consumo de los productos).
+                </p>
                 <p id="vc-card-explicacion-general" class="text-gray-700">
                   Cargando análisis de capacidad...
                 </p>
@@ -968,12 +971,12 @@
           // Gran Explicación Gerencial de Capacidad
           const elExpGen = document.getElementById('vc-card-explicacion-general');
           if (elExpGen) {
-            elExpGen.innerHTML = `El volumen total de productos vendidos en este período demandó una inversión de <strong>${fmt(totalHorasGlobal)} horas de mano de obra</strong> (equivalente a <strong>${fmt(totalMinGlobal)} minutos</strong>), combinando cocción previa y ensamble de comandas.`;
+            elExpGen.innerHTML = `El volumen total de productos vendidos en este período demandó una inversión de <strong>${fmt(totalHorasGlobal)} horas de mano de obra</strong> (equivalente a <strong>${fmt(totalMinGlobal)} minutos</strong>), combinando producción, ensambles y servicio.`;
           }
 
           const elExpUni = document.getElementById('vc-card-explicacion-unipersonal');
           if (elExpUni) {
-            elExpUni.innerHTML = `Requeriría <strong>${fmt(dias1Persona)} días de trabajo completo</strong> (o <strong>${fmt(semanas1Persona)} semanas laborales</strong>) a razón de ${fmt(hDia)} horas por turno diario para cubrir esta producción.`;
+            elExpUni.innerHTML = `Requeriría <strong>${fmt(dias1Persona)} días de trabajo completo</strong> (o <strong>${fmt(semanas1Persona)} semanas laborales</strong>) a razón de ${fmt(hDia)} horas por turno diario para cubrir esta operación.`;
           }
 
           const elExpEqTit = document.getElementById('vc-card-explicacion-equipo-titulo');
@@ -983,7 +986,7 @@
 
           const elExpEqBody = document.getElementById('vc-card-explicacion-equipo-body');
           if (elExpEqBody) {
-            elExpEqBody.innerHTML = `Trabajando en simultáneo, el equipo cubre toda la producción en <strong>${fmt(diasEquipo)} días de trabajo</strong> (o <strong>${fmt(semanasEquipo)} semanas laborales</strong>) de jornada regular.`;
+            elExpEqBody.innerHTML = `Trabajando en simultáneo, el equipo cubre toda la operación en <strong>${fmt(diasEquipo)} días de trabajo</strong> (o <strong>${fmt(semanasEquipo)} semanas laborales</strong>) de jornada regular.`;
           }
 
           const elExpTarifa = document.getElementById('vc-card-explicacion-tarifa');

@@ -128,7 +128,7 @@ class MarketplaceTest(unittest.TestCase):
     def test_servicios_tiene_filtro_propio_para_la_lista_y_las_sugerencias(self):
         servicio = dict(tipo="publicaciones", id=367, nombre="Servicio técnico",
                         categoria="Servicios", negocio="Publicación particular",
-                        slug=None, precio=Decimal("50000"), imagen=None)
+                        slug=None, precio=Decimal("50000"), imagen=None, ambito="servicios")
         conn = Registro(servicio)
         with patch.object(marketplace, "_conexion_publicaciones", return_value=conn):
             portada = self.client.get("/marketplace", query_string={"categoria": "servicios"})
@@ -141,6 +141,7 @@ class MarketplaceTest(unittest.TestCase):
             self.assertEqual(sugerencias.status_code, 200)
             self.assertEqual(conn.sql[-1][1]["ambito"], "servicios")
             self.assertIn("oferta=367", sugerencias.json["sugerencias"][0]["enlace"])
+            self.assertTrue(sugerencias.json["sugerencias"][0]["es_servicio"])
 
     def test_serve_foto_publica_con_mime_y_cache(self):
         conn = Registro({"imagen": "data:image/jpeg;base64,/9j/2Q=="})
@@ -312,7 +313,7 @@ class MarketplaceTest(unittest.TestCase):
                          precio=Decimal("12500.50"), acepta_contraentrega=True)
         marketplace._aprobar_publicacion(conn, solicitud)
         alta = next(params for sql, params in conn.sql if "INSERT INTO productos" in sql)
-        self.assertEqual(alta, (95, "Oferta", "Servicios", "Detalles", "portada", Decimal("12500.50")))
+        self.assertEqual(alta, (95, "Oferta", "Servicios", "Detalles", "portada", Decimal("12500.50"), "servicio"))
         self.assertTrue(any(params == ("contraentrega",) for sql, params in conn.sql
                             if "FROM metodos_pago_catalogo" in sql))
         self.assertTrue(any(params == (95, 95, 27) for sql, params in conn.sql
@@ -323,7 +324,7 @@ class MarketplaceTest(unittest.TestCase):
         solicitud.update(producto_id=95, precio=Decimal("13900.00"), acepta_contraentrega=False)
         marketplace._aprobar_publicacion(conn, solicitud)
         self.assertFalse(any("INSERT INTO productos" in sql for sql, _ in conn.sql))
-        self.assertTrue(any(params[-2:] == (Decimal("13900.00"), 95) for sql, params in conn.sql
+        self.assertTrue(any(params[-3:] == (Decimal("13900.00"), "servicio", 95) for sql, params in conn.sql
                             if "UPDATE productos" in sql))
         self.assertTrue(any(params == (95, None, 27) for sql, params in conn.sql
                             if "metodo_pago_aprobado_id" in sql))

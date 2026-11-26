@@ -897,6 +897,7 @@ async function cargarCartaCliente() {
                                        </div>`}
                                 <div class="p-3">
                                     <span class="font-semibold txt-primary text-sm block leading-tight">${p.nombre}</span>
+                                    ${p.tipo_oferta === 'servicio' ? '<span class="text-xs font-semibold txt-muted">Servicio</span>' : ''}
                                     ${p.descripcion ? `
                                         <p class="desc-plato text-gray-400 text-xs leading-tight mt-0.5" id="desc-${p.id}">${p.descripcion}</p>
                                         <button class="btn-ver-desc" id="desc-btn-${p.id}" onclick="toggleDescPlato(${p.id}, event)">Ver más</button>

@@ -21,6 +21,7 @@ from flask import (Blueprint, Response, jsonify, make_response, redirect,
                    render_template, request, session, flash, url_for)
 
 from ..db import get_db_connection
+from ..tipo_oferta import TIPOS_OFERTA, TIPO_OFERTA_SQL, asegurar_tipo_oferta
 from ..dominios_negocio import resolver_slug_por_host
 from ..visitas_publicas import (
     listar_visitas_publicas,
@@ -1397,6 +1398,7 @@ def api_tienda_productos(slug):
             return jsonify({'ok': False, 'error': 'Negocio no encontrado'}), 404
         solo_publicos = request.args.get('publico') == '1'
         mostrar_cero = negocio.get('mostrar_productos_precio_cero', True)
+        asegurar_tipo_oferta(conn)
         filtro_adicional = ""
         if solo_publicos or not mostrar_cero:
             filtro_adicional += " AND precio > 0"
@@ -1404,8 +1406,9 @@ def api_tienda_productos(slug):
             filtro_adicional += " AND disponible = TRUE"
 
         productos = conn.execute(
-            "SELECT id, nombre, categoria, precio, costo, imagen, disponible, orden, descripcion, codigo_barra, catalogo_id, iva_pct "
-            f"FROM productos WHERE negocio_id = %s{filtro_adicional} ORDER BY categoria, orden, nombre",
+            "SELECT id, nombre, categoria, precio, costo, imagen, disponible, orden, descripcion, codigo_barra, catalogo_id, iva_pct, "
+            f"{TIPO_OFERTA_SQL} AS tipo_oferta FROM productos p "
+            f"WHERE negocio_id = %s{filtro_adicional} ORDER BY categoria, orden, nombre",
             (negocio['tercero_id'],)
         ).fetchall()
         
@@ -1500,7 +1503,7 @@ def api_tienda_productos(slug):
             comps = te_dict.get(pid, [])
             cat_p = p['categoria'] or ''
             resultado.append({
-                'id': pid, 'nombre': p['nombre'], 'categoria': cat_p,
+                'id': pid, 'nombre': p['nombre'], 'categoria': cat_p, 'tipo_oferta': p['tipo_oferta'],
                 'precio': float(p['precio']), 'costo': float(p['costo'] or 0), 'imagen': p['imagen'] or '',
                 'disponible': p['disponible'], 'orden': p['orden'],
                 'descripcion': p['descripcion'] or '',
@@ -1557,12 +1560,19 @@ def api_tienda_producto_crear(slug):
         codigo_barra = (data.get('codigo_barra') or '').strip() or None
         catalogo_id  = data.get('catalogo_id') or None
         iva_pct      = float(data.get('iva_pct', 0) or 0)
+        tipo_oferta  = data.get('tipo_oferta')
+        if tipo_oferta is not None and tipo_oferta not in TIPOS_OFERTA:
+            return jsonify({'ok': False, 'error': 'Tipo de oferta inválido'}), 400
         if not nombre:
             return jsonify({'ok': False, 'error': 'Nombre requerido'}), 400
         conn = get_db_connection()
-        tienda = conn.execute("SELECT id, tercero_id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        asegurar_tipo_oferta(conn)
+        tienda = conn.execute("SELECT id, tercero_id, admin_id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
         if not tienda:
             return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        if (tipo_oferta is not None and session.get('rol') != 'Administrador'
+                and session.get('usuario_id') != tienda['admin_id']):
+            return jsonify({'ok': False, 'error': 'No puedes cambiar el tipo de oferta de esta tienda'}), 403
         if codigo_barra and not catalogo_id:
             existing = conn.execute("SELECT id FROM catalogo_productos WHERE codigo_barra = %s", (codigo_barra,)).fetchone()
             if existing:
@@ -1583,15 +1593,15 @@ def api_tienda_producto_crear(slug):
 
         if producto_id:
             conn.execute(
-                "UPDATE productos SET nombre=%s, categoria=%s, precio=%s, descripcion=%s, catalogo_id=%s, codigo_barra=%s, iva_pct=%s WHERE id=%s AND negocio_id=%s",
-                (nombre, categoria, precio, descripcion or None, catalogo_id, codigo_barra, iva_pct, producto_id, tienda['tercero_id'])
+                "UPDATE productos SET nombre=%s, categoria=%s, precio=%s, descripcion=%s, catalogo_id=%s, codigo_barra=%s, iva_pct=%s, tipo_oferta=COALESCE(%s,tipo_oferta) WHERE id=%s AND negocio_id=%s",
+                (nombre, categoria, precio, descripcion or None, catalogo_id, codigo_barra, iva_pct, tipo_oferta, producto_id, tienda['tercero_id'])
             )
             nuevo_id = producto_id
             _sync_precio(conn, tienda['tercero_id'], producto_id)
         else:
             row = conn.execute(
-                "INSERT INTO productos (negocio_id, nombre, categoria, precio, descripcion, catalogo_id, codigo_barra, iva_pct) VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
-                (tienda['tercero_id'], nombre, categoria, precio, descripcion or None, catalogo_id, codigo_barra, iva_pct)
+                "INSERT INTO productos (negocio_id, nombre, categoria, precio, descripcion, catalogo_id, codigo_barra, iva_pct, tipo_oferta) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
+                (tienda['tercero_id'], nombre, categoria, precio, descripcion or None, catalogo_id, codigo_barra, iva_pct, tipo_oferta)
             ).fetchone()
             nuevo_id = row['id']
             _sync_precio(conn, tienda['tercero_id'], nuevo_id)

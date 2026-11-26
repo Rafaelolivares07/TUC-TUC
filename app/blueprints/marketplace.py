@@ -14,6 +14,7 @@ from itsdangerous import BadData, URLSafeTimedSerializer
 
 from ..asegurar import asegurar_una_vez
 from ..db import get_db_connection
+from ..tipo_oferta import TIPO_OFERTA_SQL, asegurar_tipo_oferta
 
 bp = Blueprint("marketplace", __name__)
 COMPRADOR = "__Host-tuctuc_comprador"
@@ -57,32 +58,9 @@ _PUBLICACIONES_APROBADAS = """
      WHERE p.disponible IS TRUE
 """
 _ORIGEN_PUBLICACION = "CASE WHEN s.contacto_aprobado THEN s.nombre ELSE 'Publicación particular' END"
-# La categoría aprobada del producto se conserva mientras se revisa una nueva edición.
-_AMBITO_PUBLICACION = "CASE WHEN p.categoria = 'Servicios' THEN 'servicios' ELSE 'productos' END"
+_AMBITO_PRODUCTO = f"CASE WHEN {TIPO_OFERTA_SQL} = 'servicio' THEN 'servicios' ELSE 'productos' END"
+_AMBITO_CARTA = f"CASE WHEN {TIPO_OFERTA_SQL} = 'servicio' THEN 'servicios' ELSE 'restaurantes' END"
 
-
-_OFERTAS = f"""
-WITH ofertas AS (
-    SELECT 'productos' AS tipo, p.id, p.nombre, p.categoria,
-           t.nombre AS negocio, t.slug, p.precio, left({_FOTO_PRODUCTO}, 1501) AS imagen,
-           'productos' AS ambito
-      {_PRODUCTOS_PUBLICOS}
-    UNION ALL
-    SELECT 'restaurantes', r.id, r.nombre, 'Carta y menú', r.nombre,
-           r.slug, NULL::numeric, left(r.imagen_header, 1501), 'restaurantes'
-      {_RESTAURANTES_PUBLICOS}
-    UNION ALL
-    SELECT 'publicaciones', p.id, p.nombre, p.categoria, {_ORIGEN_PUBLICACION}, NULL,
-           NULLIF(p.precio,0), left(p.imagen,1501), {_AMBITO_PUBLICACION}
-      {_PUBLICACIONES_APROBADAS}
-)
-SELECT tipo, id, nombre, categoria, negocio, slug, precio, imagen
-  FROM ofertas
- WHERE (%s = '' OR ambito = %s)
-   AND (%s = '' OR strpos(lower(concat_ws(' ', nombre, categoria, negocio)), lower(%s)) > 0)
- ORDER BY (NULLIF(btrim(imagen), '') IS NOT NULL) DESC, negocio, nombre, tipo, id
- LIMIT %s OFFSET %s
-"""
 
 _PLATOS_PUBLICOS = """
       FROM productos p
@@ -93,6 +71,33 @@ _PLATOS_PUBLICOS = """
        AND (r.tipo_restaurante = 'carta' OR lower(btrim(COALESCE(p.categoria, '')))
             NOT IN ('sopa', 'proteina', 'proteína', 'principio'))
 """
+_OFERTAS = f"""
+WITH ofertas AS (
+    SELECT 'productos' AS tipo, p.id, p.nombre, p.categoria,
+           t.nombre AS negocio, t.slug, p.precio, left({_FOTO_PRODUCTO}, 1501) AS imagen,
+           {_AMBITO_PRODUCTO} AS ambito
+      {_PRODUCTOS_PUBLICOS}
+    UNION ALL
+    SELECT 'platos', p.id, p.nombre, p.categoria, r.nombre, r.slug, p.precio,
+           left({_FOTO_PRODUCTO}, 1501), 'servicios'
+      {_PLATOS_PUBLICOS} AND {TIPO_OFERTA_SQL} = 'servicio'
+    UNION ALL
+    SELECT 'restaurantes', r.id, r.nombre, 'Carta y menú', r.nombre,
+           r.slug, NULL::numeric, left(r.imagen_header, 1501), 'restaurantes'
+      {_RESTAURANTES_PUBLICOS}
+    UNION ALL
+    SELECT 'publicaciones', p.id, p.nombre, p.categoria, {_ORIGEN_PUBLICACION}, NULL,
+           NULLIF(p.precio,0), left(p.imagen,1501), {_AMBITO_PRODUCTO}
+      {_PUBLICACIONES_APROBADAS}
+)
+SELECT tipo, id, nombre, categoria, negocio, slug, precio, imagen, ambito
+  FROM ofertas
+ WHERE (%s = '' OR ambito = %s)
+   AND (%s = '' OR strpos(lower(concat_ws(' ', nombre, categoria, negocio)), lower(%s)) > 0)
+ ORDER BY (NULLIF(btrim(imagen), '') IS NOT NULL) DESC, negocio, nombre, tipo, id
+ LIMIT %s OFFSET %s
+"""
+
 _ACENTOS = "áéíóúüñ"
 _SIN_ACENTOS = "aeiouun"
 _TRADUCCION = str.maketrans(_ACENTOS, _SIN_ACENTOS)
@@ -111,14 +116,14 @@ _CATEGORIA_BUSQUEDA = """
 _BUSQUEDA = f"""
 WITH venta AS (
     SELECT 'productos' AS tipo, p.id, p.nombre, {_CATEGORIA_BUSQUEDA} AS categoria,
-           t.nombre AS negocio, t.slug, p.precio, 'productos' AS ambito, 0 AS grupo
+           t.nombre AS negocio, t.slug, p.precio, {_AMBITO_PRODUCTO} AS ambito, 0 AS grupo
       {_PRODUCTOS_PUBLICOS}
     UNION ALL
-    SELECT 'platos', p.id, p.nombre, {_CATEGORIA_BUSQUEDA}, r.nombre, r.slug, p.precio, 'restaurantes', 0
+    SELECT 'platos', p.id, p.nombre, {_CATEGORIA_BUSQUEDA}, r.nombre, r.slug, p.precio, {_AMBITO_CARTA}, 0
       {_PLATOS_PUBLICOS}
     UNION ALL
     SELECT 'publicaciones', p.id, p.nombre, p.categoria, {_ORIGEN_PUBLICACION},
-           NULL, NULLIF(p.precio,0), {_AMBITO_PUBLICACION}, 0
+           NULL, NULLIF(p.precio,0), {_AMBITO_PRODUCTO}, 0
       {_PUBLICACIONES_APROBADAS}
 ), fichas AS (
     SELECT * FROM venta
@@ -138,7 +143,11 @@ WITH venta AS (
       {_RESTAURANTES_PUBLICOS}
 ), nombres AS (
     SELECT *, translate(lower(btrim(regexp_replace(nombre, '[^[:alnum:]_]+', ' ', 'g'))),
-                        '{_ACENTOS}', '{_SIN_ACENTOS}') AS termino
+                        '{_ACENTOS}', '{_SIN_ACENTOS}') AS termino,
+           CASE WHEN ambito = 'servicios' THEN
+                translate(lower(regexp_replace(negocio, '[^[:alnum:]_]+', ' ', 'g')),
+                          '{_ACENTOS}', '{_SIN_ACENTOS}')
+           END AS termino_negocio
       FROM fichas
      WHERE (%(ambito)s = '' OR ambito IN ('', %(ambito)s))
        AND (%(rubro)s = '' OR (grupo = 0 AND
@@ -154,7 +163,7 @@ WITH venta AS (
      WHERE %(q)s = '' OR NOT EXISTS (
         SELECT 1 FROM unnest(string_to_array(%(q)s, ' ')) AS palabras(palabra)
          WHERE NOT EXISTS (
-            SELECT 1 FROM unnest(string_to_array(termino, ' ')) AS nombre(palabra_publica)
+            SELECT 1 FROM unnest(string_to_array(concat_ws(' ', termino, termino_negocio), ' ')) AS nombre(palabra_publica)
              WHERE starts_with(palabra_publica, palabra)
          )
      )
@@ -289,7 +298,7 @@ def _oferta(fila, ambito=""):
         imagen = _foto_publica(origen_foto)
     return dict(
         nombre=fila["nombre"], categoria=fila["categoria"], negocio=fila["negocio"],
-        tipo=tipo, enlace=enlace, imagen=imagen,
+        tipo=tipo, enlace=enlace, imagen=imagen, es_servicio=fila.get("ambito") == "servicios",
         precio=_precio_visible(fila["precio"]),
     )
 
@@ -628,6 +637,7 @@ def _cookie_editor(respuesta, sesion, solicitud_id=None):
 
 def _conexion_publicaciones():
     conn = get_db_connection()
+    asegurar_tipo_oferta(conn)
     asegurar_una_vez("marketplace.solicitudes", lambda: _crear_solicitudes(conn))
     return conn
 
@@ -860,7 +870,8 @@ def _aprobar_publicacion(conn, solicitud, tercero_elegido=None):
     fotos = solicitud["fotos"] or []
     categoria = "Servicios" if solicitud["tipo"] == "servicio" else "Productos"
     producto_id = solicitud["producto_id"]
-    datos = (solicitud["titulo"], categoria, solicitud["descripcion"], fotos[0] if fotos else None, precio)
+    datos = (solicitud["titulo"], categoria, solicitud["descripcion"], fotos[0] if fotos else None, precio,
+             solicitud["tipo"])
     if producto_id is None:
         conn.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", ("comprador:" + telefono,))
         coincidencias = _terceros_de_publicacion(conn, telefono)
@@ -879,13 +890,13 @@ def _aprobar_publicacion(conn, solicitud, tercero_elegido=None):
                 (solicitud["nombre"], telefono),
             ).fetchone()
         producto_id = conn.execute(
-            """INSERT INTO productos (negocio_id,nombre,categoria,descripcion,imagen,precio,disponible)
-               VALUES (%s,%s,%s,%s,%s,%s,TRUE) RETURNING id""",
+            """INSERT INTO productos (negocio_id,nombre,categoria,descripcion,imagen,precio,tipo_oferta,disponible)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,TRUE) RETURNING id""",
             (tercero["id"], *datos),
         ).fetchone()["id"]
     else:
         conn.execute(
-            """UPDATE productos SET nombre=%s,categoria=%s,descripcion=%s,imagen=%s,precio=%s WHERE id=%s""",
+            """UPDATE productos SET nombre=%s,categoria=%s,descripcion=%s,imagen=%s,precio=%s,tipo_oferta=%s WHERE id=%s""",
             (*datos, producto_id),
         )
         conn.execute("DELETE FROM producto_imagenes WHERE producto_id=%s", (producto_id,))

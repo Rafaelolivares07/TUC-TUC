@@ -9,6 +9,7 @@ from flask import (Blueprint, jsonify, make_response, redirect, render_template,
                    request, session, url_for)
 
 from ..db import get_db_connection
+from ..tipo_oferta import TIPOS_OFERTA, TIPO_OFERTA_SQL, asegurar_tipo_oferta
 from ..visitas_publicas import (
     listar_visitas_publicas,
     registrar_visita_publica,
@@ -853,10 +854,12 @@ def api_opciones(slug):
             filtro_publico += " AND precio > 0"
         if solo_publicos and not rest['mostrar_adiciones_en_carta']:
             filtro_publico += " AND COALESCE(es_adicion, FALSE) = FALSE"
+        asegurar_tipo_oferta(conn)
         opciones = conn.execute(
             "SELECT id, categoria AS tipo, nombre, recargo, precio, imagen, disponible AS activo, "
-            "descripcion, orden, COALESCE(es_adicion, FALSE) AS es_adicion "
-            f"FROM productos WHERE negocio_id = %s AND disponible = TRUE{filtro_publico} ORDER BY orden, id",
+            "descripcion, orden, COALESCE(es_adicion, FALSE) AS es_adicion, "
+            f"{TIPO_OFERTA_SQL} AS tipo_oferta FROM productos p "
+            f"WHERE negocio_id = %s AND disponible = TRUE{filtro_publico} ORDER BY orden, id",
             (rest['tercero_id'],)
         ).fetchall()
         adiciones = []
@@ -999,6 +1002,11 @@ def api_opcion_crear(slug):
     precio = data.get('precio', 0)
     descripcion = data.get('descripcion', '').strip()
     es_adicion = bool(data.get('es_adicion', False))
+    tipo_oferta = data.get('tipo_oferta')
+    if tipo_oferta is not None and tipo_oferta not in TIPOS_OFERTA:
+        return jsonify({'ok': False, 'error': 'Tipo de oferta inválido'}), 400
+    if tipo_oferta == 'servicio' and es_adicion:
+        return jsonify({'ok': False, 'error': 'Un servicio no se puede marcar como adición'}), 400
     if not tipo:
         return jsonify({'ok': False, 'error': 'Categoría requerida'}), 400
     if not nombre:
@@ -1006,10 +1014,29 @@ def api_opcion_crear(slug):
     try:
         conn = get_db_connection()
         _asegurar_catalogo_adiciones_restaurante(conn)
-        rest = conn.execute("SELECT id, tipo_restaurante, tercero_id FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
+        asegurar_tipo_oferta(conn)
+        rest = conn.execute(
+            "SELECT id, tipo_restaurante, tercero_id, admin_id, token_acceso FROM restaurantes WHERE slug = %s",
+            (slug,),
+        ).fetchone()
         if not rest:
             conn.close()
             return jsonify({'ok': False, 'error': 'Restaurante no encontrado'}), 404
+        if tipo_oferta is not None:
+            from .core import _sesion_tiene_pantalla
+            token = session.get('restaurante_token')
+            if not (session.get('rol') == 'Administrador'
+                    or session.get('usuario_id') == rest['admin_id']
+                    or (token and token == rest['token_acceso'])
+                    or _sesion_tiene_pantalla(conn, rest['tercero_id'], 'restaurantes.mi_restaurante')):
+                conn.close()
+                return jsonify({'ok': False, 'error': 'No puedes cambiar el tipo de oferta de esta carta'}), 403
+        if tipo_oferta == 'servicio' and (
+            rest['tipo_restaurante'] == 'menu_dia'
+            or (rest['tipo_restaurante'] == 'ambos' and tipo.lower() in ('sopa', 'proteina', 'proteína', 'principio'))
+        ):
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Elige una categoría de la carta para el servicio'}), 400
         if rest['tipo_restaurante'] == 'menu_dia' and tipo not in ('sopa', 'proteina', 'principio'):
             conn.close()
             return jsonify({'ok': False, 'error': 'Tipo debe ser sopa, proteina o principio'}), 400
@@ -1035,16 +1062,16 @@ def api_opcion_crear(slug):
             return jsonify({'ok': False, 'error': 'Ese producto ya existe en el catalogo'}), 409
         if opcion_id:
             conn.execute(
-                "UPDATE productos SET categoria=%s, nombre=%s, recargo=%s, precio=%s, descripcion=%s, es_adicion=%s "
-                "WHERE id=%s AND negocio_id=%s",
-                (tipo, nombre, recargo, precio, descripcion or None, es_adicion, opcion_id, rest['tercero_id'])
+                "UPDATE productos SET categoria=%s, nombre=%s, recargo=%s, precio=%s, descripcion=%s, es_adicion=%s, "
+                "tipo_oferta=COALESCE(%s,tipo_oferta) WHERE id=%s AND negocio_id=%s",
+                (tipo, nombre, recargo, precio, descripcion or None, es_adicion, tipo_oferta, opcion_id, rest['tercero_id'])
             )
             _sync_precio(conn, rest['tercero_id'], opcion_id)
         else:
             r = conn.execute(
-                "INSERT INTO productos (negocio_id, categoria, nombre, recargo, precio, descripcion, es_adicion) "
-                "VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id",
-                (rest['tercero_id'], tipo, nombre, recargo, precio, descripcion or None, es_adicion)
+                "INSERT INTO productos (negocio_id, categoria, nombre, recargo, precio, descripcion, es_adicion, tipo_oferta) "
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
+                (rest['tercero_id'], tipo, nombre, recargo, precio, descripcion or None, es_adicion, tipo_oferta)
             )
             _sync_precio(conn, rest['tercero_id'], r[0])
         conn.commit()

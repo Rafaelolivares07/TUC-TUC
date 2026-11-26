@@ -646,7 +646,12 @@ def mi_restaurante(slug):
         uid = session.get('usuario_id')
         es_admin = session.get('rol') == 'Administrador'
         tok = session.get('restaurante_token')
-        autenticado = es_admin or (uid and uid == restaurante['admin_id']) or (tok and tok == restaurante['token_acceso'])
+        try:
+            from .core import _sesion_tiene_pantalla as _grant_pant
+            _grant_mr = bool(_grant_pant(conn, restaurante.get('tercero_id'), 'restaurantes.mi_restaurante'))
+        except Exception:
+            _grant_mr = False
+        autenticado = es_admin or (uid and uid == restaurante['admin_id']) or (tok and tok == restaurante['token_acceso']) or _grant_mr
         conn.close()
         if autenticado:
             cliente_url = f"https://{restaurante['slug']}.tuc-tuc.co"

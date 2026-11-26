@@ -1,4 +1,4 @@
-from flask import Blueprint, Response, jsonify, redirect, render_template, request, session, url_for
+from flask import Blueprint, Response, g, jsonify, redirect, render_template, request, session, url_for
 from ..db import get_db_connection
 from decimal import Decimal, ROUND_HALF_UP
 from datetime import date, datetime, timedelta
@@ -522,71 +522,43 @@ def _puede_gestionar_negocio(contexto):
         or nombre == 'Rafael Olivares'
         or usuario_id == 1
         or (usuario_id and contexto.get('admin_id') and _mismo_id(usuario_id, contexto['admin_id']))
+        or _flag_pantalla_ok()
     )
+
+
+def _flag_pantalla_ok():
+    """True si el guardian concedio esta pagina por grant (rollout)."""
+    try:
+        return bool(request.endpoint) and g.get('pantalla_concedida') == request.endpoint
+    except Exception:
+        return False
 
 
 def _validar_negocio_json(conn, negocio_id):
     contexto = _contexto_negocio(conn, negocio_id)
     if not contexto:
         return None, (jsonify({'ok': False, 'error': 'Negocio no encontrado'}), 404)
-    if not _puede_gestionar_negocio(contexto):
-        return None, (jsonify({'ok': False, 'error': 'No autorizado para este negocio'}), 403)
-    return contexto, None
-
-
-def _sesion_tiene_pantalla(conn, negocio_id, endpoint):
-    """Grant de pantalla (menu/desk) para la sesion. Espejo del guardian de core.
-
-    Acepta admin (bypass) o grant en permisos_terceros para
-    (tercero, negocio, endpoint), con el mismo periodo de gracia del
-    guardian (tercero <= 107). El tercero se resuelve igual que en
-    core._tercero_de_sesion (chat_tercero_id, o usuario_id si es tercero).
-    """
-    if session.get('rol') == 'Administrador':
-        return True
-    tercero_id = session.get('chat_tercero_id') or session.get('usuario_id')
-    if not tercero_id:
-        return False
-    try:
-        row = conn.execute("SELECT id FROM terceros WHERE id = %s", (tercero_id,)).fetchone()
-    except Exception:
-        try:
-            conn.rollback()
-        except Exception:
-            pass
-        return False
-    if not row:
-        return False
-    tercero_id = row['id']
-    try:
-        grant = conn.execute("""
-            SELECT 1 FROM permisos_terceros pt JOIN pantallas p ON p.id = pt.pantalla_id
-            WHERE pt.tercero_id = %s AND pt.negocio_id = %s AND p.endpoint = %s
-        """, (tercero_id, negocio_id, endpoint)).fetchone()
-    except Exception:
-        return False
-    if grant:
-        return True
-    try:
-        return int(tercero_id) <= 107
-    except Exception:
-        return False
-
-
-def _validar_negocio_o_pantalla(conn, negocio_id, endpoint):
-    """Como _validar_negocio_json, pero tambien acepta grant de pantalla.
-
-    Para rutas de pantallas otorgables (menu/desk): admin/dueno pasan por
-    la regla vieja; usuarios con la pantalla otorgada pasan por el grant.
-    """
-    contexto = _contexto_negocio(conn, negocio_id)
-    if not contexto:
-        return None, (jsonify({'ok': False, 'error': 'Negocio no encontrado'}), 404)
     if _puede_gestionar_negocio(contexto):
         return contexto, None
-    if _sesion_tiene_pantalla(conn, negocio_id, endpoint):
+    if _grant_por_mapa(conn, negocio_id):
         return contexto, None
     return None, (jsonify({'ok': False, 'error': 'No autorizado para este negocio'}), 403)
+
+
+_MAESTRO_GRANT = 'inventarios.admin_inventario'
+
+
+def _grant_por_mapa(conn, negocio_id, endpoint=None):
+    """Grant via MAPA_API_PANTALLA (+comodin inventario). Fail-closed."""
+    try:
+        from .core import MAPA_API_PANTALLA, _sesion_tiene_pantalla
+        ep = endpoint or request.endpoint or ''
+        for pant in list(MAPA_API_PANTALLA.get(ep, ())) + [_MAESTRO_GRANT]:
+            if _sesion_tiene_pantalla(conn, negocio_id, pant):
+                return True
+        return False
+    except Exception:
+        return False
 
 
 def _negocio_id_de_producto(conn, producto_id):
@@ -2741,7 +2713,7 @@ def api_inventario_productos(negocio_id):
     conn = get_db_connection()
     try:
         _crear_tablas(conn)
-        _contexto, error = _validar_negocio_o_pantalla(conn, negocio_id, 'inventarios.kardex_standalone')
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
         if error:
             return error
         solo_venta = request.args.get('solo_venta') == '1'
@@ -3772,7 +3744,7 @@ def api_inventario_kardex(producto_id):
         negocio_id = _negocio_id_de_producto(conn, producto_id)
         if not negocio_id:
             return jsonify({'ok': False, 'error': 'Producto no encontrado'}), 404
-        _contexto, error = _validar_negocio_o_pantalla(conn, negocio_id, 'inventarios.kardex_standalone')
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
         if error:
             return error
 
@@ -4285,7 +4257,7 @@ def api_inventario_kardex_pdf(producto_id):
         negocio_id = _negocio_id_de_producto(conn, producto_id)
         if not negocio_id:
             return jsonify({'ok': False, 'error': 'Producto no encontrado'}), 404
-        _contexto, error = _validar_negocio_o_pantalla(conn, negocio_id, 'inventarios.kardex_standalone')
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
         if error:
             return error
         contexto = _contexto_negocio(conn, negocio_id)
@@ -11330,7 +11302,12 @@ def admin_inventario(negocio_id, tab_name=None):
         contexto = _contexto_negocio(conn, negocio_id)
         if not contexto:
             return "Negocio no encontrado", 404
-        if not _puede_gestionar_negocio(contexto):
+        try:
+            from .core import _sesion_tiene_pantalla as _grant_pant
+            _ok_grant = _grant_pant(conn, negocio_id, 'inventarios.admin_inventario')
+        except Exception:
+            _ok_grant = False
+        if not _puede_gestionar_negocio(contexto) and not _ok_grant:
             return "No autorizado para este negocio", 403
 
         # Si tab_name es 'gastos', mapear a 'desembolsos'
@@ -11779,7 +11756,7 @@ def kardex_standalone():
         contexto = _contexto_negocio(conn, negocio_id)
         if not contexto:
             return "Negocio no encontrado", 404
-        if not _puede_gestionar_negocio(contexto) and not _sesion_tiene_pantalla(conn, negocio_id, 'inventarios.kardex_standalone'):
+        if not _puede_gestionar_negocio(contexto):
             return "No autorizado para este negocio", 403
         centros_rows = conn.execute("""
             SELECT id, codigo, nombre, tipo, color_badge, imagen_url, telefono, direccion

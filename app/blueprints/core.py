@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime  # noqa
 
 import requests as http_requests
-from flask import (abort, Blueprint, jsonify, redirect, render_template,
+from flask import (abort, Blueprint, g, jsonify, redirect, render_template,
                    request, session, url_for)
 
 from ..db import get_db_connection
@@ -1855,6 +1855,86 @@ def _inyectar_cinta_su_global(response):
     return response
 
 
+# ── Grants de pantalla: mecanismo global (2026-11-26, caso David Felipe) ──
+PANTALLAS_GRANT_ABIERTAS = {
+    'inventarios.admin_inventario_fisico',
+    'inventarios.auditor_documentos_standalone',
+    'inventarios.catalogo_productos_standalone',
+    'inventarios.entradas_standalone',
+    'inventarios.kardex_standalone',
+    'inventarios.produccion_standalone',
+    'inventarios.ventas_clientes_standalone',
+    'inventarios.ventas_costos_standalone',
+}
+"""Paginas cuya API ya acepta grants (rollout por pantalla, sin estados medios)."""
+
+MAPA_API_PANTALLA = {
+    'inventarios.api_inventario_kardex': ['inventarios.kardex_standalone',
+                                         'inventarios.admin_inventario_fisico'],
+    'inventarios.api_inventario_kardex_pdf': ['inventarios.kardex_standalone'],
+    'inventarios.api_inventario_productos': ['inventarios.kardex_standalone',
+                                            'inventarios.entradas_standalone',
+                                            'inventarios.produccion_standalone',
+                                            'inventarios.catalogo_productos_standalone',
+                                            'inventarios.admin_inventario_fisico',
+                                            'contabilidad.admin_contabilidad',
+                                            'contabilidad.tesoreria_standalone'],
+    'inventarios.api_inventario_producto_eliminar': ['inventarios.entradas_standalone',
+                                                    'inventarios.catalogo_productos_standalone'],
+    'inventarios.api_inventario_producto_editar': ['inventarios.entradas_standalone',
+                                                  'inventarios.catalogo_productos_standalone'],
+    'inventarios.api_inventario_producto_crear': ['inventarios.entradas_standalone',
+                                                 'inventarios.catalogo_productos_standalone'],
+    'inventarios.api_inventario_entrada_borrador': ['inventarios.entradas_standalone'],
+    'inventarios.api_produccion_sugerencia': ['inventarios.produccion_standalone'],
+    'inventarios.api_produccion_preview': ['inventarios.produccion_standalone'],
+    'inventarios.api_produccion_registrar': ['inventarios.produccion_standalone'],
+    'inventarios.api_inventario_tarjeta_update_proportions': ['inventarios.produccion_standalone'],
+    'inventarios.api_historial_recosteo': ['inventarios.produccion_standalone'],
+    'inventarios.api_inventario_categorias_adiciones': ['inventarios.catalogo_productos_standalone'],
+    'inventarios.api_auditoria_productos': ['inventarios.catalogo_productos_standalone'],
+    'inventarios.api_auditoria_vincular_ids': ['inventarios.catalogo_productos_standalone'],
+    'inventarios.api_auditoria_reparar_valores': ['inventarios.catalogo_productos_standalone'],
+    'inventarios.api_auditoria_detalle_cotejo': ['inventarios.catalogo_productos_standalone'],
+    'inventarios.api_ejecutar_recosteo': ['inventarios.kardex_standalone',
+                                         'inventarios.admin_inventario_fisico',
+                                         'inventarios.auditor_documentos_standalone'],
+    'inventarios.api_verificar_cambio_fecha_documento': ['inventarios.kardex_standalone',
+                                                        'inventarios.auditor_documentos_standalone'],
+    'inventarios.api_modificar_documento_mantenimiento': ['inventarios.auditor_documentos_standalone'],
+    'inventarios.api_listar_centros_utilidad': ['inventarios.entradas_standalone',
+                                               'tiendas.tienda_caja',
+                                               'contabilidad.admin_contabilidad',
+                                               'contabilidad.tesoreria_standalone'],
+}
+"""API -> pantallas cuyo grant la abre (OR). Fuera del mapa: regla vieja."""
+
+GRANT_MAESTRO_INVENTARIO = 'inventarios.admin_inventario'
+"""Quien tiene el inventario general abre todas las APIs de inventarios."""
+
+
+def _sesion_tiene_pantalla(conn, negocio_id, endpoint):
+    """Grant de pantalla para la sesion (misma regla del guardian)."""
+    if session.get('rol') == 'Administrador':
+        return True
+    tercero_id = _tercero_de_sesion(conn, session)
+    if not tercero_id:
+        return False
+    try:
+        grant = conn.execute("""
+            SELECT 1 FROM permisos_terceros pt JOIN pantallas p ON p.id = pt.pantalla_id
+            WHERE pt.tercero_id = %s AND pt.negocio_id = %s AND p.endpoint = %s
+        """, (tercero_id, negocio_id, endpoint)).fetchone()
+    except Exception:
+        return False
+    if grant:
+        return True
+    try:
+        return int(tercero_id) <= 107
+    except Exception:
+        return False
+
+
 @bp.before_app_request
 def check_dynamic_permissions():
     if 'usuario_id' not in session:
@@ -1886,8 +1966,7 @@ def check_dynamic_permissions():
 
         # Excepción temporal: Inventario permanece accesible mientras se define su autorización.
         # Visor de manuales: se auto-chequea por slug (anonimo = publico, como antes).
-        if endpoint in ('inventarios.admin_inventario', 'inventarios.admin_inventario_fisico',
-                        'core.core_ver_manual'):
+        if endpoint in ('inventarios.admin_inventario', 'core.core_ver_manual'):
             return
 
         # 1. Superadmin bypass completo
@@ -1909,10 +1988,14 @@ def check_dynamic_permissions():
         """, (tercero_id, negocio_id, endpoint)).fetchone()
 
         if permiso:
+            if endpoint in PANTALLAS_GRANT_ABIERTAS:
+                g.pantalla_concedida = endpoint
             return
 
         # 3. Periodo de gracia para usuarios existentes (Tercero ID <= 107)
         if tercero_id <= 107:
+            if endpoint in PANTALLAS_GRANT_ABIERTAS:
+                g.pantalla_concedida = endpoint
             return
 
         abort(403)

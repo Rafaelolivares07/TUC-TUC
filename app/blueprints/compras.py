@@ -1,7 +1,7 @@
 from datetime import date, timedelta
 from decimal import Decimal, ROUND_CEILING
 
-from flask import Blueprint, jsonify, redirect, render_template, request, session, url_for
+from flask import Blueprint, g, jsonify, redirect, render_template, request, session, url_for
 
 from ..db import get_db_connection
 
@@ -162,16 +162,46 @@ def _puede_gestionar_negocio(contexto):
     return (
         session.get('rol') == 'Administrador'
         or (usuario_id and contexto.get('admin_id') and _mismo_id(usuario_id, contexto['admin_id']))
+        or _flag_pantalla_ok()
     )
+
+
+def _flag_pantalla_ok():
+    """True si el guardian concedio esta pagina por grant (rollout)."""
+    try:
+        return bool(request.endpoint) and g.get('pantalla_concedida') == request.endpoint
+    except Exception:
+        return False
 
 
 def _validar_negocio_json(conn, negocio_id):
     contexto = _contexto_negocio(conn, negocio_id)
     if not contexto:
         return None, (jsonify({'ok': False, 'error': 'Negocio no encontrado'}), 404)
-    if not _puede_gestionar_negocio(contexto):
-        return None, (jsonify({'ok': False, 'error': 'No autorizado para este negocio'}), 403)
-    return contexto, None
+    if _puede_gestionar_negocio(contexto):
+        return contexto, None
+    if _grant_por_mapa(conn, negocio_id):
+        return contexto, None
+    return None, (jsonify({'ok': False, 'error': 'No autorizado para este negocio'}), 403)
+
+
+_MAESTRO_GRANT = None
+
+
+def _grant_por_mapa(conn, negocio_id, endpoint=None):
+    """Grant via MAPA_API_PANTALLA. Fail-closed."""
+    try:
+        from .core import MAPA_API_PANTALLA, _sesion_tiene_pantalla
+        ep = endpoint or request.endpoint or ''
+        cands = list(MAPA_API_PANTALLA.get(ep, ()))
+        if _MAESTRO_GRANT:
+            cands.append(_MAESTRO_GRANT)
+        for pant in cands:
+            if _sesion_tiene_pantalla(conn, negocio_id, pant):
+                return True
+        return False
+    except Exception:
+        return False
 
 
 # ── Órdenes de Compra y Despachos ─────────────────────────────────────────────

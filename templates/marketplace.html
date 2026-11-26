@@ -52,7 +52,7 @@
 </section>
 <section class="browse wrap" id="explorar" aria-labelledby="browse-title">
 <div class="cats market-tabs" aria-label="Categorías">
-{% for clave, etiqueta in [('', 'Todo'), ('restaurantes', 'Restaurantes'), ('productos', 'Productos')] %}
+{% for clave, etiqueta in [('', 'Todo'), ('restaurantes', 'Comida y bebidas'), ('productos', 'Productos')] %}
 <a class="cat" href="{{ url_for('marketplace.portada', categoria=clave, q=busqueda) }}#explorar"{% if categoria == clave %} aria-current="true"{% endif %}>{{ etiqueta }}</a>
 {% endfor %}
 </div>

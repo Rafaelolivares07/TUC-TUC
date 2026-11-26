@@ -27,6 +27,8 @@
 <h2>{{ solicitud.titulo }}</h2>
 <p>{{ solicitud.nombre }} · {{ solicitud.telefono }} · {{ solicitud.tipo }}</p>
 <p>{{ solicitud.descripcion }}</p>
+<p><strong>Precio</strong> {{ precio or 'Por confirmar' }}{% if precio %} COP{% endif %}</p>
+<p><strong>Pago contra entrega</strong> {% if solicitud.acepta_contraentrega is none %}Por confirmar{% elif solicitud.acepta_contraentrega %}Aceptado en efectivo{% else %}El ofertante indicó que no{% endif %}</p>
 {% if solicitud.fotos %}<div class="revision-galeria">{% for foto in solicitud.fotos %}<img src="{{ foto }}" alt="{{ 'Portada' if loop.first else 'Foto ' ~ loop.index }}" loading="lazy">{% endfor %}</div>{% else %}<p>La solicitud aún no tiene fotos.</p>{% endif %}
 <p>{{ 'El autor autorizó mostrar su contacto.' if solicitud.contacto_publico else 'El contacto queda privado.' }}</p>
 <form>
@@ -35,6 +37,9 @@
 </form>
 {% if oferta %}<p><a class="btn clear" href="{{ oferta }}">Ver publicación en el Marketplace</a></p>{% endif %}
 {% if solicitud.estado != 'aprobada' %}
+{% if not precio or solicitud.acepta_contraentrega is none %}
+<p>Comparte el enlace de edición para que el ofertante confirme el precio y el pago contra entrega antes de aprobar.</p>
+{% else %}
 <form method="post" action="{{ url_for('marketplace.aprobar_publicacion') }}">
 <input type="hidden" name="token" value="{{ token }}">
 <input type="hidden" name="solicitud" value="{{ solicitud.id }}">
@@ -47,6 +52,7 @@
 {% elif terceros %}<p>Se asociará a {{ terceros[0].nombre }} · #{{ terceros[0].id }}.</p>{% endif %}
 <button type="submit" class="btn dark">Aprobar publicación</button>
 </form>
+{% endif %}
 {% endif %}
 </article>
 <script>

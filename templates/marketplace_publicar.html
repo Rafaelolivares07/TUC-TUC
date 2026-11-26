@@ -44,6 +44,13 @@
 <label>Celular<input type="tel" name="telefono" autocomplete="tel" maxlength="25" required{% if datos.get('id') %} readonly{% endif %} value="{{ datos.get('telefono') or (comprador or {}).get('telefono','') }}"></label>
 <label>Qué ofreces<select name="tipo"><option value="producto">Un producto</option><option value="servicio"{% if datos.get('tipo') == 'servicio' %} selected{% endif %}>Un servicio</option></select></label>
 <label>Título<input name="titulo" maxlength="120" required value="{{ datos.get('titulo','') }}"></label>
+<label>Precio (COP)<input name="precio" type="number" min="0.01" max="99999999.99" step="0.01" inputmode="decimal" required value="{{ datos.get('precio') or '' }}"></label>
+<label>¿Aceptas pago contra entrega en efectivo?
+<select name="contraentrega" required>
+<option value="">Selecciona una opción</option>
+<option value="si"{% if datos.get('acepta_contraentrega') is sameas true %} selected{% endif %}>Sí, acepto</option>
+<option value="no"{% if datos.get('acepta_contraentrega') is sameas false %} selected{% endif %}>No, acordaré el pago con el comprador</option>
+</select></label>
 <label>Descripción<textarea name="descripcion" maxlength="1000" required>{{ datos.get('descripcion','') }}</textarea></label>
 <label class="market-consent"><input type="checkbox" name="contacto_publico" value="1"{% if datos.get('contacto_publico') %} checked{% endif %}>Mostrar mi celular para contacto por WhatsApp</label>
 <label>Fotos <span class="photo-help">La primera será la portada. Puedes agregar o quitar fotos. El total comprimido admite {{ limite_fotos // 1048576 }} MB.</span>

@@ -16,6 +16,8 @@
 <main class="wrap"><article class="publication">
 <p>{{ producto.categoria }} · Publicación particular</p>
 <h1>{{ producto.nombre }}</h1>
+<p class="price"><strong>{{ precio ~ ' COP' if precio else 'Precio por confirmar' }}</strong></p>
+{% if producto.metodo_pago %}<p>{{ producto.metodo_pago }}</p>{% endif %}
 {% if fotos %}<div class="oferta-fotos">{% for foto in fotos %}<a href="{{ foto }}"><img src="{{ foto }}" alt="{{ 'Portada de ' ~ producto.nombre if loop.first else 'Foto ' ~ loop.index }}" loading="lazy"></a>{% endfor %}</div>{% endif %}
 <p>{{ producto.descripcion }}</p>
 {% if producto.contacto %}<p><a class="btn lime" href="https://wa.me/57{{ producto.contacto }}" rel="noreferrer">Contactar por WhatsApp</a></p>{% endif %}

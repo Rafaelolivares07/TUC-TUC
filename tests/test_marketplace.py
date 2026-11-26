@@ -159,16 +159,50 @@ class MarketplaceTest(unittest.TestCase):
         token = re.search(r'name="token" value="([^"]+)"', pagina.get_data(as_text=True)).group(1)
         form = MultiDict([("token", token), ("nombre", "Diana"), ("telefono", "3151112222"),
                           ("tipo", "producto"), ("titulo", "Oferta de prueba"),
-                          ("descripcion", "Descripción de prueba"), *[("fotos", foto) for foto in fotos]])
+                          ("descripcion", "Descripción de prueba"), ("precio", "12500,50"),
+                          ("contraentrega", "no"), *[("fotos", foto) for foto in fotos]])
         conn = Registro()
         with patch.object(marketplace, "get_db_connection", return_value=conn):
             respuesta = self.client.post("/marketplace/publicar", data=form, content_type="multipart/form-data")
         self.assertEqual(respuesta.status_code, 303)
         guardado = next(params for sql, params in conn.sql if "INSERT INTO marketplace_solicitudes" in sql)
-        self.assertEqual(json.loads(guardado[-2]), fotos)
+        self.assertEqual(json.loads(guardado[6]), fotos)
+        self.assertEqual(guardado[-2:], (Decimal("12500.50"), False))
         self.assertEqual(marketplace._fotos_publicacion([]), [])
         with self.assertRaises(ValueError):
             marketplace._fotos_publicacion(["data:image/jpeg;base64,AAAA"])
+
+    def test_publicar_pide_precio_positivo_y_respuesta_explicita_de_contraentrega(self):
+        import re
+
+        pagina = self.client.get("/marketplace/publicar")
+        html = pagina.get_data(as_text=True)
+        self.assertIn('name="precio"', html)
+        self.assertIn('name="contraentrega"', html)
+        token = re.search(r'name="token" value="([^"]+)"', html).group(1)
+        form = dict(token=token, nombre="Diana", telefono="3151112222",
+                    tipo="producto", titulo="Oferta", descripcion="Detalles")
+        with patch.object(marketplace, "_conexion_publicaciones") as conexion:
+            for precio, contraentrega in (("", "si"), ("0", "si"), ("100000000", "si"),
+                                           ("9.001", "si"), ("10000", "")):
+                respuesta = self.client.post("/marketplace/publicar",
+                                             data=dict(form, precio=precio, contraentrega=contraentrega))
+                self.assertEqual(respuesta.status_code, 400)
+            conexion.assert_not_called()
+
+    def test_ficha_muestra_precio_canonico_y_metodo_confirmado(self):
+        class Detalle(Registro):
+            def fetchall(self):
+                return []
+
+        fila = dict(id=95, nombre="Oferta", categoria="Productos", descripcion="Detalles",
+                    imagen=None, contacto=None, precio=Decimal("12500.50"),
+                    metodo_pago="Contraentrega en efectivo")
+        with patch.object(marketplace, "_conexion_publicaciones", return_value=Detalle(fila)):
+            ficha = self.client.get("/marketplace?oferta=95")
+        self.assertEqual(ficha.status_code, 200)
+        self.assertIn("$12.500,5 COP", ficha.get_data(as_text=True))
+        self.assertIn("Contraentrega en efectivo", ficha.get_data(as_text=True))
 
     def test_enlace_recupera_solicitud_anterior_y_rechaza_id_ajeno(self):
         with self.app.test_request_context():
@@ -257,24 +291,33 @@ class MarketplaceTest(unittest.TestCase):
         conn = Registro({"id": 95})
         solicitud = dict(id=27, nombre="Diana", telefono="3151112222", tipo="servicio",
                          titulo="Oferta", descripcion="Detalles", fotos=["portada", "galeria"],
-                         estado="recibida", revision=2, producto_id=None)
+                         estado="recibida", revision=2, producto_id=None,
+                         precio=Decimal("12500.50"), acepta_contraentrega=True)
         marketplace._aprobar_publicacion(conn, solicitud)
         alta = next(params for sql, params in conn.sql if "INSERT INTO productos" in sql)
-        self.assertEqual(alta, (95, "Oferta", "Servicios", "Detalles", "portada"))
+        self.assertEqual(alta, (95, "Oferta", "Servicios", "Detalles", "portada", Decimal("12500.50")))
+        self.assertTrue(any(params == ("contraentrega",) for sql, params in conn.sql
+                            if "FROM metodos_pago_catalogo" in sql))
+        self.assertTrue(any(params == (95, 95, 27) for sql, params in conn.sql
+                            if "metodo_pago_aprobado_id" in sql))
         self.assertTrue(any(params == (95, "galeria", 1) for sql, params in conn.sql
                             if "INSERT INTO producto_imagenes" in sql))
         conn.sql.clear()
-        solicitud["producto_id"] = 95
+        solicitud.update(producto_id=95, precio=Decimal("13900.00"), acepta_contraentrega=False)
         marketplace._aprobar_publicacion(conn, solicitud)
         self.assertFalse(any("INSERT INTO productos" in sql for sql, _ in conn.sql))
-        self.assertTrue(any("UPDATE productos" in sql for sql, _ in conn.sql))
+        self.assertTrue(any(params[-2:] == (Decimal("13900.00"), 95) for sql, params in conn.sql
+                            if "UPDATE productos" in sql))
+        self.assertTrue(any(params == (95, None, 27) for sql, params in conn.sql
+                            if "metodo_pago_aprobado_id" in sql))
 
     def test_aprobacion_exige_seleccion_si_hay_dos_terceros(self):
         from werkzeug.exceptions import Conflict
 
         conn = Registro({"id": 95})
         solicitud = dict(id=27, nombre="Diana", telefono="3151112222", tipo="producto",
-                         titulo="Oferta", descripcion="Detalles", fotos=[], producto_id=None)
+                         titulo="Oferta", descripcion="Detalles", fotos=[], producto_id=None,
+                         precio=Decimal("15000"), acepta_contraentrega=False)
         with patch.object(marketplace, "_terceros_de_publicacion", return_value=[{"id": 95}, {"id": 122}]):
             with self.assertRaises(Conflict):
                 marketplace._aprobar_publicacion(conn, solicitud)

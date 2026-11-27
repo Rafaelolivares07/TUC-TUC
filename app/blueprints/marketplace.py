@@ -461,24 +461,36 @@ def usuario_sesion():
     chat_tercero_id manda (lo escriben admin, core, crm, compras); si falta,
     usuario_id vale cuando el rol no es Administrador (tienda, restaurante,
     cliente, SU). Todo se valida contra terceros: lo que no existe se ignora.
+    Incluye los negocios donde vende (tiendas y restaurantes propios).
     """
     candidatos = [session.get("chat_tercero_id")]
     if session.get("rol") != "Administrador":
         candidatos.append(session.get("usuario_id"))
-    for tid in candidatos:
-        if type(tid) is not int or tid <= 0:
-            continue
-        conn = get_db_connection()
-        try:
+    candidatos = [c for c in candidatos if type(c) is int and c > 0]
+    if not candidatos:
+        return None
+    conn = get_db_connection()
+    try:
+        for tid in candidatos:
             fila = conn.execute(
                 "SELECT id, nombre, telefono, direccion FROM terceros WHERE id = %s",
                 (tid,),
             ).fetchone()
-        finally:
-            conn.close()
-        if fila:
+            if not fila:
+                continue
+            negs = conn.execute(
+                "SELECT 'tienda' AS tipo, nombre, slug FROM tiendas "
+                "WHERE tercero_id = %s AND activo IS TRUE "
+                "UNION ALL SELECT 'restaurante', nombre, slug FROM restaurantes "
+                "WHERE tercero_id = %s AND activo IS TRUE ORDER BY nombre",
+                (fila["id"], fila["id"]),
+            ).fetchall()
             return {"id": fila["id"], "nombre": fila["nombre"],
-                    "telefono": fila["telefono"] or "", "direccion": fila["direccion"] or ""}
+                    "telefono": fila["telefono"] or "", "direccion": fila["direccion"] or "",
+                    "negocios": [{"tipo": n["tipo"], "nombre": n["nombre"], "slug": n["slug"]}
+                                 for n in negs]}
+    finally:
+        conn.close()
     return None
 
 
@@ -560,6 +572,59 @@ def datos_pedido(data, *, restaurante=False):
         if not any(pedido[campo] for campo in ("sopa_id", "proteina_id", "principio_id")):
             raise ValueError("Selecciona las opciones de tu menú.")
     return pedido
+
+
+@bp.post("/api/marketplace/identificar")
+def identificar_comprador():
+    """Entrada con celular + PIN (mismo molde que rockola/identificar).
+
+    Con PIN correcto abre sesión de Cliente; en primer uso fija el PIN
+    (tercero existente sin PIN) o crea el tercero invitado (con nombre).
+    """
+    from werkzeug.security import check_password_hash, generate_password_hash
+    data = request.get_json(silent=True) or {}
+    telefono = (data.get("telefono") or "").strip()
+    nombre = (data.get("nombre") or "").strip()
+    pin = (data.get("pin") or "").strip()
+    tel_limpio = "".join(c for c in telefono if c.isdigit())
+    if not tel_limpio:
+        return jsonify(ok=False, error="Celular requerido."), 400
+    if len(pin) != 4 or not pin.isdigit():
+        return jsonify(ok=False, error="El PIN debe tener 4 números."), 400
+    conn = get_db_connection()
+    try:
+        tercero = conn.execute(
+            "SELECT id, nombre, pin_seguridad FROM terceros "
+            "WHERE REGEXP_REPLACE(COALESCE(telefono, ''), '[^0-9]', '', 'g') = %s LIMIT 1",
+            (tel_limpio,),
+        ).fetchone()
+        if tercero:
+            if tercero["pin_seguridad"]:
+                if not check_password_hash(tercero["pin_seguridad"], pin):
+                    return jsonify(ok=False, error="PIN incorrecto."), 401
+            else:
+                conn.execute("UPDATE terceros SET pin_seguridad = %s WHERE id = %s",
+                             (generate_password_hash(pin), tercero["id"]))
+                conn.commit()
+            tercero_id, nombre_final = tercero["id"], tercero["nombre"]
+        else:
+            if not nombre:
+                return jsonify(ok=False, error="Escribe tu nombre para crear tu cuenta."), 400
+            cur = conn.execute(
+                "INSERT INTO terceros (nombre, telefono, pin_seguridad, tipo_tercero) "
+                "VALUES (%s, %s, %s, 'invitado') RETURNING id",
+                (nombre, telefono, generate_password_hash(pin)),
+            )
+            tercero_id = cur.fetchone()["id"]
+            conn.commit()
+            nombre_final = nombre
+        session["usuario_id"] = tercero_id
+        session["nombre"] = nombre_final
+        session["telefono"] = telefono
+        session["rol"] = "Cliente"
+        return jsonify(ok=True, tercero_id=tercero_id, nombre=nombre_final)
+    finally:
+        conn.close()
 
 
 @bp.post("/api/marketplace/comprador")

@@ -14,7 +14,7 @@
 <header class="head"><div class="head-inner wrap">
 {% include 'marketplace_logo.html' %}
 <nav aria-label="Navegación principal"><a href="#explorar">Explorar</a><a href="#negocios">Para negocios</a><a href="#reparto">Reparto</a></nav>
-<a class="btn dark publish" href="{{ url_for('marketplace.publicar') }}">Publicar gratis</a><button class="btn clear mp-cart-btn" id="mp-cart-open" type="button">Carrito <b id="mp-cart-count">0</b></button>{% if usuario %}<span class="mp-hello">Hola, {{ usuario.nombre|e }}</span>{% else %}<a class="mp-login" href="/entrar">Entrar</a>{% endif %}
+<a class="btn dark publish" href="{{ url_for('marketplace.publicar') }}">Publicar gratis</a><button class="btn clear mp-cart-btn" id="mp-cart-open" type="button">Carrito <b id="mp-cart-count">0</b></button>{% if usuario %}<span class="mp-hello">Hola, {{ usuario.nombre|e }}</span>{% if usuario.negocios %}<span class="mp-sell">Vendes:{% for n in usuario.negocios %} <a href="https://{{ n.slug }}.tuc-tuc.co/" target="_blank" rel="noopener">{{ n.nombre|e }}</a>{% endfor %}</span>{% endif %}{% else %}<a class="mp-login" href="/entrar">Entrar</a>{% endif %}
 </div></header>
 <main id="inicio">
 {% if aviso %}<p class="wrap notice" role="status">Recibimos tu solicitud. Tu oferta aparecerá cuando quede confirmada.</p>{% endif %}
@@ -122,6 +122,11 @@ for (const button of plans) {
 #mp-cart-pay{display:grid;gap:8px}
 .mp-hello{font-weight:700;font-size:.9rem;white-space:nowrap}
 .mp-login{font-weight:700;font-size:.9rem;white-space:nowrap;text-decoration:underline;text-underline-offset:4px}
+.mp-sell{font-size:.82rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px}
+.mp-sell a{font-weight:700;text-decoration:underline;text-underline-offset:3px}
+.mp-pinrow{display:flex;gap:8px}
+.mp-pinrow input{flex:1;border:1px solid #c6d1c6;border-radius:9px;padding:10px;font:inherit;min-width:0}
+.mp-pinrow button{border:1px solid #829587;background:transparent;border-radius:9px;padding:10px 14px;font-weight:700;white-space:nowrap}
 @media(max-width:760px){.mp-hello{max-width:100px;overflow:hidden;text-overflow:ellipsis;font-size:.82rem}.mp-login{font-size:.82rem}}
 </style>
 <div class="mp-cart" id="mp-cart" hidden>
@@ -131,6 +136,7 @@ for (const button of plans) {
 <div class="mp-cart-contact">
 <label>Tu nombre<input id="mp-nombre" autocomplete="name"></label>
 <label>Celular<input id="mp-tel" inputmode="tel" autocomplete="tel"></label>
+<div class="mp-pinrow"><input id="mp-pin" inputmode="numeric" maxlength="4" placeholder="PIN (4 dígitos)" autocomplete="off"><button id="mp-pin-go" type="button">Entrar con PIN</button></div>
 </div>
 <div id="mp-cart-groups"></div>
 <p class="mp-cart-err" id="mp-cart-err" hidden></p>
@@ -293,6 +299,18 @@ document.getElementById('mp-cart-confirm').addEventListener('click', async () =>
   mpBadge();
   document.getElementById('mp-cart-open').addEventListener('click', () => { mpRender(); document.getElementById('mp-cart-pay').hidden = true; if (MP_USUARIO && MP_USUARIO.direccion) document.querySelectorAll('.mp-dir').forEach(d => { if (!d.value) d.value = MP_USUARIO.direccion; }); document.getElementById('mp-cart').hidden = false; });
   document.getElementById('mp-cart-close').addEventListener('click', () => { document.getElementById('mp-cart').hidden = true; });
+document.getElementById('mp-pin-go').addEventListener('click', async () => {
+  const err = document.getElementById('mp-cart-err');
+  err.hidden = true;
+  const nombre = document.getElementById('mp-nombre').value.trim();
+  const telefono = document.getElementById('mp-tel').value.trim();
+  const pin = document.getElementById('mp-pin').value.trim();
+  try {
+    const r = await mpPost('/api/marketplace/identificar', {nombre, telefono, pin});
+    if (!r.ok) throw new Error(r.error || 'No pudimos entrar.');
+    window.location.reload();
+  } catch (e) { err.textContent = e.message || 'Error de conexión.'; err.hidden = false; }
+});
   document.getElementById('mp-cart').addEventListener('click', (e) => { if (e.target.id === 'mp-cart') document.getElementById('mp-cart').hidden = true; });
 })();
 </script>

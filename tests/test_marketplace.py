@@ -424,6 +424,17 @@ class OfertasFalsas:
         pass
 
 
+class SesionConn(Registro):
+    def __init__(self, tercero=None, negocios=()):
+        super().__init__(tercero)
+        self.negocios = list(negocios)
+
+    def fetchall(self):
+        if self.sql and "UNION ALL" in self.sql[-1][0]:
+            return self.negocios
+        return super().fetchall()
+
+
 class CompraMarketplaceTest(unittest.TestCase):
     def setUp(self):
         self.app = Flask(__name__, template_folder="../templates")
@@ -528,7 +539,7 @@ class CompraMarketplaceTest(unittest.TestCase):
     def test_usuario_sesion_reconoce_todos_los_origenes(self):
         from flask import session as fsession
         fila = {"id": 61, "nombre": "David", "telefono": "3001112233", "direccion": "Calle 5"}
-        conn = Registro(fila)
+        conn = SesionConn(fila)
         casos = [
             {"chat_tercero_id": 61, "rol": "Administrador", "usuario_id": 4},
             {"usuario_id": 61, "rol": "Tienda"},
@@ -544,6 +555,7 @@ class CompraMarketplaceTest(unittest.TestCase):
             self.assertEqual(u["nombre"], "David")
             self.assertEqual(u["telefono"], "3001112233")
             self.assertEqual(u["direccion"], "Calle 5")
+            self.assertEqual(u["negocios"], [])
 
     def test_usuario_sesion_ignora_admin_sin_tercero_e_invitado(self):
         from flask import session as fsession
@@ -561,7 +573,7 @@ class CompraMarketplaceTest(unittest.TestCase):
         filas = [self._fila("productos")]
         fila_u = {"id": 61, "nombre": "David", "telefono": "3001112233", "direccion": "Calle 5"}
         with patch.object(marketplace, "_conexion_publicaciones", return_value=OfertasFalsas(filas)):
-            with patch.object(marketplace, "get_db_connection", return_value=Registro(fila_u)):
+            with patch.object(marketplace, "get_db_connection", return_value=SesionConn(fila_u)):
                 with self.client.session_transaction(base_url="https://tuc-tuc.co/") as s:
                     s["chat_tercero_id"] = 61
                 pagina = self.client.get("/marketplace", base_url="https://tuc-tuc.co/")
@@ -578,6 +590,74 @@ class CompraMarketplaceTest(unittest.TestCase):
         self.assertIn('href="/entrar"', html)
         self.assertNotIn('<span class="mp-hello">', html)
         self.assertIn("const MP_USUARIO = null;", html)
+        self.assertIn("mp-pinrow", html)
+        self.assertIn("/api/marketplace/identificar", html)
+
+    def test_usuario_sesion_trae_negocios_donde_vende(self):
+        from flask import session as fsession
+        fila = {"id": 61, "nombre": "David", "telefono": "3001112233", "direccion": None}
+        negs = [{"tipo": "tienda", "nombre": "Pitt", "slug": "pitt"},
+                {"tipo": "restaurante", "nombre": "Bistro", "slug": "bistro"}]
+        with self.app.test_request_context():
+            fsession["usuario_id"] = 61
+            fsession["rol"] = "Tienda"
+            with patch.object(marketplace, "get_db_connection",
+                              return_value=SesionConn(fila, negs)):
+                u = marketplace.usuario_sesion()
+        self.assertEqual([n["slug"] for n in u["negocios"]], ["pitt", "bistro"])
+
+    def test_portada_muestra_donde_vende(self):
+        filas = [self._fila("productos")]
+        fila_u = {"id": 61, "nombre": "David", "telefono": "3001112233", "direccion": None}
+        negs = [{"tipo": "tienda", "nombre": "Pitt", "slug": "pitt"}]
+        with patch.object(marketplace, "_conexion_publicaciones", return_value=OfertasFalsas(filas)):
+            with patch.object(marketplace, "get_db_connection",
+                              return_value=SesionConn(fila_u, negs)):
+                with self.client.session_transaction(base_url="https://tuc-tuc.co/") as s:
+                    s["usuario_id"] = 61
+                    s["rol"] = "Tienda"
+                pagina = self.client.get("/marketplace", base_url="https://tuc-tuc.co/")
+        html = pagina.get_data(as_text=True)
+        self.assertIn("Hola, David", html)
+        self.assertIn("Vendes:", html)
+        self.assertIn("https://pitt.tuc-tuc.co/", html)
+
+    def test_identificar_con_pin(self):
+        from werkzeug.security import generate_password_hash
+        bueno = generate_password_hash("1234")
+        with patch.object(marketplace, "get_db_connection",
+                          return_value=SesionConn({"id": 61, "nombre": "D",
+                                                   "pin_seguridad": bueno})):
+            r = self.client.post("/api/marketplace/identificar",
+                                 json={"telefono": "3001112233", "pin": "1234"})
+            self.assertEqual(r.json, {"ok": True, "tercero_id": 61, "nombre": "D"})
+            with self.client.session_transaction() as s:
+                self.assertEqual(s["usuario_id"], 61)
+                self.assertEqual(s["rol"], "Cliente")
+        with patch.object(marketplace, "get_db_connection",
+                          return_value=SesionConn({"id": 61, "nombre": "D",
+                                                   "pin_seguridad": bueno})):
+            r = self.client.post("/api/marketplace/identificar",
+                                 json={"telefono": "3001112233", "pin": "9999"})
+            self.assertEqual(r.status_code, 401)
+            self.assertIn("PIN incorrecto", r.json["error"])
+        conn = SesionConn({"id": 61, "nombre": "D", "pin_seguridad": None})
+        with patch.object(marketplace, "get_db_connection", return_value=conn):
+            r = self.client.post("/api/marketplace/identificar",
+                                 json={"telefono": "3001112233", "pin": "1234"})
+            self.assertTrue(r.json["ok"])
+            self.assertTrue(any("UPDATE terceros SET pin_seguridad" in s for s, _ in conn.sql))
+        with patch.object(marketplace, "get_db_connection", return_value=SesionConn(None)):
+            r = self.client.post("/api/marketplace/identificar",
+                                 json={"telefono": "3001112233", "pin": "1234"})
+            self.assertEqual(r.status_code, 400)
+            r = self.client.post("/api/marketplace/identificar",
+                                 json={"telefono": "3009998877", "nombre": "Nuevo",
+                                       "pin": "1234"})
+            self.assertEqual(r.json["tercero_id"], 51)
+            r = self.client.post("/api/marketplace/identificar",
+                                 json={"telefono": "3001112233", "pin": "12"})
+            self.assertEqual(r.status_code, 400)
 
     def test_busqueda_abre_externa_en_pestana_nueva(self):
         with open("../static/marketplace/busqueda.js", encoding="utf-8") as f:

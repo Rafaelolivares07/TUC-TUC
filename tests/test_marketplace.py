@@ -518,6 +518,13 @@ class CompraMarketplaceTest(unittest.TestCase):
         self.assertRegex(html, r'<a href="[^"]*oferta=95">')
         self.assertNotRegex(html, r"(?s)<a\b[^>]*>(?:(?!</a>).)*<a\b")
 
+    def test_tarjeta_deja_ver_boton_comprar(self):
+        filas = [self._fila("productos")]
+        with patch.object(marketplace, "_conexion_publicaciones", return_value=OfertasFalsas(filas)):
+            pagina = self.client.get("/marketplace", base_url="https://tuc-tuc.co/")
+        html = pagina.get_data(as_text=True)
+        self.assertIn(".card>a{height:auto}", html)
+
     def test_busqueda_abre_externa_en_pestana_nueva(self):
         with open("../static/marketplace/busqueda.js", encoding="utf-8") as f:
             js = f.read()

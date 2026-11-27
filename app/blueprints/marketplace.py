@@ -22,6 +22,8 @@ PUBLICACION = "__Host-tuctuc_publicar"
 VIGENCIA_PUBLICACION = 30 * 86400
 LIMITE_FOTOS_PUBLICACION = 7 * 1024 * 1024
 LIMITE_FOTO_PUBLICACION = 450_000
+LIMITE_ICONO_OFERTANTE = 160_000
+DIMENSION_ICONO_OFERTANTE = 320
 VIGENCIA_COMPRADOR = 90 * 24 * 60 * 60
 CATEGORIAS = {"": "Todo", "restaurantes": "Comida y bebidas",
               "productos": "Productos", "servicios": "Servicios"}
@@ -57,7 +59,9 @@ _PUBLICACIONES_APROBADAS = """
       FROM marketplace_solicitudes s JOIN productos p ON p.id=s.producto_id
      WHERE p.disponible IS TRUE
 """
-_ORIGEN_PUBLICACION = "CASE WHEN s.contacto_aprobado THEN s.nombre ELSE 'Publicación particular' END"
+_NOMBRE_OFERTANTE = """CASE WHEN s.contacto_aprobado OR s.icono_ofertante_aprobado IS NOT NULL
+                            THEN s.nombre END"""
+_ORIGEN_PUBLICACION = f"COALESCE({_NOMBRE_OFERTANTE}, 'Publicación particular')"
 _AMBITO_PRODUCTO = f"CASE WHEN {TIPO_OFERTA_SQL} = 'servicio' THEN 'servicios' ELSE 'productos' END"
 _AMBITO_CARTA = f"CASE WHEN {TIPO_OFERTA_SQL} = 'servicio' THEN 'servicios' ELSE 'restaurantes' END"
 
@@ -200,6 +204,7 @@ def _buscar(conn, q, ambito="", rubro="", pagina=1, sugerencias=False):
 
 _CONSULTAS_FOTO = {
     "publicaciones": f"SELECT p.imagen AS imagen {_PUBLICACIONES_APROBADAS} AND p.id = %s",
+    "ofertantes": f"SELECT s.icono_ofertante_aprobado AS imagen {_PUBLICACIONES_APROBADAS} AND p.id = %s",
     "platos": f"SELECT {_FOTO_PRODUCTO} AS imagen {_PLATOS_PUBLICOS} AND p.id = %s LIMIT 1",
     "productos": f"SELECT {_FOTO_PRODUCTO} AS imagen {_PRODUCTOS_PUBLICOS} AND p.id = %s LIMIT 1",
     "restaurantes": f"SELECT r.imagen_header AS imagen {_RESTAURANTES_PUBLICOS} AND r.id = %s",
@@ -237,16 +242,16 @@ def foto(tipo, oferta_id):
     consulta = _CONSULTAS_FOTO.get(tipo)
     if consulta is None or not 1 <= oferta_id <= 2_147_483_647:
         abort(404)
-    conn = _conexion_publicaciones() if tipo == "publicaciones" else get_db_connection()
+    conn = _conexion_publicaciones() if tipo in ("publicaciones", "ofertantes") else get_db_connection()
     try:
         fila = conn.execute(consulta, (oferta_id,)).fetchone()
     finally:
         conn.close()
 
-    return _servir_imagen(fila)
+    return _servir_imagen(fila, max_age=0 if tipo == "ofertantes" else 300)
 
 
-def _servir_imagen(fila):
+def _servir_imagen(fila, max_age=300):
     imagen = fila["imagen"] if fila else None
     if not imagen or len(imagen) > _LIMITE_FOTO:
         abort(404)
@@ -265,7 +270,9 @@ def _servir_imagen(fila):
     respuesta.mimetype = formato
     respuesta.headers["X-Content-Type-Options"] = "nosniff"
     respuesta.cache_control.public = True
-    respuesta.cache_control.max_age = 300
+    respuesta.cache_control.max_age = max_age
+    if max_age == 0:
+        respuesta.cache_control.must_revalidate = True
     respuesta.add_etag()
     return respuesta.make_conditional(request)
 
@@ -311,7 +318,9 @@ def _detalle_publicacion(producto_id):
                    left(p.imagen,1501) AS imagen,
                    (SELECT nombre FROM metodos_pago_catalogo
                      WHERE id=s.metodo_pago_aprobado_id AND activo IS TRUE) AS metodo_pago,
-                   CASE WHEN s.contacto_aprobado THEN s.telefono ELSE NULL END AS contacto
+                   CASE WHEN s.contacto_aprobado THEN s.telefono ELSE NULL END AS contacto,
+                   {_NOMBRE_OFERTANTE} AS nombre_ofertante,
+                   s.icono_ofertante_aprobado IS NOT NULL AS tiene_icono_ofertante
               {_PUBLICACIONES_APROBADAS} AND p.id=%s
         """, (producto_id,)).fetchone()
         if not fila:
@@ -576,14 +585,16 @@ def _crear_solicitudes(conn):
         ADD COLUMN IF NOT EXISTS revision integer NOT NULL DEFAULT 1,
         ADD COLUMN IF NOT EXISTS contacto_publico boolean NOT NULL DEFAULT FALSE,
         ADD COLUMN IF NOT EXISTS contacto_aprobado boolean NOT NULL DEFAULT FALSE,
-    ADD COLUMN IF NOT EXISTS precio numeric(10,2) CHECK (precio > 0),
-    ADD COLUMN IF NOT EXISTS acepta_contraentrega boolean,
-    ADD COLUMN IF NOT EXISTS metodo_pago_aprobado_id integer REFERENCES metodos_pago_catalogo(id)
+        ADD COLUMN IF NOT EXISTS icono_ofertante text,
+        ADD COLUMN IF NOT EXISTS icono_ofertante_aprobado text,
+        ADD COLUMN IF NOT EXISTS precio numeric(10,2) CHECK (precio > 0),
+        ADD COLUMN IF NOT EXISTS acepta_contraentrega boolean,
+        ADD COLUMN IF NOT EXISTS metodo_pago_aprobado_id integer REFERENCES metodos_pago_catalogo(id)
     """)
     conn.commit()
 
 
-def _fotos_publicacion(fotos):
+def _fotos_publicacion(fotos, *, limite_foto=LIMITE_FOTO_PUBLICACION, dimension=800):
     if sum(map(len, fotos)) > LIMITE_FOTOS_PUBLICACION:
         raise ValueError("Las fotos superan el tamaño total permitido.")
     if not fotos:
@@ -592,13 +603,13 @@ def _fotos_publicacion(fotos):
 
     for foto in fotos:
         encabezado, separador, contenido = foto.partition(",")
-        if (len(foto) > LIMITE_FOTO_PUBLICACION or not separador
+        if (len(foto) > limite_foto or not separador
                 or encabezado != "data:image/jpeg;base64"):
             raise ValueError("Una foto supera el tamaño permitido o tiene un formato inválido.")
         try:
             datos = b64decode(contenido, validate=True)
             with Image.open(BytesIO(datos), formats=("JPEG",)) as imagen:
-                if max(imagen.size) > 800:
+                if max(imagen.size) > dimension:
                     raise ValueError("Una foto supera el tamaño permitido. Vuelve a seleccionarla.")
                 imagen.load()
         except (ErrorBase64, OSError, Image.DecompressionBombError):
@@ -610,7 +621,8 @@ def _formulario_publicacion(token, datos, error=None, solicitudes=(), aviso=Fals
     return render_template(
         "marketplace_publicar.html", token=token, comprador=datos_comprador(), datos=datos,
         error=error, limite_fotos=LIMITE_FOTOS_PUBLICACION, limite_foto=LIMITE_FOTO_PUBLICACION,
-        solicitudes=solicitudes, aviso=aviso,
+        solicitudes=solicitudes, aviso=aviso, limite_icono=LIMITE_ICONO_OFERTANTE,
+        dimension_icono=DIMENSION_ICONO_OFERTANTE,
     )
 
 
@@ -653,7 +665,7 @@ def _solicitudes_editor(identidades, actual=None):
         ).fetchall()
         seleccion = conn.execute(
             """SELECT s.id, s.nombre, s.telefono, s.tipo, s.titulo, s.descripcion, s.fotos, s.estado,
-                      s.revision, s.contacto_publico, s.acepta_contraentrega,
+                      s.revision, s.contacto_publico, s.acepta_contraentrega, s.icono_ofertante,
                       COALESCE(s.precio, NULLIF(p.precio,0)) AS precio
                  FROM marketplace_solicitudes s LEFT JOIN productos p ON p.id=s.producto_id
                 WHERE s.id = %s""", (actual,)
@@ -721,6 +733,13 @@ def recibir_publicacion():
     datos["contacto_publico"] = request.form.get("contacto_publico") == "1"
     datos["precio"] = request.form.get("precio", "").strip()
     datos["acepta_contraentrega"] = {"si": True, "no": False}.get(request.form.get("contraentrega"))
+    icono = request.form.get("icono_ofertante")
+    if icono:
+        try:
+            _fotos_publicacion([icono], limite_foto=LIMITE_ICONO_OFERTANTE, dimension=DIMENSION_ICONO_OFERTANTE)
+        except ValueError:
+            return _formulario_publicacion(token, datos, "Vuelve a seleccionar el ícono del ofertante."), 400
+    datos["icono_ofertante"] = icono
     if not all(datos[k] for k in ("nombre", "telefono", "tipo", "titulo", "descripcion")) or datos["tipo"] not in ("producto", "servicio"):
         return _formulario_publicacion(token, datos, "Completa los datos y escribe un celular colombiano válido."), 400
     try:
@@ -743,11 +762,14 @@ def recibir_publicacion():
                       SET tipo=%s, titulo=%s, descripcion=%s, fotos=%s::jsonb,
                           precio=%s, acepta_contraentrega=%s,
                           contacto_publico=%s, contacto_aprobado=contacto_aprobado AND %s,
+                          icono_ofertante=CASE WHEN %s THEN %s ELSE icono_ofertante END,
+                          icono_ofertante_aprobado=CASE WHEN %s THEN NULL ELSE icono_ofertante_aprobado END,
                           estado='recibida', revision=revision+1
                     WHERE id=%s AND revision=%s RETURNING id, nombre, telefono""",
                 (datos["tipo"], datos["titulo"], datos["descripcion"], json.dumps(fotos),
                  precio, datos["acepta_contraentrega"], datos["contacto_publico"],
-                 datos["contacto_publico"], solicitud_id, datos["revision"]),
+                 datos["contacto_publico"], icono is not None, icono or None, icono == "",
+                 solicitud_id, datos["revision"]),
             ).fetchone()
             if not fila:
                 return _formulario_publicacion(token, datos, "La publicación cambió. Ábrela de nuevo antes de guardar."), 409
@@ -755,12 +777,12 @@ def recibir_publicacion():
             fila = conn.execute(
                 """INSERT INTO marketplace_solicitudes
                           (token, nombre, telefono, tipo, titulo, descripcion, fotos, contacto_publico,
-                           precio, acepta_contraentrega)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s)
+                           precio, acepta_contraentrega, icono_ofertante)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s)
                    ON CONFLICT (token) DO NOTHING RETURNING id, nombre, telefono""",
                 (token, datos["nombre"], datos["telefono"], datos["tipo"], datos["titulo"],
                  datos["descripcion"], json.dumps(fotos), datos["contacto_publico"], precio,
-                 datos["acepta_contraentrega"]),
+                 datos["acepta_contraentrega"], icono or None),
             ).fetchone()
             if not fila:
                 fila = conn.execute(
@@ -815,7 +837,7 @@ def revisar_publicaciones():
         ).fetchall()
         solicitud = conn.execute(
             """SELECT id, titulo, nombre, telefono, tipo, estado, descripcion, fotos, revision,
-                      producto_id, contacto_publico, precio, acepta_contraentrega
+                      producto_id, contacto_publico, precio, acepta_contraentrega, icono_ofertante
                  FROM marketplace_solicitudes WHERE id=%s""",
             (solicitud_id,),
         ).fetchone() if solicitud_id is not None else None
@@ -906,7 +928,7 @@ def _aprobar_publicacion(conn, solicitud, tercero_elegido=None):
     conn.execute(
         """UPDATE marketplace_solicitudes
               SET producto_id=%s, estado='aprobada', revision=revision+1, contacto_aprobado=contacto_publico,
-                  metodo_pago_aprobado_id=%s
+                  metodo_pago_aprobado_id=%s, icono_ofertante_aprobado=icono_ofertante
             WHERE id=%s""",
         (producto_id, metodo_pago, solicitud["id"]),
     )

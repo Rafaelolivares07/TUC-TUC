@@ -12,7 +12,8 @@
 .publication .photo-preview img {width:100%;height:auto;aspect-ratio:1;object-fit:cover;border-radius:8px}
 .publication .photo-preview small {font-weight:700}
 .publication .photo-preview button {min-height:35px;padding:4px 9px}
-.publication #market-fotos-error:empty {display:none}
+.publication #market-fotos-error:empty,.publication #market-icono-error:empty {display:none}
+.publication #market-icono-quitar {min-height:35px;padding:4px 9px}
 .publication button:disabled {opacity:.65;cursor:wait}
 .publication .market-consent{display:flex;align-items:center;gap:8px}
 .publication .market-consent input{width:auto}
@@ -20,8 +21,8 @@
 .publication .market-mias a{display:block;padding:8px 0}
 </style>
 {% if token %}
-<script src="{{ url_for('static', filename='JS/imagen_producto.js', v=1) }}" defer></script>
-<script src="{{ url_for('static', filename='marketplace/publicar_fotos.js', v=2) }}" defer></script>
+<script src="{{ url_for('static', filename='JS/imagen_producto.js', v=2) }}" defer></script>
+<script src="{{ url_for('static', filename='marketplace/publicar_fotos.js', v=3) }}" defer></script>
 {% endif %}
 </head>
 <body>
@@ -42,6 +43,16 @@
 {% if datos.get('id') %}<input type="hidden" name="solicitud" value="{{ datos.id }}"><input type="hidden" name="revision" value="{{ datos.revision }}">{% endif %}
 <label>Tu nombre<input name="nombre" autocomplete="name" maxlength="100" required{% if datos.get('id') %} readonly{% endif %} value="{{ datos.get('nombre') or (comprador or {}).get('nombre','') }}"></label>
 <label>Celular<input type="tel" name="telefono" autocomplete="tel" maxlength="25" required{% if datos.get('id') %} readonly{% endif %} value="{{ datos.get('telefono') or (comprador or {}).get('telefono','') }}"></label>
+<label>Ícono del ofertante (opcional)
+<span class="photo-help" id="market-icono-ayuda">Agrega tu logo o una foto. Aparecerá junto a tu nombre cuando se apruebe la publicación.</span>
+<input id="market-icono" type="file" accept="image/jpeg,image/png,image/webp" disabled aria-describedby="market-icono-ayuda market-icono-error" data-limite="{{ limite_icono }}" data-dimension="{{ dimension_icono }}">
+</label>
+<input id="market-icono-valor" type="hidden" name="icono_ofertante" value="{{ datos.get('icono_ofertante') or '' }}"{% if datos.get('icono_ofertante') is none %} disabled{% endif %}>
+<div id="market-icono-preview" class="market-ofertante"{% if not datos.get('icono_ofertante') %} hidden{% endif %}>
+<img class="market-ofertante-icono" alt="Vista previa del ícono"{% if datos.get('icono_ofertante') %} src="{{ datos.icono_ofertante }}"{% endif %}>
+<button id="market-icono-quitar" class="btn clear" type="button" hidden>Quitar ícono</button>
+</div>
+<p id="market-icono-error" class="error" role="alert"></p>
 <label>Qué ofreces<select name="tipo"><option value="producto">Un producto</option><option value="servicio"{% if datos.get('tipo') == 'servicio' %} selected{% endif %}>Un servicio</option></select></label>
 <label>Título<input name="titulo" maxlength="120" required value="{{ datos.get('titulo','') }}"></label>
 <label>Precio (COP)<input name="precio" type="number" min="0.01" max="99999999.99" step="0.01" inputmode="decimal" required value="{{ datos.get('precio') or '' }}"></label>

@@ -1,4 +1,4 @@
-function procesarImagen(file, maxSize, quality, callback, onError = () => {}) {
+function procesarImagen(file, maxSize, quality, callback, onError = () => {}, fondo = null) {
     const reader = new FileReader();
     reader.onerror = onError;
     reader.onload = e => {
@@ -12,7 +12,12 @@ function procesarImagen(file, maxSize, quality, callback, onError = () => {}) {
                 else { w = w * maxSize / h; h = maxSize; }
             }
             canvas.width = w; canvas.height = h;
-            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            const ctx = canvas.getContext('2d');
+            if (fondo) {
+                ctx.fillStyle = fondo;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+            ctx.drawImage(img, 0, 0, w, h);
             callback(canvas.toDataURL('image/jpeg', quality));
         };
         img.src = e.target.result;

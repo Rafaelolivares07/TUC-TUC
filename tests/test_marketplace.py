@@ -178,14 +178,15 @@ class MarketplaceTest(unittest.TestCase):
         form = MultiDict([("token", token), ("nombre", "Diana"), ("telefono", "3151112222"),
                           ("tipo", "producto"), ("titulo", "Oferta de prueba"),
                           ("descripcion", "Descripción de prueba"), ("precio", "12500,50"),
-                          ("contraentrega", "no"), *[("fotos", foto) for foto in fotos]])
+                          ("contraentrega", "no"), ("icono_ofertante", fotos[0]),
+                          *[("fotos", foto) for foto in fotos]])
         conn = Registro()
         with patch.object(marketplace, "get_db_connection", return_value=conn):
             respuesta = self.client.post("/marketplace/publicar", data=form, content_type="multipart/form-data")
         self.assertEqual(respuesta.status_code, 303)
         guardado = next(params for sql, params in conn.sql if "INSERT INTO marketplace_solicitudes" in sql)
         self.assertEqual(json.loads(guardado[6]), fotos)
-        self.assertEqual(guardado[-2:], (Decimal("12500.50"), False))
+        self.assertEqual(guardado[-3:], (Decimal("12500.50"), False, fotos[0]))
         self.assertEqual(marketplace._fotos_publicacion([]), [])
         with self.assertRaises(ValueError):
             marketplace._fotos_publicacion(["data:image/jpeg;base64,AAAA"])
@@ -197,6 +198,7 @@ class MarketplaceTest(unittest.TestCase):
         html = pagina.get_data(as_text=True)
         self.assertIn('name="precio"', html)
         self.assertIn('name="contraentrega"', html)
+        self.assertIn('name="icono_ofertante"', html)
         token = re.search(r'name="token" value="([^"]+)"', html).group(1)
         form = dict(token=token, nombre="Diana", telefono="3151112222",
                     tipo="producto", titulo="Oferta", descripcion="Detalles")
@@ -215,12 +217,28 @@ class MarketplaceTest(unittest.TestCase):
 
         fila = dict(id=95, nombre="Oferta", categoria="Productos", descripcion="Detalles",
                     imagen=None, contacto=None, precio=Decimal("12500.50"),
-                    metodo_pago="Contraentrega en efectivo")
+                    metodo_pago="Contraentrega en efectivo", nombre_ofertante="Diana",
+                    tiene_icono_ofertante=True)
         with patch.object(marketplace, "_conexion_publicaciones", return_value=Detalle(fila)):
             ficha = self.client.get("/marketplace?oferta=95")
         self.assertEqual(ficha.status_code, 200)
         self.assertIn("$12.500,5 COP", ficha.get_data(as_text=True))
-        self.assertIn("Contraentrega en efectivo", ficha.get_data(as_text=True))
+        html = ficha.get_data(as_text=True)
+        self.assertIn("Contraentrega en efectivo", html)
+        self.assertIn("Ofrecido por <strong>Diana</strong>", html)
+        self.assertIn("/static/marketplace/fotos/ofertantes/95", html)
+        self.assertNotIn("wa.me", html)
+
+    def test_foto_del_ofertante_usa_solo_el_icono_aprobado(self):
+        ruta = "/static/marketplace/fotos/ofertantes/95"
+        conn = Registro({"imagen": None})
+        with patch.object(marketplace, "_conexion_publicaciones", return_value=conn):
+            self.assertEqual(self.client.get(ruta).status_code, 404)
+            self.assertIn("s.icono_ofertante_aprobado AS imagen", conn.sql[-1][0])
+            conn.tercero["imagen"] = "data:image/jpeg;base64,/9j/2Q=="
+            icono = self.client.get(ruta)
+        self.assertEqual(icono.mimetype, "image/jpeg")
+        self.assertIn("must-revalidate", icono.headers["Cache-Control"])
 
     def test_enlace_recupera_solicitud_anterior_y_rechaza_id_ajeno(self):
         with self.app.test_request_context():
@@ -316,8 +334,10 @@ class MarketplaceTest(unittest.TestCase):
         self.assertEqual(alta, (95, "Oferta", "Servicios", "Detalles", "portada", Decimal("12500.50"), "servicio"))
         self.assertTrue(any(params == ("contraentrega",) for sql, params in conn.sql
                             if "FROM metodos_pago_catalogo" in sql))
-        self.assertTrue(any(params == (95, 95, 27) for sql, params in conn.sql
-                            if "metodo_pago_aprobado_id" in sql))
+        aprobacion_sql, params = next((sql, params) for sql, params in conn.sql
+                                      if "metodo_pago_aprobado_id" in sql)
+        self.assertEqual(params, (95, 95, 27))
+        self.assertIn("icono_ofertante_aprobado=icono_ofertante", aprobacion_sql)
         self.assertTrue(any(params == (95, "galeria", 1) for sql, params in conn.sql
                             if "INSERT INTO producto_imagenes" in sql))
         conn.sql.clear()

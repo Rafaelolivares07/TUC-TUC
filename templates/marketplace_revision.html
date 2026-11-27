@@ -25,7 +25,10 @@
 {% if solicitud %}
 <article class="revision-detalle">
 <h2>{{ solicitud.titulo }}</h2>
-<p>{{ solicitud.nombre }} · {{ solicitud.telefono }} · {{ solicitud.tipo }}</p>
+<p class="market-ofertante">
+{% if solicitud.icono_ofertante %}<img class="market-ofertante-icono" src="{{ solicitud.icono_ofertante }}" alt="Ícono del ofertante">{% endif %}
+<span>{{ solicitud.nombre }} · {{ solicitud.telefono }} · {{ solicitud.tipo }}</span>
+</p>
 <p>{{ solicitud.descripcion }}</p>
 <p><strong>Precio</strong> {{ precio or 'Por confirmar' }}{% if precio %} COP{% endif %}</p>
 <p><strong>Pago contra entrega</strong> {% if solicitud.acepta_contraentrega is none %}Por confirmar{% elif solicitud.acepta_contraentrega %}Aceptado en efectivo{% else %}El ofertante indicó que no{% endif %}</p>

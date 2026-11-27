@@ -3,6 +3,12 @@
   const picker = document.getElementById('market-fotos');
   const preview = document.getElementById('market-fotos-preview');
   const feedback = document.getElementById('market-fotos-error');
+  const iconPicker = document.getElementById('market-icono');
+  const iconValue = document.getElementById('market-icono-valor');
+  const iconPreview = document.getElementById('market-icono-preview');
+  const iconImage = iconPreview.querySelector('img');
+  const iconRemove = document.getElementById('market-icono-quitar');
+  const iconFeedback = document.getElementById('market-icono-error');
   const submit = form.querySelector('button[type=submit]');
   const fotos = Array.from(preview.querySelectorAll('input[name=fotos]'), input => input.value);
   let occupied = false;
@@ -44,10 +50,53 @@
     occupied = value;
     submit.disabled = value;
     picker.disabled = value;
+    iconPicker.disabled = value;
+    iconRemove.disabled = value;
+  }
+
+  function renderIcon() {
+    const image = iconValue.value;
+    if (image) iconImage.src = image;
+    else iconImage.removeAttribute('src');
+    iconPreview.hidden = !image;
   }
 
   render();
-  picker.disabled = false;
+  renderIcon();
+  iconRemove.hidden = false;
+  busy(false);
+
+  iconPicker.addEventListener('change', async () => {
+    const file = iconPicker.files[0];
+    if (!file) return;
+    busy(true);
+    iconFeedback.textContent = '';
+    try {
+      const size = Number(iconPicker.dataset.dimension);
+      const image = await new Promise((resolve, reject) => procesarImagen(file, size, 0.8, resolve, reject, "#fff"));
+      if (image.length > Number(iconPicker.dataset.limite)) {
+        iconFeedback.textContent = 'El ícono es demasiado pesado. Prueba con otra imagen.';
+        return;
+      }
+      iconValue.value = image;
+      iconValue.disabled = false;
+      renderIcon();
+    } catch {
+      iconFeedback.textContent = 'No se pudo leer el ícono. Prueba con JPEG, PNG o WebP.';
+    } finally {
+      iconPicker.value = '';
+      busy(false);
+    }
+  });
+
+  iconRemove.addEventListener('click', () => {
+    iconValue.value = '';
+    iconValue.disabled = false;
+    iconFeedback.textContent = '';
+    renderIcon();
+    iconPicker.focus();
+  });
+
   picker.addEventListener('change', async () => {
     const files = Array.from(picker.files);
     if (!files.length) return;

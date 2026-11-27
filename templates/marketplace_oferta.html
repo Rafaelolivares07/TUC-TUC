@@ -20,6 +20,12 @@
 {% if producto.metodo_pago %}<p>{{ producto.metodo_pago }}</p>{% endif %}
 {% if fotos %}<div class="oferta-fotos">{% for foto in fotos %}<a href="{{ foto }}"><img src="{{ foto }}" alt="{{ 'Portada de ' ~ producto.nombre if loop.first else 'Foto ' ~ loop.index }}" loading="lazy"></a>{% endfor %}</div>{% endif %}
 <p>{{ producto.descripcion }}</p>
+{% if producto.nombre_ofertante %}
+<p class="market-ofertante">
+{% if producto.tiene_icono_ofertante %}<img class="market-ofertante-icono" src="{{ url_for('marketplace.foto', tipo='ofertantes', oferta_id=producto.id) }}" alt="">{% endif %}
+<span>Ofrecido por <strong>{{ producto.nombre_ofertante }}</strong></span>
+</p>
+{% endif %}
 {% if producto.contacto %}<p><a class="btn lime" href="https://wa.me/57{{ producto.contacto }}" rel="noreferrer">Contactar por WhatsApp</a></p>{% endif %}
 <p><a class="btn clear" href="{{ url_for('marketplace.portada') }}#explorar">Volver al Marketplace</a></p>
 </article></main>

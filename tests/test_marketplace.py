@@ -525,6 +525,60 @@ class CompraMarketplaceTest(unittest.TestCase):
         html = pagina.get_data(as_text=True)
         self.assertIn(".card>a{height:auto}", html)
 
+    def test_usuario_sesion_reconoce_todos_los_origenes(self):
+        from flask import session as fsession
+        fila = {"id": 61, "nombre": "David", "telefono": "3001112233", "direccion": "Calle 5"}
+        conn = Registro(fila)
+        casos = [
+            {"chat_tercero_id": 61, "rol": "Administrador", "usuario_id": 4},
+            {"usuario_id": 61, "rol": "Tienda"},
+            {"usuario_id": 61, "rol": "Restaurante"},
+            {"usuario_id": 61, "rol": "Cliente"},
+        ]
+        for ses in casos:
+            with self.app.test_request_context():
+                for k, v in ses.items():
+                    fsession[k] = v
+                with patch.object(marketplace, "get_db_connection", return_value=conn):
+                    u = marketplace.usuario_sesion()
+            self.assertEqual(u["nombre"], "David")
+            self.assertEqual(u["telefono"], "3001112233")
+            self.assertEqual(u["direccion"], "Calle 5")
+
+    def test_usuario_sesion_ignora_admin_sin_tercero_e_invitado(self):
+        from flask import session as fsession
+        conn = Registro(None)
+        with self.app.test_request_context():
+            fsession["usuario_id"] = 4
+            fsession["rol"] = "Administrador"
+            with patch.object(marketplace, "get_db_connection", return_value=conn):
+                self.assertIsNone(marketplace.usuario_sesion())
+        with self.app.test_request_context():
+            with patch.object(marketplace, "get_db_connection", return_value=conn):
+                self.assertIsNone(marketplace.usuario_sesion())
+
+    def test_portada_saluda_y_prellena(self):
+        filas = [self._fila("productos")]
+        fila_u = {"id": 61, "nombre": "David", "telefono": "3001112233", "direccion": "Calle 5"}
+        with patch.object(marketplace, "_conexion_publicaciones", return_value=OfertasFalsas(filas)):
+            with patch.object(marketplace, "get_db_connection", return_value=Registro(fila_u)):
+                with self.client.session_transaction(base_url="https://tuc-tuc.co/") as s:
+                    s["chat_tercero_id"] = 61
+                pagina = self.client.get("/marketplace", base_url="https://tuc-tuc.co/")
+        html = pagina.get_data(as_text=True)
+        self.assertIn("Hola, David", html)
+        self.assertIn('"telefono": "3001112233"', html)
+        self.assertNotIn('href="/entrar"', html)
+
+    def test_portada_invitada_muestra_entrar(self):
+        filas = [self._fila("productos")]
+        with patch.object(marketplace, "_conexion_publicaciones", return_value=OfertasFalsas(filas)):
+            pagina = self.client.get("/marketplace", base_url="https://tuc-tuc.co/")
+        html = pagina.get_data(as_text=True)
+        self.assertIn('href="/entrar"', html)
+        self.assertNotIn('<span class="mp-hello">', html)
+        self.assertIn("const MP_USUARIO = null;", html)
+
     def test_busqueda_abre_externa_en_pestana_nueva(self):
         with open("../static/marketplace/busqueda.js", encoding="utf-8") as f:
             js = f.read()

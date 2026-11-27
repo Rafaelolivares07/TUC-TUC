@@ -424,6 +424,7 @@ def portada():
     return render_template(
         "marketplace.html", ofertas=ofertas, busqueda=busqueda, categoria=categoria, categorias=CATEGORIAS,
         rubro=rubro, pagina=pagina, siguiente=len(filas) > LIMITE, comprador=datos_comprador(),
+        usuario=usuario_sesion(),
         aviso=request.args.get("publicacion") == "recibida",
     )
 
@@ -452,6 +453,33 @@ def _perfil_comprador():
 def datos_comprador():
     perfil = _perfil_comprador()
     return {campo: perfil[campo] for campo in ("nombre", "telefono")} if perfil else None
+
+
+def usuario_sesion():
+    """Tercero identificado por la sesión TucTuc (admin, negocio, cliente, SU).
+
+    chat_tercero_id manda (lo escriben admin, core, crm, compras); si falta,
+    usuario_id vale cuando el rol no es Administrador (tienda, restaurante,
+    cliente, SU). Todo se valida contra terceros: lo que no existe se ignora.
+    """
+    candidatos = [session.get("chat_tercero_id")]
+    if session.get("rol") != "Administrador":
+        candidatos.append(session.get("usuario_id"))
+    for tid in candidatos:
+        if type(tid) is not int or tid <= 0:
+            continue
+        conn = get_db_connection()
+        try:
+            fila = conn.execute(
+                "SELECT id, nombre, telefono, direccion FROM terceros WHERE id = %s",
+                (tid,),
+            ).fetchone()
+        finally:
+            conn.close()
+        if fila:
+            return {"id": fila["id"], "nombre": fila["nombre"],
+                    "telefono": fila["telefono"] or "", "direccion": fila["direccion"] or ""}
+    return None
 
 
 def _recordar(respuesta, nombre, telefono, cliente_id=None):

@@ -144,9 +144,10 @@
 <div class="{{ 'max-w-lg' if (tienda.desktop_layout or 'movil') == 'movil' else ('max-w-5xl' if tienda.desktop_layout == 'ampliado' else 'max-w-7xl') }} mx-auto">
 
     <!-- Header / Portada -->
-    {% if tienda.imagen_header or tienda.imagen_header_movil %}
+    {% set tiene_portada = tienda.imagen_header or tienda.imagen_header_movil %}
+    {% set mostrar_titulo = not tiene_portada or tienda.mostrar_nombre | default(true) %}
+    {% if tiene_portada %}
     {% set header_img = tienda.imagen_header or tienda.imagen_header_movil %}
-    <div>
         <div class="header-wrap">
             <picture>
                 {% if tienda.imagen_header_movil %}
@@ -161,24 +162,16 @@
                 <img src="{{ header_img }}" class="img-principal" alt="{{ tienda.nombre }}">
             </picture>
         </div>
-        {% if tienda.mostrar_nombre | default(true) %}
-        <div class="store-intro px-4 pt-4 pb-3 text-center">
-            <h1 class="text-2xl font-extrabold txt-primary tracking-tight leading-snug drop-shadow-sm">{{ tienda.nombre }}</h1>
-            {% if tienda.descripcion %}
-            <p class="text-sm txt-secondary mt-2 leading-relaxed max-w-sm mx-auto opacity-90">{{ tienda.descripcion }}</p>
-            {% endif %}
-        </div>
-        {% else %}
-        {% if tienda.descripcion %}
-        <div class="store-intro px-4 pt-3 pb-2 text-center">
-            <p class="text-sm txt-secondary leading-relaxed max-w-sm mx-auto opacity-90">{{ tienda.descripcion }}</p>
-        </div>
+    {% endif %}
+    {% if tienda.logo or mostrar_titulo or tienda.descripcion %}
+    <div class="store-intro text-center {{ 'px-4 pt-4 pb-3' if tiene_portada else 'px-6 pt-6 pb-3' }}">
+        {% if tienda.logo %}
+        <img src="{{ tienda.logo }}" alt="Logo de {{ tienda.nombre }}" width="80" height="80"
+             class="mx-auto mb-3 rounded-md object-contain" referrerpolicy="no-referrer">
         {% endif %}
-        {% endif %}
-    </div>
-    {% else %}
-    <div class="store-intro px-6 pt-6 pb-3 text-center">
+        {% if mostrar_titulo %}
         <h1 class="text-2xl font-extrabold txt-primary tracking-tight leading-snug drop-shadow-sm">{{ tienda.nombre }}</h1>
+        {% endif %}
         {% if tienda.descripcion %}
         <p class="text-sm txt-secondary mt-2 leading-relaxed max-w-sm mx-auto opacity-90">{{ tienda.descripcion }}</p>
         {% endif %}

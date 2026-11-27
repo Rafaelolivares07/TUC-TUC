@@ -848,7 +848,9 @@ def tienda_publica(slug):
     try:
         _crear_tablas(conn)
         tienda = conn.execute(
-            "SELECT * FROM tiendas WHERE slug = %s AND activo = TRUE", (slug,)
+            """SELECT t.*, negocio.foto_perfil AS logo
+                 FROM tiendas t LEFT JOIN terceros negocio ON negocio.id = t.tercero_id
+                WHERE t.slug = %s AND t.activo = TRUE""", (slug,)
         ).fetchone()
         if not tienda:
             return "Tienda no encontrada", 404

@@ -768,9 +768,17 @@ def _fotos_publicacion(fotos, *, limite_foto=LIMITE_FOTO_PUBLICACION, dimension=
     return fotos
 
 
+def _contacto_publicar():
+    """Contacto por defecto del formulario: usuario logueado, luego invitado."""
+    u = usuario_sesion() or {}
+    c = datos_comprador() or {}
+    return {"nombre": u.get("nombre") or c.get("nombre") or "",
+            "telefono": u.get("telefono") or c.get("telefono") or ""}
+
+
 def _formulario_publicacion(token, datos, error=None, solicitudes=(), aviso=False):
     return render_template(
-        "marketplace_publicar.html", token=token, comprador=datos_comprador(), datos=datos,
+        "marketplace_publicar.html", token=token, comprador=_contacto_publicar(), datos=datos,
         error=error, limite_fotos=LIMITE_FOTOS_PUBLICACION, limite_foto=LIMITE_FOTO_PUBLICACION,
         solicitudes=solicitudes, aviso=aviso, limite_icono=LIMITE_ICONO_OFERTANTE,
         dimension_icono=DIMENSION_ICONO_OFERTANTE,

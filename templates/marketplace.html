@@ -120,7 +120,7 @@ for (const button of plans) {
 .mp-group label{font-size:.9rem;display:inline-flex;gap:4px;margin-right:14px}
 .mp-cart-err{background:#fbe4e4;border:1px solid #d99;color:#843333;border-radius:10px;padding:10px;font-size:.9rem}
 #mp-cart-pay{display:grid;gap:8px}
-.mp-hello{font-weight:700;font-size:.9rem;white-space:nowrap}
+.mp-hello{font-weight:700;font-size:.9rem;white-space:nowrap;max-width:200px;overflow:hidden;text-overflow:ellipsis}
 .mp-login{font-weight:700;font-size:.9rem;white-space:nowrap;text-decoration:underline;text-underline-offset:4px}
 .mp-sell{font-size:.82rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px}
 .mp-sell a{font-weight:700;text-decoration:underline;text-underline-offset:3px}
@@ -128,6 +128,8 @@ for (const button of plans) {
 .mp-pinrow input{flex:1;border:1px solid #c6d1c6;border-radius:9px;padding:10px;font:inherit;min-width:0}
 .mp-pinrow button{border:1px solid #829587;background:transparent;border-radius:9px;padding:10px 14px;font-weight:700;white-space:nowrap}
 @media(max-width:760px){.mp-hello{max-width:100px;overflow:hidden;text-overflow:ellipsis;font-size:.82rem}.mp-login{font-size:.82rem}}
+@media(max-width:1024px){.head nav a{display:none}}
+@media(max-width:760px){.head-inner{flex-wrap:wrap;row-gap:6px;padding-block:8px}.mp-sell{white-space:normal;max-width:none}}
 </style>
 <div class="mp-cart" id="mp-cart" hidden>
 <div class="mp-cart-panel" role="dialog" aria-label="Carrito del Marketplace">

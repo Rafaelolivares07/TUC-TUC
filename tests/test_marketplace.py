@@ -581,6 +581,8 @@ class CompraMarketplaceTest(unittest.TestCase):
         self.assertIn("Hola, David", html)
         self.assertIn('"telefono": "3001112233"', html)
         self.assertNotIn('href="/entrar"', html)
+        self.assertIn("@media(max-width:1024px){.head nav a{display:none}}", html)
+        self.assertIn(".head-inner{flex-wrap:wrap", html)
 
     def test_portada_invitada_muestra_entrar(self):
         filas = [self._fila("productos")]
@@ -658,6 +660,50 @@ class CompraMarketplaceTest(unittest.TestCase):
             r = self.client.post("/api/marketplace/identificar",
                                  json={"telefono": "3001112233", "pin": "12"})
             self.assertEqual(r.status_code, 400)
+
+    def _contacto(self, ses=None, galleta=None, fila=None):
+        from flask import session as fsession
+        if fila is None:
+            fila = {"id": 61, "nombre": "David", "telefono": "3001112233",
+                    "direccion": None}
+        with patch.dict(os.environ, {"MARKETPLACE_SIGNING_KEY": "k"}):
+            env = {}
+            if galleta:
+                firmado = marketplace._firma_comprador().dumps(galleta)
+                env = {"HTTP_COOKIE": f"{marketplace.COMPRADOR}={firmado}"}
+            with self.app.test_request_context("/", environ_overrides=env):
+                for k, v in (ses or {}).items():
+                    fsession[k] = v
+                with patch.object(marketplace, "get_db_connection",
+                                  return_value=SesionConn(fila)):
+                    return marketplace._contacto_publicar()
+
+    def test_contacto_publicar_usuario_gana_a_invitado(self):
+        galleta = {"nombre": "G", "telefono": "1", "cliente_id": 5}
+        self.assertEqual(self._contacto({"chat_tercero_id": 61}),
+                         {"nombre": "David", "telefono": "3001112233"})
+        self.assertEqual(self._contacto(None, galleta),
+                         {"nombre": "G", "telefono": "1"})
+        self.assertEqual(self._contacto({"chat_tercero_id": 61}, galleta),
+                         {"nombre": "David", "telefono": "3001112233"})
+        self.assertEqual(self._contacto(), {"nombre": "", "telefono": ""})
+        sin_tel = {"id": 61, "nombre": "David", "telefono": None, "direccion": None}
+        self.assertEqual(self._contacto({"chat_tercero_id": 61}, galleta, sin_tel),
+                         {"nombre": "David", "telefono": "1"})
+
+    def test_publicar_prellena_datos_del_usuario(self):
+        fila_u = {"id": 61, "nombre": "David", "telefono": "3001112233",
+                  "direccion": None}
+        with patch.dict(os.environ, {"MARKETPLACE_SIGNING_KEY": "k"}):
+            with patch.object(marketplace, "get_db_connection",
+                              return_value=SesionConn(fila_u)):
+                with self.client.session_transaction(base_url="https://tuc-tuc.co/") as s:
+                    s["chat_tercero_id"] = 61
+                pagina = self.client.get("/marketplace/publicar",
+                                         base_url="https://tuc-tuc.co/")
+        html = pagina.get_data(as_text=True)
+        self.assertIn('value="David"', html)
+        self.assertIn('value="3001112233"', html)
 
     def test_busqueda_abre_externa_en_pestana_nueva(self):
         with open("../static/marketplace/busqueda.js", encoding="utf-8") as f:

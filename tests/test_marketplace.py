@@ -20,6 +20,8 @@ class Registro:
     def fetchone(self):
         if "INSERT INTO marketplace_solicitudes" in self.sql[-1][0]:
             return {"id": 27, "nombre": "Diana", "telefono": "3151112222"}
+        if "RETURNING negocio_id" in self.sql[-1][0]:
+            return {"negocio_id": self.tercero["id"]}
         return {"id": 51} if "INSERT INTO terceros" in self.sql[-1][0] else self.tercero
 
     def fetchall(self):
@@ -186,7 +188,7 @@ class MarketplaceTest(unittest.TestCase):
         self.assertEqual(respuesta.status_code, 303)
         guardado = next(params for sql, params in conn.sql if "INSERT INTO marketplace_solicitudes" in sql)
         self.assertEqual(json.loads(guardado[6]), fotos)
-        self.assertEqual(guardado[-3:], (Decimal("12500.50"), False, fotos[0]))
+        self.assertEqual(guardado[-4:], (Decimal("12500.50"), False, fotos[0], True))
         self.assertEqual(marketplace._fotos_publicacion([]), [])
         with self.assertRaises(ValueError):
             marketplace._fotos_publicacion(["data:image/jpeg;base64,AAAA"])
@@ -234,7 +236,8 @@ class MarketplaceTest(unittest.TestCase):
         conn = Registro({"imagen": None})
         with patch.object(marketplace, "_conexion_publicaciones", return_value=conn):
             self.assertEqual(self.client.get(ruta).status_code, 404)
-            self.assertIn("s.icono_ofertante_aprobado AS imagen", conn.sql[-1][0])
+            self.assertIn("ofertante.icono_marketplace AS imagen", conn.sql[-1][0])
+            self.assertIn("ofertante.id=p.negocio_id", conn.sql[-1][0])
             conn.tercero["imagen"] = "data:image/jpeg;base64,/9j/2Q=="
             icono = self.client.get(ruta)
         self.assertEqual(icono.mimetype, "image/jpeg")
@@ -252,12 +255,15 @@ class MarketplaceTest(unittest.TestCase):
         self.assertNotIn(acceso, respuesta.location)
         self.assertEqual(self.client.get("/marketplace/publicar?solicitud=28").status_code, 404)
         actual = dict(id=27, nombre="Diana", telefono="3151112222", tipo="servicio", titulo="Oferta recuperada",
-                      descripcion="Descripción", fotos=[], estado="recibida", revision=1, contacto_publico=False)
+                      descripcion="Descripción", fotos=[], estado="recibida", revision=1, contacto_publico=False,
+                      icono_actual="data:image/jpeg;base64,/9j/2Q==")
         with patch.object(marketplace, "_solicitudes_editor", return_value=(actual, [actual])):
             html = self.client.get(respuesta.location).get_data(as_text=True)
         self.assertIn("Oferta recuperada", html)
         self.assertIn("Guardar cambios", html)
         self.assertIn('id="market-fotos"', html)
+        self.assertIn('data-icono-actual="data:image/jpeg;base64,/9j/2Q=="', html)
+        self.assertIn('name="icono_ofertante" value="" disabled', html)
 
     def test_desk_reusa_su_inicio_de_sesion_para_revision(self):
         class RegistroAdmin(Registro):
@@ -337,7 +343,8 @@ class MarketplaceTest(unittest.TestCase):
         aprobacion_sql, params = next((sql, params) for sql, params in conn.sql
                                       if "metodo_pago_aprobado_id" in sql)
         self.assertEqual(params, (95, 95, 27))
-        self.assertIn("icono_ofertante_aprobado=icono_ofertante", aprobacion_sql)
+        self.assertIn("cambiar_icono_ofertante=FALSE", aprobacion_sql)
+        self.assertFalse(any("UPDATE terceros" in sql for sql, _ in conn.sql))
         self.assertTrue(any(params == (95, "galeria", 1) for sql, params in conn.sql
                             if "INSERT INTO producto_imagenes" in sql))
         conn.sql.clear()
@@ -348,6 +355,24 @@ class MarketplaceTest(unittest.TestCase):
                             if "UPDATE productos" in sql))
         self.assertTrue(any(params == (95, None, 27) for sql, params in conn.sql
                             if "metodo_pago_aprobado_id" in sql))
+
+    def test_icono_del_tercero_se_preserva_al_publicar_otra_oferta(self):
+        conn = Registro({"id": 95})
+        solicitud = dict(id=27, nombre="Diana", telefono="3151112222", tipo="producto",
+                         titulo="Oferta", descripcion="Detalles", fotos=[], producto_id=None,
+                         precio=Decimal("15000"), acepta_contraentrega=False,
+                         cambiar_icono_ofertante=True, icono_ofertante="icono")
+        marketplace._aprobar_publicacion(conn, solicitud)
+        self.assertIn(("UPDATE terceros SET icono_marketplace=%s WHERE id=%s", ("icono", 95)), conn.sql)
+
+        conn.sql.clear()
+        otra = dict(solicitud, id=28, cambiar_icono_ofertante=False, icono_ofertante=None)
+        marketplace._aprobar_publicacion(conn, otra)
+        self.assertFalse(any("UPDATE terceros" in sql for sql, _ in conn.sql))
+
+        conn.sql.clear()
+        marketplace._aprobar_publicacion(conn, dict(otra, producto_id=96, cambiar_icono_ofertante=True))
+        self.assertIn(("UPDATE terceros SET icono_marketplace=%s WHERE id=%s", (None, 95)), conn.sql)
 
     def test_aprobacion_exige_seleccion_si_hay_dos_terceros(self):
         from werkzeug.exceptions import Conflict

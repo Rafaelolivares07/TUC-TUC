@@ -55,7 +55,7 @@
   }
 
   function renderIcon() {
-    const image = iconValue.value;
+    const image = iconValue.disabled ? iconPreview.dataset.iconoActual : iconValue.value;
     if (image) iconImage.src = image;
     else iconImage.removeAttribute('src');
     iconPreview.hidden = !image;

@@ -57,9 +57,10 @@ _LIMITE_FOTO = 8 * 1024 * 1024
 
 _PUBLICACIONES_APROBADAS = """
       FROM marketplace_solicitudes s JOIN productos p ON p.id=s.producto_id
+      JOIN terceros ofertante ON ofertante.id=p.negocio_id
      WHERE p.disponible IS TRUE
 """
-_NOMBRE_OFERTANTE = """CASE WHEN s.contacto_aprobado OR s.icono_ofertante_aprobado IS NOT NULL
+_NOMBRE_OFERTANTE = """CASE WHEN s.contacto_aprobado OR ofertante.icono_marketplace IS NOT NULL
                             THEN s.nombre END"""
 _ORIGEN_PUBLICACION = f"COALESCE({_NOMBRE_OFERTANTE}, 'Publicación particular')"
 _AMBITO_PRODUCTO = f"CASE WHEN {TIPO_OFERTA_SQL} = 'servicio' THEN 'servicios' ELSE 'productos' END"
@@ -204,7 +205,7 @@ def _buscar(conn, q, ambito="", rubro="", pagina=1, sugerencias=False):
 
 _CONSULTAS_FOTO = {
     "publicaciones": f"SELECT p.imagen AS imagen {_PUBLICACIONES_APROBADAS} AND p.id = %s",
-    "ofertantes": f"SELECT s.icono_ofertante_aprobado AS imagen {_PUBLICACIONES_APROBADAS} AND p.id = %s",
+    "ofertantes": f"SELECT ofertante.icono_marketplace AS imagen {_PUBLICACIONES_APROBADAS} AND p.id = %s",
     "platos": f"SELECT {_FOTO_PRODUCTO} AS imagen {_PLATOS_PUBLICOS} AND p.id = %s LIMIT 1",
     "productos": f"SELECT {_FOTO_PRODUCTO} AS imagen {_PRODUCTOS_PUBLICOS} AND p.id = %s LIMIT 1",
     "restaurantes": f"SELECT r.imagen_header AS imagen {_RESTAURANTES_PUBLICOS} AND r.id = %s",
@@ -320,7 +321,7 @@ def _detalle_publicacion(producto_id):
                      WHERE id=s.metodo_pago_aprobado_id AND activo IS TRUE) AS metodo_pago,
                    CASE WHEN s.contacto_aprobado THEN s.telefono ELSE NULL END AS contacto,
                    {_NOMBRE_OFERTANTE} AS nombre_ofertante,
-                   s.icono_ofertante_aprobado IS NOT NULL AS tiene_icono_ofertante
+                   ofertante.icono_marketplace IS NOT NULL AS tiene_icono_ofertante
               {_PUBLICACIONES_APROBADAS} AND p.id=%s
         """, (producto_id,)).fetchone()
         if not fila:
@@ -565,6 +566,7 @@ def ids_pago(pedido_id, tipo):
 
 
 def _crear_solicitudes(conn):
+    conn.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", ("marketplace.solicitudes.schema",))
     conn.execute("""
         CREATE TABLE IF NOT EXISTS marketplace_solicitudes (
             id bigserial PRIMARY KEY,
@@ -586,11 +588,32 @@ def _crear_solicitudes(conn):
         ADD COLUMN IF NOT EXISTS contacto_publico boolean NOT NULL DEFAULT FALSE,
         ADD COLUMN IF NOT EXISTS contacto_aprobado boolean NOT NULL DEFAULT FALSE,
         ADD COLUMN IF NOT EXISTS icono_ofertante text,
+        ADD COLUMN IF NOT EXISTS cambiar_icono_ofertante boolean NOT NULL DEFAULT FALSE,
         ADD COLUMN IF NOT EXISTS icono_ofertante_aprobado text,
         ADD COLUMN IF NOT EXISTS precio numeric(10,2) CHECK (precio > 0),
         ADD COLUMN IF NOT EXISTS acepta_contraentrega boolean,
         ADD COLUMN IF NOT EXISTS metodo_pago_aprobado_id integer REFERENCES metodos_pago_catalogo(id)
     """)
+    if not conn.execute("""
+        SELECT 1 FROM pg_attribute
+         WHERE attrelid='terceros'::regclass AND attname='icono_marketplace' AND NOT attisdropped
+    """).fetchone():
+        conn.execute("ALTER TABLE terceros ADD COLUMN IF NOT EXISTS icono_marketplace text")
+        conn.execute("""
+            UPDATE terceros t SET icono_marketplace=anterior.icono_ofertante_aprobado
+              FROM (
+                  SELECT DISTINCT ON (p.negocio_id) p.negocio_id, s.icono_ofertante_aprobado
+                    FROM marketplace_solicitudes s JOIN productos p ON p.id=s.producto_id
+                   WHERE s.icono_ofertante_aprobado IS NOT NULL
+                   ORDER BY p.negocio_id, s.id DESC
+              ) anterior
+             WHERE t.id=anterior.negocio_id
+        """)
+        conn.execute("""
+            UPDATE marketplace_solicitudes SET cambiar_icono_ofertante=TRUE
+             WHERE estado='recibida' AND icono_ofertante IS NOT NULL
+               AND icono_ofertante IS DISTINCT FROM icono_ofertante_aprobado
+        """)
     conn.commit()
 
 
@@ -665,9 +688,12 @@ def _solicitudes_editor(identidades, actual=None):
         ).fetchall()
         seleccion = conn.execute(
             """SELECT s.id, s.nombre, s.telefono, s.tipo, s.titulo, s.descripcion, s.fotos, s.estado,
-                      s.revision, s.contacto_publico, s.acepta_contraentrega, s.icono_ofertante,
+                      s.revision, s.contacto_publico, s.acepta_contraentrega,
+                      CASE WHEN s.cambiar_icono_ofertante THEN COALESCE(s.icono_ofertante,'') END AS icono_ofertante,
+                      ofertante.icono_marketplace AS icono_actual,
                       COALESCE(s.precio, NULLIF(p.precio,0)) AS precio
                  FROM marketplace_solicitudes s LEFT JOIN productos p ON p.id=s.producto_id
+                 LEFT JOIN terceros ofertante ON ofertante.id=p.negocio_id
                 WHERE s.id = %s""", (actual,)
         ).fetchone() if actual is not None else None
         return seleccion, resumen
@@ -763,12 +789,13 @@ def recibir_publicacion():
                           precio=%s, acepta_contraentrega=%s,
                           contacto_publico=%s, contacto_aprobado=contacto_aprobado AND %s,
                           icono_ofertante=CASE WHEN %s THEN %s ELSE icono_ofertante END,
-                          icono_ofertante_aprobado=CASE WHEN %s THEN NULL ELSE icono_ofertante_aprobado END,
+                          cambiar_icono_ofertante=CASE WHEN %s THEN %s OR producto_id IS NOT NULL
+                                                       ELSE cambiar_icono_ofertante END,
                           estado='recibida', revision=revision+1
                     WHERE id=%s AND revision=%s RETURNING id, nombre, telefono""",
                 (datos["tipo"], datos["titulo"], datos["descripcion"], json.dumps(fotos),
                  precio, datos["acepta_contraentrega"], datos["contacto_publico"],
-                 datos["contacto_publico"], icono is not None, icono or None, icono == "",
+                 datos["contacto_publico"], icono is not None, icono or None, icono is not None, bool(icono),
                  solicitud_id, datos["revision"]),
             ).fetchone()
             if not fila:
@@ -777,12 +804,12 @@ def recibir_publicacion():
             fila = conn.execute(
                 """INSERT INTO marketplace_solicitudes
                           (token, nombre, telefono, tipo, titulo, descripcion, fotos, contacto_publico,
-                           precio, acepta_contraentrega, icono_ofertante)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s)
+                           precio, acepta_contraentrega, icono_ofertante, cambiar_icono_ofertante)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s, %s)
                    ON CONFLICT (token) DO NOTHING RETURNING id, nombre, telefono""",
                 (token, datos["nombre"], datos["telefono"], datos["tipo"], datos["titulo"],
                  datos["descripcion"], json.dumps(fotos), datos["contacto_publico"], precio,
-                 datos["acepta_contraentrega"], icono or None),
+                 datos["acepta_contraentrega"], icono or None, bool(icono)),
             ).fetchone()
             if not fila:
                 fila = conn.execute(
@@ -837,7 +864,8 @@ def revisar_publicaciones():
         ).fetchall()
         solicitud = conn.execute(
             """SELECT id, titulo, nombre, telefono, tipo, estado, descripcion, fotos, revision,
-                      producto_id, contacto_publico, precio, acepta_contraentrega, icono_ofertante
+                      producto_id, contacto_publico, precio, acepta_contraentrega,
+                      icono_ofertante, cambiar_icono_ofertante
                  FROM marketplace_solicitudes WHERE id=%s""",
             (solicitud_id,),
         ).fetchone() if solicitud_id is not None else None
@@ -911,24 +939,29 @@ def _aprobar_publicacion(conn, solicitud, tercero_elegido=None):
                    VALUES (%s,%s,'persona',NOW()) RETURNING id""",
                 (solicitud["nombre"], telefono),
             ).fetchone()
+        negocio_id = tercero["id"]
         producto_id = conn.execute(
             """INSERT INTO productos (negocio_id,nombre,categoria,descripcion,imagen,precio,tipo_oferta,disponible)
                VALUES (%s,%s,%s,%s,%s,%s,%s,TRUE) RETURNING id""",
-            (tercero["id"], *datos),
+            (negocio_id, *datos),
         ).fetchone()["id"]
     else:
-        conn.execute(
-            """UPDATE productos SET nombre=%s,categoria=%s,descripcion=%s,imagen=%s,precio=%s,tipo_oferta=%s WHERE id=%s""",
+        negocio_id = conn.execute(
+            """UPDATE productos SET nombre=%s,categoria=%s,descripcion=%s,imagen=%s,precio=%s,tipo_oferta=%s
+                WHERE id=%s RETURNING negocio_id""",
             (*datos, producto_id),
-        )
+        ).fetchone()["negocio_id"]
         conn.execute("DELETE FROM producto_imagenes WHERE producto_id=%s", (producto_id,))
+    if solicitud.get("cambiar_icono_ofertante"):
+        conn.execute("UPDATE terceros SET icono_marketplace=%s WHERE id=%s",
+                     (solicitud["icono_ofertante"], negocio_id))
     for orden, foto in enumerate(fotos[1:], 1):
         conn.execute("INSERT INTO producto_imagenes (producto_id,imagen,orden) VALUES (%s,%s,%s)",
                      (producto_id, foto, orden))
     conn.execute(
         """UPDATE marketplace_solicitudes
               SET producto_id=%s, estado='aprobada', revision=revision+1, contacto_aprobado=contacto_publico,
-                  metodo_pago_aprobado_id=%s, icono_ofertante_aprobado=icono_ofertante
+                  metodo_pago_aprobado_id=%s, icono_ofertante=NULL, cambiar_icono_ofertante=FALSE
             WHERE id=%s""",
         (producto_id, metodo_pago, solicitud["id"]),
     )
@@ -958,7 +991,7 @@ def aprobar_publicacion():
             abort(403)
         solicitud = conn.execute(
             """SELECT id,nombre,telefono,titulo,tipo,descripcion,fotos,estado,revision,producto_id,
-                      precio,acepta_contraentrega
+                      precio,acepta_contraentrega,icono_ofertante,cambiar_icono_ofertante
                  FROM marketplace_solicitudes WHERE id=%s FOR UPDATE""",
             (solicitud_id,),
         ).fetchone()

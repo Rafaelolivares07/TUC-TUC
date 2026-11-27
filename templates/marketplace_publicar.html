@@ -22,7 +22,7 @@
 </style>
 {% if token %}
 <script src="{{ url_for('static', filename='JS/imagen_producto.js', v=2) }}" defer></script>
-<script src="{{ url_for('static', filename='marketplace/publicar_fotos.js', v=3) }}" defer></script>
+<script src="{{ url_for('static', filename='marketplace/publicar_fotos.js', v=4) }}" defer></script>
 {% endif %}
 </head>
 <body>
@@ -44,13 +44,16 @@
 <label>Tu nombre<input name="nombre" autocomplete="name" maxlength="100" required{% if datos.get('id') %} readonly{% endif %} value="{{ datos.get('nombre') or (comprador or {}).get('nombre','') }}"></label>
 <label>Celular<input type="tel" name="telefono" autocomplete="tel" maxlength="25" required{% if datos.get('id') %} readonly{% endif %} value="{{ datos.get('telefono') or (comprador or {}).get('telefono','') }}"></label>
 <label>Ícono del ofertante (opcional)
-<span class="photo-help" id="market-icono-ayuda">Agrega tu logo o una foto. Aparecerá junto a tu nombre cuando se apruebe la publicación.</span>
+<span class="photo-help" id="market-icono-ayuda">Tu logo o foto acompaña todas tus ofertas. Si ya tienes un ícono, se reutiliza automáticamente. Los cambios pasan por revisión.</span>
 <input id="market-icono" type="file" accept="image/jpeg,image/png,image/webp" disabled aria-describedby="market-icono-ayuda market-icono-error" data-limite="{{ limite_icono }}" data-dimension="{{ dimension_icono }}">
 </label>
-<input id="market-icono-valor" type="hidden" name="icono_ofertante" value="{{ datos.get('icono_ofertante') or '' }}"{% if datos.get('icono_ofertante') is none %} disabled{% endif %}>
-<div id="market-icono-preview" class="market-ofertante"{% if not datos.get('icono_ofertante') %} hidden{% endif %}>
-<img class="market-ofertante-icono" alt="Vista previa del ícono"{% if datos.get('icono_ofertante') %} src="{{ datos.icono_ofertante }}"{% endif %}>
-<button id="market-icono-quitar" class="btn clear" type="button" hidden>Quitar ícono</button>
+{% set icono_propuesto = datos.get('icono_ofertante') %}
+{% set icono_actual = datos.get('icono_actual') or '' %}
+{% set icono_vista = icono_actual if icono_propuesto is none else icono_propuesto %}
+<input id="market-icono-valor" type="hidden" name="icono_ofertante" value="{{ icono_propuesto or '' }}"{% if icono_propuesto is none %} disabled{% endif %}>
+<div id="market-icono-preview" class="market-ofertante" data-icono-actual="{{ icono_actual }}"{% if not icono_vista %} hidden{% endif %}>
+<img class="market-ofertante-icono" alt="Vista previa del ícono"{% if icono_vista %} src="{{ icono_vista }}"{% endif %}>
+<button id="market-icono-quitar" class="btn clear" type="button" hidden>{{ 'Quitar ícono de mi perfil' if icono_actual else 'Quitar ícono' }}</button>
 </div>
 <p id="market-icono-error" class="error" role="alert"></p>
 <label>Qué ofreces<select name="tipo"><option value="producto">Un producto</option><option value="servicio"{% if datos.get('tipo') == 'servicio' %} selected{% endif %}>Un servicio</option></select></label>

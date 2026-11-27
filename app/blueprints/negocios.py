@@ -1057,10 +1057,7 @@ def pagar(pedido_id):
         opciones = {}
         if marketplace:
             opciones['api_url'] = url_for('negocios.api_pagar_marketplace', pedido_id=pedido_id)
-            opciones['volver_url'] = url_for(
-                'tiendas.tienda_publica' if tipo == 'tienda' else 'restaurantes.restaurante_publico',
-                slug=row['slug'], origen='marketplace',
-            )
+            opciones['volver_url'] = f"https://{row['slug']}.tuc-tuc.co/?origen=marketplace"
         return render_template('pagar.html',
                                pedido_id=pedido_id,
                                tipo=tipo,

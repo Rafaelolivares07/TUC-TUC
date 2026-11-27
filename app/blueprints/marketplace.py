@@ -7,7 +7,7 @@ from decimal import Decimal
 from io import BytesIO
 import re
 import secrets
-from urllib.parse import urlsplit
+from urllib.parse import urlencode, urlsplit
 
 from flask import Blueprint, abort, current_app, jsonify, make_response, redirect, render_template, request, session, url_for
 from itsdangerous import BadData, URLSafeTimedSerializer
@@ -282,32 +282,67 @@ def _precio_visible(precio):
     return ("$" + f"{precio:,.2f}".rstrip("0").rstrip(".").replace(",", "X").replace(".", ",").replace("X", ".")) if precio is not None else ""
 
 
+_HOSTS_MARKETPLACE_PROD = ("tuc-tuc.co", "www.tuc-tuc.co")
+
+
+def _en_prod_marketplace():
+    try:
+        return request.host.split(":", 1)[0].lower() in _HOSTS_MARKETPLACE_PROD
+    except RuntimeError:
+        return False
+
+
+def _url_negocio(slug, **params):
+    base = f"https://{slug}.tuc-tuc.co/"
+    return base + ("?" + urlencode(params) if params else "")
+
+
 def _oferta(fila, ambito=""):
     tipo = fila["tipo"]
+    externa = tipo in ("productos", "platos", "tiendas", "restaurantes")
+    absoluta = externa and _en_prod_marketplace()
     if tipo == "productos":
-        enlace = url_for("tiendas.tienda_publica", slug=fila["slug"],
-                         producto=fila["id"], origen="marketplace")
+        if absoluta:
+            enlace = _url_negocio(fila["slug"], producto=fila["id"], origen="marketplace")
+        else:
+            enlace = url_for("tiendas.tienda_publica", slug=fila["slug"],
+                             producto=fila["id"], origen="marketplace")
     elif tipo == "platos":
-        enlace = url_for("restaurantes.restaurante_publico", slug=fila["slug"],
-                         plato=fila["id"], origen="marketplace")
+        if absoluta:
+            enlace = _url_negocio(fila["slug"], plato=fila["id"], origen="marketplace")
+        else:
+            enlace = url_for("restaurantes.restaurante_publico", slug=fila["slug"],
+                             plato=fila["id"], origen="marketplace")
     elif tipo == "publicaciones":
         enlace = url_for("marketplace.portada", oferta=fila["id"])
     elif tipo == "categorias":
         enlace = url_for("marketplace.portada", categoria=ambito, rubro=fila["nombre"], _anchor="explorar")
     elif tipo == "tiendas":
-        enlace = url_for("tiendas.tienda_publica", slug=fila["slug"], origen="marketplace")
+        if absoluta:
+            enlace = _url_negocio(fila["slug"], origen="marketplace")
+        else:
+            enlace = url_for("tiendas.tienda_publica", slug=fila["slug"], origen="marketplace")
     else:
-        enlace = url_for("restaurantes.restaurante_publico", slug=fila["slug"], origen="marketplace")
+        if absoluta:
+            enlace = _url_negocio(fila["slug"], origen="marketplace")
+        else:
+            enlace = url_for("restaurantes.restaurante_publico", slug=fila["slug"], origen="marketplace")
 
     origen_foto = fila["imagen"] or ""
     if origen_foto.partition(",")[0].lower() in _FORMATOS_FOTO:
         imagen = url_for("marketplace.foto", tipo=tipo, oferta_id=fila["id"])
     else:
         imagen = _foto_publica(origen_foto)
+    try:
+        precio_num = float(fila["precio"]) if fila["precio"] is not None else None
+    except (TypeError, ValueError):
+        precio_num = None
     return dict(
         nombre=fila["nombre"], categoria=fila["categoria"], negocio=fila["negocio"],
         tipo=tipo, enlace=enlace, imagen=imagen, es_servicio=fila.get("ambito") == "servicios",
-        precio=_precio_visible(fila["precio"]),
+        precio=_precio_visible(fila["precio"]), externa=externa,
+        comprable=tipo in ("productos", "platos"),
+        negocio_slug=fila.get("slug"), oferta_id=fila.get("id"), precio_num=precio_num,
     )
 
 

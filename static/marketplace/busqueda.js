@@ -33,6 +33,7 @@
   function option(item, group, index) {
     const enlace = document.createElement('a');
     enlace.href = item.enlace;
+    if (item.externa) { enlace.target = '_blank'; enlace.rel = 'noopener'; }
     enlace.className = 'market-option';
     enlace.id = 'market-opcion-' + index;
     enlace.setAttribute('role', 'option');

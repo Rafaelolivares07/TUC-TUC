@@ -410,5 +410,125 @@ class MarketplaceTest(unittest.TestCase):
         self.assertNotIn("costo", ficha)
 
 
+class OfertasFalsas:
+    def __init__(self, filas):
+        self.filas = filas
+
+    def execute(self, *args, **kwargs):
+        return self
+
+    def fetchall(self):
+        return self.filas
+
+    def close(self):
+        pass
+
+
+class CompraMarketplaceTest(unittest.TestCase):
+    def setUp(self):
+        self.app = Flask(__name__, template_folder="../templates")
+        self.app.secret_key = "llave-de-pruebas"
+        self.app.register_blueprint(marketplace.bp)
+        tiendas = Blueprint("tiendas", __name__)
+
+        @tiendas.get("/t/<slug>")
+        def tienda_publica(slug):
+            return slug
+
+        restaurantes = Blueprint("restaurantes", __name__)
+
+        @restaurantes.get("/r/<slug>")
+        def restaurante_publico(slug):
+            return slug
+
+        self.app.register_blueprint(tiendas)
+        self.app.register_blueprint(restaurantes)
+        self.client = self.app.test_client()
+
+    def _fila(self, tipo="productos", **kw):
+        base = {"tipo": tipo, "id": 368, "nombre": "Delantal", "categoria": "Ropa",
+                "negocio": "Andrea", "slug": "andrea-rendon",
+                "precio": Decimal("10000"), "imagen": None}
+        base.update(kw)
+        return base
+
+    def test_enlace_absoluto_al_subdominio_en_prod(self):
+        with self.app.test_request_context(base_url="https://tuc-tuc.co/"):
+            prod = marketplace._oferta(self._fila("productos"))
+            plato = marketplace._oferta(self._fila("platos", id=81, slug="pitt"))
+            tienda = marketplace._oferta(self._fila("tiendas", id=7, precio=None))
+            rest = marketplace._oferta(self._fila("restaurantes", id=3, slug="pitt", precio=None))
+        self.assertEqual(prod["enlace"], "https://andrea-rendon.tuc-tuc.co/?producto=368&origen=marketplace")
+        self.assertEqual(plato["enlace"], "https://pitt.tuc-tuc.co/?plato=81&origen=marketplace")
+        self.assertEqual(tienda["enlace"], "https://andrea-rendon.tuc-tuc.co/?origen=marketplace")
+        self.assertEqual(rest["enlace"], "https://pitt.tuc-tuc.co/?origen=marketplace")
+        for ficha in (prod, plato, tienda, rest):
+            self.assertTrue(ficha["externa"])
+        self.assertTrue(prod["comprable"])
+        self.assertTrue(plato["comprable"])
+        self.assertFalse(tienda["comprable"])
+        self.assertFalse(rest["comprable"])
+        self.assertEqual(prod["precio_num"], 10000.0)
+        self.assertIsNone(tienda["precio_num"])
+        self.assertEqual(prod["negocio_slug"], "andrea-rendon")
+        self.assertEqual(prod["oferta_id"], 368)
+
+    def test_enlace_relativo_fuera_de_prod(self):
+        with self.app.test_request_context(base_url="http://localhost/"):
+            prod = marketplace._oferta(self._fila("productos"))
+            plato = marketplace._oferta(self._fila("platos", id=81, slug="pitt"))
+        self.assertTrue(prod["enlace"].startswith("/t/andrea-rendon?"))
+        self.assertIn("producto=368", prod["enlace"])
+        self.assertTrue(plato["enlace"].startswith("/r/pitt?"))
+        self.assertIn("plato=81", plato["enlace"])
+        self.assertTrue(prod["externa"])
+
+    def test_servicio_compra_igual_y_particular_solo_visita(self):
+        with self.app.test_request_context(base_url="https://tuc-tuc.co/"):
+            serv = marketplace._oferta(self._fila("productos", ambito="servicios"))
+            part = marketplace._oferta(self._fila("publicaciones", id=95, slug=None,
+                                                  negocio="Particular"))
+            cat = marketplace._oferta(self._fila("categorias", id=0, nombre="Ropa",
+                                                 slug=None, precio=None))
+        self.assertTrue(serv["es_servicio"])
+        self.assertTrue(serv["comprable"])
+        self.assertFalse(part["comprable"])
+        self.assertFalse(part["externa"])
+        self.assertIn("oferta=95", part["enlace"])
+        self.assertFalse(cat["externa"])
+        self.assertFalse(cat["comprable"])
+
+    def test_portada_con_comprar_visitar_y_carrito(self):
+        filas = [self._fila("productos"),
+                 self._fila("publicaciones", id=95, slug=None, negocio="Particular")]
+        with patch.object(marketplace, "_conexion_publicaciones", return_value=OfertasFalsas(filas)):
+            pagina = self.client.get("/marketplace", base_url="https://tuc-tuc.co/")
+        self.assertEqual(pagina.status_code, 200)
+        html = pagina.get_data(as_text=True)
+        self.assertIn("https://andrea-rendon.tuc-tuc.co/?producto=368", html)
+        self.assertIn('target="_blank"', html)
+        self.assertIn("mp-add", html)
+        self.assertIn('data-precio="10000.0"', html)
+        self.assertIn(">Comprar<", html)
+        self.assertIn("Visitar tienda", html)
+        self.assertIn("mp-cart-open", html)
+        self.assertIn("mp-cart-confirm", html)
+        self.assertIn("/api/marketplace/comprador", html)
+        self.assertIn("/api/marketplace/tienda/", html)
+        self.assertRegex(html, r'<a href="[^"]*oferta=95">')
+        self.assertNotRegex(html, r"(?s)<a\b[^>]*>(?:(?!</a>).)*<a\b")
+
+    def test_busqueda_abre_externa_en_pestana_nueva(self):
+        with open("../static/marketplace/busqueda.js", encoding="utf-8") as f:
+            js = f.read()
+        self.assertIn("item.externa", js)
+        self.assertIn("_blank", js)
+
+    def test_volver_url_usa_subdominio(self):
+        with open("../app/blueprints/negocios.py", encoding="utf-8") as f:
+            src = f.read()
+        self.assertIn(".tuc-tuc.co/?origen=marketplace", src)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -14,7 +14,7 @@
 <header class="head"><div class="head-inner wrap">
 {% include 'marketplace_logo.html' %}
 <nav aria-label="Navegación principal"><a href="#explorar">Explorar</a><a href="#negocios">Para negocios</a><a href="#reparto">Reparto</a></nav>
-<a class="btn dark publish" href="{{ url_for('marketplace.publicar') }}">Publicar gratis</a>
+<a class="btn dark publish" href="{{ url_for('marketplace.publicar') }}">Publicar gratis</a><button class="btn clear mp-cart-btn" id="mp-cart-open" type="button">Carrito <b id="mp-cart-count">0</b></button>
 </div></header>
 <main id="inicio">
 {% if aviso %}<p class="wrap notice" role="status">Recibimos tu solicitud. Tu oferta aparecerá cuando quede confirmada.</p>{% endif %}
@@ -59,7 +59,7 @@
 <div class="section-head"><div><h2 id="browse-title">Explora productos, servicios y negocios</h2>{% if busqueda %}<p>Resultados para «{{ busqueda }}».</p>{% elif rubro %}<p>Categoría «{{ rubro }}».</p>{% endif %}</div></div>
 <div class="cards">
 {% for oferta in ofertas %}
-<article class="card"><a href="{{ oferta.enlace }}"><span class="card-photo">{% if oferta.imagen %}<img src="{{ oferta.imagen }}" alt="" loading="lazy" referrerpolicy="no-referrer">{% else %}<span class="fallback">{{ oferta.categoria or oferta.negocio or 'Categoría' }}</span>{% endif %}</span><span class="card-info"><small>{% if oferta.es_servicio %}Servicio · {% endif %}{{ oferta.negocio if oferta.tipo in ('productos','platos','publicaciones') else (oferta.categoria or 'Categoría') }}</small><strong>{{ oferta.nombre }}</strong><span class="price">{{ oferta.precio or ('Ver categoría' if oferta.tipo == 'categorias' else 'Ver tienda' if oferta.tipo == 'tiendas' else 'Ver publicación' if oferta.tipo == 'publicaciones' else 'Ver carta') }}</span></span></a></article>
+<article class="card"><a href="{{ oferta.enlace }}"{% if oferta.externa %} target="_blank" rel="noopener"{% endif %}><span class="card-photo">{% if oferta.imagen %}<img src="{{ oferta.imagen }}" alt="" loading="lazy" referrerpolicy="no-referrer">{% else %}<span class="fallback">{{ oferta.categoria or oferta.negocio or 'Categoría' }}</span>{% endif %}</span><span class="card-info"><small>{% if oferta.es_servicio %}Servicio · {% endif %}{{ oferta.negocio if oferta.tipo in ('productos','platos','publicaciones') else (oferta.categoria or 'Categoría') }}</small><strong>{{ oferta.nombre }}</strong><span class="price">{{ oferta.precio or ('Ver categoría' if oferta.tipo == 'categorias' else 'Ver tienda' if oferta.tipo == 'tiendas' else 'Ver publicación' if oferta.tipo == 'publicaciones' else 'Ver carta') }}</span></span></a>{% if oferta.comprable and oferta.precio_num is not none %}<div class="mp-buyrow"><button class="btn lime mp-add" type="button" data-tipo="{{ oferta.tipo }}" data-id="{{ oferta.oferta_id }}" data-slug="{{ oferta.negocio_slug }}" data-negocio="{{ oferta.negocio|e }}" data-nombre="{{ oferta.nombre|e }}" data-precio="{{ oferta.precio_num }}">Comprar</button><a class="mp-visit" href="{{ oferta.enlace }}"{% if oferta.externa %} target="_blank" rel="noopener"{% endif %}>Visitar {{ 'tienda' if oferta.tipo == 'productos' else 'carta' }}</a></div>{% endif %}</article>
 {% else %}
 <p class="empty">No encontramos ofertas para esta búsqueda.</p>
 {% endfor %}
@@ -96,5 +96,191 @@ for (const button of plans) {
       : 'Todo lo de Básico, más meseros, cocina y gestión de mesas.';
   });
 }
+</script>
+<style>
+.mp-buyrow{display:grid;gap:8px;padding:0 16px 16px}
+.mp-add{width:100%}
+.mp-visit{display:block;text-align:center;font-size:.85rem;font-weight:700;color:var(--muted);padding:4px}
+.mp-visit:hover{text-decoration:underline}
+.mp-cart-btn b{background:var(--lime);color:#162e20;border-radius:99px;min-width:24px;height:24px;display:inline-grid;place-items:center;font-size:.85rem}
+.mp-cart{position:fixed;inset:0;z-index:50;background:rgba(20,35,25,.55);display:grid;place-items:center;padding:16px}
+.mp-cart[hidden]{display:none}
+.mp-cart-panel{background:#fff;border-radius:16px;max-width:520px;width:100%;max-height:88vh;overflow:auto;padding:20px;display:grid;gap:12px}
+.mp-cart-head{display:flex;justify-content:space-between;align-items:center;font-size:1.1rem}
+.mp-cart-head button{border:0;background:#eef3ea;border-radius:50%;width:34px;height:34px;font-size:1.2rem}
+.mp-line{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line);font-size:.92rem}
+.mp-qty{display:flex;align-items:center;gap:8px}
+.mp-qty button{border:1px solid #c6d1c6;background:#fff;border-radius:8px;width:30px;height:30px}
+.mp-cart-contact,.mp-group{display:grid;gap:8px}
+.mp-cart-contact label{font-size:.85rem;font-weight:700;display:grid;gap:4px}
+.mp-cart-contact input,.mp-dir{border:1px solid #c6d1c6;border-radius:9px;padding:10px;font:inherit;width:100%}
+.mp-group{border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.mp-group legend{font-weight:800;font-size:.9rem;padding:0 6px}
+.mp-group label{font-size:.9rem;display:inline-flex;gap:4px;margin-right:14px}
+.mp-cart-err{background:#fbe4e4;border:1px solid #d99;color:#843333;border-radius:10px;padding:10px;font-size:.9rem}
+#mp-cart-pay{display:grid;gap:8px}
+</style>
+<div class="mp-cart" id="mp-cart" hidden>
+<div class="mp-cart-panel" role="dialog" aria-label="Carrito del Marketplace">
+<div class="mp-cart-head"><strong>Tu carrito</strong><button id="mp-cart-close" type="button" aria-label="Cerrar">x</button></div>
+<div id="mp-cart-lines"></div>
+<div class="mp-cart-contact">
+<label>Tu nombre<input id="mp-nombre" autocomplete="name"></label>
+<label>Celular<input id="mp-tel" inputmode="tel" autocomplete="tel"></label>
+</div>
+<div id="mp-cart-groups"></div>
+<p class="mp-cart-err" id="mp-cart-err" hidden></p>
+<button class="btn lime" id="mp-cart-confirm" type="button">Confirmar pedido</button>
+<div id="mp-cart-pay" hidden></div>
+</div>
+</div>
+<script>
+const MP_CART_KEY = 'mp_carrito_v1';
+const MP_CONTACT_KEY = 'mp_contacto_v1';
+let mpCart = [];
+try { mpCart = JSON.parse(localStorage.getItem(MP_CART_KEY) || '[]'); } catch (e) { mpCart = []; }
+if (!Array.isArray(mpCart)) mpCart = [];
+function mpSave() { localStorage.setItem(MP_CART_KEY, JSON.stringify(mpCart)); }
+function mpCount() { return mpCart.reduce((n, l) => n + (l.cantidad || 0), 0); }
+function mpBadge() { document.getElementById('mp-cart-count').textContent = mpCount(); }
+function mpMoney(n) { return '$' + Number(n || 0).toLocaleString('es-CO', {maximumFractionDigits: 0}); }
+document.querySelectorAll('.mp-add').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const pre = parseFloat(btn.dataset.precio);
+    const linea = {t: btn.dataset.tipo === 'platos' ? 'plato' : 'producto',
+      id: parseInt(btn.dataset.id, 10), slug: btn.dataset.slug,
+      neg: btn.dataset.negocio, nom: btn.dataset.nombre,
+      pre: isNaN(pre) ? 0 : pre, cantidad: 1};
+    const misma = mpCart.find(l => l.t === linea.t && l.id === linea.id);
+    if (misma) misma.cantidad = Math.min(99, misma.cantidad + 1);
+    else mpCart.push(linea);
+    mpSave(); mpBadge();
+    const viejo = btn.textContent;
+    btn.textContent = 'Agregado ✓'; btn.disabled = true;
+    setTimeout(() => { btn.textContent = viejo; btn.disabled = false; }, 1100);
+  });
+});
+function mpGrupos() {
+  const g = {};
+  for (const l of mpCart) {
+    const k = l.t + '|' + l.slug;
+    (g[k] = g[k] || {t: l.t, slug: l.slug, neg: l.neg, lineas: []}).lineas.push(l);
+  }
+  return Object.values(g);
+}
+function mpRender() {
+  const box = document.getElementById('mp-cart-lines');
+  box.innerHTML = '';
+  for (const l of mpCart) {
+    const row = document.createElement('div');
+    row.className = 'mp-line';
+    const info = document.createElement('span');
+    info.textContent = l.nom + ' · ' + l.neg;
+    const qty = document.createElement('span');
+    qty.className = 'mp-qty';
+    const menos = document.createElement('button');
+    menos.type = 'button'; menos.textContent = '-';
+    menos.addEventListener('click', () => { l.cantidad--; if (l.cantidad <= 0) mpCart.splice(mpCart.indexOf(l), 1); mpSave(); mpBadge(); mpRender(); });
+    const cant = document.createElement('b');
+    cant.textContent = l.cantidad;
+    const mas = document.createElement('button');
+    mas.type = 'button'; mas.textContent = '+';
+    mas.addEventListener('click', () => { l.cantidad = Math.min(99, l.cantidad + 1); mpSave(); mpBadge(); mpRender(); });
+    const tot = document.createElement('span');
+    tot.textContent = mpMoney(l.pre * l.cantidad);
+    qty.append(menos, cant, mas);
+    row.append(info, qty, tot);
+    box.append(row);
+  }
+  const gr = document.getElementById('mp-cart-groups');
+  gr.innerHTML = '';
+  mpGrupos().forEach((g, i) => {
+    const f = document.createElement('fieldset');
+    f.className = 'mp-group';
+    const leg = document.createElement('legend');
+    leg.textContent = g.neg;
+    const lab1 = document.createElement('label');
+    const r1 = document.createElement('input');
+    r1.type = 'radio'; r1.name = 'mp-ent-' + i; r1.value = 'domicilio'; r1.checked = true;
+    lab1.append(r1, ' Domicilio');
+    const lab2 = document.createElement('label');
+    const r2 = document.createElement('input');
+    r2.type = 'radio'; r2.name = 'mp-ent-' + i; r2.value = 'recoger';
+    lab2.append(r2, ' Recoger');
+    const dir = document.createElement('input');
+    dir.placeholder = 'Dirección de entrega';
+    dir.dataset.group = i;
+    dir.className = 'mp-dir';
+    f.append(leg, lab1, lab2, dir);
+    gr.append(f);
+  });
+  const total = mpCart.reduce((n, l) => n + l.pre * l.cantidad, 0);
+  document.getElementById('mp-cart-confirm').textContent = 'Confirmar pedido · ' + mpMoney(total);
+}
+async function mpPost(url, body) {
+  const r = await fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+  return r.json();
+}
+document.getElementById('mp-cart-confirm').addEventListener('click', async () => {
+  const err = document.getElementById('mp-cart-err');
+  err.hidden = true;
+  const nombre = document.getElementById('mp-nombre').value.trim();
+  const telefono = document.getElementById('mp-tel').value.trim();
+  if (!nombre || !telefono) { err.textContent = 'Escribe tu nombre y tu celular.'; err.hidden = false; return; }
+  if (!mpCart.length) { err.textContent = 'Tu carrito está vacío.'; err.hidden = false; return; }
+  const btn = document.getElementById('mp-cart-confirm');
+  btn.disabled = true;
+  try {
+    const cli = await mpPost('/api/marketplace/comprador', {nombre, telefono});
+    if (!cli.ok) throw new Error(cli.error || 'No pudimos registrarte.');
+    localStorage.setItem(MP_CONTACT_KEY, JSON.stringify({nombre, telefono}));
+    const grupos = mpGrupos();
+    const pagos = [];
+    for (let i = 0; i < grupos.length; i++) {
+      const g = grupos[i];
+      const ent = (document.querySelector('input[name="mp-ent-' + i + '"]:checked') || {}).value || 'domicilio';
+      const dir = (document.querySelector('.mp-dir[data-group="' + i + '"]') || {}).value || '';
+      const base = {tipo_entrega: ent, direccion_cliente: dir.trim(), notas: '', metodo_pago: 'efectivo'};
+      let url, cuerpo;
+      if (g.t === 'plato') {
+        url = '/api/marketplace/restaurante/' + g.slug + '/pedido';
+        cuerpo = Object.assign({}, base, {platos: g.lineas.map(l => ({plato_id: l.id, cantidad: l.cantidad}))});
+      } else {
+        url = '/api/marketplace/tienda/' + g.slug + '/pedido';
+        cuerpo = Object.assign({}, base, {items: g.lineas.map(l => ({producto_id: l.id, cantidad: l.cantidad}))});
+      }
+      const ped = await mpPost(url, cuerpo);
+      if (!ped.ok) throw new Error(g.neg + ': ' + (ped.error || 'no recibió el pedido.'));
+      pagos.push({neg: g.neg, url: ped.url_pago});
+    }
+    mpCart = []; mpSave(); mpBadge(); mpRender();
+    const pay = document.getElementById('mp-cart-pay');
+    pay.innerHTML = '';
+    const ok = document.createElement('p');
+    ok.textContent = 'Pedido listo. Sigue a pagar en cada negocio:';
+    pay.append(ok);
+    pagos.forEach(p => {
+      const a = document.createElement('a');
+      a.href = p.url; a.target = '_blank'; a.rel = 'noopener';
+      a.className = 'btn dark'; a.textContent = 'Pagar en ' + p.neg;
+      pay.append(a);
+    });
+    pay.hidden = false;
+  } catch (e) {
+    err.textContent = e.message || 'Error de conexión.';
+    err.hidden = false;
+  }
+  btn.disabled = false;
+});
+(function mpInit() {
+  try {
+    const c = JSON.parse(localStorage.getItem(MP_CONTACT_KEY) || 'null');
+    if (c) { document.getElementById('mp-nombre').value = c.nombre || ''; document.getElementById('mp-tel').value = c.telefono || ''; }
+  } catch (e) {}
+  mpBadge();
+  document.getElementById('mp-cart-open').addEventListener('click', () => { mpRender(); document.getElementById('mp-cart-pay').hidden = true; document.getElementById('mp-cart').hidden = false; });
+  document.getElementById('mp-cart-close').addEventListener('click', () => { document.getElementById('mp-cart').hidden = true; });
+  document.getElementById('mp-cart').addEventListener('click', (e) => { if (e.target.id === 'mp-cart') document.getElementById('mp-cart').hidden = true; });
+})();
 </script>
 </body></html>

@@ -702,12 +702,13 @@
             <div class="mb-8">
                 <h3 class="font-bold text-gray-700 mb-3">Tema</h3>
                 <div class="flex gap-4">
-                    <button onclick="cambiarTema('claro')" id="btn-tema-claro" class="flex-1 py-3 rounded-xl border-2 font-semibold transition {{ 'border-rose-500 bg-rose-50' if (tienda.tema or 'claro') == 'claro' else 'border-gray-200' }}">
-                        Claro
+                    {% for tema, etiqueta in [('claro', 'Claro'), ('oscuro', 'Oscuro'), ('marfil', 'Marfil')] %}
+                    <button type="button" onclick="cambiarTema('{{ tema }}')" data-tema-tienda="{{ tema }}"
+                            aria-pressed="{{ 'true' if (tienda.tema or 'claro') == tema else 'false' }}"
+                            class="flex-1 py-3 rounded-xl border-2 font-semibold transition {{ 'border-rose-500 bg-rose-50' if (tienda.tema or 'claro') == tema else 'border-gray-200' }}">
+                        {{ etiqueta }}
                     </button>
-                    <button onclick="cambiarTema('oscuro')" id="btn-tema-oscuro" class="flex-1 py-3 rounded-xl border-2 font-semibold transition {{ 'border-rose-500 bg-rose-50' if tienda.tema == 'oscuro' else 'border-gray-200' }}">
-                        Oscuro
-                    </button>
+                    {% endfor %}
                 </div>
             </div>
 
@@ -3774,8 +3775,13 @@ async function cambiarTema(tema) {
         });
         const data = await r.json();
         if (data.ok) {
-            document.getElementById('btn-tema-claro').className = `flex-1 py-3 rounded-xl border-2 font-semibold transition ${tema === 'claro' ? 'border-rose-500 bg-rose-50' : 'border-gray-200'}`;
-            document.getElementById('btn-tema-oscuro').className = `flex-1 py-3 rounded-xl border-2 font-semibold transition ${tema === 'oscuro' ? 'border-rose-500 bg-rose-50' : 'border-gray-200'}`;
+            document.querySelectorAll('[data-tema-tienda]').forEach((boton) => {
+                const seleccionado = boton.dataset.temaTienda === tema;
+                boton.setAttribute('aria-pressed', String(seleccionado));
+                boton.classList.toggle('border-rose-500', seleccionado);
+                boton.classList.toggle('bg-rose-50', seleccionado);
+                boton.classList.toggle('border-gray-200', !seleccionado);
+            });
             toast('Tema actualizado');
         } else toast(data.error || 'Error', true);
     } catch(e) { toast('Error de conexion', true); }

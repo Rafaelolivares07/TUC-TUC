@@ -1789,7 +1789,7 @@ def api_tienda_tema(slug):
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
     tema = (request.get_json() or {}).get('tema', 'claro')
-    if tema not in ('claro', 'oscuro'):
+    if tema not in ('claro', 'oscuro', 'marfil'):
         tema = 'claro'
     conn = get_db_connection()
     try:

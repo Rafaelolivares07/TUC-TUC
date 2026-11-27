@@ -11,6 +11,8 @@
     <style>
         body { font-family: 'Inter', sans-serif; }
         body.tema-claro { background: #faf7f2; color: #1f2937; }
+        body.tema-marfil { background: #f3f4ef; color: #36393a; }
+        .tema-marfil .txt-primary { color: #36393a; }
         body.tema-oscuro { background: #111827; color: #f3f4f6; }
         .toast {
             position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
@@ -134,7 +136,7 @@
         }
     </style>
 </head>
-<body class="tema-{{ tienda.tema or 'claro' }} pb-20" style="--color-accion: {{ tienda.color_accion or '#e11d48' }}">
+<body class="tema-{{ 'oscuro' if tienda.tema == 'oscuro' else 'claro' }}{% if tienda.tema == 'marfil' %} tema-marfil{% endif %} pb-20" style="--color-accion: {{ tienda.color_accion or '#e11d48' }}">
 
 <div id="toast" class="toast"></div>
 <div id="zoom-overlay" class="zoom-overlay" onclick="cerrarZoom()">

@@ -1470,7 +1470,7 @@ def buscar_datos_tipos_doc(conn, q, negocio_id, limite=5):
                 'mueve_inventario': bool(r['mueve_inventario']),
                 'consecutivo': r['consecutivo'] or 0,
                 'proximo_numero': (r['consecutivo'] or 0) + 1,
-                'url': f"/contabilidad/{nid or 0}?tab=tipos_doc"
+                'url': f"/contabilidad/{nid or 0}?tab=tipos"
             })
         return tipos_out
     except Exception:

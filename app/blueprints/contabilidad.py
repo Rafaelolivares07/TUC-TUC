@@ -7484,6 +7484,8 @@ def api_tesoreria_procesar_pago(negocio_id):
     conn = get_db_connection()
     try:
         es_cobro = (tipo_movimiento == 'cobro')
+        from .rockola import _validar_tercero_id
+        tercero_id = _validar_tercero_id(conn, tercero_id)
         
         # 1. Validar cuenta financiera según método de pago
         mapping = conn.execute("""
@@ -7595,7 +7597,7 @@ def api_tesoreria_procesar_pago(negocio_id):
                 conn.close()
                 return jsonify({'ok': False, 'error': f"La cuenta contable con ID {c_id} no existe"}), 400
                 
-            c_tercero = ab.get('tercero_id') or tercero_id
+            c_tercero = _validar_tercero_id(conn, ab.get('tercero_id') or tercero_id)
             concepto_abono = (ab.get('concepto') or f"{verbo} {c_row['codigo']} - {c_row['nombre']}").strip()
             
             total_desembolso += monto

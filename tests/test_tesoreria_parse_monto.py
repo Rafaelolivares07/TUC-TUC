@@ -85,5 +85,18 @@ else:
             except Exception:
                 pass
 
+# Tercero FK: el pane mandaba id de CUENTA como tercero_id (187) -> 500.
+# Frontend solo hereda ente cuando es tercero; backend valida -> None.
+check('tercero: pane fallback solo-tercero',
+      part.count("enteActivo.tipo === 'tercero'") >= 2)
+check('tercero: sin fallback ciego',
+      "parseInt(inp.getAttribute('data-tercero-id')) || (TesoreriaState.enteActivo ? TesoreriaState.enteActivo.id : null)" not in part)
+CONT = os.path.join(ROOT, 'app', 'blueprints', 'contabilidad.py')
+src = open(CONT, encoding='utf-8').read()
+check('tercero: backend valida header',
+      'tercero_id = _validar_tercero_id(conn, tercero_id)' in src)
+check('tercero: backend valida item',
+      "c_tercero = _validar_tercero_id(conn, ab.get('tercero_id') or tercero_id)" in src)
+
 print('%d/%d checks' % (total[0] - len(fails), total[0]))
 sys.exit(1 if fails else 0)

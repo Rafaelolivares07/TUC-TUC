@@ -840,7 +840,7 @@ async function tes_ejecutarLiquidacion() {
     if (chk && chk.checked && val > 0) {
       abonosCuentas.push({
         cuenta_id: parseInt(inp.getAttribute('data-cuenta-id')),
-        tercero_id: parseInt(inp.getAttribute('data-tercero-id')) || (TesoreriaState.enteActivo ? TesoreriaState.enteActivo.id : null),
+        tercero_id: parseInt(inp.getAttribute('data-tercero-id')) || ((TesoreriaState.enteActivo && TesoreriaState.enteActivo.tipo === 'tercero') ? TesoreriaState.enteActivo.id : null),
         monto: val
       });
     }

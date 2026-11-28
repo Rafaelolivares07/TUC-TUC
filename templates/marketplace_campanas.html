@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="es-CO">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Campañas y promotores · Tuc-Tuc</title>
+{% include 'marketplace_estilos.html' %}
+<style>
+.campanas{max-width:820px}
+.campanas article{margin-top:22px;padding-top:14px;border-top:1px solid var(--line)}
+.campanas .campana-acuerdo{display:flex;align-items:start;gap:8px}
+.campanas .campana-acuerdo input{width:auto}
+.campanas label[hidden]{display:none}
+</style>
+</head>
+<body>
+<main class="wrap"><section class="publication campanas">
+<p><a href="{{ url_for('marketplace.revisar_publicaciones') }}">Volver a Revisión</a></p>
+<h1>Campañas y promotores</h1>
+<form method="get">
+<label>ID del producto o plato<input name="producto" type="number" min="1" max="2147483647" required value="{{ ficha.id if ficha else '' }}"></label>
+<button class="btn clear" type="submit">Abrir oferta</button>
+</form>
+{% if ficha %}
+<article>
+<h2>{{ ficha.nombre }}</h2>
+<p>{{ ficha.negocio }}</p>
+<form method="post">
+<input type="hidden" name="producto" value="{{ ficha.id }}">
+<input type="hidden" name="token" value="{{ token }}">
+<input type="hidden" name="accion" value="condiciones">
+<label>Comisión sobre el precio de la oferta (%)<input name="comision_pct" type="number" min="0.01" max="99.99" step="0.01" required value="{{ condiciones.comision_pct if condiciones else '' }}"></label>
+<label>Parte de la comisión para el promotor (%)<input name="parte_promotor_pct" type="number" min="50.01" max="99.99" step="0.01" required value="{{ condiciones.parte_promotor_pct if condiciones else parte_promotor }}"></label>
+<label class="campana-acuerdo"><input type="checkbox" name="acuerdo" value="1" required>El ofertante confirmó estas condiciones.</label>
+<button class="btn dark" type="submit">Guardar condiciones</button>
+</form>
+{% if condiciones and condiciones.activa %}
+<form method="post">
+<input type="hidden" name="producto" value="{{ ficha.id }}">
+<input type="hidden" name="token" value="{{ token }}">
+<input type="hidden" name="accion" value="pausar_condiciones">
+<button class="btn clear" type="submit">Pausar comisión y enlaces</button>
+</form>
+{% elif condiciones %}<p>Comisión pausada.</p>{% endif %}
+</article>
+{% if condiciones and condiciones.activa %}
+<article>
+<h2>Crear enlace</h2>
+<form method="post">
+<input type="hidden" name="producto" value="{{ ficha.id }}">
+<input type="hidden" name="token" value="{{ token }}">
+<input type="hidden" name="accion" value="enlace">
+<label>Quién promueve
+<select name="canal" id="campana-canal">
+{% for codigo, nombre in canales.items() %}<option value="{{ codigo }}">{{ nombre }}</option>{% endfor %}
+</select></label>
+<label id="campana-promotor-label">ID del tercero promotor<input id="campana-promotor" name="promotor" type="number" min="1" max="2147483647"></label>
+<p id="campana-pauta" hidden>Identifica una pauta acordada con el promotor.</p>
+<button class="btn dark" type="submit">Crear enlace</button>
+</form>
+</article>
+{% endif %}
+{% if campanas %}
+<article>
+<h2>Enlaces de la oferta</h2>
+{% for c in campanas %}
+<p><strong>{{ canales[c.canal] }}</strong>{% if c.promotor %} · {{ c.promotor }}{% endif %} · {{ 'Activo' if c.activa and condiciones.activa else 'Pausado' }}{% if c.codigo == enlace_nuevo %} · Recién creado{% endif %}</p>
+{% if c.activa and condiciones.activa %}
+<form method="post">
+<label>Enlace para compartir<input type="url" readonly value="https://tuc-tuc.co{{ url_for('marketplace.portada', campana=c.codigo) }}"></label>
+<input type="hidden" name="producto" value="{{ ficha.id }}">
+<input type="hidden" name="token" value="{{ token }}">
+<input type="hidden" name="accion" value="pausar">
+<input type="hidden" name="codigo" value="{{ c.codigo }}">
+<button class="btn clear" type="submit">Pausar enlace</button>
+</form>
+{% endif %}
+{% endfor %}
+</article>
+{% endif %}
+{% if ventas %}
+<article>
+<h2>Comisiones registradas</h2>
+<p>Confirma el cobro, la entrega y las devoluciones antes de liquidar.</p>
+<ul>
+{% for v in ventas %}
+<li>Pedido {{ v.pedido_id }} · {{ v.estado or 'Nuevo' }} · {{ canales.get(v.canal, 'Venta directa') }} · Promotor ${{ v.promotor_cop }} · Tuc-Tuc ${{ v.tuctuc_cop }}</li>
+{% endfor %}
+</ul>
+</article>
+{% endif %}
+{% endif %}
+</section></main>
+<script>
+const canal = document.getElementById('campana-canal');
+if (canal) {
+  const promotor = document.getElementById('campana-promotor');
+  const label = document.getElementById('campana-promotor-label');
+  const pauta = document.getElementById('campana-pauta');
+  function ajustarCanal() {
+    const requierePromotor = canal.value !== 'tuctuc';
+    label.hidden = !requierePromotor;
+    promotor.required = requierePromotor;
+    pauta.hidden = canal.value !== 'pauta_promotor';
+  }
+  canal.addEventListener('change', ajustarCanal);
+  ajustarCanal();
+}
+</script>
+</body>
+</html>

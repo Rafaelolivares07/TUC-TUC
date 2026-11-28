@@ -2090,11 +2090,14 @@ def api_pedido_crear(slug):
         data = request.get_json(silent=True) or {}
         marketplace_compra = request.path.startswith('/api/marketplace/')
         if marketplace_compra:
-            from .marketplace import datos_pedido
+            from ..marketplace_comisiones import asegurar_comisiones, registrar_comisiones
+            from .marketplace import datos_pedido, origenes_campana
             try:
                 data = datos_pedido(data, restaurante=True)
             except ValueError as error:
                 return jsonify(ok=False, error=str(error)), 400
+            if data.get('platos'):
+                asegurar_comisiones()
         mesa_nombre = str(data.get('mesa_nombre') or '').strip() or None
         nombre_cliente = data.get('nombre_cliente', '').strip() or None
         notas = data.get('notas', '').strip()
@@ -2595,6 +2598,10 @@ def api_pedido_crear(slug):
                               metodo_pago=metodo_pago)
             except Exception as _e:
                 print(f'[cont] venta rest {slug}: {_e}')
+        if marketplace_compra and data.get('platos') and es_carta:
+            origenes = origenes_campana()
+            for pedido_carta_id in pedidos_insertados:
+                registrar_comisiones(conn, pedido_carta_id, origenes)
         conn.commit()
         try:
             _notificar_pedido_restaurante(

@@ -7,6 +7,7 @@ from decimal import Decimal
 from io import BytesIO
 import re
 import secrets
+from time import time
 from urllib.parse import urlencode, urlsplit
 
 from flask import Blueprint, abort, current_app, jsonify, make_response, redirect, render_template, request, session, url_for
@@ -14,6 +15,7 @@ from itsdangerous import BadData, URLSafeTimedSerializer
 
 from ..asegurar import asegurar_una_vez
 from ..db import get_db_connection
+from .. import marketplace_comisiones as comercial
 from ..tipo_oferta import TIPO_OFERTA_SQL, asegurar_tipo_oferta
 
 bp = Blueprint("marketplace", __name__)
@@ -76,6 +78,17 @@ _PLATOS_PUBLICOS = """
        AND (r.tipo_restaurante = 'carta' OR lower(btrim(COALESCE(p.categoria, '')))
             NOT IN ('sopa', 'proteina', 'proteína', 'principio'))
 """
+_FICHA_CAMPANA = f"""
+    SELECT 'productos' AS tipo, p.id, p.negocio_id, p.nombre, p.categoria, t.nombre AS negocio, t.slug,
+           p.precio, left({_FOTO_PRODUCTO},1501) AS imagen, {_AMBITO_PRODUCTO} AS ambito
+      {_PRODUCTOS_PUBLICOS} AND p.id=%s
+    UNION ALL
+    SELECT 'platos', p.id, p.negocio_id, p.nombre, p.categoria, r.nombre, r.slug,
+           p.precio, left({_FOTO_PRODUCTO},1501), {_AMBITO_CARTA}
+      {_PLATOS_PUBLICOS} AND p.id=%s
+    ORDER BY tipo, slug LIMIT 1
+"""
+
 _OFERTAS = f"""
 WITH ofertas AS (
     SELECT 'productos' AS tipo, p.id, p.nombre, p.categoria,
@@ -393,6 +406,8 @@ def foto_publicacion_extra(producto_id, foto_id):
 
 @bp.get("/marketplace")
 def portada():
+    if "campana" in request.args:
+        return _portada_campana(request.args["campana"])
     producto_id = request.args.get("oferta", type=int)
     if producto_id is not None:
         if not 1 <= producto_id <= 2_147_483_647:
@@ -427,6 +442,50 @@ def portada():
         usuario=usuario_sesion(),
         aviso=request.args.get("publicacion") == "recibida",
     )
+
+
+def _ficha_campana(conn, producto_id):
+    return conn.execute(_FICHA_CAMPANA, (producto_id, producto_id)).fetchone()
+
+
+def _portada_campana(codigo):
+    comercial.asegurar_comisiones()
+    with get_db_connection() as conn:
+        campana = comercial.buscar_campana(conn, codigo)
+        if not campana:
+            abort(404)
+        ficha = _ficha_campana(conn, campana["producto_id"])
+        if not ficha or ficha["negocio_id"] != campana["negocio_id"]:
+            abort(404)
+    oferta = _oferta(ficha)
+    respuesta = make_response(render_template(
+        "marketplace.html", ofertas=[oferta], campana=oferta, pagina=1,
+        comprador=datos_comprador(), usuario=usuario_sesion(),
+    ))
+    origenes = _campanas_navegador()
+    origenes[str(ficha["id"])] = [codigo, int(time())]
+    recientes = dict(sorted(origenes.items(), key=lambda item: item[1][1], reverse=True)[:10])
+    respuesta.set_cookie(comercial.COOKIE_CAMPANA, _firma("campanas-origen").dumps(recientes),
+                         max_age=comercial.VIGENCIA_CAMPANA,
+                         secure=True, httponly=True, samesite="Lax")
+    respuesta.headers["Cache-Control"] = "private, no-store"
+    return respuesta
+
+
+def _campanas_navegador():
+    valor = request.cookies.get(comercial.COOKIE_CAMPANA)
+    if not valor:
+        return {}
+    try:
+        origenes = _firma("campanas-origen").loads(valor, max_age=comercial.VIGENCIA_CAMPANA)
+    except BadData:
+        return {}
+    limite = time() - comercial.VIGENCIA_CAMPANA
+    return {producto: dato for producto, dato in origenes.items() if dato[1] > limite}
+
+
+def origenes_campana():
+    return {producto: dato[0] for producto, dato in _campanas_navegador().items()}
 
 
 def _firma(uso):
@@ -719,6 +778,7 @@ def _crear_solicitudes(conn):
         ADD COLUMN IF NOT EXISTS cambiar_icono_ofertante boolean NOT NULL DEFAULT FALSE,
         ADD COLUMN IF NOT EXISTS icono_ofertante_aprobado text,
         ADD COLUMN IF NOT EXISTS precio numeric(10,2) CHECK (precio > 0),
+        ADD COLUMN IF NOT EXISTS comision_pct numeric(4,2) CHECK (comision_pct > 0 AND comision_pct < 100),
         ADD COLUMN IF NOT EXISTS acepta_contraentrega boolean,
         ADD COLUMN IF NOT EXISTS metodo_pago_aprobado_id integer REFERENCES metodos_pago_catalogo(id)
     """)
@@ -824,7 +884,7 @@ def _solicitudes_editor(identidades, actual=None):
         ).fetchall()
         seleccion = conn.execute(
             """SELECT s.id, s.nombre, s.telefono, s.tipo, s.titulo, s.descripcion, s.fotos, s.estado,
-                      s.revision, s.contacto_publico, s.acepta_contraentrega,
+                      s.revision, s.contacto_publico, s.acepta_contraentrega, s.comision_pct,
                       CASE WHEN s.cambiar_icono_ofertante THEN COALESCE(s.icono_ofertante,'') END AS icono_ofertante,
                       ofertante.icono_marketplace AS icono_actual,
                       COALESCE(s.precio, NULLIF(p.precio,0)) AS precio
@@ -894,6 +954,7 @@ def recibir_publicacion():
     datos["revision"] = request.form.get("revision", type=int)
     datos["contacto_publico"] = request.form.get("contacto_publico") == "1"
     datos["precio"] = request.form.get("precio", "").strip()
+    datos["comision_pct"] = request.form.get("comision_pct", "").strip().replace(",", ".")
     datos["acepta_contraentrega"] = {"si": True, "no": False}.get(request.form.get("contraentrega"))
     icono = request.form.get("icono_ofertante")
     if icono:
@@ -915,6 +976,10 @@ def recibir_publicacion():
     precio = Decimal(monto)
     if datos["acepta_contraentrega"] is None:
         return _formulario_publicacion(token, datos, "Indica si aceptas pago contra entrega."), 400
+    try:
+        comision = comercial.porcentaje(datos["comision_pct"])
+    except ValueError:
+        return _formulario_publicacion(token, datos, "Indica una comisión mayor a 0% y menor a 100%."), 400
     conn = _conexion_publicaciones()
     try:
         if editando:
@@ -922,7 +987,7 @@ def recibir_publicacion():
             fila = conn.execute(
                 """UPDATE marketplace_solicitudes
                       SET tipo=%s, titulo=%s, descripcion=%s, fotos=%s::jsonb,
-                          precio=%s, acepta_contraentrega=%s,
+                          precio=%s, acepta_contraentrega=%s, comision_pct=%s,
                           contacto_publico=%s, contacto_aprobado=contacto_aprobado AND %s,
                           icono_ofertante=CASE WHEN %s THEN %s ELSE icono_ofertante END,
                           cambiar_icono_ofertante=CASE WHEN %s THEN %s OR producto_id IS NOT NULL
@@ -930,7 +995,7 @@ def recibir_publicacion():
                           estado='recibida', revision=revision+1
                     WHERE id=%s AND revision=%s RETURNING id, nombre, telefono""",
                 (datos["tipo"], datos["titulo"], datos["descripcion"], json.dumps(fotos),
-                 precio, datos["acepta_contraentrega"], datos["contacto_publico"],
+                 precio, datos["acepta_contraentrega"], comision, datos["contacto_publico"],
                  datos["contacto_publico"], icono is not None, icono or None, icono is not None, bool(icono),
                  solicitud_id, datos["revision"]),
             ).fetchone()
@@ -940,12 +1005,12 @@ def recibir_publicacion():
             fila = conn.execute(
                 """INSERT INTO marketplace_solicitudes
                           (token, nombre, telefono, tipo, titulo, descripcion, fotos, contacto_publico,
-                           precio, acepta_contraentrega, icono_ofertante, cambiar_icono_ofertante)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s, %s)
+                           precio, acepta_contraentrega, icono_ofertante, cambiar_icono_ofertante, comision_pct)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s, %s, %s)
                    ON CONFLICT (token) DO NOTHING RETURNING id, nombre, telefono""",
                 (token, datos["nombre"], datos["telefono"], datos["tipo"], datos["titulo"],
                  datos["descripcion"], json.dumps(fotos), datos["contacto_publico"], precio,
-                 datos["acepta_contraentrega"], icono or None, bool(icono)),
+                 datos["acepta_contraentrega"], icono or None, bool(icono), comision),
             ).fetchone()
             if not fila:
                 fila = conn.execute(
@@ -1000,7 +1065,7 @@ def revisar_publicaciones():
         ).fetchall()
         solicitud = conn.execute(
             """SELECT id, titulo, nombre, telefono, tipo, estado, descripcion, fotos, revision,
-                      producto_id, contacto_publico, precio, acepta_contraentrega,
+                      producto_id, contacto_publico, precio, acepta_contraentrega, comision_pct,
                       icono_ofertante, cambiar_icono_ofertante
                  FROM marketplace_solicitudes WHERE id=%s""",
             (solicitud_id,),
@@ -1025,6 +1090,97 @@ def revisar_publicaciones():
         precio=_precio_visible(solicitud["precio"]) if solicitud else "",
         token=_firma("revision-csrf").dumps(moderador), pagina=pagina, siguiente=len(solicitudes) > 30,
     )
+
+
+@bp.route("/admin/marketplace/campanas", methods=["GET", "POST"])
+def campanas_marketplace():
+    _host_revision()
+    from .auth import administrador_autenticado
+
+    moderador = administrador_autenticado()
+    if moderador is None:
+        return redirect(url_for("auth.entrar", destino="revision-marketplace"))
+    comercial.asegurar_comisiones()
+    producto_id = request.values.get("producto", type=int)
+    if producto_id is not None and not _entero(producto_id):
+        abort(400)
+    with get_db_connection() as conn:
+        if not conn.execute("SELECT 1 FROM usuarios WHERE id=%s AND rol='Administrador'", (moderador,)).fetchone():
+            abort(403)
+        ficha = _ficha_campana(conn, producto_id) if producto_id else None
+        if producto_id and not ficha:
+            abort(404, "La oferta debe estar disponible para comprar en el Marketplace.")
+        condiciones = None
+        if ficha:
+            condiciones = conn.execute("""
+                SELECT * FROM marketplace_condiciones WHERE producto_id=%s AND negocio_id=%s
+            """, (producto_id, ficha["negocio_id"])).fetchone()
+        if request.method == "POST":
+            return _guardar_campana(conn, ficha, condiciones, moderador)
+        campanas = []
+        ventas = []
+        if condiciones:
+            campanas = conn.execute("""
+                SELECT c.*, t.nombre AS promotor FROM marketplace_campanas c
+                  LEFT JOIN terceros t ON t.id=c.promotor_id
+                 WHERE c.producto_id=%s AND c.negocio_id=%s ORDER BY creada_en DESC LIMIT 30
+            """, (producto_id, ficha["negocio_id"])).fetchall()
+            ventas = conn.execute("""
+                SELECT c.*, p.estado FROM marketplace_comisiones_pedido c JOIN pedidos p ON p.id=c.pedido_id
+                 WHERE c.producto_id=%s AND c.negocio_id=%s ORDER BY c.pedido_id DESC LIMIT 30
+            """, (producto_id, ficha["negocio_id"])).fetchall()
+    return render_template("marketplace_campanas.html", ficha=ficha, condiciones=condiciones,
+                           campanas=campanas, ventas=ventas, canales=comercial.CANALES,
+                           parte_promotor=comercial.PARTE_PROMOTOR_PREDETERMINADA,
+                           token=_firma("campanas-csrf").dumps(moderador), enlace_nuevo=request.args.get("enlace"))
+
+
+def _guardar_campana(conn, ficha, condiciones, moderador):
+    try:
+        titular = _firma("campanas-csrf").loads(request.form.get("token", ""), max_age=VIGENCIA_FORMULARIO_REVISION)
+    except BadData:
+        abort(403)
+    if titular != moderador:
+        abort(403)
+    if not ficha:
+        abort(400)
+    producto_id, negocio_id = ficha["id"], ficha["negocio_id"]
+    accion = request.form.get("accion")
+    codigo = None
+    if accion == "condiciones":
+        try:
+            comision = comercial.porcentaje(request.form.get("comision_pct"))
+            parte = comercial.porcentaje(request.form.get("parte_promotor_pct"))
+        except ValueError as error:
+            abort(400, str(error))
+        if parte <= 50 or request.form.get("acuerdo") != "1":
+            abort(400, "Confirma el acuerdo con el ofertante y asigna al promotor más de la mitad de la comisión.")
+        comercial.activar_condiciones(conn, producto_id, negocio_id, comision, parte)
+    elif accion == "enlace":
+        canal = request.form.get("canal")
+        if not condiciones or not condiciones["activa"] or canal not in comercial.CANALES:
+            abort(400, "Activa las condiciones de la oferta y elige un canal válido.")
+        promotor_id = None
+        if canal != "tuctuc":
+            promotor_id = request.form.get("promotor", type=int)
+            if (not _entero(promotor_id) or promotor_id == negocio_id or not conn.execute(
+                """SELECT 1 FROM terceros WHERE id=%s AND es_empresa IS NOT TRUE
+                     AND COALESCE(tipo_tercero,'') <> 'negocio'""", (promotor_id,)
+            ).fetchone()):
+                abort(400, "Selecciona el ID de un tercero particular distinto del ofertante.")
+        codigo = comercial.crear_campana(conn, producto_id, negocio_id, canal, promotor_id)
+    elif accion == "pausar_condiciones":
+        conn.execute("""
+            UPDATE marketplace_condiciones SET activa=FALSE WHERE producto_id=%s AND negocio_id=%s
+        """, (producto_id, negocio_id))
+    elif accion == "pausar":
+        conn.execute("""
+            UPDATE marketplace_campanas SET activa=FALSE WHERE codigo=%s AND producto_id=%s AND negocio_id=%s
+        """, (_texto(request.form.get("codigo"), 24), producto_id, negocio_id))
+    else:
+        abort(400)
+    conn.commit()
+    return redirect(url_for("marketplace.campanas_marketplace", producto=producto_id, enlace=codigo), code=303)
 
 
 def _terceros_de_publicacion(conn, telefono):
@@ -1088,6 +1244,8 @@ def _aprobar_publicacion(conn, solicitud, tercero_elegido=None):
             (*datos, producto_id),
         ).fetchone()["negocio_id"]
         conn.execute("DELETE FROM producto_imagenes WHERE producto_id=%s", (producto_id,))
+    if solicitud.get("comision_pct"):
+        comercial.activar_condiciones(conn, producto_id, negocio_id, solicitud["comision_pct"])
     if solicitud.get("cambiar_icono_ofertante"):
         conn.execute("UPDATE terceros SET icono_marketplace=%s WHERE id=%s",
                      (solicitud["icono_ofertante"], negocio_id))
@@ -1121,13 +1279,14 @@ def aprobar_publicacion():
     revision = request.form.get("revision", type=int)
     if not solicitud_id or not revision:
         abort(400)
+    comercial.asegurar_comisiones()
     conn = _conexion_publicaciones()
     try:
         if not conn.execute("SELECT 1 FROM usuarios WHERE id=%s AND rol='Administrador'", (moderador,)).fetchone():
             abort(403)
         solicitud = conn.execute(
             """SELECT id,nombre,telefono,titulo,tipo,descripcion,fotos,estado,revision,producto_id,
-                      precio,acepta_contraentrega,icono_ofertante,cambiar_icono_ofertante
+                      precio,acepta_contraentrega,icono_ofertante,cambiar_icono_ofertante,comision_pct
                  FROM marketplace_solicitudes WHERE id=%s FOR UPDATE""",
             (solicitud_id,),
         ).fetchone()
@@ -1136,6 +1295,8 @@ def aprobar_publicacion():
         if solicitud["estado"] != "aprobada":
             if solicitud["revision"] != revision:
                 abort(409, "La solicitud cambió. Vuelve a abrirla para revisar la versión más reciente.")
+            if not solicitud["comision_pct"]:
+                abort(409, "El ofertante debe confirmar la comisión antes de aprobar.")
             _aprobar_publicacion(conn, solicitud, request.form.get("tercero", type=int))
         conn.commit()
     except Exception:

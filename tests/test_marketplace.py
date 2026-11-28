@@ -180,7 +180,7 @@ class MarketplaceTest(unittest.TestCase):
         form = MultiDict([("token", token), ("nombre", "Diana"), ("telefono", "3151112222"),
                           ("tipo", "producto"), ("titulo", "Oferta de prueba"),
                           ("descripcion", "Descripción de prueba"), ("precio", "12500,50"),
-                          ("contraentrega", "no"), ("icono_ofertante", fotos[0]),
+                          ("contraentrega", "no"), ("icono_ofertante", fotos[0]), ("comision_pct", "20,50"),
                           *[("fotos", foto) for foto in fotos]])
         conn = Registro()
         with patch.object(marketplace, "get_db_connection", return_value=conn):
@@ -188,7 +188,7 @@ class MarketplaceTest(unittest.TestCase):
         self.assertEqual(respuesta.status_code, 303)
         guardado = next(params for sql, params in conn.sql if "INSERT INTO marketplace_solicitudes" in sql)
         self.assertEqual(json.loads(guardado[6]), fotos)
-        self.assertEqual(guardado[-4:], (Decimal("12500.50"), False, fotos[0], True))
+        self.assertEqual(guardado[-5:], (Decimal("12500.50"), False, fotos[0], True, Decimal("20.50")))
         self.assertEqual(marketplace._fotos_publicacion([]), [])
         with self.assertRaises(ValueError):
             marketplace._fotos_publicacion(["data:image/jpeg;base64,AAAA"])
@@ -200,6 +200,7 @@ class MarketplaceTest(unittest.TestCase):
         html = pagina.get_data(as_text=True)
         self.assertIn('name="precio"', html)
         self.assertIn('name="contraentrega"', html)
+        self.assertIn('name="comision_pct"', html)
         self.assertIn('name="icono_ofertante"', html)
         token = re.search(r'name="token" value="([^"]+)"', html).group(1)
         form = dict(token=token, nombre="Diana", telefono="3151112222",
@@ -704,6 +705,32 @@ class CompraMarketplaceTest(unittest.TestCase):
         html = pagina.get_data(as_text=True)
         self.assertIn('value="David"', html)
         self.assertIn('value="3001112233"', html)
+
+    def test_campana_abre_oferta_directa_y_firma_origen_por_producto(self):
+        comercial = marketplace.comercial
+        ficha = dict(tipo="productos", id=19, negocio_id=61, nombre="Combo de prueba",
+                     categoria="Productos", negocio="Tienda", slug="tienda", precio=Decimal("25000"),
+                     imagen=None, ambito="productos")
+        codigo = "A" * 24
+        conn = Registro()
+        with patch.object(comercial, "asegurar_comisiones"), \
+             patch.object(marketplace, "get_db_connection") as db, \
+             patch.object(comercial, "buscar_campana", return_value={"producto_id": 19, "negocio_id": 61}), \
+             patch.object(marketplace, "_ficha_campana", return_value=ficha):
+            db.return_value.__enter__.return_value = conn
+            pagina = self.client.get("/marketplace", query_string={"campana": codigo}, base_url="https://tuc-tuc.co")
+        self.assertEqual(pagina.status_code, 200)
+        html = pagina.get_data(as_text=True)
+        self.assertIn('data-id="19"', html)
+        self.assertIn("Comprar</button>", html)
+        self.assertNotIn("Visitar tienda", html)
+        self.assertIn("no-store", pagina.headers["Cache-Control"])
+        cookie = self.client.get_cookie(comercial.COOKIE_CAMPANA, domain="tuc-tuc.co")
+        self.assertTrue(cookie.http_only)
+        with self.app.test_request_context(headers={"Cookie": f"{comercial.COOKIE_CAMPANA}={cookie.value}"}):
+            self.assertEqual(marketplace.origenes_campana(), {"19": codigo})
+        with self.app.test_request_context(headers={"Cookie": f"{comercial.COOKIE_CAMPANA}={codigo}"}):
+            self.assertEqual(marketplace.origenes_campana(), {})
 
     def test_busqueda_abre_externa_en_pestana_nueva(self):
         with open("../static/marketplace/busqueda.js", encoding="utf-8") as f:

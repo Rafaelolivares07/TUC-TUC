@@ -21,6 +21,7 @@
 <p>Esta sección requiere una cuenta administradora de Tuc-Tuc.</p>
 <a class="btn dark" href="{{ url_for('auth.entrar', destino='revision-marketplace') }}">Entrar con una cuenta administradora</a>
 {% else %}
+<p><a href="{{ url_for('marketplace.campanas_marketplace') }}">Campañas y promotores</a></p>
 {% if aviso %}<p class="notice" role="status">Publicación aprobada.</p>{% endif %}
 {% if solicitud %}
 <article class="revision-detalle">
@@ -32,6 +33,7 @@
 {% if solicitud.cambiar_icono_ofertante %}<p>{{ 'Este ícono se aplicará a todas las publicaciones del ofertante.' if solicitud.icono_ofertante else 'Se quitará el ícono de todas las publicaciones del ofertante.' }}</p>{% endif %}
 <p>{{ solicitud.descripcion }}</p>
 <p><strong>Precio</strong> {{ precio or 'Por confirmar' }}{% if precio %} COP{% endif %}</p>
+<p><strong>Comisión propuesta</strong> {{ (solicitud.comision_pct|string ~ '%') if solicitud.get('comision_pct') else 'Por confirmar' }}</p>
 <p><strong>Pago contra entrega</strong> {% if solicitud.acepta_contraentrega is none %}Por confirmar{% elif solicitud.acepta_contraentrega %}Aceptado en efectivo{% else %}El ofertante indicó que no{% endif %}</p>
 {% if solicitud.fotos %}<div class="revision-galeria">{% for foto in solicitud.fotos %}<img src="{{ foto }}" alt="{{ 'Portada' if loop.first else 'Foto ' ~ loop.index }}" loading="lazy">{% endfor %}</div>{% else %}<p>La solicitud aún no tiene fotos.</p>{% endif %}
 <p>{{ 'El autor autorizó mostrar su contacto.' if solicitud.contacto_publico else 'El contacto queda privado.' }}</p>
@@ -41,8 +43,8 @@
 </form>
 {% if oferta %}<p><a class="btn clear" href="{{ oferta }}">Ver publicación en el Marketplace</a></p>{% endif %}
 {% if solicitud.estado != 'aprobada' %}
-{% if not precio or solicitud.acepta_contraentrega is none %}
-<p>Comparte el enlace de edición para que el ofertante confirme el precio y el pago contra entrega antes de aprobar.</p>
+{% if not precio or solicitud.acepta_contraentrega is none or not solicitud.get('comision_pct') %}
+<p>Comparte el enlace de edición para que el ofertante confirme el precio, la comisión y el pago contra entrega antes de aprobar.</p>
 {% else %}
 <form method="post" action="{{ url_for('marketplace.aprobar_publicacion') }}">
 <input type="hidden" name="token" value="{{ token }}">

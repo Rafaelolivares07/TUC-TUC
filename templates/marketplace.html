@@ -18,7 +18,7 @@
 </div></header>
 <main id="inicio">
 {% if aviso %}<p class="wrap notice" role="status">Recibimos tu solicitud. Tu oferta aparecerá cuando quede confirmada.</p>{% endif %}
-<section class="hero wrap" aria-labelledby="hero-title">
+{% if not campana %}<section class="hero wrap" aria-labelledby="hero-title">
 <div class="hero-copy">
 <div class="tagline"><span class="pin" aria-hidden="true"></span>Compra local</div>
 <h1 id="hero-title">Lo que buscas,<br><em>cerca de ti.</em></h1>
@@ -50,16 +50,18 @@
   <span class="market-carousel-status" role="status"></span>
 </div>
 </section>
+{% endif %}
 <section class="browse wrap" id="explorar" aria-labelledby="browse-title">
-<div class="cats market-tabs" aria-label="Categorías">
+{% if not campana %}<div class="cats market-tabs" aria-label="Categorías">
 {% for clave, etiqueta in categorias.items() %}
 <a class="cat" href="{{ url_for('marketplace.portada', categoria=clave, q=busqueda) }}#explorar"{% if categoria == clave %} aria-current="true"{% endif %}>{{ etiqueta }}</a>
 {% endfor %}
 </div>
 <div class="section-head"><div><h2 id="browse-title">Explora productos, servicios y negocios</h2>{% if busqueda %}<p>Resultados para «{{ busqueda }}».</p>{% elif rubro %}<p>Categoría «{{ rubro }}».</p>{% endif %}</div></div>
+{% else %}<div class="section-head"><h1 id="browse-title">{{ campana.nombre }}</h1></div>{% endif %}
 <div class="cards">
 {% for oferta in ofertas %}
-<article class="card"><a href="{{ oferta.enlace }}"{% if oferta.externa %} target="_blank" rel="noopener"{% endif %}><span class="card-photo">{% if oferta.imagen %}<img src="{{ oferta.imagen }}" alt="" loading="lazy" referrerpolicy="no-referrer">{% else %}<span class="fallback">{{ oferta.categoria or oferta.negocio or 'Categoría' }}</span>{% endif %}</span><span class="card-info"><small>{% if oferta.es_servicio %}Servicio · {% endif %}{{ oferta.negocio if oferta.tipo in ('productos','platos','publicaciones') else (oferta.categoria or 'Categoría') }}</small><strong>{{ oferta.nombre }}</strong><span class="price">{{ oferta.precio or ('Ver categoría' if oferta.tipo == 'categorias' else 'Ver tienda' if oferta.tipo == 'tiendas' else 'Ver publicación' if oferta.tipo == 'publicaciones' else 'Ver carta') }}</span></span></a>{% if oferta.comprable and oferta.precio_num is not none %}<div class="mp-buyrow"><button class="btn lime mp-add" type="button" data-tipo="{{ oferta.tipo }}" data-id="{{ oferta.oferta_id }}" data-slug="{{ oferta.negocio_slug }}" data-negocio="{{ oferta.negocio|e }}" data-nombre="{{ oferta.nombre|e }}" data-precio="{{ oferta.precio_num }}">Comprar</button><a class="mp-visit" href="{{ oferta.enlace }}"{% if oferta.externa %} target="_blank" rel="noopener"{% endif %}>Visitar {{ 'tienda' if oferta.tipo == 'productos' else 'carta' }}</a></div>{% endif %}</article>
+<article class="card">{% if campana %}<div>{% else %}<a href="{{ oferta.enlace }}"{% if oferta.externa %} target="_blank" rel="noopener"{% endif %}>{% endif %}<span class="card-photo">{% if oferta.imagen %}<img src="{{ oferta.imagen }}" alt="" loading="lazy" referrerpolicy="no-referrer">{% else %}<span class="fallback">{{ oferta.categoria or oferta.negocio or 'Categoría' }}</span>{% endif %}</span><span class="card-info"><small>{% if oferta.es_servicio %}Servicio · {% endif %}{{ oferta.negocio if oferta.tipo in ('productos','platos','publicaciones') else (oferta.categoria or 'Categoría') }}</small><strong>{{ oferta.nombre }}</strong><span class="price">{{ oferta.precio or ('Ver categoría' if oferta.tipo == 'categorias' else 'Ver tienda' if oferta.tipo == 'tiendas' else 'Ver publicación' if oferta.tipo == 'publicaciones' else 'Ver carta') }}</span></span>{% if campana %}</div>{% else %}</a>{% endif %}{% if oferta.comprable and oferta.precio_num is not none %}<div class="mp-buyrow"><button class="btn lime mp-add" type="button" data-tipo="{{ oferta.tipo }}" data-id="{{ oferta.oferta_id }}" data-slug="{{ oferta.negocio_slug }}" data-negocio="{{ oferta.negocio|e }}" data-nombre="{{ oferta.nombre|e }}" data-precio="{{ oferta.precio_num }}">Comprar</button>{% if not campana %}<a class="mp-visit" href="{{ oferta.enlace }}"{% if oferta.externa %} target="_blank" rel="noopener"{% endif %}>Visitar {{ 'tienda' if oferta.tipo == 'productos' else 'carta' }}</a>{% endif %}</div>{% endif %}</article>
 {% else %}
 <p class="empty">No encontramos ofertas para esta búsqueda.</p>
 {% endfor %}
@@ -71,18 +73,18 @@
 </div>
 {% endif %}
 </section>
-<section class="sell" id="negocios" aria-labelledby="sell-title"><div class="wrap">
+{% if not campana %}<section class="sell" id="negocios" aria-labelledby="sell-title"><div class="wrap">
 <div class="sell-copy"><h2 id="sell-title">Tu negocio también tiene un lugar aquí.</h2><div class="sell-intro"><p class="lead">Si ya usas Tuc-Tuc, tu catálogo público puede aparecer automáticamente. Si vendes por tu cuenta, envía gratis un producto o servicio para publicarlo.</p><a class="btn lime publish" href="{{ url_for('marketplace.publicar') }}">Empezar a publicar</a></div></div>
 <span class="plan-label" id="plan-label">Compara los planes para tu negocio</span>
 <div class="segments" role="group" aria-labelledby="plan-label"><button type="button" data-plan="rest" aria-pressed="true">Restaurantes</button><button type="button" data-plan="other" aria-pressed="false">Otros negocios</button></div>
 <div class="plans">
-<article class="plan"><h3>Marketplace</h3><strong class="amount">Gratis</strong><p>Publicación de productos y servicios.</p></article>
+<article class="plan"><h3>Marketplace</h3><strong class="amount">Gratis</strong><p>Publicación de productos y servicios. Comisión acordada por venta.</p></article>
 <article class="plan"><h3>Básico</h3><strong class="amount">$50.000 <small>/ mes</small></strong><p>Todo lo anterior, más página propia, pedidos y gestión de envíos.</p></article>
 <article class="plan special" aria-live="polite"><h3 id="plan-title">Intermedio · Bistró</h3><strong class="amount">$90.000 <small>/ mes</small></strong><p id="plan-copy">Todo lo de Básico, más meseros, cocina y gestión de mesas.</p></article>
 <article class="plan"><h3>Full</h3><strong class="amount">$140.000 <small>/ mes</small></strong><p>Todo lo de Intermedio, más inventarios, contabilidad y gestión integral.</p></article>
 </div></div></section>
 <section class="delivery wrap" id="reparto"><h2>Reparto con Tuc-Tuc</h2><p>Consulta con cada negocio si entrega en tu zona o hace envíos a otras ciudades. Estamos preparando el reparto de Tuc-Tuc por zonas.</p></section>
-</main>
+{% endif %}</main>
 <footer class="foot"><div class="wrap"><strong>tuc-tuc.co</strong><span>Marketplace · Colombia</span></div></footer>
 <script>
 const plans = [...document.querySelectorAll('[data-plan]')];

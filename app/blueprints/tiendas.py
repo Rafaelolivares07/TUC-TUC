@@ -2410,11 +2410,13 @@ def api_tienda_pedido_crear(slug):
     data             = request.get_json() or {}
     marketplace_compra = request.path.startswith('/api/marketplace/')
     if marketplace_compra:
-        from .marketplace import datos_pedido
+        from ..marketplace_comisiones import asegurar_comisiones, registrar_comisiones
+        from .marketplace import datos_pedido, origenes_campana
         try:
             data = datos_pedido(data)
         except ValueError as error:
             return jsonify(ok=False, error=str(error)), 400
+        asegurar_comisiones()
     nombre_cliente   = data.get('nombre_cliente', '').strip()
     telefono_cliente = data.get('telefono_cliente', '').strip()
     direccion_cliente = data.get('direccion_cliente', '').strip()
@@ -2877,6 +2879,8 @@ def api_tienda_pedido_crear(slug):
                 WHERE id = %s
             """, (session.get('usuario_id'), numero_documento, pedido_premontado_id))
 
+        if marketplace_compra:
+            registrar_comisiones(conn, pedido_id, origenes_campana())
         conn.commit()
         # Notificación Telegram
         chat_id = telegram_chat_id or (tienda.get('telegram_chat_id') if isinstance(tienda, dict) else (tienda['telegram_chat_id'] if tienda else None))

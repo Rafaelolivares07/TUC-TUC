@@ -586,6 +586,30 @@ function tes_renderizarArbol() {
   tes_recalcularCuadreTesoreria();
 }
 
+// Parser de montos: es-CO "27.627.561,00" -> 27627561 ; tolera en-US y plano.
+// El patron viejo (strip de comas + parseFloat) leia 27.6 en vez de 27.6M.
+function tes_parseMontoEsCO(v) {
+  if (v === null || v === undefined) return 0;
+  let s = String(v).trim().replace(/\s/g, '');
+  if (s === '') return 0;
+  const hasComma = s.indexOf(',') !== -1;
+  const hasDot = s.indexOf('.') !== -1;
+  if (hasComma && hasDot) {
+    if (s.lastIndexOf(',') > s.lastIndexOf('.')) {
+      s = s.replace(/\./g, '').replace(',', '.');
+    } else {
+      s = s.replace(/,/g, '');
+    }
+  } else if (hasComma) {
+    s = s.replace(',', '.');
+  } else if (hasDot && /^\d{1,3}(\.\d{3})+$/.test(s)) {
+    s = s.replace(/\./g, '');
+  }
+  s = s.replace(/[^0-9.\-]/g, '');
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+}
+
 // 5. Atajos y Eventos de Abonos
 function tes_onCheckDoc(id) {
   const chk = document.getElementById(`tes-doc-chk-${id}`);
@@ -593,7 +617,7 @@ function tes_onCheckDoc(id) {
   if (!chk || !inp) return;
 
   if (chk.checked) {
-    if (!inp.value || parseFloat(inp.value.replace(/[^0-9.]/g, '')) <= 0) {
+    if (!inp.value || tes_parseMontoEsCO(inp.value) <= 0) {
       inp.value = Number(inp.getAttribute('data-saldo')).toLocaleString('es-CO', {minimumFractionDigits: 2});
     }
   } else {
@@ -617,7 +641,7 @@ function tes_onCheckCuenta(itemId) {
   if (!chk || !inp) return;
 
   if (chk.checked) {
-    if (!inp.value || parseFloat(inp.value.replace(/[^0-9.]/g, '')) <= 0) {
+    if (!inp.value || tes_parseMontoEsCO(inp.value) <= 0) {
       inp.value = Number(inp.getAttribute('data-saldo')).toLocaleString('es-CO', {minimumFractionDigits: 2});
     }
   } else {
@@ -636,7 +660,7 @@ function tes_abono100Cuenta(itemId) {
 }
 
 function tes_onInputAbono(inp) {
-  const val = parseFloat(inp.value.replace(/[^0-9.]/g, '')) || 0;
+  const val = tes_parseMontoEsCO(inp.value);
   const maxSaldo = parseFloat(inp.getAttribute('data-saldo')) || 0;
   const itemId = inp.getAttribute('data-item-id');
   const docId = inp.getAttribute('data-id');
@@ -680,7 +704,7 @@ function tes_marcarTodoAl100() {
 // 6. Distribución Inteligente del Monto Objetivo (FIFO)
 function tes_distribuirMontoObjetivo() {
   const objInp = document.getElementById('tes-monto-objetivo');
-  let remanente = parseFloat(objInp.value.replace(/[^0-9.]/g, '')) || 0;
+  let remanente = tes_parseMontoEsCO(objInp.value);
 
   if (remanente <= 0) {
     alert("Por favor ingrese primero un monto objetivo arriba.");
@@ -741,7 +765,7 @@ function tes_recalcularCuadreTesoreria() {
   let totalSeleccionado = 0.0;
 
   document.querySelectorAll('#tes-tbody-docs input[id^="tes-doc-abono-"]').forEach(inp => {
-    const val = parseFloat(inp.value.replace(/[^0-9.]/g, '')) || 0;
+    const val = tes_parseMontoEsCO(inp.value);
     const chk = document.getElementById(`tes-doc-chk-${inp.getAttribute('data-id')}`);
     if (chk && chk.checked && val > 0) {
       totalSeleccionado += val;
@@ -749,7 +773,7 @@ function tes_recalcularCuadreTesoreria() {
   });
 
   document.querySelectorAll('#tes-tbody-cuentas input[id^="tes-abono-"]').forEach(inp => {
-    const val = parseFloat(inp.value.replace(/[^0-9.]/g, '')) || 0;
+    const val = tes_parseMontoEsCO(inp.value);
     const chk = document.getElementById(`tes-chk-${inp.getAttribute('data-item-id')}`);
     if (chk && chk.checked && val > 0) {
       totalSeleccionado += val;
@@ -757,9 +781,9 @@ function tes_recalcularCuadreTesoreria() {
   });
 
   const objInp = document.getElementById('tes-monto-objetivo');
-  const objValStr = objInp ? objInp.value.replace(/[^0-9.]/g, '') : '';
-  const tieneObjetivo = (objValStr.length > 0 && parseFloat(objValStr) > 0);
-  const montoObjetivo = tieneObjetivo ? parseFloat(objValStr) : totalSeleccionado;
+  const montoObjetivoRaw = tes_parseMontoEsCO(objInp ? objInp.value : '');
+  const tieneObjetivo = montoObjetivoRaw > 0;
+  const montoObjetivo = tieneObjetivo ? montoObjetivoRaw : totalSeleccionado;
 
   // Actualizar indicadores barra
   document.getElementById('tes-bar-objetivo').textContent = `$${Number(montoObjetivo).toLocaleString('es-CO', {minimumFractionDigits: 2})}`;
@@ -799,7 +823,7 @@ async function tes_ejecutarLiquidacion() {
   // Recolectar abonos de documentos
   const abonosDocs = [];
   document.querySelectorAll('#tes-tbody-docs input[id^="tes-doc-abono-"]').forEach(inp => {
-    const val = parseFloat(inp.value.replace(/[^0-9.]/g, '')) || 0;
+    const val = tes_parseMontoEsCO(inp.value);
     const id = parseInt(inp.getAttribute('data-id'));
     const chk = document.getElementById(`tes-doc-chk-${id}`);
     if (chk && chk.checked && val > 0) {
@@ -810,7 +834,7 @@ async function tes_ejecutarLiquidacion() {
   // Recolectar abonos de cuentas
   const abonosCuentas = [];
   document.querySelectorAll('#tes-tbody-cuentas input[id^="tes-abono-"]').forEach(inp => {
-    const val = parseFloat(inp.value.replace(/[^0-9.]/g, '')) || 0;
+    const val = tes_parseMontoEsCO(inp.value);
     const itemId = inp.getAttribute('data-item-id');
     const chk = document.getElementById(`tes-chk-${itemId}`);
     if (chk && chk.checked && val > 0) {

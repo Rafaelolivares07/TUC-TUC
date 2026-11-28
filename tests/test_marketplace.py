@@ -206,7 +206,8 @@ class MarketplaceTest(unittest.TestCase):
         html = pagina.get_data(as_text=True)
         self.assertIn('name="precio"', html)
         self.assertIn('name="contraentrega"', html)
-        self.assertIn('name="comision_pct"', html)
+        self.assertIn('name="comision_pct" type="number" min="10"', html)
+        self.assertIn('id="comision-neto"', html)
         self.assertIn('name="icono_ofertante"', html)
         token = re.search(r'name="token" value="([^"]+)"', html).group(1)
         form = dict(token=token, nombre="Diana", telefono="3151112222",
@@ -217,6 +218,10 @@ class MarketplaceTest(unittest.TestCase):
                 respuesta = self.client.post("/marketplace/publicar",
                                              data=dict(form, precio=precio, contraentrega=contraentrega))
                 self.assertEqual(respuesta.status_code, 400)
+            respuesta = self.client.post("/marketplace/publicar", data=dict(
+                form, precio="10000", contraentrega="si", comision_pct="9.99"))
+            self.assertEqual(respuesta.status_code, 400)
+            self.assertIn("La comisión mínima es del 10%", respuesta.get_data(as_text=True))
             conexion.assert_not_called()
 
     def test_ficha_muestra_precio_canonico_y_metodo_confirmado(self):

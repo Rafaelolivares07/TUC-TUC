@@ -9,6 +9,7 @@ from .db import get_db_connection
 
 COOKIE_CAMPANA = "__Host-tuctuc_campana"
 VIGENCIA_CAMPANA = 7 * 86400
+COMISION_MINIMA_PCT = Decimal("10")
 PARTE_PROMOTOR_PREDETERMINADA = Decimal("80")
 CANALES = {
     "tuctuc": "Promoción de Tuc-Tuc",
@@ -22,6 +23,13 @@ def porcentaje(valor):
     if not re.fullmatch(r"[0-9]{1,2}(\.[0-9]{1,2})?", texto) or not Decimal(texto):
         raise ValueError("Indica un porcentaje mayor a 0 y menor a 100.")
     return Decimal(texto)
+
+
+def porcentaje_comision(valor):
+    comision = porcentaje(valor)
+    if comision < COMISION_MINIMA_PCT:
+        raise ValueError(f"La comisión mínima es del {COMISION_MINIMA_PCT}%.")
+    return comision
 
 
 def _crear_tablas():

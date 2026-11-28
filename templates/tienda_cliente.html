@@ -292,6 +292,7 @@
         <h2 class="text-xl font-extrabold txt-primary mb-4">Confirmar pedido</h2>
 
         <div id="resumen-pedido" class="mb-4 max-h-40 overflow-y-auto space-y-1"></div>
+        {% if marketplace_compra %}<p class="text-sm txt-secondary mb-3">Los precios de los productos excluyen el envío urbano y entre ciudades. El envío se cotiza por separado.</p>{% endif %}
 
         <div class="flex items-center justify-between mb-4 p-3 bg-gray-50 rounded-xl card">
             <span class="font-bold txt-primary">Total</span>

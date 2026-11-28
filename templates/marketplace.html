@@ -122,6 +122,7 @@ for (const button of plans) {
 .mp-group label{font-size:.9rem;display:inline-flex;gap:4px;margin-right:14px}
 .mp-cart-err{background:#fbe4e4;border:1px solid #d99;color:#843333;border-radius:10px;padding:10px;font-size:.9rem}
 #mp-cart-pay{display:grid;gap:8px}
+.mp-cart-envio{font-size:.85rem;color:var(--muted);margin:0}
 .mp-hello{font-weight:700;font-size:.9rem;white-space:nowrap;max-width:200px;overflow:hidden;text-overflow:ellipsis}
 .mp-login{font-weight:700;font-size:.9rem;white-space:nowrap;text-decoration:underline;text-underline-offset:4px}
 .mp-sell{font-size:.82rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px}
@@ -137,6 +138,8 @@ for (const button of plans) {
 <div class="mp-cart-panel" role="dialog" aria-label="Carrito del Marketplace">
 <div class="mp-cart-head"><strong>Tu carrito</strong><button id="mp-cart-close" type="button" aria-label="Cerrar">x</button></div>
 <div id="mp-cart-lines"></div>
+<p><strong>Subtotal de productos <span id="mp-cart-subtotal">$0</span></strong></p>
+<p class="mp-cart-envio">Los precios de los productos excluyen el envío urbano y entre ciudades. El envío se cotiza por separado.</p>
 <div class="mp-cart-contact">
 <label>Tu nombre<input id="mp-nombre" autocomplete="name"></label>
 <label>Celular<input id="mp-tel" inputmode="tel" autocomplete="tel"></label>
@@ -231,7 +234,7 @@ function mpRender() {
     gr.append(f);
   });
   const total = mpCart.reduce((n, l) => n + l.pre * l.cantidad, 0);
-  document.getElementById('mp-cart-confirm').textContent = 'Confirmar pedido · ' + mpMoney(total);
+  document.getElementById('mp-cart-subtotal').textContent = mpMoney(total);
 }
 async function mpPost(url, body) {
   const r = await fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});

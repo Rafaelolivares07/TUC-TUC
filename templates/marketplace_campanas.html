@@ -29,7 +29,7 @@
 <input type="hidden" name="producto" value="{{ ficha.id }}">
 <input type="hidden" name="token" value="{{ token }}">
 <input type="hidden" name="accion" value="condiciones">
-<label>Comisión sobre el precio de la oferta (%)<input name="comision_pct" type="number" min="0.01" max="99.99" step="0.01" required value="{{ condiciones.comision_pct if condiciones else '' }}"></label>
+<label>Comisión sobre el precio de la oferta (%)<input name="comision_pct" type="number" min="{{ comision_minima }}" max="99.99" step="0.01" required value="{{ condiciones.comision_pct if condiciones else '' }}"></label>
 <label>Parte de la comisión para el promotor (%)<input name="parte_promotor_pct" type="number" min="50.01" max="99.99" step="0.01" required value="{{ condiciones.parte_promotor_pct if condiciones else parte_promotor }}"></label>
 <label class="campana-acuerdo"><input type="checkbox" name="acuerdo" value="1" required>El ofertante confirmó estas condiciones.</label>
 <button class="btn dark" type="submit">Guardar condiciones</button>

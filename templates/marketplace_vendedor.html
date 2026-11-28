@@ -20,6 +20,7 @@
 <a class="btn clear" href="https://tuc-tuc.co/marketplace/publicar">Mis publicaciones</a>
 </nav>
 <h2>Pedidos</h2>
+<p>El precio de tus productos excluye el envío urbano y entre ciudades.</p>
 <p id="pedidos-vendedor-mensaje" role="status">Cargando pedidos…</p>
 <div id="pedidos-vendedor-lista"></div>
 <button id="pedidos-vendedor-recargar" class="btn clear" type="button">Actualizar pedidos</button>
@@ -51,6 +52,11 @@
     const items = document.createElement('ul');
     for (const item of pedido.items) texto(items, 'li', item.cantidad + ' × ' + item.nombre);
     articulo.append(items);
+    texto(articulo, 'p', 'Subtotal de productos sin envío ' + monedas.format(pedido.subtotal_productos));
+    if (pedido.tipo_entrega === 'domicilio') {
+      const envio = pedido.domicilio_estado === 'confirmado' ? monedas.format(pedido.valor_domicilio) : 'Por confirmar';
+      texto(articulo, 'p', 'Envío por separado · ' + envio);
+    }
     texto(articulo, 'p', 'Total del pedido ' + monedas.format(pedido.total));
     if (pedido.comision_marketplace !== null)
       texto(articulo, 'p', 'Comisión registrada ' + monedas.format(pedido.comision_marketplace));

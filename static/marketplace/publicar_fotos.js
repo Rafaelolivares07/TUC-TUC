@@ -11,6 +11,37 @@
       usarSugerencia = negocio.value.trim() === '';
     });
   }
+  const precio = form.elements.namedItem('precio');
+  const tasa = form.elements.namedItem('comision_pct');
+  const importe = document.getElementById('comision-importe');
+  const neto = document.getElementById('comision-neto');
+  const pesos = new Intl.NumberFormat('es-CO', {
+    style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 2
+  });
+
+  function centesimas(campo) {
+    const partes = /^(\d+)(?:\.(\d{1,2}))?$/.exec(campo.value);
+    if (!campo.validity.valid || !partes) return null;
+    return Number(partes[1]) * 100 + Number((partes[2] || '').padEnd(2, '0'));
+  }
+
+  function mostrarComision() {
+    const centavos = centesimas(precio);
+    const puntosBase = centesimas(tasa);
+    if (centavos === null || puntosBase === null) {
+      importe.textContent = '—';
+      neto.textContent = '—';
+      return;
+    }
+    const comision = Math.floor((centavos * puntosBase + 5000) / 10000);
+    importe.textContent = pesos.format(comision / 100);
+    neto.textContent = pesos.format((centavos - comision) / 100);
+  }
+
+  precio.addEventListener('input', mostrarComision);
+  tasa.addEventListener('input', mostrarComision);
+  mostrarComision();
+
   const picker = document.getElementById('market-fotos');
   const preview = document.getElementById('market-fotos-preview');
   const feedback = document.getElementById('market-fotos-error');

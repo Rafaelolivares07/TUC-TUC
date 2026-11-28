@@ -911,6 +911,7 @@ def _formulario_publicacion(token, datos, error=None, solicitudes=(), aviso=Fals
         error=error, limite_fotos=LIMITE_FOTOS_PUBLICACION, limite_foto=LIMITE_FOTO_PUBLICACION,
         solicitudes=solicitudes, aviso=aviso, limite_icono=LIMITE_ICONO_OFERTANTE,
         dimension_icono=DIMENSION_ICONO_OFERTANTE, negocios=negocios,
+        comision_minima=comercial.COMISION_MINIMA_PCT,
     )
 
 
@@ -1061,9 +1062,9 @@ def recibir_publicacion():
     if datos["acepta_contraentrega"] is None:
         return _formulario_publicacion(token, datos, "Indica si aceptas pago contra entrega."), 400
     try:
-        comision = comercial.porcentaje(datos["comision_pct"])
-    except ValueError:
-        return _formulario_publicacion(token, datos, "Indica una comisión mayor a 0% y menor a 100%."), 400
+        comision = comercial.porcentaje_comision(datos["comision_pct"])
+    except ValueError as error:
+        return _formulario_publicacion(token, datos, str(error)), 400
     usuario = usuario_sesion() if not editando else None
     titular = usuario if usuario and _telefono(usuario["telefono"]) == datos["telefono"] else None
     if titular:
@@ -1241,6 +1242,7 @@ def campanas_marketplace():
     return render_template("marketplace_campanas.html", ficha=ficha, condiciones=condiciones,
                            campanas=campanas, ventas=ventas, canales=comercial.CANALES,
                            parte_promotor=comercial.PARTE_PROMOTOR_PREDETERMINADA,
+                           comision_minima=comercial.COMISION_MINIMA_PCT,
                            token=_firma("campanas-csrf").dumps(moderador), enlace_nuevo=request.args.get("enlace"))
 
 
@@ -1258,7 +1260,7 @@ def _guardar_campana(conn, ficha, condiciones, moderador):
     codigo = None
     if accion == "condiciones":
         try:
-            comision = comercial.porcentaje(request.form.get("comision_pct"))
+            comision = comercial.porcentaje_comision(request.form.get("comision_pct"))
             parte = comercial.porcentaje(request.form.get("parte_promotor_pct"))
         except ValueError as error:
             abort(400, str(error))

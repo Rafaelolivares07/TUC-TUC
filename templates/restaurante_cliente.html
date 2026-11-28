@@ -1304,6 +1304,7 @@ setInterval(cargarMisPedidos, 10000);
 <div id="modal-registro" class="fixed inset-0 bg-black/60 z-50 flex items-end justify-center hidden" onclick="if(event.target===this)cerrarModal()">
     <div class="modal-card bg-white rounded-t-3xl w-full max-w-lg p-6 pb-8">
         <h2 class="font-extrabold text-xl txt-primary mb-4">Datos para tu pedido</h2>
+        {% if marketplace_compra %}<p class="text-sm text-gray-600 mb-3">Los precios de los productos excluyen el envío urbano y entre ciudades. El envío se cotiza por separado.</p>{% endif %}
         <div class="space-y-3">
             <input id="reg-nombre" type="text" placeholder="Tu nombre"
                 class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-amber-500 focus:outline-none font-semibold">

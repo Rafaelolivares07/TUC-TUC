@@ -19,10 +19,16 @@
 .publication .market-consent input{width:auto}
 .publication .market-mias{padding:0;list-style:none}
 .publication .market-mias a{display:block;padding:8px 0}
+.publication .comision-porcentaje{display:flex;gap:6px;align-items:center}
+.publication .comision-porcentaje input{width:7rem;font-variant-numeric:tabular-nums}
+.publication .comision-resumen{margin:0;padding:12px;background:#eef3ea;border-radius:9px}
+.publication .comision-resumen div{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.publication .comision-resumen div + div{margin-top:7px}
+.publication .comision-resumen dd{margin:0;font-variant-numeric:tabular-nums;text-align:right}
 </style>
 {% if token %}
 <script src="{{ url_for('static', filename='JS/imagen_producto.js', v=2) }}" defer></script>
-<script src="{{ url_for('static', filename='marketplace/publicar_fotos.js', v=5) }}" defer></script>
+<script src="{{ url_for('static', filename='marketplace/publicar_fotos.js', v=6) }}" defer></script>
 {% endif %}
 </head>
 <body>
@@ -72,9 +78,15 @@
 <label>Qué ofreces<select name="tipo"><option value="producto">Un producto</option><option value="servicio"{% if datos.get('tipo') == 'servicio' %} selected{% endif %}>Un servicio</option></select></label>
 <label>Título<input name="titulo" maxlength="120" required value="{{ datos.get('titulo','') }}"></label>
 <label>Precio (COP)<input name="precio" type="number" min="0.01" max="99999999.99" step="0.01" inputmode="decimal" required value="{{ datos.get('precio') or '' }}"></label>
-<label>Comisión por venta completada (%)
-<span class="photo-help">Indica qué porcentaje del precio autorizas para Tuc-Tuc y, cuando corresponda, el promotor. Revisaremos la propuesta antes de aprobar la oferta.</span>
-<input name="comision_pct" type="number" min="0.01" max="99.99" step="0.01" inputmode="decimal" required value="{{ datos.get('comision_pct') or '' }}"></label>
+<p class="photo-help">El precio publicado excluye el envío urbano y entre ciudades. El envío se cotiza por separado.</p>
+<label>Comisión por venta completada
+<span class="comision-porcentaje"><input name="comision_pct" type="number" min="{{ comision_minima }}" max="99.99" step="0.01" inputmode="decimal" required aria-describedby="comision-ayuda" placeholder="{{ comision_minima }}" value="{{ datos.get('comision_pct') or '' }}"><span aria-hidden="true">%</span></span>
+<span class="photo-help" id="comision-ayuda">Mínimo {{ comision_minima }}%. La comisión se reparte entre Tuc-Tuc y el promotor cuando corresponda.</span>
+</label>
+<dl class="comision-resumen" aria-live="polite">
+<div><dt>Comisión por unidad</dt><dd id="comision-importe">—</dd></div>
+<div><dt><strong>Neto para ti por unidad</strong></dt><dd><strong id="comision-neto">—</strong></dd></div>
+</dl>
 <label>¿Aceptas pago contra entrega en efectivo?
 <select name="contraentrega" required>
 <option value="">Selecciona una opción</option>

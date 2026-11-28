@@ -793,7 +793,12 @@ async function enviarPedido() {
             carritoMeta = {};
             localStorage.removeItem('carrito_' + SLUG);
             localStorage.removeItem('carrito_meta_' + SLUG);
-            window.location.href = dataPedido.url_pago || `/pagar/${pedidoId}?tipo=tienda&slug=${SLUG}`;
+            if (dataPedido.pago_por_acordar) {
+                actualizarCarritoUI();
+                toast('La tienda se comunicará contigo para acordar el pago del pedido ' + pedidoId);
+            } else {
+                window.location.href = dataPedido.url_pago || `/pagar/${pedidoId}?tipo=tienda&slug=${SLUG}`;
+            }
         } else {
             if (dataPedido.error === 'suscripcion_agotada') {
                 toast('La tienda no esta disponible en este momento', true);

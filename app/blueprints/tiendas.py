@@ -347,6 +347,7 @@ def _crear_tablas_impl(conn):
     alters = [
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS telegram_chat_id VARCHAR(50)",
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS fecha_vence DATE",
+        "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS plan_marketplace BOOLEAN NOT NULL DEFAULT FALSE",
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS pin_caja VARCHAR(10)",
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS color_primario VARCHAR(20) DEFAULT '#f59e0b'",
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS descripcion TEXT",
@@ -445,6 +446,29 @@ def _generar_slug(nombre):
     s = ''.join(c for c in s if unicodedata.category(c) != 'Mn')
     s = re.sub(r'[^a-z0-9]+', '-', s).strip('-')
     return s
+
+
+def crear_tienda_para_titular(conn, nombre, slug, titular_id, titular_nombre, telefono, *, marketplace=False):
+    negocio_id = conn.execute("""
+        INSERT INTO terceros (nombre, tipo_tercero) VALUES (%s, 'negocio') RETURNING id
+    """, (nombre,)).fetchone()[0]
+    token = str(uuid.uuid4())
+    conn.execute("""
+        INSERT INTO tiendas (nombre, slug, admin_id, admin_nombre, admin_telefono, token_acceso,
+                             tercero_id, activo, plan_marketplace)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+    """, (nombre, slug, titular_id, titular_nombre, telefono, token, negocio_id, not marketplace, marketplace))
+    conn.execute("""
+        INSERT INTO terceros_negocios (tercero_id, negocio_id, activo)
+        VALUES (%s,%s,TRUE)
+        ON CONFLICT (tercero_id, negocio_id) DO UPDATE SET activo=TRUE
+    """, (titular_id, negocio_id))
+    if marketplace:
+        conn.execute("""
+            INSERT INTO centros_utilidad (negocio_id, codigo, nombre, tipo, activo)
+            VALUES (%s,'SEDE-01','Principal','local',TRUE)
+        """, (negocio_id,))
+    return negocio_id, token
 
 
 def _enviar_telegram_tienda(*args):
@@ -832,7 +856,11 @@ def mi_tienda(slug):
         usuario_id      = session.get('usuario_id')
         es_admin_sistema = session.get('rol') == 'Administrador'
         if usuario_id and (es_admin_sistema or usuario_id == tienda['admin_id']):
+            if tienda.get('plan_marketplace'):
+                return render_template('marketplace_vendedor.html', tienda=tienda)
             return render_template('tienda_admin.html', tienda=tienda, tiendas=None, es_dueno=True)
+        if tienda.get('plan_marketplace'):
+            return redirect("https://tuc-tuc.co/marketplace")
         return render_template('tienda_recuperar.html', tienda=tienda)
     except Exception as e:
         return f"Error: {e}", 500
@@ -854,7 +882,7 @@ def tienda_publica(slug):
         ).fetchone()
         if not tienda:
             return "Tienda no encontrada", 404
-        marketplace_compra = (request.args.get('origen') == 'marketplace'
+        marketplace_compra = (tienda.get('plan_marketplace') or request.args.get('origen') == 'marketplace'
                               or request.host.split(':', 1)[0] in ('tuc-tuc.co', 'www.tuc-tuc.co'))
         cliente_data = None
         if marketplace_compra:
@@ -912,7 +940,7 @@ def tienda_publica(slug):
 
 def _obtener_negocio_por_slug(conn, slug):
     tienda = conn.execute(
-        "SELECT id, nombre, 'tienda' as tipo_negocio, tercero_id, color_primario, imagen_header, telegram_chat_id, admin_id, token_acceso FROM tiendas WHERE slug = %s AND activo = TRUE", (slug,)
+        "SELECT id, nombre, 'tienda' as tipo_negocio, tercero_id, color_primario, imagen_header, telegram_chat_id, admin_id, token_acceso, plan_marketplace FROM tiendas WHERE slug = %s AND activo = TRUE", (slug,)
     ).fetchone()
     if tienda:
         res = dict(tienda)
@@ -1328,10 +1356,10 @@ def api_tienda_crear():
     if len(admin_telefono) < 10:
         return jsonify({'ok': False, 'error': 'Celular debe tener al menos 10 digitos'}), 400
     slug         = _generar_slug(nombre)
-    token_acceso = str(uuid.uuid4())
     conn = get_db_connection()
     try:
         _crear_tablas(conn)
+        conn.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", ("tuc-tuc.tiendas.slug",))
         if conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone():
             return jsonify({'ok': False, 'error': 'Ya existe una tienda con ese nombre'}), 400
         # Tercero del dueño (persona)
@@ -1344,15 +1372,7 @@ def api_tienda_crear():
                 "INSERT INTO terceros (nombre, telefono, tipo_tercero) VALUES (%s, %s, 'persona') RETURNING id",
                 (admin_nombre, admin_telefono)
             ).fetchone()[0]
-        # Tercero del negocio (entidad propia)
-        negocio_tercero_id = conn.execute(
-            "INSERT INTO terceros (nombre, tipo_tercero) VALUES (%s, 'negocio') RETURNING id",
-            (nombre,)
-        ).fetchone()[0]
-        conn.execute(
-            "INSERT INTO tiendas (nombre, slug, admin_id, admin_nombre, admin_telefono, token_acceso, tercero_id) VALUES (%s,%s,%s,%s,%s,%s,%s)",
-            (nombre, slug, admin_id, admin_nombre, admin_telefono, token_acceso, negocio_tercero_id)
-        )
+        _, token_acceso = crear_tienda_para_titular(conn, nombre, slug, admin_id, admin_nombre, admin_telefono)
         conn.commit()
         link = f"{request.host_url}t/acceso/{token_acceso}"
         return jsonify({'ok': True, 'slug': slug, 'nombre': nombre, 'token_acceso': token_acceso, 'link_acceso': link})
@@ -1376,8 +1396,10 @@ def api_tienda_dias_pagados(slug):
         base        = tienda['fecha_vence'] if tienda['fecha_vence'] and tienda['fecha_vence'] > date.today() else date.today()
         nueva_fecha = base + timedelta(days=dias)
         conn.execute(
-            "UPDATE tiendas SET dias_pagados = %s, fecha_vence = %s WHERE slug = %s",
-            (nuevo_total, nueva_fecha, slug)
+            """UPDATE tiendas SET dias_pagados=%s, fecha_vence=%s,
+                                   plan_marketplace=CASE WHEN %s>0 THEN FALSE ELSE plan_marketplace END
+                WHERE slug=%s""",
+            (nuevo_total, nueva_fecha, dias_add, slug)
         )
         conn.commit()
         return jsonify({'ok': True, 'dias_pagados': nuevo_total, 'fecha_vence': str(nueva_fecha)})
@@ -2462,7 +2484,7 @@ def api_tienda_pedido_crear(slug):
                 ).fetchone()
                 if row_disp:
                     centro_utilidad_id = row_disp['centro_utilidad_id']
-        if not centro_utilidad_id:
+        if not centro_utilidad_id and not marketplace_compra:
             centro_utilidad_id = session.get('centro_utilidad_id')
         if not centro_utilidad_id and negocio.get('tercero_id'):
             try:
@@ -2516,7 +2538,7 @@ def api_tienda_pedido_crear(slug):
         items_validos = []
         for item in items:
             producto = conn.execute(
-                "SELECT id, nombre, precio, disponible, iva_pct FROM productos "
+                "SELECT id, nombre, precio, disponible, iva_pct, to_jsonb(productos)->>'tipo_oferta' AS tipo_oferta FROM productos "
                 "WHERE id = %s AND negocio_id = %s AND disponible = TRUE AND precio > 0",
                 (item.get('producto_id'), negocio['tercero_id'])
             ).fetchone()
@@ -2552,6 +2574,7 @@ def api_tienda_pedido_crear(slug):
                 'producto_id': producto['id'], 'nombre_producto': producto['nombre'],
                 'cantidad': cantidad, 'precio_unitario': precio_u,
                 'iva_pct': float(producto['iva_pct'] or 0),
+                'es_servicio': marketplace_compra and producto.get('tipo_oferta') == 'servicio',
                 'excluir_componentes_ids': item.get('excluir_componentes_ids', []),
                 'excluidos_nombres': item.get('excluidos_nombres', []),
                 'adiciones': item.get('adiciones', [])
@@ -2642,11 +2665,28 @@ def api_tienda_pedido_crear(slug):
             return jsonify({'ok': False, 'error': 'El negocio no tiene habilitado forzar ventas con saldo negativo en inventario.'}), 400
 
         if not force_negative:
-            shortages = _verificar_stock_pedido(conn, negocio['tercero_id'], items_validos, excluir_componentes, bodega=centro_utilidad_id)
+            items_stock = [item for item in items_validos if not item['es_servicio']]
+            if marketplace_compra and negocio.get('plan_marketplace'):
+                controlados = conn.execute("""
+                    SELECT DISTINCT producto_id FROM movimientos_inventario
+                     WHERE negocio_id=%s AND tipo='entrada' AND producto_id=ANY(%s::int[])
+                """, (negocio['tercero_id'], [item['producto_id'] for item in items_stock])).fetchall()
+                con_stock = {fila['producto_id'] for fila in controlados}
+                items_stock = [item for item in items_stock if item['producto_id'] in con_stock]
+            shortages = _verificar_stock_pedido(conn, negocio['tercero_id'], items_stock, excluir_componentes, bodega=centro_utilidad_id)
             if shortages:
                 conn.close()
                 return jsonify({'ok': False, 'error': 'insufficient_stock', 'shortages': shortages}), 400
                 
+        por_acordar = False
+        if marketplace_compra and negocio.get('plan_marketplace'):
+            por_acordar = conn.execute("""
+                SELECT 1 FROM marketplace_solicitudes
+                 WHERE negocio_destino_id=%s AND producto_id=ANY(%s::int[]) AND metodo_pago_aprobado_id IS NULL
+                 LIMIT 1
+            """, (negocio['tercero_id'], [item['producto_id'] for item in items_validos])).fetchone() is not None
+            if por_acordar:
+                metodo_pago = 'por_acordar'
         subtotal_productos = total
         tercero_config_id = negocio['tercero_id'] or admin_id
         valor_domicilio, domicilio_estado = _calcular_domicilio(
@@ -2780,7 +2820,7 @@ def api_tienda_pedido_crear(slug):
                 INSERT INTO pedido_items (pedido_id, producto_id, nombre_producto, cantidad, precio_unitario, costo_unitario)
                 VALUES (%s,%s,%s,%s,%s,%s)
             """, (pedido_id, it['producto_id'], nombre_prod_item, it['cantidad'], it['precio_unitario'], costo_u))
-            if negocio['tercero_id']:
+            if negocio['tercero_id'] and not it['es_servicio']:
                 try:
                     conn.execute("SAVEPOINT sp_inv_tienda")
                     _aplicar_tarjeta(
@@ -3000,6 +3040,9 @@ def api_tienda_pedido_crear(slug):
                   'numero_documento': numero_documento,
                   'entrega_texto': entrega if (imprimir_entrega and entrega) else None}
         if marketplace_compra:
+            if por_acordar:
+                cuerpo['pago_por_acordar'] = True
+                return jsonify(cuerpo)
             from .marketplace import respuesta_pedido
             return respuesta_pedido('tienda', pedido_id, cuerpo)
         return jsonify(cuerpo)
@@ -3009,22 +3052,29 @@ def api_tienda_pedido_crear(slug):
         conn.close()
 
 
+def _puede_ver_pedidos_marketplace(tienda):
+    return (session.get('rol') == 'Administrador' or session.get('usuario_id') == tienda['admin_id'])
+
+
 @bp.route('/api/tienda/<slug>/pedidos')
 def api_tienda_pedidos(slug):
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
     conn = get_db_connection()
     try:
-        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        tienda = conn.execute("SELECT id, admin_id, plan_marketplace FROM tiendas WHERE slug = %s", (slug,)).fetchone()
         if not tienda:
             return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        if tienda['plan_marketplace'] and not _puede_ver_pedidos_marketplace(tienda):
+            return jsonify(ok=False, error='Sin permisos para ver estos pedidos.'), 403
         pedidos = conn.execute("""
             SELECT id, nombre_cliente, telefono_cliente, direccion_cliente, tipo_entrega,
                    estado, total, notas, created_at, nombre_cajero, metodo_pago, comprobante_pago,
                    subtotal_productos, valor_domicilio, domicilio_estado
-            FROM pedidos WHERE tienda_id = %s AND DATE(created_at) = CURRENT_DATE
+            FROM pedidos WHERE tienda_id = %s
+              AND (DATE(created_at) = CURRENT_DATE OR (%s AND estado IN ('nuevo','preparando','listo')))
             ORDER BY created_at DESC
-        """, (tienda['id'],)).fetchall()
+        """, (tienda['id'], tienda['plan_marketplace'])).fetchall()
         resultado = []
         for p in pedidos:
             items = conn.execute(
@@ -3050,8 +3100,15 @@ def api_tienda_pedidos(slug):
                     'nombre': p['metodo_pago'] or 'efectivo',
                     'monto': float(p['total'] or 0),
                 }]
+            comision = None
+            if tienda['plan_marketplace']:
+                comision = conn.execute("""
+                    SELECT SUM(promotor_cop + tuctuc_cop) AS importe FROM marketplace_comisiones_pedido
+                     WHERE pedido_id=%s
+                """, (p['id'],)).fetchone()['importe']
             resultado.append({
                 'id': p['id'],
+                'comision_marketplace': float(comision) if comision is not None else None,
                 'nombre_cliente': p['nombre_cliente'] or '',
                 'telefono_cliente': p['telefono_cliente'] or '',
                 'direccion_cliente': p['direccion_cliente'] or '',
@@ -3768,9 +3825,11 @@ def api_tienda_pedido_estado(slug, pedido_id):
         return jsonify({'ok': False, 'error': 'Estado invalido'}), 400
     conn = get_db_connection()
     try:
-        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        tienda = conn.execute("SELECT id, admin_id, plan_marketplace FROM tiendas WHERE slug = %s", (slug,)).fetchone()
         if not tienda:
             return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        if tienda['plan_marketplace'] and not _puede_ver_pedidos_marketplace(tienda):
+            return jsonify(ok=False, error='Sin permisos para actualizar este pedido.'), 403
         conn.execute(
             "UPDATE pedidos SET estado = %s WHERE id = %s AND tienda_id = %s",
             (estado, pedido_id, tienda['id'])

@@ -11,6 +11,7 @@ from time import time
 from urllib.parse import urlencode, urlsplit
 
 from flask import Blueprint, abort, current_app, jsonify, make_response, redirect, render_template, request, session, url_for
+from werkzeug.exceptions import Conflict
 from itsdangerous import BadData, URLSafeTimedSerializer
 
 from ..asegurar import asegurar_una_vez
@@ -106,7 +107,7 @@ WITH ofertas AS (
     UNION ALL
     SELECT 'publicaciones', p.id, p.nombre, p.categoria, {_ORIGEN_PUBLICACION}, NULL,
            NULLIF(p.precio,0), left(p.imagen,1501), {_AMBITO_PRODUCTO}
-      {_PUBLICACIONES_APROBADAS}
+      {_PUBLICACIONES_APROBADAS} AND s.negocio_destino_id IS NULL
 )
 SELECT tipo, id, nombre, categoria, negocio, slug, precio, imagen, ambito
   FROM ofertas
@@ -142,7 +143,7 @@ WITH venta AS (
     UNION ALL
     SELECT 'publicaciones', p.id, p.nombre, p.categoria, {_ORIGEN_PUBLICACION},
            NULL, NULLIF(p.precio,0), {_AMBITO_PRODUCTO}, 0
-      {_PUBLICACIONES_APROBADAS}
+      {_PUBLICACIONES_APROBADAS} AND s.negocio_destino_id IS NULL
 ), fichas AS (
     SELECT * FROM venta
     UNION ALL
@@ -368,7 +369,7 @@ def _detalle_publicacion(producto_id):
                    (SELECT nombre FROM metodos_pago_catalogo
                      WHERE id=s.metodo_pago_aprobado_id AND activo IS TRUE) AS metodo_pago,
                    CASE WHEN s.contacto_aprobado THEN s.telefono ELSE NULL END AS contacto,
-                   {_NOMBRE_OFERTANTE} AS nombre_ofertante,
+                   {_NOMBRE_OFERTANTE} AS nombre_ofertante, s.negocio_destino_id,
                    ofertante.icono_marketplace IS NOT NULL AS tiene_icono_ofertante
               {_PUBLICACIONES_APROBADAS} AND p.id=%s
         """, (producto_id,)).fetchone()
@@ -379,6 +380,12 @@ def _detalle_publicacion(producto_id):
         ).fetchall()
     finally:
         conn.close()
+    if fila.get("negocio_destino_id"):
+        with get_db_connection() as conn:
+            ficha = _ficha_campana(conn, producto_id)
+        if not ficha:
+            abort(404)
+        return _render_oferta_compra(ficha)
     fotos = []
     if fila["imagen"]:
         fotos.append(url_for("marketplace.foto", tipo="publicaciones", oferta_id=producto_id))
@@ -448,6 +455,12 @@ def _ficha_campana(conn, producto_id):
     return conn.execute(_FICHA_CAMPANA, (producto_id, producto_id)).fetchone()
 
 
+def _render_oferta_compra(ficha):
+    oferta = _oferta(ficha)
+    return render_template("marketplace.html", ofertas=[oferta], campana=oferta, pagina=1,
+                           comprador=datos_comprador(), usuario=usuario_sesion())
+
+
 def _portada_campana(codigo):
     comercial.asegurar_comisiones()
     with get_db_connection() as conn:
@@ -457,11 +470,7 @@ def _portada_campana(codigo):
         ficha = _ficha_campana(conn, campana["producto_id"])
         if not ficha or ficha["negocio_id"] != campana["negocio_id"]:
             abort(404)
-    oferta = _oferta(ficha)
-    respuesta = make_response(render_template(
-        "marketplace.html", ofertas=[oferta], campana=oferta, pagina=1,
-        comprador=datos_comprador(), usuario=usuario_sesion(),
-    ))
+    respuesta = make_response(_render_oferta_compra(ficha))
     origenes = _campanas_navegador()
     origenes[str(ficha["id"])] = [codigo, int(time())]
     recientes = dict(sorted(origenes.items(), key=lambda item: item[1][1], reverse=True)[:10])
@@ -771,6 +780,9 @@ def _crear_solicitudes(conn):
         ALTER TABLE marketplace_solicitudes
         ADD COLUMN IF NOT EXISTS fotos jsonb NOT NULL DEFAULT '[]'::jsonb,
         ADD COLUMN IF NOT EXISTS producto_id integer REFERENCES productos(id),
+        ADD COLUMN IF NOT EXISTS nombre_negocio text,
+        ADD COLUMN IF NOT EXISTS titular_id integer REFERENCES terceros(id),
+        ADD COLUMN IF NOT EXISTS negocio_destino_id integer REFERENCES terceros(id),
         ADD COLUMN IF NOT EXISTS revision integer NOT NULL DEFAULT 1,
         ADD COLUMN IF NOT EXISTS contacto_publico boolean NOT NULL DEFAULT FALSE,
         ADD COLUMN IF NOT EXISTS contacto_aprobado boolean NOT NULL DEFAULT FALSE,
@@ -836,12 +848,69 @@ def _contacto_publicar():
             "telefono": u.get("telefono") or c.get("telefono") or ""}
 
 
+def _asegurar_tiendas_publicacion():
+    from .tiendas import _crear_tablas
+
+    with get_db_connection() as conn:
+        _crear_tablas(conn)
+
+
+def _negocios_del_titular(conn, titular_id):
+    return conn.execute("""
+        SELECT t.tercero_id AS id, t.nombre, t.slug, t.activo, t.plan_marketplace
+          FROM tiendas t
+         WHERE t.admin_id=%s AND t.tercero_id IS NOT NULL AND (t.activo OR t.plan_marketplace)
+        UNION ALL
+        SELECT r.tercero_id, r.nombre, r.slug, r.activo, FALSE
+          FROM restaurantes r
+         WHERE r.admin_id=%s AND r.activo AND r.tercero_id IS NOT NULL
+           AND r.tipo_restaurante IN ('carta','ambos')
+        ORDER BY nombre, id
+    """, (titular_id, titular_id)).fetchall()
+
+
+def _negocio_para_publicar(conn, titular_id, nombre, titular_nombre, telefono, negocio_elegido=None):
+    from .tiendas import _generar_slug, crear_tienda_para_titular
+
+    conn.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (f"marketplace.titular:{titular_id}",))
+    negocios = _negocios_del_titular(conn, titular_id)
+    if negocio_elegido is not None:
+        destino = next((fila for fila in negocios if fila["id"] == negocio_elegido), None)
+        if not destino:
+            abort(409, "El negocio seleccionado debe pertenecer al titular de la publicación.")
+        return destino
+    if len(negocios) > 1:
+        abort(409, "Elige en cuál de tus negocios se publicará la oferta.")
+    if negocios:
+        return negocios[0]
+
+    conn.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", ("tuc-tuc.tiendas.slug",))
+    base = _generar_slug(nombre)[:52].rstrip("-") or "negocio"
+    reservados = {"www", "desk", "admin", "api", "bistro", "mail", "marketplace", "static", "rockola", "go"}
+    slug = base if base not in reservados else f"{base}-tienda"
+    sufijo = 2
+    while conn.execute("""
+        SELECT 1 FROM tiendas WHERE slug=%s UNION ALL SELECT 1 FROM restaurantes WHERE slug=%s LIMIT 1
+    """, (slug, slug)).fetchone():
+        slug = f"{base}-{sufijo}"
+        sufijo += 1
+    negocio_id, _ = crear_tienda_para_titular(conn, nombre, slug, titular_id, titular_nombre, telefono,
+                                           marketplace=True)
+    return {"id": negocio_id, "nombre": nombre, "slug": slug, "activo": False, "plan_marketplace": True}
+
+
 def _formulario_publicacion(token, datos, error=None, solicitudes=(), aviso=False):
+    negocios = []
+    usuario = usuario_sesion() if token and not datos.get("id") else None
+    if usuario:
+        _asegurar_tiendas_publicacion()
+        with get_db_connection() as conn:
+            negocios = _negocios_del_titular(conn, usuario["id"])
     return render_template(
         "marketplace_publicar.html", token=token, comprador=_contacto_publicar(), datos=datos,
         error=error, limite_fotos=LIMITE_FOTOS_PUBLICACION, limite_foto=LIMITE_FOTO_PUBLICACION,
         solicitudes=solicitudes, aviso=aviso, limite_icono=LIMITE_ICONO_OFERTANTE,
-        dimension_icono=DIMENSION_ICONO_OFERTANTE,
+        dimension_icono=DIMENSION_ICONO_OFERTANTE, negocios=negocios,
     )
 
 
@@ -885,11 +954,15 @@ def _solicitudes_editor(identidades, actual=None):
         seleccion = conn.execute(
             """SELECT s.id, s.nombre, s.telefono, s.tipo, s.titulo, s.descripcion, s.fotos, s.estado,
                       s.revision, s.contacto_publico, s.acepta_contraentrega, s.comision_pct,
+                      COALESCE(titular_negocio.nombre, s.nombre_negocio, s.nombre) AS nombre_negocio,
+                      s.negocio_destino_id, tienda.slug AS slug_negocio, s.producto_id,
                       CASE WHEN s.cambiar_icono_ofertante THEN COALESCE(s.icono_ofertante,'') END AS icono_ofertante,
                       ofertante.icono_marketplace AS icono_actual,
                       COALESCE(s.precio, NULLIF(p.precio,0)) AS precio
                  FROM marketplace_solicitudes s LEFT JOIN productos p ON p.id=s.producto_id
                  LEFT JOIN terceros ofertante ON ofertante.id=p.negocio_id
+                 LEFT JOIN terceros titular_negocio ON titular_negocio.id=s.negocio_destino_id
+                 LEFT JOIN tiendas tienda ON tienda.tercero_id=s.negocio_destino_id AND tienda.activo
                 WHERE s.id = %s""", (actual,)
         ).fetchone() if actual is not None else None
         return seleccion, resumen
@@ -922,6 +995,13 @@ def publicar():
 
     solicitud_id = request.args.get("solicitud", type=int)
     acceso_local = sesion.get("solicitudes", [])
+    usuario = usuario_sesion()
+    if usuario:
+        with _conexion_publicaciones() as conn:
+            propias = conn.execute("""
+                SELECT id FROM marketplace_solicitudes WHERE titular_id=%s ORDER BY id DESC LIMIT 50
+            """, (usuario["id"],)).fetchall()
+        acceso_local = list(set(acceso_local) | {fila["id"] for fila in propias})
     if solicitud_id is not None and solicitud_id not in acceso_local:
         abort(404)
     actual, solicitudes = _solicitudes_editor(acceso_local, solicitud_id)
@@ -930,6 +1010,8 @@ def publicar():
     respuesta = make_response(_formulario_publicacion(
         sesion["token"], actual or {}, solicitudes=solicitudes, aviso=request.args.get("guardada") == "1",
     ))
+    if solicitud_id is not None and solicitud_id not in sesion.get("solicitudes", []):
+        return _cookie_editor(respuesta, sesion, solicitud_id)
     if renovar:
         return _cookie_editor(respuesta, sesion)
     return respuesta
@@ -950,6 +1032,8 @@ def recibir_publicacion():
     datos = {clave: _texto(request.form.get(clave), limite) for clave, limite in
              (("nombre", 100), ("telefono", 25), ("tipo", 12), ("titulo", 120), ("descripcion", 1000))}
     datos["telefono"] = _telefono(datos["telefono"])
+    datos["nombre_negocio"] = _texto(request.form.get("nombre_negocio"), 100) or datos["nombre"]
+    datos["negocio_destino_id"] = request.form.get("negocio", type=int)
     datos["id"] = solicitud_id
     datos["revision"] = request.form.get("revision", type=int)
     datos["contacto_publico"] = request.form.get("contacto_publico") == "1"
@@ -980,6 +1064,10 @@ def recibir_publicacion():
         comision = comercial.porcentaje(datos["comision_pct"])
     except ValueError:
         return _formulario_publicacion(token, datos, "Indica una comisión mayor a 0% y menor a 100%."), 400
+    usuario = usuario_sesion() if not editando else None
+    titular = usuario if usuario and _telefono(usuario["telefono"]) == datos["telefono"] else None
+    if titular:
+        _asegurar_tiendas_publicacion()
     conn = _conexion_publicaciones()
     try:
         if editando:
@@ -987,6 +1075,7 @@ def recibir_publicacion():
             fila = conn.execute(
                 """UPDATE marketplace_solicitudes
                       SET tipo=%s, titulo=%s, descripcion=%s, fotos=%s::jsonb,
+                          nombre_negocio=CASE WHEN negocio_destino_id IS NULL THEN %s ELSE nombre_negocio END,
                           precio=%s, acepta_contraentrega=%s, comision_pct=%s,
                           contacto_publico=%s, contacto_aprobado=contacto_aprobado AND %s,
                           icono_ofertante=CASE WHEN %s THEN %s ELSE icono_ofertante END,
@@ -994,7 +1083,7 @@ def recibir_publicacion():
                                                        ELSE cambiar_icono_ofertante END,
                           estado='recibida', revision=revision+1
                     WHERE id=%s AND revision=%s RETURNING id, nombre, telefono""",
-                (datos["tipo"], datos["titulo"], datos["descripcion"], json.dumps(fotos),
+                (datos["tipo"], datos["titulo"], datos["descripcion"], json.dumps(fotos), datos["nombre_negocio"],
                  precio, datos["acepta_contraentrega"], comision, datos["contacto_publico"],
                  datos["contacto_publico"], icono is not None, icono or None, icono is not None, bool(icono),
                  solicitud_id, datos["revision"]),
@@ -1002,21 +1091,35 @@ def recibir_publicacion():
             if not fila:
                 return _formulario_publicacion(token, datos, "La publicación cambió. Ábrela de nuevo antes de guardar."), 409
         else:
+            destino = None
+            if titular:
+                confirmados = _terceros_de_publicacion(conn, datos["telefono"])
+                if any(t["id"] == titular["id"] for t in confirmados):
+                    destino = _negocio_para_publicar(conn, titular["id"], datos["nombre_negocio"], titular["nombre"],
+                                                    datos["telefono"], datos["negocio_destino_id"])
+                else:
+                    titular = None
             fila = conn.execute(
                 """INSERT INTO marketplace_solicitudes
                           (token, nombre, telefono, tipo, titulo, descripcion, fotos, contacto_publico,
-                           precio, acepta_contraentrega, icono_ofertante, cambiar_icono_ofertante, comision_pct)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s, %s, %s)
+                           precio, acepta_contraentrega, icono_ofertante, cambiar_icono_ofertante, comision_pct,
+                           nombre_negocio, titular_id, negocio_destino_id)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                    ON CONFLICT (token) DO NOTHING RETURNING id, nombre, telefono""",
                 (token, datos["nombre"], datos["telefono"], datos["tipo"], datos["titulo"],
                  datos["descripcion"], json.dumps(fotos), datos["contacto_publico"], precio,
-                 datos["acepta_contraentrega"], icono or None, bool(icono), comision),
+                 datos["acepta_contraentrega"], icono or None, bool(icono), comision,
+                 destino["nombre"] if destino else datos["nombre_negocio"],
+                 titular["id"] if titular else None, destino["id"] if destino else None),
             ).fetchone()
             if not fila:
                 fila = conn.execute(
                     "SELECT id, nombre, telefono FROM marketplace_solicitudes WHERE token=%s", (token,)
                 ).fetchone()
         conn.commit()
+    except Conflict as error:
+        conn.rollback()
+        return _formulario_publicacion(token, datos, error.description), 409
     except Exception:
         current_app.logger.exception("Error al guardar solicitud de Marketplace")
         conn.rollback()
@@ -1053,6 +1156,8 @@ def revisar_publicaciones():
         return render_template("marketplace_revision.html", autenticado=False), 403
     pagina = max(1, min(request.args.get("pagina", 1, type=int), 1000))
     solicitud_id = request.args.get("solicitud", type=int)
+    if solicitud_id:
+        _asegurar_tiendas_publicacion()
     conn = _conexion_publicaciones()
     try:
         if not conn.execute("SELECT 1 FROM usuarios WHERE id=%s AND rol='Administrador'", (moderador,)).fetchone():
@@ -1066,12 +1171,16 @@ def revisar_publicaciones():
         solicitud = conn.execute(
             """SELECT id, titulo, nombre, telefono, tipo, estado, descripcion, fotos, revision,
                       producto_id, contacto_publico, precio, acepta_contraentrega, comision_pct,
-                      icono_ofertante, cambiar_icono_ofertante
+                      icono_ofertante, cambiar_icono_ofertante, nombre_negocio, titular_id, negocio_destino_id
                  FROM marketplace_solicitudes WHERE id=%s""",
             (solicitud_id,),
         ).fetchone() if solicitud_id is not None else None
-        terceros = (_terceros_de_publicacion(conn, solicitud["telefono"])
-                    if solicitud and solicitud["producto_id"] is None else ())
+        terceros = ()
+        destinos = []
+        if solicitud and solicitud["estado"] != "aprobada" and not solicitud["negocio_destino_id"]:
+            terceros = _terceros_de_publicacion(conn, solicitud["telefono"])
+            for titular in terceros:
+                destinos.extend(_negocios_del_titular(conn, titular["id"]))
     finally:
         conn.close()
     if solicitud_id is not None and solicitud is None:
@@ -1086,7 +1195,7 @@ def revisar_publicaciones():
             oferta = "https://tuc-tuc.co" + url_for("marketplace.portada", oferta=solicitud["producto_id"])
     return render_template(
         "marketplace_revision.html", autenticado=True, solicitudes=solicitudes[:30], solicitud=solicitud,
-        enlace=enlace, oferta=oferta, terceros=terceros, aviso=request.args.get("aprobada") == "1",
+        enlace=enlace, oferta=oferta, terceros=terceros, destinos=destinos, aviso=request.args.get("aprobada") == "1",
         precio=_precio_visible(solicitud["precio"]) if solicitud else "",
         token=_firma("revision-csrf").dumps(moderador), pagina=pagina, siguiente=len(solicitudes) > 30,
     )
@@ -1195,7 +1304,38 @@ def _terceros_de_publicacion(conn, telefono):
     ).fetchall()
 
 
-def _aprobar_publicacion(conn, solicitud, tercero_elegido=None):
+def _resolver_titular(conn, solicitud, titular_elegido):
+    telefono = solicitud["telefono"]
+    conn.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", ("comprador:" + telefono,))
+    coincidencias = _terceros_de_publicacion(conn, telefono)
+    if titular_elegido is not None:
+        titular = next((t for t in coincidencias if t["id"] == titular_elegido), None)
+        if not titular:
+            abort(409, "El titular ya no coincide con el celular de la publicación.")
+        return titular
+    if len(coincidencias) > 1:
+        abort(409, "Elige el usuario correcto entre los que comparten este celular.")
+    if coincidencias:
+        return coincidencias[0]
+    return conn.execute("""
+        INSERT INTO terceros (nombre, telefono, tipo_tercero, fecha_creacion)
+        VALUES (%s,%s,'persona',NOW()) RETURNING id, nombre
+    """, (solicitud["nombre"], telefono)).fetchone()
+
+
+def _producto_con_historial(conn, producto_id):
+    return conn.execute("""
+        SELECT 1 FROM pedido_items WHERE producto_id=%(id)s
+        UNION ALL SELECT 1 FROM movimientos_inventario WHERE producto_id=%(id)s
+        UNION ALL SELECT 1 FROM saldos_inventario WHERE producto_id=%(id)s
+        UNION ALL SELECT 1 FROM pedidos WHERE %(id)s IN (plato_id,sopa_id,proteina_id,principio_id)
+        LIMIT 1
+    """, {"id": producto_id}).fetchone() is not None
+
+
+def _aprobar_publicacion(conn, solicitud, tercero_elegido=None, negocio_elegido=None):
+    from .inventarios import _sync_precio
+
     precio = solicitud["precio"]
     acepta = solicitud["acepta_contraentrega"]
     if not precio or acepta is None:
@@ -1214,50 +1354,71 @@ def _aprobar_publicacion(conn, solicitud, tercero_elegido=None):
     producto_id = solicitud["producto_id"]
     datos = (solicitud["titulo"], categoria, solicitud["descripcion"], fotos[0] if fotos else None, precio,
              solicitud["tipo"])
+    titular_fijado = solicitud.get("titular_id")
+    destino_fijado = solicitud.get("negocio_destino_id")
+    negocio_anterior = None
+    if producto_id:
+        negocio_anterior = conn.execute("SELECT negocio_id FROM productos WHERE id=%s FOR UPDATE", (producto_id,)).fetchone()
+        if not negocio_anterior:
+            abort(409, "El producto de la publicación ya no existe.")
+        negocio_anterior = negocio_anterior["negocio_id"]
+
+    titular = _resolver_titular(conn, solicitud, titular_fijado or negocio_anterior or tercero_elegido)
+    destino = _negocio_para_publicar(
+        conn, titular["id"], solicitud.get("nombre_negocio") or solicitud["nombre"],
+        titular.get("nombre") or solicitud["nombre"], telefono, destino_fijado or negocio_elegido,
+    )
+    negocio_id = destino["id"]
+    if negocio_anterior is not None and negocio_anterior != negocio_id:
+        if destino_fijado or _producto_con_historial(conn, producto_id):
+            abort(409, "La ficha tiene historial o ya está vinculada a otro negocio.")
+        conn.execute("DELETE FROM precios WHERE negocio_id=%s AND producto_id=%s", (negocio_anterior, producto_id))
+
     if producto_id is None:
-        conn.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", ("comprador:" + telefono,))
-        coincidencias = _terceros_de_publicacion(conn, telefono)
-        if tercero_elegido is not None:
-            tercero = next((t for t in coincidencias if t["id"] == tercero_elegido), None)
-            if tercero is None:
-                abort(409, "El usuario seleccionado ya no coincide con el celular de la solicitud.")
-        elif len(coincidencias) > 1:
-            abort(409, "Elige el usuario correcto entre los que comparten este celular.")
-        else:
-            tercero = coincidencias[0] if coincidencias else None
-        if not tercero:
-            tercero = conn.execute(
-                """INSERT INTO terceros (nombre, telefono, tipo_tercero, fecha_creacion)
-                   VALUES (%s,%s,'persona',NOW()) RETURNING id""",
-                (solicitud["nombre"], telefono),
-            ).fetchone()
-        negocio_id = tercero["id"]
         producto_id = conn.execute(
             """INSERT INTO productos (negocio_id,nombre,categoria,descripcion,imagen,precio,tipo_oferta,disponible)
                VALUES (%s,%s,%s,%s,%s,%s,%s,TRUE) RETURNING id""",
             (negocio_id, *datos),
         ).fetchone()["id"]
     else:
-        negocio_id = conn.execute(
-            """UPDATE productos SET nombre=%s,categoria=%s,descripcion=%s,imagen=%s,precio=%s,tipo_oferta=%s
-                WHERE id=%s RETURNING negocio_id""",
-            (*datos, producto_id),
-        ).fetchone()["negocio_id"]
+        conn.execute("""
+            UPDATE productos SET nombre=%s,categoria=%s,descripcion=%s,imagen=%s,precio=%s,tipo_oferta=%s,
+                                 negocio_id=%s WHERE id=%s
+        """, (*datos, negocio_id, producto_id))
         conn.execute("DELETE FROM producto_imagenes WHERE producto_id=%s", (producto_id,))
+    _sync_precio(conn, negocio_id, producto_id)
     if solicitud.get("comision_pct"):
         comercial.activar_condiciones(conn, producto_id, negocio_id, solicitud["comision_pct"])
     if solicitud.get("cambiar_icono_ofertante"):
         conn.execute("UPDATE terceros SET icono_marketplace=%s WHERE id=%s",
-                     (solicitud["icono_ofertante"], negocio_id))
+                     (solicitud["icono_ofertante"], titular["id"]))
+        if destino["plan_marketplace"]:
+            conn.execute("UPDATE terceros SET foto_perfil=%s, icono_marketplace=%s WHERE id=%s",
+                         (solicitud["icono_ofertante"], solicitud["icono_ofertante"], negocio_id))
+    elif destino["plan_marketplace"] and not destino["activo"]:
+        conn.execute("""
+            UPDATE terceros negocio SET foto_perfil=persona.icono_marketplace,
+                                       icono_marketplace=persona.icono_marketplace
+              FROM terceros persona WHERE negocio.id=%s AND persona.id=%s
+        """, (negocio_id, titular["id"]))
+    if destino["plan_marketplace"] and not destino["activo"]:
+        conn.execute("""
+            UPDATE tiendas SET activo=TRUE
+             WHERE tercero_id=%s AND plan_marketplace AND NOT activo
+               AND NOT EXISTS (
+                   SELECT 1 FROM marketplace_solicitudes WHERE negocio_destino_id=%s AND producto_id IS NOT NULL
+               )
+        """, (negocio_id, negocio_id))
     for orden, foto in enumerate(fotos[1:], 1):
         conn.execute("INSERT INTO producto_imagenes (producto_id,imagen,orden) VALUES (%s,%s,%s)",
                      (producto_id, foto, orden))
     conn.execute(
         """UPDATE marketplace_solicitudes
-              SET producto_id=%s, estado='aprobada', revision=revision+1, contacto_aprobado=contacto_publico,
+              SET producto_id=%s, titular_id=%s, negocio_destino_id=%s, estado='aprobada', revision=revision+1,
+                  contacto_aprobado=contacto_publico,
                   metodo_pago_aprobado_id=%s, icono_ofertante=NULL, cambiar_icono_ofertante=FALSE
             WHERE id=%s""",
-        (producto_id, metodo_pago, solicitud["id"]),
+        (producto_id, titular["id"], negocio_id, metodo_pago, solicitud["id"]),
     )
 
 
@@ -1280,13 +1441,15 @@ def aprobar_publicacion():
     if not solicitud_id or not revision:
         abort(400)
     comercial.asegurar_comisiones()
+    _asegurar_tiendas_publicacion()
     conn = _conexion_publicaciones()
     try:
         if not conn.execute("SELECT 1 FROM usuarios WHERE id=%s AND rol='Administrador'", (moderador,)).fetchone():
             abort(403)
         solicitud = conn.execute(
             """SELECT id,nombre,telefono,titulo,tipo,descripcion,fotos,estado,revision,producto_id,
-                      precio,acepta_contraentrega,icono_ofertante,cambiar_icono_ofertante,comision_pct
+                      precio,acepta_contraentrega,icono_ofertante,cambiar_icono_ofertante,comision_pct,
+                      titular_id, negocio_destino_id, nombre_negocio
                  FROM marketplace_solicitudes WHERE id=%s FOR UPDATE""",
             (solicitud_id,),
         ).fetchone()
@@ -1297,7 +1460,8 @@ def aprobar_publicacion():
                 abort(409, "La solicitud cambió. Vuelve a abrirla para revisar la versión más reciente.")
             if not solicitud["comision_pct"]:
                 abort(409, "El ofertante debe confirmar la comisión antes de aprobar.")
-            _aprobar_publicacion(conn, solicitud, request.form.get("tercero", type=int))
+            _aprobar_publicacion(conn, solicitud, request.form.get("tercero", type=int),
+                                 request.form.get("negocio", type=int))
         conn.commit()
     except Exception:
         conn.rollback()

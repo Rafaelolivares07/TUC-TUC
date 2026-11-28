@@ -22,7 +22,7 @@
 </style>
 {% if token %}
 <script src="{{ url_for('static', filename='JS/imagen_producto.js', v=2) }}" defer></script>
-<script src="{{ url_for('static', filename='marketplace/publicar_fotos.js', v=4) }}" defer></script>
+<script src="{{ url_for('static', filename='marketplace/publicar_fotos.js', v=5) }}" defer></script>
 {% endif %}
 </head>
 <body>
@@ -43,6 +43,19 @@
 {% if datos.get('id') %}<input type="hidden" name="solicitud" value="{{ datos.id }}"><input type="hidden" name="revision" value="{{ datos.revision }}">{% endif %}
 <label>Tu nombre<input name="nombre" autocomplete="name" maxlength="100" required{% if datos.get('id') %} readonly{% endif %} value="{{ datos.get('nombre') or (comprador or {}).get('nombre','') }}"></label>
 <label>Celular<input type="tel" name="telefono" autocomplete="tel" maxlength="25" required{% if datos.get('id') %} readonly{% endif %} value="{{ datos.get('telefono') or (comprador or {}).get('telefono','') }}"></label>
+{% if datos.get('negocio_destino_id') %}
+<p>Publicación de <strong>{{ datos.nombre_negocio }}</strong>{% if datos.slug_negocio %} · <a href="https://{{ datos.slug_negocio }}.tuc-tuc.co/mi-tienda/{{ datos.slug_negocio }}">Administrar tienda</a>{% endif %}</p>
+{% elif negocios %}
+<label>Negocio donde vas a publicar<select name="negocio" required>
+{% if negocios|length > 1 %}<option value="">Selecciona tu negocio</option>{% endif %}
+{% for negocio in negocios %}<option value="{{ negocio.id }}"{% if datos.get('negocio_destino_id') == negocio.id %} selected{% endif %}>{{ negocio.nombre }}</option>{% endfor %}
+</select></label>
+{% else %}
+{% set nombre_sugerido = datos.get('nombre') or (comprador or {}).get('nombre','') %}
+<label>Nombre de tu negocio
+<span class="photo-help">Sugerimos tu nombre. Puedes cambiarlo por el nombre comercial que quieras mostrar a tus clientes.</span>
+<input name="nombre_negocio" autocomplete="organization" maxlength="100" value="{{ datos.get('nombre_negocio') or nombre_sugerido }}" data-sugerido="{{ nombre_sugerido }}"></label>
+{% endif %}
 <label>Ícono del ofertante (opcional)
 <span class="photo-help" id="market-icono-ayuda">Tu logo o foto acompaña todas tus ofertas. Si ya tienes un ícono, se reutiliza automáticamente. Los cambios pasan por revisión.</span>
 <input id="market-icono" type="file" accept="image/jpeg,image/png,image/webp" disabled aria-describedby="market-icono-ayuda market-icono-error" data-limite="{{ limite_icono }}" data-dimension="{{ dimension_icono }}">

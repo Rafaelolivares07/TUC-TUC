@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="es-CO">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pedidos de {{ tienda.nombre }} · Tuc-Tuc</title>
+{% include 'marketplace_estilos.html' %}
+<style>
+.pedidos-vendedor article{padding:16px 0;border-top:1px solid var(--line)}
+.pedidos-vendedor ul{padding-left:20px}
+.pedidos-vendedor nav{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+.pedidos-vendedor .btn[disabled]{opacity:.65}
+</style>
+</head>
+<body>
+<header class="head"><div class="wrap head-inner"><a class="logo" href="https://tuc-tuc.co/marketplace">tuc-tuc.</a></div></header>
+<main class="wrap"><section class="publication pedidos-vendedor">
+<h1>{{ tienda.nombre }}</h1>
+<nav aria-label="Tu negocio">
+<a class="btn clear" href="{{ url_for('tiendas.tienda_publica', slug=tienda.slug, origen='marketplace') }}">Ver tienda</a>
+<a class="btn clear" href="https://tuc-tuc.co/marketplace/publicar">Mis publicaciones</a>
+</nav>
+<h2>Pedidos</h2>
+<p id="pedidos-vendedor-mensaje" role="status">Cargando pedidos…</p>
+<div id="pedidos-vendedor-lista"></div>
+<button id="pedidos-vendedor-recargar" class="btn clear" type="button">Actualizar pedidos</button>
+</section></main>
+<script>
+(() => {
+  const lista = document.getElementById('pedidos-vendedor-lista');
+  const mensaje = document.getElementById('pedidos-vendedor-mensaje');
+  const actualizar = document.getElementById('pedidos-vendedor-recargar');
+  const url = {{ url_for('tiendas.api_tienda_pedidos', slug=tienda.slug)|tojson }};
+  const estadoUrl = {{ url_for('tiendas.api_tienda_pedido_estado', slug=tienda.slug, pedido_id=0)|tojson }};
+  const estados = {nuevo: 'Nuevo', preparando: 'En preparación', listo: 'Listo', entregado: 'Entregado'};
+  const siguiente = {nuevo: 'preparando', preparando: 'listo', listo: 'entregado'};
+  const monedas = new Intl.NumberFormat('es-CO', {style: 'currency', currency: 'COP'});
+  function texto(elemento, etiqueta, contenido) {
+    const nodo = document.createElement(etiqueta);
+    nodo.textContent = contenido;
+    elemento.append(nodo);
+    return nodo;
+  }
+  function mostrar(pedido) {
+    const articulo = document.createElement('article');
+    texto(articulo, 'h3', 'Pedido ' + pedido.id + ' · ' + (estados[pedido.estado] || pedido.estado));
+    texto(articulo, 'p', [pedido.nombre_cliente, pedido.telefono_cliente].filter(Boolean).join(' · '));
+    const entrega = pedido.tipo_entrega === 'recoger' ? 'Recoge en tienda' : 'Domicilio';
+    texto(articulo, 'p', [entrega, pedido.direccion_cliente].filter(Boolean).join(' · '));
+    if (pedido.notas) texto(articulo, 'p', pedido.notas);
+    if (pedido.metodo_pago === 'por_acordar') texto(articulo, 'p', 'Pago por acordar con el comprador.');
+    const items = document.createElement('ul');
+    for (const item of pedido.items) texto(items, 'li', item.cantidad + ' × ' + item.nombre);
+    articulo.append(items);
+    texto(articulo, 'p', 'Total del pedido ' + monedas.format(pedido.total));
+    if (pedido.comision_marketplace !== null)
+      texto(articulo, 'p', 'Comisión registrada ' + monedas.format(pedido.comision_marketplace));
+    const paso = siguiente[pedido.estado];
+    if (paso) {
+      const boton = texto(articulo, 'button', 'Marcar como ' + estados[paso].toLowerCase());
+      boton.className = 'btn dark';
+      boton.type = 'button';
+      boton.addEventListener('click', async () => {
+        boton.disabled = true;
+        try {
+          const res = await fetch(estadoUrl.replace('/0/estado', '/' + pedido.id + '/estado'), {
+            method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({estado: paso})
+          });
+          if (!res.ok) throw new Error();
+          await cargar();
+        } catch {
+          mensaje.textContent = 'No pudimos actualizar el pedido. Intenta otra vez.';
+        } finally {
+          boton.disabled = false;
+        }
+      });
+    }
+    return articulo;
+  }
+  async function cargar() {
+    actualizar.disabled = true;
+    try {
+      const res = await fetch(url, {cache: 'no-store'});
+      if (!res.ok) throw new Error();
+      const datos = await res.json();
+      lista.replaceChildren(...datos.pedidos.map(mostrar));
+      mensaje.textContent = datos.pedidos.length ? '' : 'Todavía no tienes pedidos para atender.';
+    } catch {
+      mensaje.textContent = 'No pudimos cargar los pedidos.';
+    } finally {
+      actualizar.disabled = false;
+    }
+  }
+  actualizar.addEventListener('click', cargar);
+  cargar();
+})();
+</script>
+</body>
+</html>

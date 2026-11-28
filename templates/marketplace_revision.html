@@ -31,6 +31,7 @@
 <span>{{ solicitud.nombre }} · {{ solicitud.telefono }} · {{ solicitud.tipo }}</span>
 </p>
 {% if solicitud.cambiar_icono_ofertante %}<p>{{ 'Este ícono se aplicará a todas las publicaciones del ofertante.' if solicitud.icono_ofertante else 'Se quitará el ícono de todas las publicaciones del ofertante.' }}</p>{% endif %}
+<p><strong>Nombre comercial</strong> {{ solicitud.get('nombre_negocio') or solicitud.nombre }}</p>
 <p>{{ solicitud.descripcion }}</p>
 <p><strong>Precio</strong> {{ precio or 'Por confirmar' }}{% if precio %} COP{% endif %}</p>
 <p><strong>Comisión propuesta</strong> {{ (solicitud.comision_pct|string ~ '%') if solicitud.get('comision_pct') else 'Por confirmar' }}</p>
@@ -50,12 +51,18 @@
 <input type="hidden" name="token" value="{{ token }}">
 <input type="hidden" name="solicitud" value="{{ solicitud.id }}">
 <input type="hidden" name="revision" value="{{ solicitud.revision }}">
-{% if terceros|length > 1 %}
+{% if terceros|length > 1 and not solicitud.get('titular_id') %}
 <label>Usuario de Tuc-Tuc
 <select name="tercero" required><option value="">Elige a quién pertenece la publicación</option>
 {% for tercero in terceros %}<option value="{{ tercero.id }}">{{ tercero.nombre or tercero.tipo_tercero or "Usuario" }} · #{{ tercero.id }}{% if tercero.tiene_pin %} · PIN configurado{% endif %}</option>{% endfor %}</select></label>
 <p>El celular coincide con varios usuarios. Elige el del autor para conservar su cuenta.</p>
-{% elif terceros %}<p>Se asociará a {{ terceros[0].nombre }} · #{{ terceros[0].id }}.</p>{% endif %}
+{% elif terceros|length == 1 %}<p>Se asociará a {{ terceros[0].nombre }} · #{{ terceros[0].id }}.</p>{% endif %}
+{% if destinos %}
+<label>Negocio de la publicación<select name="negocio">
+<option value="">Usar el negocio del titular o darlo de alta</option>
+{% for destino in destinos %}<option value="{{ destino.id }}">{{ destino.nombre }} · #{{ destino.id }}</option>{% endfor %}
+</select></label>
+{% endif %}
 <button type="submit" class="btn dark">Aprobar publicación</button>
 </form>
 {% endif %}

@@ -1,5 +1,16 @@
 (() => {
   const form = document.getElementById('market-publicacion');
+  const nombre = form.elements.namedItem('nombre');
+  const negocio = form.elements.namedItem('nombre_negocio');
+  if (negocio) {
+    let usarSugerencia = negocio.value === negocio.dataset.sugerido;
+    nombre.addEventListener('input', () => {
+      if (usarSugerencia) negocio.value = nombre.value;
+    });
+    negocio.addEventListener('input', () => {
+      usarSugerencia = negocio.value.trim() === '';
+    });
+  }
   const picker = document.getElementById('market-fotos');
   const preview = document.getElementById('market-fotos-preview');
   const feedback = document.getElementById('market-fotos-error');

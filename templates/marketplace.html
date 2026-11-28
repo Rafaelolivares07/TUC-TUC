@@ -267,15 +267,21 @@ document.getElementById('mp-cart-confirm').addEventListener('click', async () =>
       }
       const ped = await mpPost(url, cuerpo);
       if (!ped.ok) throw new Error(g.neg + ': ' + (ped.error || 'no recibió el pedido.'));
-      pagos.push({neg: g.neg, url: ped.url_pago});
+      pagos.push({neg: g.neg, url: ped.url_pago, pedido: ped.pedido_id});
     }
     mpCart = []; mpSave(); mpBadge(); mpRender();
     const pay = document.getElementById('mp-cart-pay');
     pay.innerHTML = '';
     const ok = document.createElement('p');
-    ok.textContent = 'Pedido listo. Sigue a pagar en cada negocio:';
+    ok.textContent = 'Confirmamos el envío de tu pedido.';
     pay.append(ok);
     pagos.forEach(p => {
+      if (!p.url) {
+        const aviso = document.createElement('p');
+        aviso.textContent = p.neg + ' se comunicará contigo para acordar el pago del pedido ' + p.pedido + '.';
+        pay.append(aviso);
+        return;
+      }
       const a = document.createElement('a');
       a.href = p.url; a.target = '_blank'; a.rel = 'noopener';
       a.className = 'btn dark'; a.textContent = 'Pagar en ' + p.neg;

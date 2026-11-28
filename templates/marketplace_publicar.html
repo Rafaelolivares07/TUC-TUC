@@ -35,7 +35,7 @@
 <ul class="market-mias">{% for item in solicitudes %}<li><a href="{{ url_for('marketplace.publicar', solicitud=item.id) }}">{{ item.titulo }} · {{ 'Aprobada' if item.estado == 'aprobada' else 'En revisión' }}</a></li>{% endfor %}</ul>
 {% if datos.get('id') %}<p><a href="{{ url_for('marketplace.publicar') }}">Crear otra publicación</a></p>{% endif %}
 {% endif %}
-<p>{% if datos.get('id') %}Puedes guardar cambios y fotos aquí. Volverán a revisión.{% else %}Envíanos lo que vendes. Usaremos tu celular para confirmar la publicación.{% endif %}</p>
+<p>{% if datos.get('id') %}Puedes guardar cambios y fotos aquí. Volverán a revisión.{% else %}Describe lo que vendes. Usaremos tu celular para confirmar la publicación.{% endif %}</p>
 {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
 {% if token %}
 <form id="market-publicacion" method="post" enctype="multipart/form-data" action="{{ url_for('marketplace.recibir_publicacion') }}">
